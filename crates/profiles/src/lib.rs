@@ -1716,7 +1716,13 @@ pub const fn effect_color(effect: EffectType) -> ColorToken {
 }
 
 fn eventide_cc_control(label: &str, cc: u8) -> ControlDefinition {
-    ControlDefinition { label: label.into(), cc: Some(cc), program: None, range: (0, 127) }
+    ControlDefinition {
+        label: label.into(),
+        cc: Some(cc),
+        program: None,
+        range: (0, 127),
+        operation: None,
+    }
 }
 
 /// Built-in Eventide `MicroPitch` profile from the firmware 1.0+ quick-reference MIDI table.
@@ -1762,6 +1768,7 @@ pub fn eventide_micropitch_profile() -> DeviceProfile {
                 cc: None,
                 program: Some(1),
                 range: (0, 0),
+                operation: None,
             },
         ],
         queries: Vec::new(),
@@ -1795,7 +1802,22 @@ pub fn mvave_ir_box_profile() -> DeviceProfile {
             transport: ControlTransport::Midi,
             unsafe_on_connect: false,
         }],
-        controls: Vec::new(),
+        controls: vec![
+            ControlDefinition {
+                label: "IR".into(),
+                cc: None,
+                program: None,
+                range: (0, 1),
+                operation: Some("mvave_ir".into()),
+            },
+            ControlDefinition {
+                label: "EQ".into(),
+                cc: None,
+                program: None,
+                range: (0, 1),
+                operation: Some("mvave_eq".into()),
+            },
+        ],
         queries: Vec::new(),
         replies: Vec::new(),
         templates: Vec::new(),
@@ -1866,6 +1888,7 @@ pub fn valeton_arena2000_profile() -> DeviceProfile {
             cc: None,
             program: Some(program),
             range: (0, 0),
+            operation: None,
         })
         .collect();
     controls.extend([
@@ -1915,7 +1938,13 @@ pub fn valeton_arena2000_profile() -> DeviceProfile {
 }
 
 fn arena2000_cc_control(label: &str, cc: u8) -> ControlDefinition {
-    ControlDefinition { label: label.into(), cc: Some(cc), program: None, range: (0, 127) }
+    ControlDefinition {
+        label: label.into(),
+        cc: Some(cc),
+        program: None,
+        range: (0, 127),
+        operation: None,
+    }
 }
 
 /// Returns the built-in conservative device-profile catalog in stable order.
@@ -2426,6 +2455,9 @@ pub struct ControlDefinition {
     pub program: Option<u8>,
     /// Safe inclusive value range.
     pub range: (u16, u16),
+    /// Optional profile-specific operation identifier.
+    #[serde(default)]
+    pub operation: Option<String>,
 }
 
 /// A declarative identity probe: masked bytes must match at the same offset.
@@ -3232,6 +3264,13 @@ impl DeviceProfile {
             return Err("control value is outside its declared MIDI range");
         }
         let value = u8::try_from(value).map_err(|_| "control value is invalid")?;
+        if let Some(operation) = control.operation.as_deref() {
+            return match operation {
+                "mvave_ir" => Ok(mvave_ir_box_module_sysex(MvaveIrBoxModule::Ir, value != 0)),
+                "mvave_eq" => Ok(mvave_ir_box_module_sysex(MvaveIrBoxModule::Eq, value != 0)),
+                _ => Err("control operation is unsupported"),
+            };
+        }
         let status = channel - 1;
         if let Some(cc) = control.cc {
             return Ok(vec![0xB0 | status, cc, value]);
@@ -3268,7 +3307,7 @@ impl DeviceProfile {
             }
         }
         for control in &self.controls {
-            if control.cc.is_some() == control.program.is_some() {
+            if control.operation.is_none() && control.cc.is_some() == control.program.is_some() {
                 return Err("control must map to exactly one CC or program");
             }
             if control.range.0 > control.range.1 || control.range.1 > 16_383 {
@@ -3600,6 +3639,7 @@ mod tests {
                 cc: Some(12),
                 program: None,
                 range: (0, 127),
+                operation: None,
             }],
             queries: Vec::new(),
             replies: Vec::new(),
