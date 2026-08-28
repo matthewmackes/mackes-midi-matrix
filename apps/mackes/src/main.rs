@@ -22,8 +22,8 @@ fn run_tui() -> Result<(), String> {
         mackes_tui::ReflexWorkspace::from_compiled_algorithm(1).map_err(str::to_owned)?;
     let eventide_workspace = mackes_tui::DeviceWorkspace::eventide_micropitch();
     let mut routing_editor = mackes_tui::RoutingEditor::from_bank(&mackes_tui::MappingBank::new());
-    let diagnostics = mackes_tui::DiagnosticsState::default();
-    let monitor = mackes_tui::MonitorState::new(128).expect("valid monitor capacity");
+    let mut diagnostics = mackes_tui::DiagnosticsState::default();
+    let mut monitor = mackes_tui::MonitorState::new(128).expect("valid monitor capacity");
     let backup_workspace = mackes_tui::BackupWorkspace::default();
     let setlist_editor = mackes_tui::SetlistEditor::from_snapshot(&[]);
     let mut workspace = 1_u8;
@@ -36,6 +36,8 @@ fn run_tui() -> Result<(), String> {
                 &mut dashboard,
                 &mut routing_editor,
                 &mut route_generation,
+                &mut monitor,
+                &mut diagnostics,
             )
         } else {
             synchronize_events(
@@ -43,6 +45,8 @@ fn run_tui() -> Result<(), String> {
                 &mut dashboard,
                 &mut routing_editor,
                 &mut route_generation,
+                &mut monitor,
+                &mut diagnostics,
             )
         };
         if let Ok(health) = synchronized {
@@ -743,6 +747,8 @@ fn synchronize_snapshot(
     dashboard: &mut mackes_tui::DashboardState,
     routing: &mut mackes_tui::RoutingEditor,
     route_generation: &mut u64,
+    monitor: &mut mackes_tui::MonitorState,
+    diagnostics: &mut mackes_tui::DiagnosticsState,
 ) -> Result<String, String> {
     let response = daemon_request(mackes_ipc::Command::Snapshot, b"{}");
     let value: serde_json::Value =
@@ -766,6 +772,7 @@ fn synchronize_snapshot(
     // The dashboard is intentionally not reconstructed from local files or MIDI state.
     apply_dashboard_payload(dashboard, &value);
     project_routes(routing, &value);
+    project_observability(monitor, diagnostics, &value);
     if let Some(generation) = value.get("route_generation").and_then(serde_json::Value::as_u64) {
         *route_generation = generation;
     }
@@ -812,6 +819,31 @@ fn apply_dashboard_payload(
         dashboard.apply_event(mackes_tui::DashboardEvent::ActivationResult(result.to_owned()));
     }
     */
+}
+
+fn project_observability(
+    monitor: &mut mackes_tui::MonitorState,
+    diagnostics: &mut mackes_tui::DiagnosticsState,
+    payload: &serde_json::Value,
+) {
+    let Some(health) = payload.get("health").and_then(serde_json::Value::as_str) else {
+        return;
+    };
+    let severity = if health == "ready" || health == "online" {
+        mackes_tui::MonitorSeverity::Info
+    } else {
+        mackes_tui::MonitorSeverity::Warning
+    };
+    monitor
+        .push(mackes_tui::MonitorEntry { severity, message: format!("daemon health: {health}") });
+    if severity >= mackes_tui::MonitorSeverity::Warning {
+        diagnostics.push(mackes_tui::HealthDiagnostic {
+            subject: "daemon".into(),
+            severity,
+            reason: format!("health is {health}"),
+            remediation: "inspect the latest daemon status and event details".into(),
+        });
+    }
 }
 
 fn save_routes(editor: &mackes_tui::RoutingEditor, current_generation: u64) -> String {
@@ -894,6 +926,8 @@ fn synchronize_events(
     dashboard: &mut mackes_tui::DashboardState,
     routing: &mut mackes_tui::RoutingEditor,
     route_generation: &mut u64,
+    monitor: &mut mackes_tui::MonitorState,
+    diagnostics: &mut mackes_tui::DiagnosticsState,
 ) -> Result<String, String> {
     let payload = serde_json::to_vec(&serde_json::json!({
         "after_sequence": state.last_sequence,
@@ -926,6 +960,7 @@ fn synchronize_events(
         let payload = event.get("payload").ok_or("event payload is missing")?;
         apply_dashboard_payload(dashboard, payload);
         project_routes(routing, payload);
+        project_observability(monitor, diagnostics, payload);
         if let Some(generation) =
             payload.get("route_generation").and_then(serde_json::Value::as_u64)
         {
@@ -1063,7 +1098,7 @@ const fn restore_result_status(result: &mackes_config::RestoreResult) -> &'stati
 
 #[cfg(test)]
 mod tests {
-    use super::project_routes;
+    use super::{project_observability, project_routes};
 
     #[test]
     fn route_projection_converts_supported_daemon_routes() {
@@ -1102,5 +1137,19 @@ mod tests {
         );
         assert_eq!(editor.drafts.len(), 1);
         assert_eq!(editor.drafts[0].source, "old");
+    }
+
+    #[test]
+    fn observability_projection_is_bounded_and_actionable() {
+        let mut monitor = mackes_tui::MonitorState::new(1).expect("capacity");
+        let mut diagnostics = mackes_tui::DiagnosticsState::new();
+        project_observability(
+            &mut monitor,
+            &mut diagnostics,
+            &serde_json::json!({"health": "degraded"}),
+        );
+        assert_eq!(monitor.entries.len(), 1);
+        assert_eq!(diagnostics.entries.len(), 1);
+        assert!(diagnostics.entries[0].line().contains("inspect"));
     }
 }
