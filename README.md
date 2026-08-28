@@ -68,6 +68,10 @@ cargo run --package mackesd
 Launch the interactive terminal UI with `mackes-midi-matrix` (or `mackes-midi-matrix tui`). While it is running,
 number keys select the available workspaces: `1` Dashboard, `2` MIDI Learn, `3` Reflex,
 `4` Eventide, `5` Routing, `6` Diagnostics, `7` Monitor, `8` Backups, and `9` Setlists.
+The Routing workspace supports transactional add/remove/edit/save operations: `m` cycles
+message class, `c` cycles channel scope, `e` enables or disables a route, `y` toggles bounded
+cycle authorization, and `+`/`-` adjusts execution priority. Route rows also display the
+effective curve and cycle policy before saving.
 From the dashboard, `n`/`p` navigate scenes, `!` issues
 the governed panic command, and `q` exits. The UI restores the terminal state on normal
 and error exits.
