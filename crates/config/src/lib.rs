@@ -890,6 +890,31 @@ pub fn copy_scene(project: &Project, source_id: &str, new_id: &str) -> Result<Pr
     Ok(result)
 }
 
+/// Appends one executable action to a named scene and validates the resulting project.
+///
+/// # Errors
+///
+/// Returns an error when the scene or action is invalid, duplicated, or makes the project invalid.
+pub fn add_scene_action(
+    project: &Project,
+    scene_id: &str,
+    action: SceneAction,
+) -> Result<Project, String> {
+    if !project.scenes.iter().any(|scene| scene.id == scene_id) {
+        return Err(format!("unknown scene ID '{scene_id}'"));
+    }
+    let mut result = project.clone();
+    let scene =
+        result.scenes.iter_mut().find(|scene| scene.id == scene_id).ok_or("scene disappeared")?;
+    if scene.actions.iter().any(|existing| existing.id == action.id) {
+        return Err(format!("scene action '{}' already exists", action.id));
+    }
+    scene.actions.push(action);
+    let document = ConfigDocument { projects: vec![result.clone()], ..ConfigDocument::default() };
+    validate(&document)?;
+    Ok(result)
+}
+
 /// Finds scenes whose ID, name, or category contains a case-insensitive query, preserving order.
 #[must_use]
 pub fn search_scenes<'a>(project: &'a Project, query: &str) -> Vec<&'a SceneRef> {
