@@ -131,6 +131,32 @@ fn run_tui() -> Result<(), String> {
                     {
                         poll_learn_capture(&mut learn_workspace);
                     }
+                    KeyCode::Char('j')
+                        if workspace == 2
+                            && learn_workspace.phase == mackes_tui::LearnPhase::Review
+                            && !learn_workspace.candidates.is_empty() =>
+                    {
+                        learn_workspace.selected =
+                            Some(learn_workspace.selected.map_or(0, |index| {
+                                (index + 1).min(learn_workspace.candidates.len() - 1)
+                            }));
+                    }
+                    KeyCode::Char('k')
+                        if workspace == 2
+                            && learn_workspace.phase == mackes_tui::LearnPhase::Review
+                            && !learn_workspace.candidates.is_empty() =>
+                    {
+                        learn_workspace.selected =
+                            Some(learn_workspace.selected.unwrap_or(0).saturating_sub(1));
+                    }
+                    KeyCode::Enter
+                        if workspace == 2
+                            && learn_workspace.phase == mackes_tui::LearnPhase::Review =>
+                    {
+                        if let Some(index) = learn_workspace.selected {
+                            learn_workspace.select(index);
+                        }
+                    }
                     KeyCode::Esc if workspace == 2 => learn_workspace.cancel(),
                     KeyCode::Char('d') if workspace == 5 => {
                         if let Some(index) = routing_editor.selected {
