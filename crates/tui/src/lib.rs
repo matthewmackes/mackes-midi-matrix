@@ -3387,6 +3387,9 @@ mod tests {
                 .all(|view| { view.range.0 <= view.range.1 && view.effective_steps > 0 }));
             let node = format!("algorithm-{}", algorithm.number);
             assert_eq!(workspace.select_node(&node).expect("node").len(), workspace.controls.len());
+            let frame = workspace.frame_lines(Viewport::new(80, 24));
+            assert_eq!(frame[1], "Logical/control view");
+            assert!(frame.iter().any(|line| line.contains(algorithm.name)));
         }
         assert_eq!(ReflexWorkspace::from_compiled_algorithm(0), Err("unknown Reflex algorithm"));
         assert_eq!(ReflexWorkspace::compiled_parameter_views(0), Err("unknown Reflex algorithm"));
