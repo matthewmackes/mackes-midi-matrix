@@ -642,6 +642,12 @@ pub struct SceneAction {
     /// Optional prerequisite action identifier.
     #[serde(default)]
     pub depends_on: Option<String>,
+    /// Optional named MIDI output for an executable action.
+    #[serde(default)]
+    pub destination: Option<String>,
+    /// Optional complete MIDI wire message for an executable action.
+    #[serde(default)]
+    pub message: Option<Vec<u8>>,
 }
 
 /// Replaces one project only after validating the complete resulting document.
@@ -1057,6 +1063,7 @@ pub fn validate_report(path: &Path, json_output: bool) -> String {
 /// # Errors
 ///
 /// Returns an error naming the first invalid ID, duplicate, or dangling reference.
+#[allow(clippy::too_many_lines)]
 pub fn validate(document: &ConfigDocument) -> Result<(), String> {
     if document.schema_version != CURRENT_SCHEMA_VERSION {
         return Err(format!("schema_version must be {CURRENT_SCHEMA_VERSION}"));
@@ -1098,6 +1105,26 @@ pub fn validate(document: &ConfigDocument) -> Result<(), String> {
                         .iter()
                         .find(|candidate| candidate.id == id)
                         .and_then(|candidate| candidate.depends_on.as_deref());
+                }
+                match (&action.destination, &action.message) {
+                    (Some(destination), Some(message)) if !destination.trim().is_empty() => {
+                        if message.is_empty() || message.len() > 8192 {
+                            return Err(format!(
+                                "scene action '{}' has an invalid message",
+                                action.id
+                            ));
+                        }
+                        mackes_domain::MidiMessage::from_wire(message).map_err(|_| {
+                            format!("scene action '{}' has invalid MIDI bytes", action.id)
+                        })?;
+                    }
+                    (None, None) => {}
+                    _ => {
+                        return Err(format!(
+                            "scene action '{}' requires destination and message",
+                            action.id
+                        ))
+                    }
                 }
             }
         }
@@ -1536,6 +1563,8 @@ mod tests {
             description: "Set opening level".into(),
             unsafe_action: false,
             depends_on: None,
+            destination: None,
+            message: None,
         }];
         let reordered = reorder_scenes(&project, &["intro"]).expect("reorder");
         assert_eq!(reordered.scenes, project.scenes);
@@ -1558,12 +1587,16 @@ mod tests {
                 description: "A".into(),
                 unsafe_action: false,
                 depends_on: Some("b".into()),
+                destination: None,
+                message: None,
             },
             SceneAction {
                 id: "b".into(),
                 description: "B".into(),
                 unsafe_action: false,
                 depends_on: Some("a".into()),
+                destination: None,
+                message: None,
             },
         ];
         assert!(validate(&cyclic).is_err());
@@ -1574,6 +1607,8 @@ mod tests {
                 description: "bounded action".into(),
                 unsafe_action: false,
                 depends_on: None,
+                destination: None,
+                message: None,
             })
             .collect();
         assert!(validate(&oversized).is_err());
