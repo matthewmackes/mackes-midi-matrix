@@ -32,4 +32,8 @@ rg -q 'mackes-midi-matrix-0.1.0-test.1-linux-x86_64/target/release/mackes-midi-m
   <<<"$archive_listing"
 rg -q 'mackes-midi-matrix-0.1.0-test.1-linux-x86_64/target/release/mackes-midi-matrixd$' \
   <<<"$archive_listing"
+artifact_tmp="$(mktemp -d)"
+trap 'rm -rf -- "$artifact_tmp"' EXIT
+tar -xzf dist/mackes-midi-matrix-0.1.0-test.1-linux-x86_64.tar.gz -C "$artifact_tmp"
+"$artifact_tmp/mackes-midi-matrix-0.1.0-test.1-linux-x86_64/scripts/install-fedora.sh" --check
 printf 'release-gate: PASS\n'
