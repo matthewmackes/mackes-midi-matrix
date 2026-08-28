@@ -2649,6 +2649,7 @@ New requests enter here before implementation.
 | 2026-08-28 | W045/W030/W031 | codex | scene navigation JSON compatibility → implemented | Added the standard trailing `--json` form to `scene next|previous`; both human/default and explicit JSON paths use the same daemon response and invalid forms remain rejected. |
 | 2026-08-28 | W040/W041 | codex | persistent dashboard navigation legend → implemented | Added expanded and compact width-bounded shortcut footers for workspace selection, scene navigation, panic, and quit; TUI tests (33) and strict Clippy pass. |
 | 2026-08-28 | W010/W030/W031/W045 | codex | two-scene navigation/persistence fixture → verified | Added a redacted two-scene config fixture and validated CLI `scene next --json` end-to-end through the daemon; response selected `verse`, config reload retained `active_scene: verse`, and daemon SIGTERM exited 0. |
+| 2026-08-28 | W031/W045 | codex | non-empty scene plan fixture → verified | Extended the two-scene fixture with a dependent safe action and an explicitly unsafe action; human and JSON `scene plan` output preserve order, dependency, and unsafe metadata without transmission. |
 | 2026-08-28 | W045/W031 | codex | safe scene plan CLI → implemented | Added `scene plan <config> <project> <scene> [--json]`, compiling validated persisted actions into the ordinary activation plan without transmission; valid empty plans and missing-scene exit-2 JSON errors are verified. |
 
 The worklist is complete only when W053 is `DONE`. A feature demonstration, passing unit

@@ -9,7 +9,15 @@
     id: 'demo',
     scenes: [
       { id: 'intro', name: 'Intro', category: 'show' },
-      { id: 'verse', name: 'Verse', category: 'show' },
+      {
+        id: 'verse',
+        name: 'Verse',
+        category: 'show',
+        actions: [
+          { id: 'route', description: 'Apply verse routing' },
+          { id: 'device-write', description: 'Update device preset', unsafe_action: true, depends_on: 'route' },
+        ],
+      },
     ],
   }],
   profiles: [],
