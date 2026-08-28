@@ -2613,7 +2613,7 @@ mod tests {
         let daemon = Daemon::bind(&path).expect("daemon");
         daemon
             .replace_routes_json(
-                br#"[{"source":1,"destination":2,"channel":1,"class":"ControlChange","enabled":false,"priority":9,"curve":"square","allow_cycle":true,"predicates":[{"NumberRange":{"minimum":10,"maximum":20}}]}]"#,
+                br#"[{"source":1,"destination":2,"destination_parameter":"Mix","channel":1,"class":"ControlChange","enabled":false,"priority":9,"curve":"square","allow_cycle":true,"predicates":[{"NumberRange":{"minimum":10,"maximum":20}}]}]"#,
                 4,
                 8,
             )
@@ -2624,6 +2624,7 @@ mod tests {
         assert!(!route.enabled);
         assert_eq!(route.priority, 9);
         assert_eq!(route.curve, mackes_midi_engine::Curve::Square);
+        assert_eq!(route.destination_parameter.as_deref(), Some("Mix"));
         assert!(route.allow_cycle);
         assert_eq!(route.predicates.len(), 1);
         assert!(daemon.replace_routes_json(br#"[{"source":1,"destination":1}]"#, 5, 8).is_err());
