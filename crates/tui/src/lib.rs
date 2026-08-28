@@ -987,6 +987,25 @@ impl SetlistEditor {
         self.drafts[index].projects.pop().ok_or("selected setlist has no projects")
     }
 
+    /// Rotates project order one position toward the requested edge.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when no setlist is selected or it has fewer than two projects.
+    pub fn move_last_project(&mut self, toward_end: bool) -> Result<(), &'static str> {
+        let index = self.selected.ok_or("no setlist selected")?;
+        let projects = &mut self.drafts[index].projects;
+        if projects.len() < 2 {
+            return Err("selected setlist has fewer than two projects");
+        }
+        if toward_end {
+            projects.rotate_right(1);
+        } else {
+            projects.rotate_left(1);
+        }
+        Ok(())
+    }
+
     /// Reorders the selected setlist using the complete project-ID order.
     ///
     /// # Errors
@@ -2684,7 +2703,7 @@ impl SetlistEditor {
     #[must_use]
     pub fn frame_lines(&self, viewport: Viewport) -> Vec<String> {
         let mut lines = vec![
-            "Setlists — uncommitted draft (a add, p project, x remove project, j/k select, </> reorder, c copy, d delete, s save)"
+            "Setlists — uncommitted draft (a add, p project, x remove, [/ ] project order, j/k select, </> reorder, c copy, d delete, s save)"
                 .into(),
         ];
         lines.extend(self.drafts.iter().enumerate().map(|(index, setlist)| {
@@ -3488,6 +3507,10 @@ mod tests {
         assert!(editor.append_project("c").is_err());
         assert_eq!(editor.remove_last_project(), Ok("c".into()));
         assert!(editor.append_project("c").is_ok());
+        editor.move_last_project(false).expect("rotate left");
+        assert_eq!(editor.drafts[0].projects, vec!["a", "c", "b"]);
+        editor.move_last_project(true).expect("rotate right");
+        assert_eq!(editor.drafts[0].projects, vec!["b", "a", "c"]);
         editor.copy_selected("encore").expect("copy");
         assert_eq!(editor.add_empty(), "new-setlist-1");
         assert_eq!(editor.add_empty(), "new-setlist-2");
