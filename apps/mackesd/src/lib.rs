@@ -592,6 +592,9 @@ impl Daemon {
         self.received_events = self.received_events.saturating_add(1);
         self.sent_events = self.sent_events.saturating_add(sent as u64);
         self.dropped_events = self.dropped_events.saturating_add(unmatched as u64);
+        // Publish the post-dispatch counters so subscribed dashboards receive live activity
+        // without needing a second command to trigger a journal append.
+        self.record_state_event(Command::Monitor);
         (sent, unmatched)
     }
 
@@ -1344,6 +1347,33 @@ mod tests {
                 .expect("gap");
         assert_eq!(gap["snapshot_required"], true);
         assert_eq!(daemon.state_events.len(), 256);
+        let _ = fs::remove_file(path);
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn registered_dispatch_updates_activity_and_publishes_live_event() {
+        let path =
+            std::env::temp_dir().join(format!("mackes-activity-{}.sock", std::process::id()));
+        let mut daemon = Daemon::bind(&path).expect("daemon");
+        let event = mackes_domain::MidiEvent {
+            timestamp: mackes_domain::TimestampNanos::new(1),
+            sequence: 1,
+            endpoint: mackes_domain::EndpointId::new(1).expect("endpoint"),
+            message: mackes_domain::MidiMessage::ControlChange {
+                channel: mackes_domain::MidiChannel::new(1).expect("channel"),
+                controller: mackes_domain::SevenBit::new(1).expect("controller"),
+                value: mackes_domain::SevenBit::new(2).expect("value"),
+            },
+        };
+        assert_eq!(daemon.dispatch_registered(&event), (0, 0));
+        assert_eq!(daemon.activity_counters(), (1, 0, 0));
+        assert_eq!(daemon.state_sequence, 1);
+        let event_payload = serde_json::from_slice::<serde_json::Value>(
+            &daemon.state_events.back().expect("event").payload,
+        )
+        .expect("payload");
+        assert_eq!(event_payload["received"], 1);
         let _ = fs::remove_file(path);
     }
 
