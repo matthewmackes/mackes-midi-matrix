@@ -2544,6 +2544,7 @@ Redacted fixture filenames and hashes:
 
 | 2026-08-28 | W040/W041 | codex | live daemon payload projection → implemented | The executable TUI now projects authoritative snapshot and sequenced event fields into typed dashboard state for health, active scene, route generation, activity counters, activation progress, and activation results; targeted build/tests and strict Clippy pass. Full daemon emission for every projected field and mapped-MIDI dashboard actions remain for final review. |
 | 2026-08-28 | W010/W040/W041 | codex | route-generation event authority → implemented | Daemon snapshots and journal events now expose the router's actual `route_generation`; the TUI consumes that field rather than daemon lifecycle generation. Daemon/TUI tests and strict Clippy pass; activity/scene event producers and mapped-MIDI actions remain for final review. |
+| 2026-08-28 | W010/W041 | codex | daemon MIDI activity counters → implemented | The common registered-dispatch boundary now maintains saturating received/sent/dropped counters and publishes them in snapshots and journal payloads; daemon tests, strict Clippy, and the full release gate pass. Physical/backend-specific activity qualification and mapped-MIDI dashboard actions remain for final review. |
 
 ## 6. Proposed changes and decisions queue
 

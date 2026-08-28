@@ -229,6 +229,9 @@ pub struct Daemon {
     virtual_ingress: Receiver<(u64, Vec<u8>)>,
     virtual_ingress_tx: Sender<(u64, Vec<u8>)>,
     virtual_sequence: u64,
+    received_events: u64,
+    sent_events: u64,
+    dropped_events: u64,
     state_sequence: u64,
     state_events: VecDeque<mackes_ipc::StateEvent>,
 }
@@ -367,6 +370,9 @@ impl Daemon {
             virtual_ingress,
             virtual_ingress_tx,
             virtual_sequence: 0,
+            received_events: 0,
+            sent_events: 0,
+            dropped_events: 0,
             state_sequence: 0,
             state_events: VecDeque::with_capacity(256),
         })
@@ -582,7 +588,17 @@ impl Daemon {
     /// Dispatches one event through the daemon-owned output registry.
     #[must_use]
     pub fn dispatch_registered(&mut self, event: &mackes_domain::MidiEvent) -> (usize, usize) {
-        self.outputs.dispatch(&self.router, event)
+        let (sent, unmatched) = self.outputs.dispatch(&self.router, event);
+        self.received_events = self.received_events.saturating_add(1);
+        self.sent_events = self.sent_events.saturating_add(sent as u64);
+        self.dropped_events = self.dropped_events.saturating_add(unmatched as u64);
+        (sent, unmatched)
+    }
+
+    /// Returns bounded aggregate MIDI activity counters.
+    #[must_use]
+    pub const fn activity_counters(&self) -> (u64, u64, u64) {
+        (self.received_events, self.sent_events, self.dropped_events)
     }
 
     /// Registers one explicitly opened input adapter with the daemon.
@@ -899,6 +915,9 @@ impl Daemon {
             "command": command.tag(),
             "generation": self.generation,
             "route_generation": self.route_generation(),
+            "received": self.received_events,
+            "sent": self.sent_events,
+            "dropped": self.dropped_events,
             "health": match self.health {
                 Health::Starting => "starting",
                 Health::Ready => "ready",
@@ -919,6 +938,9 @@ impl Daemon {
             "ok": true,
             "generation": self.generation,
             "route_generation": self.route_generation(),
+            "received": self.received_events,
+            "sent": self.sent_events,
+            "dropped": self.dropped_events,
             "last_sequence": self.state_sequence,
             "health": match self.health {
                 Health::Starting => "starting",
@@ -1302,6 +1324,9 @@ mod tests {
         let snapshot: serde_json::Value =
             serde_json::from_str(&daemon.snapshot_response()).expect("snapshot");
         assert_eq!(snapshot["last_sequence"], 1);
+        assert_eq!(snapshot["received"], 0);
+        assert_eq!(snapshot["sent"], 0);
+        assert_eq!(snapshot["dropped"], 0);
         let replay: serde_json::Value =
             serde_json::from_str(&daemon.subscribe_response(br#"{"after_sequence":0}"#))
                 .expect("replay");
