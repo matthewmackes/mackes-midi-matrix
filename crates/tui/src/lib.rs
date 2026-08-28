@@ -1545,7 +1545,8 @@ impl RoutingEditor {
 
     /// Cycles common bounded filter presets for the selected route.
     ///
-    /// The cycle is no filter, MIDI-number lower half, value upper half, then no filter.
+    /// The cycle is no filter, MIDI-number lower half, value upper half, realtime clock,
+    /// masked `SysEx` marker, then no filter.
     ///
     /// # Errors
     ///
@@ -1559,6 +1560,17 @@ impl RoutingEditor {
             [] => vec![mackes_midi_engine::RoutePredicate::NumberRange { minimum: 0, maximum: 63 }],
             [mackes_midi_engine::RoutePredicate::NumberRange { .. }] => {
                 vec![mackes_midi_engine::RoutePredicate::ValueRange { minimum: 64, maximum: 127 }]
+            }
+            [mackes_midi_engine::RoutePredicate::ValueRange { .. }] => {
+                vec![mackes_midi_engine::RoutePredicate::Realtime(
+                    mackes_domain::RealtimeMessage::Clock,
+                )]
+            }
+            [mackes_midi_engine::RoutePredicate::Realtime(_)] => {
+                vec![mackes_midi_engine::RoutePredicate::SysExMask {
+                    pattern: vec![0x7d],
+                    mask: vec![0x7f],
+                }]
             }
             _ => Vec::new(),
         };
@@ -3470,6 +3482,8 @@ mod tests {
         editor.cycle_selected_filter().expect("number filter");
         assert_eq!(editor.drafts[0].filters.predicates.len(), 1);
         editor.cycle_selected_filter().expect("value filter");
+        editor.cycle_selected_filter().expect("realtime filter");
+        editor.cycle_selected_filter().expect("sysex filter");
         editor.cycle_selected_filter().expect("clear filter");
         assert!(editor.drafts[0].filters.predicates.is_empty());
         assert_eq!(editor.remove(4), Err("mapping index is out of range"));
