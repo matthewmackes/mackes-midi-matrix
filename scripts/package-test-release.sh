@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ $# -ne 1 || ! "$1" =~ ^[0-9]+\.[0-9]+\.[0-9]+-test\.[0-9]+$ ]]; then
-  printf 'usage: %s VERSION (example: 0.1.0-test.1)\n' "$0" >&2
+if [[ $# -ne 1 || ! "$1" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-test\.[0-9]+)?$ ]]; then
+  printf 'usage: %s VERSION (example: 0.1.0 or 0.1.0-test.1)\n' "$0" >&2
   exit 64
 fi
 
