@@ -975,7 +975,8 @@ impl RoutingEditor {
     #[must_use]
     pub fn frame_lines(&self, viewport: Viewport) -> Vec<String> {
         let mut lines =
-            vec!["Routing & mappings — uncommitted draft (j/k select, d remove, s save)".into()];
+            vec!["Routing & mappings — uncommitted draft (j/k select, m mode, d remove, s save)"
+                .into()];
         lines.extend(self.drafts.iter().enumerate().map(|(index, draft)| {
             format!(
                 "{} p{} {} -> {} {:?} ch={:?} {}",
@@ -1355,6 +1356,31 @@ impl RoutingEditor {
         self.selected =
             if self.drafts.is_empty() { None } else { Some(index.min(self.drafts.len() - 1)) };
         Ok(removed)
+    }
+    /// Cycles the selected mapping through the supported MIDI message classes.
+    ///
+    /// The edit is transactional and is rejected if changing class would create a conflict.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when no valid row is selected or the edited batch conflicts.
+    pub fn cycle_selected_mode(&mut self) -> Result<(), String> {
+        let index = self.selected.ok_or("no mapping is selected")?;
+        let mut candidate = self.drafts.clone();
+        if index >= candidate.len() {
+            return Err("selected mapping is out of range".into());
+        }
+        let mode = match candidate[index].mode {
+            MappingMode::Cc => MappingMode::ProgramChange,
+            MappingMode::ProgramChange => MappingMode::Note,
+            MappingMode::Note => MappingMode::PitchBend,
+            MappingMode::PitchBend => MappingMode::Sysex,
+            MappingMode::Sysex => MappingMode::Cc,
+        };
+        candidate[index].mode = mode;
+        validate_mapping_batch(&candidate)?;
+        self.drafts = candidate;
+        Ok(())
     }
     /// Reorders rows using a complete permutation after validation.
     ///

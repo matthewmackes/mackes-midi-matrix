@@ -219,6 +219,11 @@ fn run_tui() -> Result<(), String> {
                             let _ = routing_editor.remove(index);
                         }
                     }
+                    KeyCode::Char('m') if workspace == 5 => {
+                        if routing_editor.cycle_selected_mode().is_err() {
+                            "route-edit-rejected".clone_into(&mut dashboard.health);
+                        }
+                    }
                     KeyCode::Char('j') if workspace == 5 => {
                         if !routing_editor.drafts.is_empty() {
                             let next = routing_editor.selected.map_or(0, |index| {
