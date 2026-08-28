@@ -1550,6 +1550,10 @@ pub struct DeviceWorkspace {
 impl DeviceWorkspace {
     /// Builds the Eventide `MicroPitch` page from its compiled documented
     /// control labels while applying the fixed signal-flow grouping.
+    ///
+    /// # Panics
+    ///
+    /// Panics only if the static signal-flow diagram is invalid.
     #[must_use]
     pub fn eventide_micropitch() -> Self {
         let profile = mackes_profiles::eventide_micropitch_profile();
@@ -2262,7 +2266,12 @@ pub fn draw_setlists(frame: &mut Frame<'_>, area: Rect, editor: &SetlistEditor) 
 
 /// Draws the transactional routing and mapping editor.
 pub fn draw_routing(frame: &mut Frame<'_>, area: Rect, editor: &RoutingEditor) {
-    draw_lines(frame, area, "Routing & mappings", &editor.frame_lines(Viewport::new(area.width, area.height)));
+    draw_lines(
+        frame,
+        area,
+        "Routing & mappings",
+        &editor.frame_lines(Viewport::new(area.width, area.height)),
+    );
 }
 
 #[cfg(test)]
@@ -2893,13 +2902,12 @@ mod tests {
         let profile = mackes_profiles::eventide_micropitch_profile();
         let mut rendered = workspace.shared_controls.clone();
         rendered.extend(workspace.groups.iter().flat_map(|group| group.control_ids.clone()));
-        let expected = profile
-            .controls
-            .iter()
-            .map(|control| control.label.clone())
-            .collect::<Vec<_>>();
+        let expected =
+            profile.controls.iter().map(|control| control.label.clone()).collect::<Vec<_>>();
         assert_eq!(rendered.len(), expected.len());
-        assert!(expected.iter().all(|label| rendered.iter().filter(|item| *item == label).count() == 1));
+        assert!(expected
+            .iter()
+            .all(|label| rendered.iter().filter(|item| *item == label).count() == 1));
         assert_eq!(workspace.diagram_notice(), None);
     }
 
