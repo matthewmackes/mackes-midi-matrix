@@ -110,6 +110,18 @@ fn run_tui() -> Result<(), String> {
                             let _ = routing_editor.remove(index);
                         }
                     }
+                    KeyCode::Char('j') if workspace == 5 => {
+                        if !routing_editor.drafts.is_empty() {
+                            let next = routing_editor.selected.map_or(0, |index| {
+                                (index + 1).min(routing_editor.drafts.len() - 1)
+                            });
+                            routing_editor.selected = Some(next);
+                        }
+                    }
+                    KeyCode::Char('k') if workspace == 5 && !routing_editor.drafts.is_empty() => {
+                        let next = routing_editor.selected.unwrap_or(0).saturating_sub(1);
+                        routing_editor.selected = Some(next);
+                    }
                     _ => {}
                 }
             }

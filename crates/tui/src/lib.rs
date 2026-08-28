@@ -972,7 +972,8 @@ impl RoutingEditor {
     /// Returns the transactional routing draft in execution priority order.
     #[must_use]
     pub fn frame_lines(&self, viewport: Viewport) -> Vec<String> {
-        let mut lines = vec!["Routing & mappings — uncommitted draft".into()];
+        let mut lines =
+            vec!["Routing & mappings — uncommitted draft (j/k select, d remove, s save)".into()];
         lines.extend(self.drafts.iter().enumerate().map(|(index, draft)| {
             format!(
                 "{} p{} {} -> {} {:?} ch={:?} {}",
