@@ -2638,6 +2638,15 @@ mod tests {
             }],
         };
         assert_eq!(invalid.validate(), Err("invalid MIDI value range"));
+        let persisted = vec![
+            mackes_config::LearnedFilter::NumberRange { minimum: 1, maximum: 2 },
+            mackes_config::LearnedFilter::ValueRange { minimum: 3, maximum: 4 },
+            mackes_config::LearnedFilter::Realtime {
+                message: mackes_config::LearnedRealtime::Reset,
+            },
+            mackes_config::LearnedFilter::SysExMask { pattern: vec![1], mask: vec![127] },
+        ];
+        assert_eq!(predicates_from_learned_filters(&persisted).expect("convert").len(), 4);
     }
 
     #[test]

@@ -1377,6 +1377,44 @@ mod tests {
     }
 
     #[test]
+    fn learned_filters_round_trip_and_validate_bounds() {
+        let filters = vec![
+            LearnedFilter::NumberRange { minimum: 1, maximum: 7 },
+            LearnedFilter::ValueRange { minimum: 100, maximum: 200 },
+            LearnedFilter::Realtime { message: LearnedRealtime::Clock },
+            LearnedFilter::SysExMask { pattern: vec![1, 2], mask: vec![127, 127] },
+        ];
+        let encoded = serde_json::to_string(&filters).expect("filters serialize");
+        let decoded: Vec<LearnedFilter> = serde_json::from_str(&encoded).expect("filters parse");
+        assert_eq!(decoded, filters);
+
+        let mut document = document();
+        document.endpoints.push(EndpointAlias {
+            id: "input".into(),
+            name: None,
+            vendor_id: None,
+            product_id: None,
+            serial: None,
+        });
+        let mapping = LearnedMapping {
+            source_alias: "input".into(),
+            message_kind: "control_change".into(),
+            channel_policy: LearnedChannelPolicy::Any,
+            number: Some(1),
+            raw: vec![0xB0, 1, 2],
+            destination: "delay.mix".into(),
+            mode: "cc".into(),
+            enabled: true,
+            priority: 0,
+            filters,
+        };
+        assert!(add_learned_mapping(&document, mapping.clone()).is_ok());
+        let mut invalid = mapping;
+        invalid.filters = vec![LearnedFilter::NumberRange { minimum: 8, maximum: 7 }];
+        assert!(add_learned_mapping(&document, invalid).is_err());
+    }
+
+    #[test]
     fn project_deletion_requires_explicit_reference_resolution() {
         let mut value = document();
         value.settings.active_project = None;

@@ -2614,6 +2614,7 @@ New requests enter here before implementation.
 | 2026-08-28 | W042/W046 | codex | persisted learned mapping filters → implemented | Added backward-compatible bounded number/value/realtime/masked-SysEx filters to learned mappings, semantic config validation, and conversion into validated engine predicates. Full release gate passes: workspace tests, strict Clippy, optimized throughput, hermetic integration, and installer smoke. |
 | 2026-08-28 | W042 | codex | filter-bearing mapping editor draft → implemented | Extended transactional `MappingDraft` with the bounded `MappingFilterDraft`, so editor validation now includes the same engine predicates used by persisted learned mappings. Full release gate passes. |
 | 2026-08-28 | W004/W042 | codex | configuration schema synchronization → implemented | Added schema coverage for persisted setlists, learned mappings, and bounded learned filters, closing drift between the typed config document and the committed JSON Schema. Full release gate passes. |
+| 2026-08-28 | W016/W042 | codex | learned-filter persistence evidence → implemented | Added direct config round-trip and invalid-bound tests plus all-variant persisted-filter-to-engine conversion coverage. Full release gate passes. |
 
 The worklist is complete only when W053 is `DONE`. A feature demonstration, passing unit
 tests, or code presence alone is not release completion.
