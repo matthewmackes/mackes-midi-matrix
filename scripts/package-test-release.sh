@@ -15,6 +15,10 @@ checksum="$archive.sha256"
 staging="$(mktemp -d)"
 trap 'rm -rf -- "$staging"' EXIT
 
+cargo build --release --locked \
+  --package mackes-midi-matrix \
+  --package mackesd
+
 for binary in mackes-midi-matrix mackes-midi-matrixd; do
   path="$root_dir/target/release/$binary"
   [[ -x "$path" ]] || {
