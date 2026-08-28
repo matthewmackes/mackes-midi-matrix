@@ -537,6 +537,8 @@ pub struct DashboardState {
     pub notifications: Vec<Notification>,
     /// Latest bounded source-to-destination MIDI activity.
     pub live_activity: Option<LiveActivity>,
+    /// Local monotonic age of the displayed activity, in nanoseconds.
+    pub live_activity_age_nanos: u64,
     /// Whether the mapping editor contains changes not yet committed to the daemon.
     pub mapping_dirty: bool,
     /// Selected output destination in the flattened visible inventory.
@@ -2640,6 +2642,11 @@ impl DashboardState {
         self.dropped = dropped;
     }
 
+    /// Advances the local activity age without depending on wall-clock time.
+    pub const fn advance_live_activity_age(&mut self, elapsed_nanos: u64) {
+        self.live_activity_age_nanos = self.live_activity_age_nanos.saturating_add(elapsed_nanos);
+    }
+
     /// Replaces the bounded per-device health projection.
     pub fn set_device_health(&mut self, mut values: Vec<(String, String)>) {
         values.truncate(32);
@@ -2678,7 +2685,10 @@ impl DashboardState {
             DashboardEvent::ActivationResult(value) => self.activation_result = Some(value),
             DashboardEvent::DeviceHealth(values) => self.set_device_health(values),
             DashboardEvent::Notification { severity, message } => self.notify(severity, message),
-            DashboardEvent::LiveActivity(activity) => self.live_activity = Some(activity),
+            DashboardEvent::LiveActivity(activity) => {
+                self.live_activity = Some(activity);
+                self.live_activity_age_nanos = 0;
+            }
             DashboardEvent::PhysicalDevices(devices) => self.physical_devices = devices,
         }
     }
@@ -3236,10 +3246,11 @@ pub fn draw_controller_mapping(
         let value = activity.value.map_or_else(|| "--".to_owned(), |value| value.to_string());
         let number = activity.number.map_or_else(|| "--".to_owned(), |number| number.to_string());
         lines.push(format!(
-            "  LIVE: {}  #{}  VALUE {}  → {} DESTINATION(S)",
+            "  LIVE: {}  #{}  VALUE {}  AGE {}ms  → {} DESTINATION(S)",
             activity.kind,
             number,
             value,
+            dashboard.live_activity_age_nanos / 1_000_000,
             activity.destination_endpoints.len()
         ));
         lines.push(format!(
@@ -3768,6 +3779,20 @@ mod tests {
         );
         assert_eq!(dashboard.device_health.len(), 32);
         assert!(dashboard.panic_available);
+    }
+
+    #[test]
+    fn live_activity_age_advances_and_resets_on_new_activity() {
+        let mut dashboard = DashboardState::initial();
+        dashboard.advance_live_activity_age(1_500_000_000);
+        assert_eq!(dashboard.live_activity_age_nanos, 1_500_000_000);
+        dashboard.apply_event(DashboardEvent::LiveActivity(LiveActivity {
+            control_id: "endpoint:1:cc:7".into(),
+            ..LiveActivity::default()
+        }));
+        assert_eq!(dashboard.live_activity_age_nanos, 0);
+        dashboard.advance_live_activity_age(u64::MAX);
+        assert_eq!(dashboard.live_activity_age_nanos, u64::MAX);
     }
 
     #[test]

@@ -36,6 +36,7 @@ fn run_tui() -> Result<(), String> {
     let mut needs_snapshot = true;
     let mut route_generation = 0_u64;
     let result = (|| loop {
+        dashboard.advance_live_activity_age(250_000_000);
         let synchronized = if needs_snapshot {
             synchronize_snapshot(
                 &mut client_state,
