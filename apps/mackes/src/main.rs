@@ -87,7 +87,7 @@ fn run_tui() -> Result<(), String> {
                             .and_then(|number| u8::try_from(number).ok())
                             .unwrap_or(1);
                     }
-                    KeyCode::Char('n' | 'p') => {
+                    KeyCode::Char('n' | 'p') if workspace != 9 => {
                         let response = dispatch_ui_command(if key.code == KeyCode::Char('n') {
                             mackes_tui::UiCommand::NextScene
                         } else {
@@ -263,6 +263,21 @@ fn run_tui() -> Result<(), String> {
                     }
                     KeyCode::Char('a') if workspace == 9 => {
                         setlist_editor.add_empty();
+                    }
+                    KeyCode::Char('p') if workspace == 9 => {
+                        if let Some(index) = setlist_editor.selected {
+                            let existing = &setlist_editor.drafts[index].projects;
+                            if let Some(project) = setlist_editor
+                                .available_projects
+                                .iter()
+                                .find(|project| !existing.iter().any(|value| value == *project))
+                                .cloned()
+                            {
+                                let _ = setlist_editor.append_project(project);
+                            } else {
+                                "no-unused-project".clone_into(&mut dashboard.health);
+                            }
+                        }
                     }
                     KeyCode::Char('k') if workspace == 9 && !setlist_editor.drafts.is_empty() => {
                         let next = setlist_editor.selected.unwrap_or(0).saturating_sub(1);
@@ -1038,6 +1053,17 @@ fn project_observability(
 }
 
 fn project_setlists(editor: &mut mackes_tui::SetlistEditor, payload: &serde_json::Value) {
+    if let Some(projects) = payload
+        .get("catalog")
+        .and_then(|catalog| catalog.get("projects"))
+        .and_then(serde_json::Value::as_array)
+    {
+        editor.available_projects = projects
+            .iter()
+            .filter_map(|project| project.get("id").and_then(serde_json::Value::as_str))
+            .map(str::to_owned)
+            .collect();
+    }
     let Some(values) = payload
         .get("catalog")
         .and_then(|v| v.get("setlists"))

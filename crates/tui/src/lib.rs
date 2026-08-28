@@ -917,13 +917,15 @@ pub struct SetlistEditor {
     pub drafts: Vec<mackes_config::Setlist>,
     /// Currently selected setlist index.
     pub selected: Option<usize>,
+    /// Project IDs available for assignment, projected from the daemon catalog.
+    pub available_projects: Vec<String>,
 }
 
 impl SetlistEditor {
     /// Starts an editor from a persisted snapshot.
     #[must_use]
     pub fn from_snapshot(setlists: &[mackes_config::Setlist]) -> Self {
-        Self { drafts: setlists.to_vec(), selected: None }
+        Self { drafts: setlists.to_vec(), selected: None, available_projects: Vec::new() }
     }
 
     /// Adds a new empty setlist using a deterministic collision-safe identifier.
@@ -954,6 +956,24 @@ impl SetlistEditor {
             return Err("setlist index is out of range");
         }
         self.selected = Some(index);
+        Ok(())
+    }
+
+    /// Appends a project to the selected setlist, rejecting duplicates and empty IDs.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when no setlist is selected, the ID is empty, or the project is already present.
+    pub fn append_project(&mut self, project_id: impl Into<String>) -> Result<(), &'static str> {
+        let index = self.selected.ok_or("no setlist selected")?;
+        let project_id = project_id.into();
+        if project_id.trim().is_empty() {
+            return Err("project ID must not be empty");
+        }
+        if self.drafts[index].projects.iter().any(|project| project == &project_id) {
+            return Err("project is already in setlist");
+        }
+        self.drafts[index].projects.push(project_id);
         Ok(())
     }
 
@@ -2581,7 +2601,7 @@ impl SetlistEditor {
     #[must_use]
     pub fn frame_lines(&self, viewport: Viewport) -> Vec<String> {
         let mut lines = vec![
-            "Setlists — uncommitted draft (a add, j/k select, </> reorder, c copy, d delete, s save)"
+            "Setlists — uncommitted draft (a add, p project, j/k select, </> reorder, c copy, d delete, s save)"
                 .into(),
         ];
         lines.extend(self.drafts.iter().enumerate().map(|(index, setlist)| {
@@ -3356,10 +3376,12 @@ mod tests {
         assert!(editor.reorder_selected(&["b", "a"]).is_err());
         editor.select(0).expect("selection");
         editor.reorder_selected(&["b", "a"]).expect("reorder");
+        assert!(editor.append_project("c").is_ok());
+        assert!(editor.append_project("c").is_err());
         editor.copy_selected("encore").expect("copy");
         assert_eq!(editor.add_empty(), "new-setlist-1");
         assert_eq!(editor.add_empty(), "new-setlist-2");
-        assert_eq!(editor.drafts[0].projects, vec!["b", "a"]);
+        assert_eq!(editor.drafts[0].projects, vec!["b", "a", "c"]);
         assert_eq!(source.projects, vec!["a", "b"]);
         assert!(editor.frame_lines(Viewport::new(80, 24))[0].contains("uncommitted"));
         assert_eq!(editor.commit().len(), 4);
