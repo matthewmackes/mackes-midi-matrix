@@ -111,6 +111,14 @@ fn run_tui() -> Result<(), String> {
                             "routes-save-failed".to_owned()
                         };
                     }
+                    KeyCode::Char('s') if workspace == 9 => {
+                        let response = save_setlists(&setlist_editor);
+                        dashboard.health = if response.contains("\"ok\":true") {
+                            "setlists-saved".to_owned()
+                        } else {
+                            "setlists-save-failed".to_owned()
+                        };
+                    }
                     KeyCode::Char('d') if workspace == 5 => {
                         if let Some(index) = routing_editor.selected {
                             let _ = routing_editor.remove(index);
@@ -924,6 +932,12 @@ fn save_routes(editor: &mackes_tui::RoutingEditor, current_generation: u64) -> S
     }))
     .expect("route save payload is serializable");
     daemon_request(mackes_ipc::Command::Routes, &payload)
+}
+
+fn save_setlists(editor: &mackes_tui::SetlistEditor) -> String {
+    let payload = serde_json::to_vec(&serde_json::json!({"setlists": editor.drafts}))
+        .expect("setlist save payload is serializable");
+    daemon_request(mackes_ipc::Command::Configuration, &payload)
 }
 
 fn project_routes(editor: &mut mackes_tui::RoutingEditor, payload: &serde_json::Value) {

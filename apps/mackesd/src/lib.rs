@@ -224,6 +224,7 @@ pub struct Daemon {
     active_scene: Option<String>,
     scene_ids: Vec<String>,
     catalog: serde_json::Value,
+    config_path: Option<std::path::PathBuf>,
     router: mackes_midi_engine::RouterStore,
     rtp_peer: mackes_midi_engine::RtpMidiPeer,
     outputs: mackes_midi_engine::OutputRegistry,
@@ -372,6 +373,7 @@ impl Daemon {
             active_scene: None,
             scene_ids: Vec::new(),
             catalog: serde_json::json!({"projects": [], "setlists": []}),
+            config_path: None,
             router: mackes_midi_engine::RouterStore::new(Vec::new(), 0, 8)
                 .map_err(io::Error::other)?,
             rtp_peer: mackes_midi_engine::RtpMidiPeer::new(0, 32).map_err(io::Error::other)?,
@@ -1216,6 +1218,35 @@ impl Daemon {
         {
             self.health = health_after_authorized_command(self.health, command);
             self.generation = self.generation.saturating_add(1);
+            if command == Some(Command::Configuration) {
+                let value =
+                    serde_json::from_slice::<serde_json::Value>(&request).unwrap_or_default();
+                if let Some(values) = value.get("setlists") {
+                    let Some(path) = self.config_path.clone() else {
+                        return stream.write_all(
+                            b"{\"ok\":false,\"error\":\"configuration path is unavailable\"}\n",
+                        );
+                    };
+                    let Ok(setlists) =
+                        serde_json::from_value::<Vec<mackes_config::Setlist>>(values.clone())
+                    else {
+                        return stream
+                            .write_all(b"{\"ok\":false,\"error\":\"invalid setlists\"}\n");
+                    };
+                    let Ok(mut document) = mackes_config::load(&path) else {
+                        return stream.write_all(
+                            b"{\"ok\":false,\"error\":\"configuration load failed\"}\n",
+                        );
+                    };
+                    document.setlists = setlists;
+                    if let Err(error) = mackes_config::save(&path, &document, 5) {
+                        return stream.write_all(
+                            format!("{{\"ok\":false,\"error\":\"{error}\"}}\n").as_bytes(),
+                        );
+                    }
+                    self.catalog = serde_json::json!({"projects": document.projects.iter().map(|project| serde_json::json!({"id": project.id, "scenes": project.scenes.iter().map(|scene| scene.id.clone()).collect::<Vec<_>>() })).collect::<Vec<_>>(), "setlists": document.setlists});
+                }
+            }
             if command == Some(Command::Routes) {
                 if let Ok(value) = serde_json::from_slice::<serde_json::Value>(&request) {
                     if let Some(route_values) = value.get("routes") {
@@ -1359,6 +1390,11 @@ impl Daemon {
     /// Installs the validated project/setlist catalog for read-only UI queries.
     pub fn set_catalog(&mut self, catalog: serde_json::Value) {
         self.catalog = catalog;
+    }
+
+    /// Sets the daemon-owned configuration path for authorized persistence.
+    pub fn set_config_path(&mut self, path: impl Into<std::path::PathBuf>) {
+        self.config_path = Some(path.into());
     }
 
     fn scenes_response(&self) -> String {

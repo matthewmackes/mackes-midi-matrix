@@ -111,6 +111,7 @@ fn main() {
             std::process::exit(1);
         }
     };
+    daemon.set_config_path(&config);
     if let Err(error) = daemon.set_nonblocking(true) {
         eprintln!("mackes-midi-matrixd: cannot configure nonblocking control socket: {error}");
         std::process::exit(1);
