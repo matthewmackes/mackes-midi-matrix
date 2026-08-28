@@ -576,6 +576,8 @@ pub struct LearnWorkspace {
     pub destination: Option<(String, MappingMode)>,
     /// Whether the current candidate/destination pair passed its live test.
     pub live_test_passed: bool,
+    /// Additional predicates selected for the learned mapping.
+    pub filters: MappingFilterDraft,
 }
 
 /// Explicit MIDI-channel matching policy saved with a learned mapping.
@@ -687,6 +689,60 @@ pub fn predicates_from_learned_filters(
     Ok(predicates)
 }
 
+/// Converts validated engine predicates into the persisted Learn filter model.
+#[must_use]
+pub fn learned_filters_from_predicates(
+    predicates: &[mackes_midi_engine::RoutePredicate],
+) -> Option<Vec<mackes_config::LearnedFilter>> {
+    predicates
+        .iter()
+        .map(|predicate| match predicate {
+            mackes_midi_engine::RoutePredicate::NumberRange { minimum, maximum } => {
+                Some(mackes_config::LearnedFilter::NumberRange {
+                    minimum: *minimum,
+                    maximum: *maximum,
+                })
+            }
+            mackes_midi_engine::RoutePredicate::ValueRange { minimum, maximum } => {
+                Some(mackes_config::LearnedFilter::ValueRange {
+                    minimum: *minimum,
+                    maximum: *maximum,
+                })
+            }
+            mackes_midi_engine::RoutePredicate::Realtime(message) => {
+                Some(mackes_config::LearnedFilter::Realtime {
+                    message: match message {
+                        mackes_domain::RealtimeMessage::Clock => {
+                            mackes_config::LearnedRealtime::Clock
+                        }
+                        mackes_domain::RealtimeMessage::Start => {
+                            mackes_config::LearnedRealtime::Start
+                        }
+                        mackes_domain::RealtimeMessage::Continue => {
+                            mackes_config::LearnedRealtime::Continue
+                        }
+                        mackes_domain::RealtimeMessage::Stop => {
+                            mackes_config::LearnedRealtime::Stop
+                        }
+                        mackes_domain::RealtimeMessage::ActiveSensing => {
+                            mackes_config::LearnedRealtime::ActiveSensing
+                        }
+                        mackes_domain::RealtimeMessage::Reset => {
+                            mackes_config::LearnedRealtime::Reset
+                        }
+                    },
+                })
+            }
+            mackes_midi_engine::RoutePredicate::SysExMask { pattern, mask } => {
+                Some(mackes_config::LearnedFilter::SysExMask {
+                    pattern: pattern.clone(),
+                    mask: mask.clone(),
+                })
+            }
+        })
+        .collect()
+}
+
 /// Supported operator-facing mapping classes.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum MappingMode {
@@ -712,7 +768,7 @@ impl Default for MappingDraft {
             mode: MappingMode::Cc,
             priority: 0,
             curve: mackes_midi_engine::Curve::Linear,
-            filters: MappingFilterDraft::default(),
+            filters: MappingFilterDraft { predicates: Vec::new() },
         }
     }
 }
@@ -1324,6 +1380,7 @@ impl LearnWorkspace {
             channel_policy: None,
             destination: None,
             live_test_passed: false,
+            filters: MappingFilterDraft { predicates: Vec::new() },
         }
     }
     /// Selects the global input endpoint used for all Learn captures.
@@ -1475,6 +1532,7 @@ impl LearnWorkspace {
         }
         let candidate = self.selected.and_then(|index| self.candidates.get(index))?;
         let (destination, mode) = self.destination.clone()?;
+        let filters = learned_filters_from_predicates(&self.filters.predicates)?;
         let channel_policy = match self.channel_policy? {
             LearnChannelPolicy::Exact(channel) => {
                 mackes_config::LearnedChannelPolicy::Exact(channel)
@@ -1492,7 +1550,7 @@ impl LearnWorkspace {
             mode: mapping_mode_name(mode).to_owned(),
             enabled: true,
             priority: 0,
-            filters: Vec::new(),
+            filters,
         })
     }
     /// Applies the committed mapping and global input to a configuration copy.
