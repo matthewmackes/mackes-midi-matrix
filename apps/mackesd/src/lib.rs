@@ -642,6 +642,79 @@ impl Daemon {
         self.inputs.poll_once()
     }
 
+    /// Polls registered inputs and resolves persisted dashboard bindings.
+    ///
+    /// Only the three non-destructive dashboard commands are returned. The
+    /// bound prevents a busy input from starving daemon work; unmatched and
+    /// ambiguous triggers are ignored fail-closed.
+    #[must_use]
+    pub fn poll_dashboard_commands(
+        &mut self,
+        bindings: &[mackes_config::DashboardMidiBinding],
+        limit: usize,
+    ) -> Vec<Command> {
+        let events = self.inputs.poll_once();
+        let mut commands = Vec::with_capacity(limit.min(32));
+        for event in events.into_iter().take(limit.min(128)) {
+            let mut matched = None;
+            for binding in bindings {
+                let trigger_matches = match (&binding.trigger, &event.message) {
+                    (
+                        mackes_config::DashboardMidiTrigger::NoteOn { channel, note },
+                        mackes_domain::MidiMessage::NoteOn {
+                            channel: actual_channel,
+                            note: actual_note,
+                            ..
+                        },
+                    ) => {
+                        *channel >= 1
+                            && *channel <= 16
+                            && *note <= 127
+                            && actual_channel.one_based() == *channel
+                            && actual_note.as_u8() == *note
+                    }
+                    (
+                        mackes_config::DashboardMidiTrigger::ControlChange {
+                            channel,
+                            controller,
+                            value,
+                        },
+                        mackes_domain::MidiMessage::ControlChange {
+                            channel: actual_channel,
+                            controller: actual_controller,
+                            value: actual_value,
+                        },
+                    ) => {
+                        *channel >= 1
+                            && *channel <= 16
+                            && *controller <= 127
+                            && value.is_none_or(|expected| {
+                                expected <= 127 && expected == actual_value.as_u8()
+                            })
+                            && actual_channel.one_based() == *channel
+                            && actual_controller.as_u8() == *controller
+                    }
+                    _ => false,
+                };
+                if trigger_matches {
+                    if matched.is_some() {
+                        matched = None;
+                        break;
+                    }
+                    matched = match binding.command.as_str() {
+                        "panic" => Some(Command::Panic),
+                        "next_scene" | "previous_scene" => Some(Command::Scenes),
+                        _ => None,
+                    };
+                }
+            }
+            if let Some(command) = matched {
+                commands.push(command);
+            }
+        }
+        commands
+    }
+
     /// Polls owned inputs and dispatches all decoded events through owned outputs.
     #[must_use]
     pub fn pump_registered_inputs(&mut self) -> Vec<(usize, usize)> {
@@ -1428,6 +1501,21 @@ mod tests {
         )
         .expect("event payload");
         assert_eq!(event["active_scene"], "intro");
+        let _ = fs::remove_file(path);
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn dashboard_command_polling_is_bounded_and_requires_registered_input() {
+        let path = std::env::temp_dir()
+            .join(format!("mackes-dashboard-input-{}.sock", std::process::id()));
+        let mut daemon = Daemon::bind(&path).expect("daemon");
+        let binding = mackes_config::DashboardMidiBinding {
+            trigger: mackes_config::DashboardMidiTrigger::NoteOn { channel: 1, note: 36 },
+            command: "panic".into(),
+        };
+        assert!(daemon.poll_dashboard_commands(&[binding], 128).is_empty());
+        assert!(daemon.poll_dashboard_commands(&[], 0).is_empty());
         let _ = fs::remove_file(path);
     }
 
