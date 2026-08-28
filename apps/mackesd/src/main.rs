@@ -120,6 +120,23 @@ fn main() {
         daemon.mark_degraded();
     }
     if let Ok(document) = mackes_config::load(&config) {
+        let learn_endpoint_id = document
+            .settings
+            .learn_input_alias
+            .as_deref()
+            .and_then(|alias_id| document.endpoints.iter().find(|alias| alias.id == alias_id))
+            .and_then(|alias| alias.name.as_deref())
+            .and_then(|pattern| {
+                mackes_midi_engine::enumerate_midir_ports().ok().and_then(|ports| {
+                    ports
+                        .into_iter()
+                        .find(|port| {
+                            port.direction == mackes_midi_engine::EndpointDirection::Input
+                                && port.name.contains(pattern)
+                        })
+                        .map(|port| port.id)
+                })
+            });
         let catalog = serde_json::json!({
             "projects": document.projects.iter().map(|project| serde_json::json!({
                 "id": project.id,
@@ -127,6 +144,7 @@ fn main() {
             })).collect::<Vec<_>>(),
             "setlists": document.setlists,
             "learn_input_alias": document.settings.learn_input_alias,
+            "learn_endpoint_id": learn_endpoint_id,
         });
         daemon.set_catalog(catalog);
     }
