@@ -724,9 +724,20 @@ impl Daemon {
     ) -> Vec<Command> {
         let commands = self.poll_dashboard_commands(bindings, limit);
         for command in &commands {
-            self.record_state_event(*command);
+            let _ = self.handle_dashboard_command(*command);
         }
         commands
+    }
+
+    /// Handles one daemon-owned dashboard command using the same bounded
+    /// acknowledgment and journal path as a local IPC command.
+    #[must_use]
+    pub fn handle_dashboard_command(&mut self, command: Command) -> String {
+        if !matches!(command, Command::Panic | Command::Scenes) {
+            return "{\"ok\":false,\"error\":\"dashboard command is not allowed\"}\n".to_owned();
+        }
+        self.record_state_event(command);
+        command_ack(command, self.health, self.generation, &[], self.route_generation(), &[])
     }
 
     /// Polls owned inputs and dispatches all decoded events through owned outputs.
@@ -1530,6 +1541,10 @@ mod tests {
         };
         assert!(daemon.poll_dashboard_commands(&[binding], 128).is_empty());
         assert!(daemon.poll_dashboard_commands(&[], 0).is_empty());
+        let response = daemon.handle_dashboard_command(Command::Panic);
+        assert!(response.contains("\"panic\":true"));
+        assert_eq!(daemon.state_sequence, 1);
+        assert!(daemon.handle_dashboard_command(Command::Shutdown).contains("not allowed"));
         let _ = fs::remove_file(path);
     }
 
