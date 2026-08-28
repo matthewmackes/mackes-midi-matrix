@@ -2645,6 +2645,7 @@ New requests enter here before implementation.
 | 2026-08-28 | W010 | codex | nonblocking accept regression coverage → implemented | Added a daemon test proving a production-configured nonblocking control socket returns `WouldBlock` without a client, preserving the signal-aware loop contract; daemon tests (23) and strict Clippy pass. |
 | 2026-08-28 | W040/W045 | codex | default TUI dispatch → implemented | Invoking the operator binary without arguments now launches the same TUI entry point as the explicit `tui` command; release build smoke reaches terminal initialization and exits clearly when no terminal is available. |
 | 2026-08-28 | W010 | codex | active-scene persistence boundary → implemented | Production daemon state changes now persist accepted active-scene transitions through validated `set_active_scene` and atomic rotating `save`; daemon tests (23), strict Clippy, and locked workspace checks pass. |
+| 2026-08-28 | W010 | codex | active-scene persistence round-trip coverage → implemented | Promoted the persistence boundary into the daemon library and added an isolated config copy/reload test proving the selected scene survives an atomic save; daemon tests (24) and strict Clippy pass. |
 
 The worklist is complete only when W053 is `DONE`. A feature demonstration, passing unit
 tests, or code presence alone is not release completion.

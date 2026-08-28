@@ -1,13 +1,6 @@
 //! Persistent MACKES daemon entry point.
 
 #[cfg(target_os = "linux")]
-fn persist_active_scene(path: &std::path::Path, scene: Option<&str>) -> Result<(), String> {
-    let document = mackes_config::load(path).map_err(|error| error.to_string())?;
-    let updated = mackes_config::set_active_scene(&document, scene)?;
-    mackes_config::save(path, &updated, 10).map_err(|error| error.to_string())
-}
-
-#[cfg(target_os = "linux")]
 fn install_shutdown_signals() -> Result<std::sync::Arc<std::sync::atomic::AtomicBool>, String> {
     use std::sync::{atomic::AtomicBool, Arc};
     let shutdown = Arc::new(AtomicBool::new(false));
@@ -193,7 +186,7 @@ fn main() {
         }
         let current_scene = daemon.active_scene().map(str::to_owned);
         if current_scene != persisted_scene {
-            match persist_active_scene(&config, current_scene.as_deref()) {
+            match mackesd::persist_active_scene(&config, current_scene.as_deref()) {
                 Ok(()) => persisted_scene = current_scene,
                 Err(error) => eprint!(
                     "{}",

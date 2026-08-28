@@ -1442,6 +1442,18 @@ pub fn compile_scene_actions(
     )
 }
 
+/// Persists an accepted active-scene selection through validated atomic config saving.
+///
+/// # Errors
+///
+/// Returns the load, validation, or atomic-save error without modifying the in-memory daemon.
+#[cfg(target_os = "linux")]
+pub fn persist_active_scene(path: &Path, scene: Option<&str>) -> Result<(), String> {
+    let document = mackes_config::load(path).map_err(|error| error.to_string())?;
+    let updated = mackes_config::set_active_scene(&document, scene)?;
+    mackes_config::save(path, &updated, 10).map_err(|error| error.to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1581,6 +1593,19 @@ mod tests {
             .serve_once(AccessPolicy { control_gid: 0, daemon_uid: 0 })
             .expect_err("no client should produce WouldBlock");
         assert_eq!(error.kind(), std::io::ErrorKind::WouldBlock);
+        let _ = fs::remove_file(path);
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn active_scene_persistence_round_trips_through_config() {
+        let source = std::path::Path::new("../../fixtures/config-valid.json5");
+        let path =
+            std::env::temp_dir().join(format!("mackes-scene-persist-{}.json5", std::process::id()));
+        fs::copy(source, &path).expect("fixture copy");
+        persist_active_scene(&path, Some("intro")).expect("persist scene");
+        let document = mackes_config::load(&path).expect("reload config");
+        assert_eq!(document.settings.active_scene.as_deref(), Some("intro"));
         let _ = fs::remove_file(path);
     }
 
