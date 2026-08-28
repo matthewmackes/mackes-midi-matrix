@@ -2658,6 +2658,7 @@ New requests enter here before implementation.
 | 2026-08-28 | WORKLIST/W053 | codex | release-stage metadata synchronization → implemented | Updated document control to identify the public `0.1.0-test.1` integration-qualification stage and current update date; repository policy and full release gate pass. |
 | 2026-08-28 | W052/W053 | codex | public test release publication → verified | Published GitHub pre-release `v0.1.0-test.1` with the Linux x86_64 tarball and SHA-256 manifest; GitHub confirms the release is public, non-draft, and marked pre-release. |
 | 2026-08-28 | W045/W031 | codex | safe scene plan CLI → implemented | Added `scene plan <config> <project> <scene> [--json]`, compiling validated persisted actions into the ordinary activation plan without transmission; valid empty plans and missing-scene exit-2 JSON errors are verified. |
+| 2026-08-28 | W040/W042 | codex | route projection fallback coverage → implemented | Added executable-binary regression tests for supported route conversion and preservation of existing transactional drafts when a daemon route is malformed; focused package tests and strict Clippy pass. |
 
 The worklist is complete only when W053 is `DONE`. A feature demonstration, passing unit
 tests, or code presence alone is not release completion.

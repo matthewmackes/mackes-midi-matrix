@@ -773,6 +773,9 @@ fn project_routes(editor: &mut mackes_tui::RoutingEditor, payload: &serde_json::
         .filter_map(|route| {
             let source = route.get("source")?.as_u64()?;
             let destination = route.get("destination")?.as_u64()?;
+            if source == 0 || destination == 0 {
+                return None;
+            }
             let mode = match route.get("class")?.as_str()? {
                 "ControlChange" => mackes_tui::MappingMode::Cc,
                 "ProgramChange" => mackes_tui::MappingMode::ProgramChange,
@@ -797,7 +800,7 @@ fn project_routes(editor: &mut mackes_tui::RoutingEditor, payload: &serde_json::
             })
         })
         .collect::<Vec<_>>();
-    if mackes_tui::validate_mapping_batch(&drafts).is_ok() {
+    if drafts.len() == routes.len() && mackes_tui::validate_mapping_batch(&drafts).is_ok() {
         editor.drafts = drafts;
         editor.selected = None;
     }
@@ -966,5 +969,49 @@ const fn restore_result_status(result: &mackes_config::RestoreResult) -> &'stati
     match result {
         mackes_config::RestoreResult::Planned { status, .. }
         | mackes_config::RestoreResult::Applied { status, .. } => backup_status_label(status),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::project_routes;
+
+    #[test]
+    fn route_projection_converts_supported_daemon_routes() {
+        let mut editor = mackes_tui::RoutingEditor::from_bank(&mackes_tui::MappingBank::new());
+        project_routes(
+            &mut editor,
+            &serde_json::json!({
+                "routes": [{"source": 11, "destination": 22, "channel": 3, "class": "ControlChange"}]
+            }),
+        );
+        assert_eq!(editor.drafts.len(), 1);
+        assert_eq!(editor.drafts[0].source, "11");
+        assert_eq!(editor.drafts[0].destination, "22");
+        assert_eq!(editor.drafts[0].channel, Some(3));
+        assert_eq!(editor.drafts[0].mode, mackes_tui::MappingMode::Cc);
+    }
+
+    #[test]
+    fn route_projection_preserves_drafts_when_payload_is_not_projectable() {
+        let mut editor = mackes_tui::RoutingEditor::from_bank(&mackes_tui::MappingBank::new());
+        editor.drafts.push(mackes_tui::MappingDraft {
+            source: "old".into(),
+            destination: "target".into(),
+            channel: Some(1),
+            enabled: true,
+            mode: mackes_tui::MappingMode::Cc,
+            priority: 0,
+            curve: mackes_midi_engine::Curve::Linear,
+            filters: mackes_tui::MappingFilterDraft::default(),
+        });
+        project_routes(
+            &mut editor,
+            &serde_json::json!({
+                "routes": [{"source": 0, "destination": 22, "class": "ControlChange"}]
+            }),
+        );
+        assert_eq!(editor.drafts.len(), 1);
+        assert_eq!(editor.drafts[0].source, "old");
     }
 }
