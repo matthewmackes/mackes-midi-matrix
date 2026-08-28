@@ -287,6 +287,11 @@ fn run_tui() -> Result<(), String> {
                             }
                         }
                     }
+                    KeyCode::Char('x') if workspace == 9 => {
+                        if setlist_editor.remove_last_project().is_err() {
+                            "setlist-project-remove-rejected".clone_into(&mut dashboard.health);
+                        }
+                    }
                     KeyCode::Char('k') if workspace == 9 && !setlist_editor.drafts.is_empty() => {
                         let next = setlist_editor.selected.unwrap_or(0).saturating_sub(1);
                         setlist_editor.selected = Some(next);

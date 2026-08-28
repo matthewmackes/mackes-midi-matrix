@@ -977,6 +977,16 @@ impl SetlistEditor {
         Ok(())
     }
 
+    /// Removes the last project from the selected setlist.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when no setlist is selected or it has no projects.
+    pub fn remove_last_project(&mut self) -> Result<String, &'static str> {
+        let index = self.selected.ok_or("no setlist selected")?;
+        self.drafts[index].projects.pop().ok_or("selected setlist has no projects")
+    }
+
     /// Reorders the selected setlist using the complete project-ID order.
     ///
     /// # Errors
@@ -2602,7 +2612,7 @@ impl SetlistEditor {
     #[must_use]
     pub fn frame_lines(&self, viewport: Viewport) -> Vec<String> {
         let mut lines = vec![
-            "Setlists — uncommitted draft (a add, p project, j/k select, </> reorder, c copy, d delete, s save)"
+            "Setlists — uncommitted draft (a add, p project, x remove project, j/k select, </> reorder, c copy, d delete, s save)"
                 .into(),
         ];
         lines.extend(self.drafts.iter().enumerate().map(|(index, setlist)| {
@@ -3379,6 +3389,8 @@ mod tests {
         editor.reorder_selected(&["b", "a"]).expect("reorder");
         assert!(editor.append_project("c").is_ok());
         assert!(editor.append_project("c").is_err());
+        assert_eq!(editor.remove_last_project(), Ok("c".into()));
+        assert!(editor.append_project("c").is_ok());
         editor.copy_selected("encore").expect("copy");
         assert_eq!(editor.add_empty(), "new-setlist-1");
         assert_eq!(editor.add_empty(), "new-setlist-2");
