@@ -1502,6 +1502,12 @@ pub struct Route {
     pub channel: Option<mackes_domain::MidiChannel>,
     /// Optional message class filter.
     pub class: Option<MessageClass>,
+    /// Whether this route participates in evaluation.
+    pub enabled: bool,
+    /// Lower values execute first.
+    pub priority: u16,
+    /// Value shaping applied to continuous controller values.
+    pub curve: Curve,
     /// Additional predicates, all of which must match.
     pub predicates: Vec<RoutePredicate>,
     /// Explicitly authorizes this edge to participate in a bounded cycle.
@@ -1675,8 +1681,10 @@ impl Router {
         if hops >= self.hop_limit {
             return Vec::new();
         }
-        self.routes
+        let mut routes = self
+            .routes
             .iter()
+            .filter(|route| route.enabled)
             .filter(|route| route.source == event.endpoint)
             .filter(|route| {
                 route.channel.is_none_or(|channel| match &event.message {
@@ -1696,12 +1704,35 @@ impl Router {
             .filter(|route| {
                 route.predicates.iter().all(|predicate| predicate.matches(&event.message))
             })
-            .map(|route| RoutedEvent {
-                event: MidiEvent { endpoint: route.destination, ..event.clone() },
-                generation: self.generation,
-                hops: hops.saturating_add(1),
+            .map(|route| {
+                (
+                    route.priority,
+                    RoutedEvent {
+                        event: MidiEvent {
+                            endpoint: route.destination,
+                            message: match event.message {
+                                MidiMessage::ControlChange { channel, controller, value } => {
+                                    MidiMessage::ControlChange {
+                                        channel,
+                                        controller,
+                                        value: mackes_domain::SevenBit::new(u16::from(
+                                            apply_curve(value.as_u8(), route.curve),
+                                        ))
+                                        .unwrap_or(value),
+                                    }
+                                }
+                                _ => event.message.clone(),
+                            },
+                            ..event.clone()
+                        },
+                        generation: self.generation,
+                        hops: hops.saturating_add(1),
+                    },
+                )
             })
-            .collect()
+            .collect::<Vec<_>>();
+        routes.sort_by_key(|(priority, _)| *priority);
+        routes.into_iter().map(|(_, route)| route).collect()
     }
 }
 
@@ -3278,6 +3309,9 @@ mod tests {
                 destination,
                 channel: Some(MidiChannel::new(2).expect("channel")),
                 class: Some(MessageClass::ControlChange),
+                enabled: true,
+                priority: 0,
+                curve: Curve::Linear,
                 predicates: Vec::new(),
                 allow_cycle: false,
             }],
@@ -3330,6 +3364,9 @@ mod tests {
             destination,
             channel: None,
             class: None,
+            enabled: true,
+            priority: 0,
+            curve: Curve::Linear,
             predicates,
             allow_cycle: false,
         };
@@ -3388,6 +3425,9 @@ mod tests {
             destination,
             channel: None,
             class: None,
+            enabled: true,
+            priority: 0,
+            curve: Curve::Linear,
             predicates: Vec::new(),
             allow_cycle,
         };
@@ -3416,6 +3456,9 @@ mod tests {
                 destination,
                 channel: None,
                 class: None,
+                enabled: true,
+                priority: 0,
+                curve: Curve::Linear,
                 predicates: Vec::new(),
                 allow_cycle: false,
             }],

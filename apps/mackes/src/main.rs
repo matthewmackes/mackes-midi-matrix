@@ -1514,6 +1514,13 @@ fn save_routes(editor: &mackes_tui::RoutingEditor, current_generation: u64) -> S
                 // Preserve the daemon route contract even when the current editor
                 // does not expose cycle authorization as a separate control.
                 "allow_cycle": draft.allow_cycle,
+                "enabled": draft.enabled,
+                "priority": draft.priority,
+                "curve": match draft.curve {
+                    mackes_midi_engine::Curve::Linear => "linear",
+                    mackes_midi_engine::Curve::Square => "square",
+                    mackes_midi_engine::Curve::SquareRoot => "square_root",
+                },
             }))
         })
         .collect::<Vec<_>>();
@@ -1604,10 +1611,18 @@ fn project_routes(editor: &mut mackes_tui::RoutingEditor, payload: &serde_json::
                 source: source.to_string(),
                 destination: destination.to_string(),
                 channel,
-                enabled: true,
+                enabled: route.get("enabled").and_then(serde_json::Value::as_bool).unwrap_or(true),
                 mode,
-                priority: 0,
-                curve: mackes_midi_engine::Curve::Linear,
+                priority: route
+                    .get("priority")
+                    .and_then(serde_json::Value::as_u64)
+                    .and_then(|v| u16::try_from(v).ok())
+                    .unwrap_or(0),
+                curve: match route.get("curve").and_then(serde_json::Value::as_str) {
+                    Some("square") => mackes_midi_engine::Curve::Square,
+                    Some("square_root") => mackes_midi_engine::Curve::SquareRoot,
+                    _ => mackes_midi_engine::Curve::Linear,
+                },
                 filters: mackes_tui::MappingFilterDraft::default(),
                 allow_cycle: route
                     .get("allow_cycle")

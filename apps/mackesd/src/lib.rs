@@ -312,6 +312,13 @@ fn command_ack(
                         "channel": route.channel.map(mackes_domain::MidiChannel::one_based),
                         "class": route.class.map(|class| format!("{class:?}")),
                         "allow_cycle": route.allow_cycle,
+                        "enabled": route.enabled,
+                        "priority": route.priority,
+                        "curve": match route.curve {
+                            mackes_midi_engine::Curve::Linear => "linear",
+                            mackes_midi_engine::Curve::Square => "square",
+                            mackes_midi_engine::Curve::SquareRoot => "square_root",
+                        },
                     })
                 })
                 .collect::<Vec<_>>();
@@ -559,6 +566,18 @@ impl Daemon {
                 destination,
                 channel,
                 class,
+                enabled: object.get("enabled").and_then(serde_json::Value::as_bool).unwrap_or(true),
+                priority: object
+                    .get("priority")
+                    .and_then(serde_json::Value::as_u64)
+                    .and_then(|value| u16::try_from(value).ok())
+                    .unwrap_or(0),
+                curve: match object.get("curve").and_then(serde_json::Value::as_str) {
+                    None | Some("linear") => mackes_midi_engine::Curve::Linear,
+                    Some("square") => mackes_midi_engine::Curve::Square,
+                    Some("square_root") => mackes_midi_engine::Curve::SquareRoot,
+                    Some(_) => return Err("unknown route curve"),
+                },
                 predicates: Vec::new(),
                 allow_cycle: object
                     .get("allow_cycle")
