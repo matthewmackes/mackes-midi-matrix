@@ -1549,6 +1549,15 @@ impl RoutePredicate {
     }
 }
 
+/// Validates a route predicate for editor and configuration consumers.
+///
+/// # Errors
+///
+/// Returns an error when bounds, payload size, or `SysEx` mask shape is invalid.
+pub fn validate_route_predicate(predicate: &RoutePredicate) -> Result<(), &'static str> {
+    predicate.validate()
+}
+
 const fn message_number(message: &MidiMessage) -> Option<u8> {
     match message {
         MidiMessage::NoteOn { note, .. }

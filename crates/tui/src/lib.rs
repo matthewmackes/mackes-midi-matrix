@@ -608,6 +608,33 @@ pub struct MappingDraft {
     pub curve: mackes_midi_engine::Curve,
 }
 
+/// Transactional fine-grained filter draft for a mapping editor.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct MappingFilterDraft {
+    /// Predicates applied after source/channel/message-class matching.
+    pub predicates: Vec<mackes_midi_engine::RoutePredicate>,
+}
+
+impl MappingFilterDraft {
+    /// Validates every predicate without mutating a route or daemon state.
+    ///
+    /// # Errors
+    ///
+    /// Returns the first engine predicate validation error.
+    pub fn validate(&self) -> Result<(), &'static str> {
+        if self.predicates.len() > 32 {
+            return Err("mapping filter count exceeds bound");
+        }
+        self.predicates.iter().try_for_each(mackes_midi_engine::validate_route_predicate)
+    }
+
+    /// Returns a deterministic copy suitable for preview/submission.
+    #[must_use]
+    pub fn preview(&self) -> Vec<mackes_midi_engine::RoutePredicate> {
+        self.predicates.clone()
+    }
+}
+
 /// Supported operator-facing mapping classes.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum MappingMode {
@@ -2536,6 +2563,25 @@ mod tests {
         assert_eq!(ipc_command_for(UiCommand::Panic), Some(mackes_ipc::Command::Panic));
         assert_eq!(ipc_command_for(UiCommand::NextScene), Some(mackes_ipc::Command::Scenes));
         assert_eq!(ipc_command_for(UiCommand::OpenWorkspace(3)), None);
+    }
+
+    #[test]
+    fn mapping_filter_draft_validates_and_previews_engine_predicates() {
+        let draft = MappingFilterDraft {
+            predicates: vec![mackes_midi_engine::RoutePredicate::NumberRange {
+                minimum: 10,
+                maximum: 20,
+            }],
+        };
+        assert!(draft.validate().is_ok());
+        assert_eq!(draft.preview(), draft.predicates);
+        let invalid = MappingFilterDraft {
+            predicates: vec![mackes_midi_engine::RoutePredicate::ValueRange {
+                minimum: 20,
+                maximum: 10,
+            }],
+        };
+        assert_eq!(invalid.validate(), Err("invalid MIDI value range"));
     }
 
     #[test]
