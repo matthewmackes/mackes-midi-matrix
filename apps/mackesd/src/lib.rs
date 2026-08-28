@@ -1671,6 +1671,7 @@ mod tests {
             ("configuration", Command::Configuration),
             ("endpoints", Command::Endpoints),
             ("routes", Command::Routes),
+            ("learn", Command::Learn),
             ("scenes", Command::Scenes),
             ("device_query", Command::DeviceQuery),
             ("sysex", Command::Sysex),
@@ -1702,6 +1703,10 @@ mod tests {
         assert_eq!(
             command_ack(Command::Routes, Health::Ready, 6, &[], Some(0), &[]),
             "{\"ok\":true,\"generation\":6,\"routes\":[],\"route_generation\":0}\n"
+        );
+        assert_eq!(
+            command_ack(Command::Learn, Health::Ready, 7, &[], None, &[]),
+            "{\"ok\":true,\"generation\":7,\"learn\":true}\n"
         );
         assert_eq!(
             command_ack(Command::Scenes, Health::Ready, 7, &[], None, &[]),
