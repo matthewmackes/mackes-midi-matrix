@@ -2688,3 +2688,5 @@ tests, or code presence alone is not release completion.
 
 | 2026-08-28 | W016/W040/W046 | Learn destination and live-test controls | implemented | Added explicit `r` destination selection, `t` live-test start, phase-aware Enter completion, and commit handling; destination compatibility and mandatory passed-test checks remain enforced by the shared Learn state machine. |
 | 2026-08-28 | W016/W040/W046 | durable learned-mapping persistence | implemented | Committed Learn mappings now travel through daemon-owned Configuration IPC, append to existing validated mappings, survive atomic config save, and appear in the catalog snapshot. |
+| 2026-08-28 | W040/W042 | endpoint-backed route creation | implemented | TUI `a` queries the daemon endpoint inventory, creates a validated default CC draft from the first input/output pair, and leaves it transactional until explicit save. |
+| 2026-08-28 | W030/W040/W044 | empty setlist creation | implemented | TUI `a` creates collision-safe empty setlist drafts, selects the new row, and leaves persistence behind the existing explicit `s` save gate. |

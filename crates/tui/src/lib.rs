@@ -926,6 +926,24 @@ impl SetlistEditor {
         Self { drafts: setlists.to_vec(), selected: None }
     }
 
+    /// Adds a new empty setlist using a deterministic collision-safe identifier.
+    ///
+    /// The new row remains a local draft until the caller explicitly persists the editor.
+    pub fn add_empty(&mut self) -> String {
+        let base = "new-setlist";
+        let mut suffix = 1_u32;
+        let id = loop {
+            let candidate = format!("{base}-{suffix}");
+            if !self.drafts.iter().any(|setlist| setlist.id == candidate) {
+                break candidate;
+            }
+            suffix = suffix.saturating_add(1);
+        };
+        self.drafts.push(mackes_config::Setlist { id: id.clone(), projects: Vec::new() });
+        self.selected = Some(self.drafts.len() - 1);
+        id
+    }
+
     /// Selects a setlist by index.
     ///
     /// # Errors
@@ -974,9 +992,10 @@ impl RoutingEditor {
     /// Returns the transactional routing draft in execution priority order.
     #[must_use]
     pub fn frame_lines(&self, viewport: Viewport) -> Vec<String> {
-        let mut lines =
-            vec!["Routing & mappings — uncommitted draft (j/k select, m mode, d remove, s save)"
-                .into()];
+        let mut lines = vec![
+            "Routing & mappings — uncommitted draft (a add, j/k select, m mode, d remove, s save)"
+                .into(),
+        ];
         lines.extend(self.drafts.iter().enumerate().map(|(index, draft)| {
             format!(
                 "{} p{} {} -> {} {:?} ch={:?} {}",
@@ -2562,7 +2581,7 @@ impl SetlistEditor {
     #[must_use]
     pub fn frame_lines(&self, viewport: Viewport) -> Vec<String> {
         let mut lines = vec![
-            "Setlists — uncommitted draft (j/k select, </> reorder, c copy, d delete, s save)"
+            "Setlists — uncommitted draft (a add, j/k select, </> reorder, c copy, d delete, s save)"
                 .into(),
         ];
         lines.extend(self.drafts.iter().enumerate().map(|(index, setlist)| {
@@ -3338,10 +3357,12 @@ mod tests {
         editor.select(0).expect("selection");
         editor.reorder_selected(&["b", "a"]).expect("reorder");
         editor.copy_selected("encore").expect("copy");
+        assert_eq!(editor.add_empty(), "new-setlist-1");
+        assert_eq!(editor.add_empty(), "new-setlist-2");
         assert_eq!(editor.drafts[0].projects, vec!["b", "a"]);
         assert_eq!(source.projects, vec!["a", "b"]);
         assert!(editor.frame_lines(Viewport::new(80, 24))[0].contains("uncommitted"));
-        assert_eq!(editor.commit().len(), 2);
+        assert_eq!(editor.commit().len(), 4);
     }
 
     #[test]
