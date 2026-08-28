@@ -402,6 +402,7 @@ fn command_ack(
                 .map(|route| {
                     serde_json::json!({
                         "source": route.source.get(), "destination": route.destination.get(),
+                        "destination_parameter": route.destination_parameter,
                         "channel": route.channel.map(mackes_domain::MidiChannel::one_based),
                         "class": route.class.map(|class| format!("{class:?}")),
                         "allow_cycle": route.allow_cycle,
@@ -665,6 +666,10 @@ impl Daemon {
             routes.push(mackes_midi_engine::Route {
                 source,
                 destination,
+                destination_parameter: object
+                    .get("destination_parameter")
+                    .and_then(serde_json::Value::as_str)
+                    .map(str::to_owned),
                 channel,
                 class,
                 enabled: object.get("enabled").and_then(serde_json::Value::as_bool).unwrap_or(true),

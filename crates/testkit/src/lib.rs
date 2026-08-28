@@ -98,6 +98,7 @@ mod tests {
             vec![Route {
                 source,
                 destination,
+                destination_parameter: None,
                 channel: None,
                 class: Some(MessageClass::ControlChange),
                 enabled: true,
@@ -195,6 +196,7 @@ mod tests {
             vec![Route {
                 source,
                 destination,
+                destination_parameter: None,
                 channel: None,
                 class: Some(MessageClass::ControlChange),
                 enabled: true,

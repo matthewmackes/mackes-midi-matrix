@@ -1660,6 +1660,8 @@ pub struct Route {
     pub source: mackes_domain::EndpointId,
     /// Destination endpoint.
     pub destination: mackes_domain::EndpointId,
+    /// Optional profile-owned destination parameter metadata.
+    pub destination_parameter: Option<String>,
     /// Optional one-based channel filter.
     pub channel: Option<mackes_domain::MidiChannel>,
     /// Optional message class filter.
@@ -3469,6 +3471,7 @@ mod tests {
             vec![Route {
                 source,
                 destination,
+                destination_parameter: None,
                 channel: Some(MidiChannel::new(2).expect("channel")),
                 class: Some(MessageClass::ControlChange),
                 enabled: true,
@@ -3521,6 +3524,7 @@ mod tests {
                 Route {
                     source,
                     destination: disabled,
+                    destination_parameter: None,
                     channel: None,
                     class: Some(MessageClass::ControlChange),
                     enabled: false,
@@ -3532,6 +3536,7 @@ mod tests {
                 Route {
                     source,
                     destination: first,
+                    destination_parameter: None,
                     channel: None,
                     class: Some(MessageClass::ControlChange),
                     enabled: true,
@@ -3581,6 +3586,7 @@ mod tests {
         let route = |predicates| Route {
             source,
             destination,
+            destination_parameter: None,
             channel: None,
             class: None,
             enabled: true,
@@ -3642,6 +3648,7 @@ mod tests {
         let edge = |source, destination, allow_cycle| Route {
             source,
             destination,
+            destination_parameter: None,
             channel: None,
             class: None,
             enabled: true,
@@ -3673,6 +3680,7 @@ mod tests {
             vec![Route {
                 source,
                 destination,
+                destination_parameter: None,
                 channel: None,
                 class: None,
                 enabled: true,
