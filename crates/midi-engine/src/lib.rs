@@ -1400,6 +1400,12 @@ impl OutputRegistry {
         Ok(())
     }
 
+    /// Returns registered output IDs in stable registration order.
+    #[must_use]
+    pub fn output_ids(&self) -> Vec<String> {
+        self.outputs.iter().map(|output| output.info().id.clone()).collect()
+    }
+
     /// Routes and dispatches one event through all registered outputs.
     #[must_use]
     pub fn dispatch(&mut self, router: &RouterStore, event: &MidiEvent) -> (usize, usize) {

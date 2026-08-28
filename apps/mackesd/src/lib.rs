@@ -898,10 +898,34 @@ impl Daemon {
         }
         if command == Command::Scenes {
             self.navigate_scene(true);
+        } else if command == Command::Panic {
+            let _ = self.send_panic_controls();
+            self.record_state_event(command);
         } else {
             self.record_state_event(command);
         }
         command_ack(command, self.health, self.generation, &[], self.route_generation(), &[])
+    }
+
+    /// Sends bounded All Notes Off and All Sound Off controls on every channel
+    /// to every currently registered output.
+    fn send_panic_controls(&mut self) -> (usize, usize) {
+        let destinations = self.outputs.output_ids();
+        let mut sent = 0;
+        let mut failed = 0;
+        for destination in destinations {
+            for channel in 0_u8..16 {
+                for controller in [120_u8, 123] {
+                    let payload = [0xB0 | channel, controller, 0];
+                    if self.outputs.send_direct(&destination, &payload).is_ok() {
+                        sent += 1;
+                    } else {
+                        failed += 1;
+                    }
+                }
+            }
+        }
+        (sent, failed)
     }
 
     /// Polls owned inputs and dispatches all decoded events through owned outputs.
@@ -1723,6 +1747,9 @@ impl Daemon {
                     command,
                     Command::Hello | Command::Health | Command::Snapshot | Command::Subscribe
                 ) {
+                    if command == Command::Panic {
+                        let _ = self.send_panic_controls();
+                    }
                     self.record_state_event(command);
                 }
             }
