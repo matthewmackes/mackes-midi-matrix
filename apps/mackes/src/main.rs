@@ -20,14 +20,14 @@ fn run_tui() -> Result<(), String> {
     let reflex_workspace =
         mackes_tui::ReflexWorkspace::from_compiled_algorithm(1).map_err(str::to_owned)?;
     let eventide_workspace = mackes_tui::DeviceWorkspace::eventide_micropitch();
-    let routing_editor = mackes_tui::RoutingEditor::from_bank(&mackes_tui::MappingBank::new());
+    let mut routing_editor = mackes_tui::RoutingEditor::from_bank(&mackes_tui::MappingBank::new());
     let mut workspace = 1_u8;
     let mut needs_snapshot = true;
     let result = (|| loop {
         let synchronized = if needs_snapshot {
-            synchronize_snapshot(&mut client_state, &mut dashboard)
+            synchronize_snapshot(&mut client_state, &mut dashboard, &mut routing_editor)
         } else {
-            synchronize_events(&mut client_state, &mut dashboard)
+            synchronize_events(&mut client_state, &mut dashboard, &mut routing_editor)
         };
         if let Ok(health) = synchronized {
             dashboard.health = health;
@@ -695,6 +695,7 @@ fn daemon_request(command: mackes_ipc::Command, payload: &[u8]) -> String {
 fn synchronize_snapshot(
     state: &mut mackes_tui::ClientState,
     dashboard: &mut mackes_tui::DashboardState,
+    routing: &mut mackes_tui::RoutingEditor,
 ) -> Result<String, String> {
     let response = daemon_request(mackes_ipc::Command::Snapshot, b"{}");
     let value: serde_json::Value =
@@ -717,6 +718,7 @@ fn synchronize_snapshot(
     //
     // The dashboard is intentionally not reconstructed from local files or MIDI state.
     apply_dashboard_payload(dashboard, &value);
+    project_routes(routing, &value);
     Ok(health)
 }
 
@@ -762,9 +764,49 @@ fn apply_dashboard_payload(
     */
 }
 
+fn project_routes(editor: &mut mackes_tui::RoutingEditor, payload: &serde_json::Value) {
+    let Some(routes) = payload.get("routes").and_then(serde_json::Value::as_array) else {
+        return;
+    };
+    let drafts = routes
+        .iter()
+        .filter_map(|route| {
+            let source = route.get("source")?.as_u64()?;
+            let destination = route.get("destination")?.as_u64()?;
+            let mode = match route.get("class")?.as_str()? {
+                "ControlChange" => mackes_tui::MappingMode::Cc,
+                "ProgramChange" => mackes_tui::MappingMode::ProgramChange,
+                "Note" | "NoteOn" | "NoteOff" => mackes_tui::MappingMode::Note,
+                "PitchBend" => mackes_tui::MappingMode::PitchBend,
+                "SysEx" => mackes_tui::MappingMode::Sysex,
+                _ => return None,
+            };
+            let channel = route
+                .get("channel")
+                .and_then(serde_json::Value::as_u64)
+                .and_then(|value| u8::try_from(value).ok());
+            Some(mackes_tui::MappingDraft {
+                source: source.to_string(),
+                destination: destination.to_string(),
+                channel,
+                enabled: true,
+                mode,
+                priority: 0,
+                curve: mackes_midi_engine::Curve::Linear,
+                filters: mackes_tui::MappingFilterDraft::default(),
+            })
+        })
+        .collect::<Vec<_>>();
+    if mackes_tui::validate_mapping_batch(&drafts).is_ok() {
+        editor.drafts = drafts;
+        editor.selected = None;
+    }
+}
+
 fn synchronize_events(
     state: &mut mackes_tui::ClientState,
     dashboard: &mut mackes_tui::DashboardState,
+    routing: &mut mackes_tui::RoutingEditor,
 ) -> Result<String, String> {
     let payload = serde_json::to_vec(&serde_json::json!({
         "after_sequence": state.last_sequence,
@@ -796,6 +838,7 @@ fn synchronize_events(
             .ok_or("event sequence is missing")?;
         let payload = event.get("payload").ok_or("event payload is missing")?;
         apply_dashboard_payload(dashboard, payload);
+        project_routes(routing, payload);
         if let Some(event_health) = payload.get("health").and_then(serde_json::Value::as_str) {
             event_health.clone_into(&mut health);
         }
