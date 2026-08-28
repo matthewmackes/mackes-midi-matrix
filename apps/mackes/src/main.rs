@@ -525,6 +525,7 @@ fn main() {
                 "mackes-midi-matrix: TUI/CLI\n\nUsage:\n  mackes-midi-matrix tui\n  mackes-midi-matrix validate <path> [--json]\n  mackes-midi-matrix export <config> <directory>\n  mackes-midi-matrix doctor [--json]\n  mackes-midi-matrix status [--json]\n  mackes-midi-matrix panic\n  mackes-midi-matrix endpoints [--json]\n  mackes-midi-matrix default get <config> <capability> [--json]\n  mackes-midi-matrix default set <config> <capability> <profile-id>\n  mackes-midi-matrix mvave preset <1-32> [--dry-run]\n  mackes-midi-matrix mvave ir|eq on|off --confirm-unverified\n  mackes-midi-matrix scenes|devices|routes|monitor [--json]\n  mackes-midi-matrix scene list <config> [--json]\n  mackes-midi-matrix backup list|inspect ...\n  mackes-midi-matrix profile validate [--json]\n  mackes-midi-matrix --version"
             );
             println!("  mackes-midi-matrix learn <endpoint-id> [limit]");
+            println!("  mackes-midi-matrix sysex <destination-id> <hex-bytes> --confirm");
             println!("  mackes-midi-matrix scene next|previous");
             println!("  mackes-midi-matrix scene plan <config> <project> <scene> [--json]");
         }
@@ -608,6 +609,9 @@ fn main() {
         }
         [command, endpoint, limit, flag] if command == "learn" && flag == "--json" => {
             print_learn(endpoint, limit.parse().unwrap_or(0));
+        }
+        [command, destination, hex, flag] if command == "sysex" && flag == "--confirm" => {
+            send_sysex_cli(destination, hex);
         }
         [command] if command == "scenes" || command == "devices" => {
             let ipc_command = if command == "scenes" {
@@ -1415,6 +1419,29 @@ fn print_daemon_command(command: mackes_ipc::Command) {
     let unavailable = response.contains("\"ok\":false");
     println!("{response}");
     if unavailable {
+        std::process::exit(2);
+    }
+}
+
+fn send_sysex_cli(destination: &str, hex: &str) {
+    let bytes = match mackes_profiles::parse_sysex_hex(hex) {
+        Ok(bytes) => bytes,
+        Err(error) => {
+            eprintln!("mackes-midi-matrix: {error}");
+            std::process::exit(2);
+        }
+    };
+    let payload = serde_json::json!({
+        "destination": destination,
+        "bytes": bytes,
+        "confirm": true,
+    });
+    let response = daemon_request(
+        mackes_ipc::Command::Sysex,
+        &serde_json::to_vec(&payload).expect("SysEx payload is serializable"),
+    );
+    println!("{response}");
+    if response.contains("\"ok\":false") {
         std::process::exit(2);
     }
 }

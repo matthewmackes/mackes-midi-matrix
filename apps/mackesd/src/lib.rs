@@ -1464,6 +1464,51 @@ impl Daemon {
                     .as_bytes(),
                 );
             }
+            if command == Some(Command::Sysex) {
+                let value =
+                    serde_json::from_slice::<serde_json::Value>(&request).unwrap_or_default();
+                if value.get("confirm").and_then(serde_json::Value::as_bool) != Some(true) {
+                    return stream
+                        .write_all(b"{\"ok\":false,\"error\":\"SysEx requires confirmation\"}\n");
+                }
+                let destination = value.get("destination").and_then(serde_json::Value::as_str);
+                let bytes = value.get("bytes").and_then(serde_json::Value::as_array);
+                let (Some(destination), Some(bytes)) = (destination, bytes) else {
+                    return stream.write_all(
+                        b"{\"ok\":false,\"error\":\"SysEx destination and bytes are required\"}\n",
+                    );
+                };
+                if bytes.is_empty() || bytes.len() > 1024 {
+                    return stream.write_all(
+                        b"{\"ok\":false,\"error\":\"SysEx payload must contain 1..=1024 bytes\"}\n",
+                    );
+                }
+                let payload = bytes
+                    .iter()
+                    .map(|byte| byte.as_u64().and_then(|byte| u8::try_from(byte).ok()))
+                    .collect::<Option<Vec<_>>>();
+                let Some(payload) = payload else {
+                    return stream
+                        .write_all(b"{\"ok\":false,\"error\":\"SysEx bytes are invalid\"}\n");
+                };
+                if payload.first() != Some(&0xF0) || payload.last() != Some(&0xF7) {
+                    return stream.write_all(
+                        b"{\"ok\":false,\"error\":\"SysEx payload must be framed F0..F7\"}\n",
+                    );
+                }
+                if let Err(error) = self.outputs.send_direct(destination, &payload) {
+                    return stream
+                        .write_all(format!("{{\"ok\":false,\"error\":\"{error}\"}}\n").as_bytes());
+                }
+                return stream.write_all(
+                    format!(
+                        "{{\"ok\":true,\"generation\":{},\"bytes_sent\":{}}}\n",
+                        self.generation,
+                        payload.len()
+                    )
+                    .as_bytes(),
+                );
+            }
             if let Some(command) = command {
                 if !matches!(
                     command,
