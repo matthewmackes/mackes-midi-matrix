@@ -8,7 +8,7 @@
 | Field | Value |
 |---|---|
 | Worklist version | 1.7 |
-| Product stage | 0.1.4 public release / integration qualification |
+| Product stage | 0.1.6 public release / integration qualification |
 | Target release | v1.0 |
 | Primary platform | Fedora Linux 44, x86_64 |
 | Language | Rust |
