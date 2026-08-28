@@ -629,6 +629,12 @@ impl Daemon {
         self.record_state_event(Command::Scenes);
     }
 
+    /// Returns the currently selected scene projected by the daemon.
+    #[must_use]
+    pub fn active_scene(&self) -> Option<&str> {
+        self.active_scene.as_deref()
+    }
+
     /// Selects the next or previous scene in the daemon-owned catalog.
     pub fn navigate_scene(&mut self, next: bool) -> Option<String> {
         if self.scene_ids.is_empty() {
