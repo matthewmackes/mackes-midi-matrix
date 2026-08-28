@@ -565,6 +565,7 @@ fn main() {
             println!(
                 "  mackes-midi-matrix scene action-remove <config> <project> <scene> <action-id>"
             );
+            println!("  mackes-midi-matrix scene actions <config> <project> <scene> [--json]");
             println!("  mackes-midi-matrix scene plan <config> <project> <scene> [--json]");
         }
         [command, action, path, capability] if command == "default" && action == "get" => {
@@ -826,6 +827,16 @@ fn main() {
             if command == "scene" && subcommand == "action-remove" =>
         {
             scene_action_remove_cli(path, project, scene, action_id);
+        }
+        [command, subcommand, path, project, scene]
+            if command == "scene" && subcommand == "actions" =>
+        {
+            scene_actions_cli(path, project, scene, false);
+        }
+        [command, subcommand, path, project, scene, flag]
+            if command == "scene" && subcommand == "actions" && flag == "--json" =>
+        {
+            scene_actions_cli(path, project, scene, true);
         }
         [command, subcommand, path, project, scene, action_id, description, destination, hex, flag]
             if command == "scene" && subcommand == "action-add" && flag == "--unsafe" =>
@@ -1170,6 +1181,44 @@ fn scene_action_remove_cli(path: &str, project_id: &str, scene_id: &str, action_
         Ok(()) => println!("scene action removed: {project_id}/{scene_id}/{action_id}"),
         Err(error) => {
             eprintln!("scene action remove failed: {error}");
+            std::process::exit(2);
+        }
+    }
+}
+
+fn scene_actions_cli(path: &str, project_id: &str, scene_id: &str, json: bool) {
+    let result = (|| -> Result<serde_json::Value, String> {
+        let document =
+            mackes_config::load(std::path::Path::new(path)).map_err(|error| error.to_string())?;
+        let project = document
+            .projects
+            .iter()
+            .find(|project| project.id == project_id)
+            .ok_or_else(|| format!("project '{project_id}' was not found"))?;
+        let scene = project
+            .scenes
+            .iter()
+            .find(|scene| scene.id == scene_id)
+            .ok_or_else(|| format!("scene '{scene_id}' was not found"))?;
+        Ok(
+            serde_json::json!({"ok": true, "project": project_id, "scene": scene_id, "actions": scene.actions}),
+        )
+    })();
+    match result {
+        Ok(value) if json => println!("{value}"),
+        Ok(value) => {
+            println!("scene actions: {project_id}/{scene_id}");
+            for action in value["actions"].as_array().into_iter().flatten() {
+                println!(
+                    "  {}{}: {}",
+                    action["id"].as_str().unwrap_or("?"),
+                    if action["unsafe_action"].as_bool() == Some(true) { " [unsafe]" } else { "" },
+                    action["description"].as_str().unwrap_or("?")
+                );
+            }
+        }
+        Err(error) => {
+            eprintln!("scene actions failed: {error}");
             std::process::exit(2);
         }
     }
