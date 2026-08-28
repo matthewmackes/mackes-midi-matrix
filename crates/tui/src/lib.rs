@@ -2525,7 +2525,7 @@ impl SetlistEditor {
     /// Returns the transactional setlist draft without implying persistence.
     #[must_use]
     pub fn frame_lines(&self, viewport: Viewport) -> Vec<String> {
-        let mut lines = vec!["Setlists — uncommitted draft".into()];
+        let mut lines = vec!["Setlists — uncommitted draft (j/k select, </> reorder)".into()];
         lines.extend(self.drafts.iter().enumerate().map(|(index, setlist)| {
             format!(
                 "{} {}: {}",

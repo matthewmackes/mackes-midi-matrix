@@ -128,6 +128,32 @@ fn run_tui() -> Result<(), String> {
                         let next = routing_editor.selected.unwrap_or(0).saturating_sub(1);
                         routing_editor.selected = Some(next);
                     }
+                    KeyCode::Char('j') if workspace == 9 && !setlist_editor.drafts.is_empty() => {
+                        let next = setlist_editor
+                            .selected
+                            .map_or(0, |index| (index + 1).min(setlist_editor.drafts.len() - 1));
+                        setlist_editor.selected = Some(next);
+                    }
+                    KeyCode::Char('k') if workspace == 9 && !setlist_editor.drafts.is_empty() => {
+                        let next = setlist_editor.selected.unwrap_or(0).saturating_sub(1);
+                        setlist_editor.selected = Some(next);
+                    }
+                    KeyCode::Char('<') if workspace == 9 => {
+                        if let Some(index) = setlist_editor.selected {
+                            if index > 0 {
+                                setlist_editor.drafts.swap(index, index - 1);
+                                setlist_editor.selected = Some(index - 1);
+                            }
+                        }
+                    }
+                    KeyCode::Char('>') if workspace == 9 => {
+                        if let Some(index) = setlist_editor.selected {
+                            if index + 1 < setlist_editor.drafts.len() {
+                                setlist_editor.drafts.swap(index, index + 1);
+                                setlist_editor.selected = Some(index + 1);
+                            }
+                        }
+                    }
                     _ => {}
                 }
             }
