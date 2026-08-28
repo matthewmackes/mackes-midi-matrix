@@ -514,6 +514,7 @@ fn main() {
         }
         _ => {
             eprintln!("mackes-midi-matrix: invalid arguments\n\nUsage:\n  mackes-midi-matrix validate <path> [--json]\n  mackes-midi-matrix export <config> <directory>\n  mackes-midi-matrix doctor [--json]\n  mackes-midi-matrix status [--json]\n  mackes-midi-matrix panic\n  mackes-midi-matrix endpoints [--json]\n  mackes-midi-matrix profile validate [--json]\n  mackes-midi-matrix --help");
+            eprintln!("  mackes-midi-matrix learn <endpoint-id> [limit]");
             std::process::exit(64);
         }
     }

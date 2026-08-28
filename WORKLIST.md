@@ -2620,6 +2620,7 @@ New requests enter here before implementation.
 | 2026-08-28 | W045 | codex | MIDI Learn CLI discoverability → implemented | Added the Learn command to the primary CLI help output; release gate and CLI build checks pass. |
 | 2026-08-28 | W045/W016 | codex | MIDI Learn JSON flag compatibility → implemented | Accepted the standard trailing `--json` form for Learn requests and verified help output plus exit-64 bounded-limit handling. Full release gate passes. |
 | 2026-08-28 | W005/W016 | codex | MIDI Learn IPC contract regression coverage → implemented | Added Learn classification and stable acknowledgment assertions to the daemon IPC contract tests; focused daemon tests and the full release gate pass. |
+| 2026-08-28 | W045/W016 | codex | MIDI Learn invalid-usage discoverability → implemented | Added the Learn invocation to the CLI invalid-argument usage path and verified both help surfaces plus exit-64 behavior. Full release gate passes. |
 
 The worklist is complete only when W053 is `DONE`. A feature demonstration, passing unit
 tests, or code presence alone is not release completion.
