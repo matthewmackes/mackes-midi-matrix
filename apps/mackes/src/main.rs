@@ -162,6 +162,34 @@ fn run_tui() -> Result<(), String> {
                             }
                         }
                     }
+                    KeyCode::Char('c') if workspace == 9 => {
+                        if let Some(index) = setlist_editor.selected {
+                            let source = setlist_editor.drafts[index].id.clone();
+                            let mut suffix = 1_u32;
+                            loop {
+                                let candidate = format!("{source}-copy-{suffix}");
+                                if setlist_editor
+                                    .drafts
+                                    .iter()
+                                    .all(|setlist| setlist.id != candidate)
+                                    && setlist_editor.copy_selected(&candidate).is_ok()
+                                {
+                                    break;
+                                }
+                                suffix = suffix.saturating_add(1);
+                            }
+                        }
+                    }
+                    KeyCode::Char('d') if workspace == 9 => {
+                        if let Some(index) = setlist_editor.selected {
+                            setlist_editor.drafts.remove(index);
+                            setlist_editor.selected = if setlist_editor.drafts.is_empty() {
+                                None
+                            } else {
+                                Some(index.min(setlist_editor.drafts.len() - 1))
+                            };
+                        }
+                    }
                     _ => {}
                 }
             }
