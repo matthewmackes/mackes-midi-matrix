@@ -82,8 +82,14 @@ fn run_tui() -> Result<(), String> {
                 match key.code {
                     KeyCode::Char('q') if workspace == 4 => {
                         let response = daemon_request(mackes_ipc::Command::DeviceQuery, b"{}");
-                        dashboard.health = if response.contains("\"ok\":true") {
+                        let populated = serde_json::from_str::<serde_json::Value>(&response)
+                            .ok()
+                            .and_then(|value| value.get("devices")?.as_array().map(Vec::len))
+                            .is_some_and(|count| count > 0);
+                        dashboard.health = if populated {
                             "device-query-complete".to_owned()
+                        } else if response.contains("\"ok\":true") {
+                            "device-query-empty".to_owned()
                         } else {
                             "device-query-failed".to_owned()
                         };

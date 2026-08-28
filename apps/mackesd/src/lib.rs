@@ -320,7 +320,20 @@ fn command_ack(
             format!("{{\"ok\":true,\"generation\":{generation},\"learn\":true}}\n")
         }
         Command::DeviceQuery => {
-            format!("{{\"ok\":true,\"generation\":{generation},\"devices\":[]}}\n")
+            let devices = endpoints
+                .iter()
+                .map(|endpoint| {
+                    serde_json::json!({
+                        "id": endpoint.id,
+                        "name": endpoint.name,
+                        "direction": format!("{:?}", endpoint.direction).to_lowercase(),
+                    })
+                })
+                .collect::<Vec<_>>();
+            format!(
+                "{{\"ok\":true,\"generation\":{generation},\"devices\":{}}}\n",
+                serde_json::to_string(&devices).unwrap_or_else(|_| "[]".into())
+            )
         }
         Command::Monitor => format!("{{\"ok\":true,\"generation\":{generation},\"monitor\":[]}}\n"),
         Command::Backups => format!("{{\"ok\":true,\"generation\":{generation},\"backups\":[]}}\n"),
