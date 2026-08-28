@@ -3460,6 +3460,20 @@ mod tests {
     }
 
     #[test]
+    fn direct_output_send_is_named_bounded_and_validated() {
+        let mut registry = OutputRegistry::new(1);
+        registry
+            .insert(Box::new(VirtualEndpoint::new("out", "output", EndpointDirection::Output)))
+            .expect("output");
+        registry.send_direct("out", &[0xF0, 0x7D, 0x01, 0xF7]).expect("SysEx send");
+        assert_eq!(
+            registry.send_direct("missing", &[0xF0, 0x7D, 0xF7]),
+            Err("destination output is not registered".into())
+        );
+        assert!(registry.send_direct("out", &[0xF0, 0x80, 0xF7]).is_err());
+    }
+
+    #[test]
     fn cc_mapping_remaps_controller_and_channel() {
         let event = MidiEvent {
             timestamp: TimestampNanos::new(1),
