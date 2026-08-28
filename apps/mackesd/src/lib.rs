@@ -898,6 +898,7 @@ impl Daemon {
         let payload = serde_json::to_vec(&serde_json::json!({
             "command": command.tag(),
             "generation": self.generation,
+            "route_generation": self.route_generation(),
             "health": match self.health {
                 Health::Starting => "starting",
                 Health::Ready => "ready",
@@ -917,6 +918,7 @@ impl Daemon {
         serde_json::json!({
             "ok": true,
             "generation": self.generation,
+            "route_generation": self.route_generation(),
             "last_sequence": self.state_sequence,
             "health": match self.health {
                 Health::Starting => "starting",

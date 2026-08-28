@@ -602,7 +602,7 @@ fn apply_dashboard_payload(
     }) {
         dashboard.apply_event(mackes_tui::DashboardEvent::ActiveScene(scene));
     }
-    if let Some(generation) = payload.get("generation").and_then(serde_json::Value::as_u64) {
+    if let Some(generation) = payload.get("route_generation").and_then(serde_json::Value::as_u64) {
         dashboard.apply_event(mackes_tui::DashboardEvent::RouteGeneration(generation));
     }
     if let (Some(received), Some(sent), Some(dropped)) = (

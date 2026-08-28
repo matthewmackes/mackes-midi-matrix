@@ -2543,6 +2543,7 @@ Redacted fixture filenames and hashes:
 | 2026-08-27 | W044 | codex | `IN_PROGRESS` → `IN_REVIEW` | Verified pause/resume monitor collection, severity filtering, bounded retention, redacted export, and structured cause/remediation diagnostics. TUI tests (21), formatting, and worklist governance checks pass; setlist/editor and live event binding remain. |
 
 | 2026-08-28 | W040/W041 | codex | live daemon payload projection → implemented | The executable TUI now projects authoritative snapshot and sequenced event fields into typed dashboard state for health, active scene, route generation, activity counters, activation progress, and activation results; targeted build/tests and strict Clippy pass. Full daemon emission for every projected field and mapped-MIDI dashboard actions remain for final review. |
+| 2026-08-28 | W010/W040/W041 | codex | route-generation event authority → implemented | Daemon snapshots and journal events now expose the router's actual `route_generation`; the TUI consumes that field rather than daemon lifecycle generation. Daemon/TUI tests and strict Clippy pass; activity/scene event producers and mapped-MIDI actions remain for final review. |
 
 ## 6. Proposed changes and decisions queue
 
