@@ -233,6 +233,7 @@ pub struct Daemon {
     received_events: u64,
     sent_events: u64,
     dropped_events: u64,
+    activation_result: Option<String>,
     state_sequence: u64,
     state_events: VecDeque<mackes_ipc::StateEvent>,
 }
@@ -375,6 +376,7 @@ impl Daemon {
             received_events: 0,
             sent_events: 0,
             dropped_events: 0,
+            activation_result: None,
             state_sequence: 0,
             state_events: VecDeque::with_capacity(256),
         })
@@ -868,7 +870,7 @@ impl Daemon {
     /// Executes a scene plan with a caller-provided device action executor.
     #[must_use]
     pub fn execute_scene_with<F>(
-        &self,
+        &mut self,
         plan: &mackes_scene_engine::ActivationPlan,
         unsafe_armed: bool,
         cancelled: bool,
@@ -877,13 +879,15 @@ impl Daemon {
     where
         F: FnMut(&mackes_scene_engine::ActivationAction) -> mackes_scene_engine::ActionResult,
     {
-        plan.execute_with(unsafe_armed, cancelled, execute_action)
+        let results = plan.execute_with(unsafe_armed, cancelled, execute_action);
+        self.publish_activation_result(&results);
+        results
     }
 
     /// Executes startup restore through the ordinary planner with unsafe mode disarmed.
     #[must_use]
     pub fn execute_startup_restore<F>(
-        &self,
+        &mut self,
         plan: &mackes_scene_engine::ActivationPlan,
         execute_action: F,
     ) -> Vec<(String, mackes_scene_engine::ActionResult)>
@@ -896,7 +900,7 @@ impl Daemon {
     /// Executes a scene through the daemon boundary with a monotonic deadline.
     #[must_use]
     pub fn execute_scene_with_deadline<F>(
-        &self,
+        &mut self,
         plan: &mackes_scene_engine::ActivationPlan,
         unsafe_armed: bool,
         cancelled: bool,
@@ -907,7 +911,27 @@ impl Daemon {
     where
         F: FnMut(&mackes_scene_engine::ActivationAction) -> mackes_scene_engine::ActionResult,
     {
-        plan.execute_with_deadline(unsafe_armed, cancelled, now, deadline, execute_action)
+        let results =
+            plan.execute_with_deadline(unsafe_armed, cancelled, now, deadline, execute_action);
+        self.publish_activation_result(&results);
+        results
+    }
+
+    fn publish_activation_result(
+        &mut self,
+        results: &[(String, mackes_scene_engine::ActionResult)],
+    ) {
+        let summary = mackes_scene_engine::ActivationSummary::from_results(results);
+        self.activation_result = Some(format!(
+            "total={} succeeded={} failed={} skipped={} cancelled={} unverified={}",
+            summary.total(),
+            summary.succeeded,
+            summary.failed,
+            summary.skipped,
+            summary.cancelled,
+            summary.sent_unverified
+        ));
+        self.record_state_event(Command::Scenes);
     }
 
     /// Discovers ALSA MIDI endpoints without opening a device or transmitting MIDI.
@@ -930,6 +954,7 @@ impl Daemon {
             "received": self.received_events,
             "sent": self.sent_events,
             "dropped": self.dropped_events,
+            "activation_result": self.activation_result.as_deref(),
             "health": match self.health {
                 Health::Starting => "starting",
                 Health::Ready => "ready",
@@ -954,6 +979,7 @@ impl Daemon {
             "received": self.received_events,
             "sent": self.sent_events,
             "dropped": self.dropped_events,
+            "activation_result": self.activation_result.as_deref(),
             "last_sequence": self.state_sequence,
             "health": match self.health {
                 Health::Starting => "starting",
@@ -1419,7 +1445,7 @@ mod tests {
     #[test]
     fn daemon_scene_boundary_enforces_deadline_before_device_executor() {
         let path = std::env::temp_dir().join(format!("mackes-scene-{}.sock", std::process::id()));
-        let daemon = Daemon::bind(&path).expect("daemon");
+        let mut daemon = Daemon::bind(&path).expect("daemon");
         let plan = mackes_scene_engine::ActivationPlan::compile(vec![
             mackes_scene_engine::ActivationAction {
                 id: "write".into(),
@@ -1443,7 +1469,7 @@ mod tests {
     fn startup_restore_uses_ordinary_planner_and_holds_unsafe_actions() {
         let path =
             std::env::temp_dir().join(format!("mackes-startup-plan-{}.sock", std::process::id()));
-        let daemon = Daemon::bind(&path).expect("daemon");
+        let mut daemon = Daemon::bind(&path).expect("daemon");
         let plan = mackes_scene_engine::ActivationPlan::compile(vec![
             mackes_scene_engine::ActivationAction {
                 id: "safe".into(),
