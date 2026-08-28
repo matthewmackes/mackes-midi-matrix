@@ -1377,6 +1377,29 @@ impl OutputRegistry {
         true
     }
 
+    /// Sends one already-validated MIDI message directly to a named output.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the destination is not registered or the message is malformed.
+    pub fn send_direct(&mut self, destination: &str, payload: &[u8]) -> Result<(), String> {
+        let message = mackes_domain::MidiMessage::from_wire(payload).map_err(str::to_owned)?;
+        let endpoint = mackes_domain::EndpointId::new(1).ok_or("invalid direct endpoint")?;
+        let event = mackes_domain::MidiEvent {
+            timestamp: mackes_domain::TimestampNanos::new(0),
+            sequence: 0,
+            endpoint,
+            message,
+        };
+        let output = self
+            .outputs
+            .iter_mut()
+            .find(|output| output.info().id == destination)
+            .ok_or("destination output is not registered")?;
+        output.send(event);
+        Ok(())
+    }
+
     /// Routes and dispatches one event through all registered outputs.
     #[must_use]
     pub fn dispatch(&mut self, router: &RouterStore, event: &MidiEvent) -> (usize, usize) {

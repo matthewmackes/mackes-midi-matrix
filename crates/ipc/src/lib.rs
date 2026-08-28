@@ -96,6 +96,8 @@ pub enum Command {
     Scenes,
     /// Query a profile-backed device.
     DeviceQuery,
+    /// Send one profile-validated device control message.
+    DeviceControl,
     /// Perform a `SysEx` operation.
     Sysex,
     /// Inspect or restore backups.
@@ -127,6 +129,7 @@ impl Command {
             Self::Learn => "learn",
             Self::Scenes => "scenes",
             Self::DeviceQuery => "device_query",
+            Self::DeviceControl => "device_control",
             Self::Sysex => "sysex",
             Self::Backups => "backups",
             Self::Monitor => "monitor",

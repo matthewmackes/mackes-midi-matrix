@@ -256,6 +256,7 @@ pub fn classify_command(request: &[u8]) -> Option<Command> {
         (Command::Learn, b"learn"),
         (Command::Scenes, b"scenes"),
         (Command::DeviceQuery, b"device_query"),
+        (Command::DeviceControl, b"device_control"),
         (Command::Sysex, b"sysex"),
         (Command::Backups, b"backups"),
         (Command::Monitor, b"monitor"),
@@ -334,6 +335,9 @@ fn command_ack(
                 "{{\"ok\":true,\"generation\":{generation},\"devices\":{}}}\n",
                 serde_json::to_string(&devices).unwrap_or_else(|_| "[]".into())
             )
+        }
+        Command::DeviceControl => {
+            format!("{{\"ok\":true,\"generation\":{generation},\"device_control\":true}}\n")
         }
         Command::Monitor => format!("{{\"ok\":true,\"generation\":{generation},\"monitor\":[]}}\n"),
         Command::Backups => format!("{{\"ok\":true,\"generation\":{generation},\"backups\":[]}}\n"),
@@ -1401,6 +1405,65 @@ impl Daemon {
                     return stream.write_all(format!("{response}\n").as_bytes());
                 }
             }
+            if command == Some(Command::DeviceControl) {
+                let value =
+                    serde_json::from_slice::<serde_json::Value>(&request).unwrap_or_default();
+                if value.get("confirm").and_then(serde_json::Value::as_bool) != Some(true) {
+                    return stream.write_all(
+                        b"{\"ok\":false,\"error\":\"device control requires confirmation\"}\n",
+                    );
+                }
+                let profile_id = value
+                    .get("profile_id")
+                    .and_then(serde_json::Value::as_str)
+                    .ok_or_else(|| io::Error::other("profile_id is required"));
+                let control = value
+                    .get("control")
+                    .and_then(serde_json::Value::as_str)
+                    .ok_or_else(|| io::Error::other("control is required"));
+                let channel = value
+                    .get("channel")
+                    .and_then(serde_json::Value::as_u64)
+                    .and_then(|number| u8::try_from(number).ok())
+                    .ok_or_else(|| io::Error::other("channel is required"));
+                let control_value = value
+                    .get("value")
+                    .and_then(serde_json::Value::as_u64)
+                    .and_then(|number| u16::try_from(number).ok())
+                    .ok_or_else(|| io::Error::other("value is required"));
+                let destination = value
+                    .get("destination")
+                    .and_then(serde_json::Value::as_str)
+                    .ok_or_else(|| io::Error::other("destination is required"));
+                let (Ok(profile_id), Ok(control), Ok(channel), Ok(control_value), Ok(destination)) =
+                    (profile_id, control, channel, control_value, destination)
+                else {
+                    return stream.write_all(
+                        b"{\"ok\":false,\"error\":\"device control fields are required\"}\n",
+                    );
+                };
+                let Some(profile) = mackes_profiles::builtin_profile(profile_id) else {
+                    return stream
+                        .write_all(b"{\"ok\":false,\"error\":\"unknown device profile\"}\n");
+                };
+                let Ok(payload) = profile.render_control_message(control, channel, control_value)
+                else {
+                    return stream
+                        .write_all(b"{\"ok\":false,\"error\":\"invalid device control\"}\n");
+                };
+                if let Err(error) = self.outputs.send_direct(destination, &payload) {
+                    return stream
+                        .write_all(format!("{{\"ok\":false,\"error\":\"{error}\"}}\n").as_bytes());
+                }
+                return stream.write_all(
+                    format!(
+                        "{{\"ok\":true,\"generation\":{},\"bytes\":{}}}\n",
+                        self.generation,
+                        serde_json::to_string(&payload).unwrap_or_else(|_| "[]".into())
+                    )
+                    .as_bytes(),
+                );
+            }
             if let Some(command) = command {
                 if !matches!(
                     command,
@@ -1933,6 +1996,7 @@ mod tests {
             ("learn", Command::Learn),
             ("scenes", Command::Scenes),
             ("device_query", Command::DeviceQuery),
+            ("device_control", Command::DeviceControl),
             ("sysex", Command::Sysex),
             ("backups", Command::Backups),
             ("monitor", Command::Monitor),
