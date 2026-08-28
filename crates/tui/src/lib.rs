@@ -2,6 +2,7 @@
 
 use mackes_ipc::{StateEvent, StateSnapshot};
 use mackes_midi_engine::MidiLearnCandidate;
+use mackes_profiles::launch_control_index_label;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
@@ -3204,13 +3205,15 @@ pub fn draw_controller_mapping(
             "  ├────────┼────────┼────────┼────────┼────────┼────────┼────────┼────────┤".into(),
         );
     }
-    lines.push("  │  BUTTONS:  [01] [02] [03] [04] [05] [06] [07] [08] [09] [10] [11] [12] [13] [14] [15] [16] │".into());
+    lines.push("  │  CHANNEL BUTTONS:  [T01] [T02] [T03] [T04] [T05] [T06] [T07] [T08] │".into());
+    lines.push("  │                    [B01] [B02] [B03] [B04] [B05] [B06] [B07] [B08] │".into());
     lines.push("  └──────────────────────────────────────────────────────────────────────────────────────┘".into());
     lines.push(String::new());
     lines.push(
-        "  FADERS:   [01]     [02]     [03]     [04]     [05]     [06]     [07]     [08]".into(),
+        "  FADERS:   [F01]    [F02]    [F03]    [F04]    [F05]    [F06]    [F07]    [F08]".into(),
     );
-    lines.push("            │  ░░  │  ░░  │  ░░  │  ░░  │  ░░  │  ░░  │  ░░  │  ░░  │".into());
+    lines.push("            │  ░░  │  ░░  │  ░░  │  ░░  │  ░░  │  ░░  │  ░░  │  ░░  │  8-channel level bank".into());
+    lines.push("  UTILITY:  DEVICE  MUTE  SOLO  RECORD ARM  UP  DOWN  LEFT  RIGHT".into());
     lines.push(format!(
         "  ACTIVE CHAIN: {}",
         if editor.drafts.is_empty() { "NO MAPPINGS" } else { "MAPPING BANK" }
@@ -3434,7 +3437,16 @@ fn control_cell(index: usize, editor: &RoutingEditor) -> String {
     let marker = if editor.selected == Some(index) { ">" } else { " " };
     let mapped =
         editor.drafts.get(index).map_or("·", |draft| if draft.enabled { "●" } else { "○" });
-    format!("{marker}{mapped}K{:02}", index + 1)
+    let label = u8::try_from(index).ok().and_then(launch_control_index_label).map_or_else(
+        || format!("C{:02}", index + 1),
+        |label| match index {
+            0..=7 => format!("T{:02}", index + 1),
+            8..=15 => format!("M{:02}", index - 7),
+            16..=23 => format!("B{:02}", index - 15),
+            _ => label,
+        },
+    );
+    format!("{marker}{mapped}{label:<6}")
 }
 
 #[cfg(test)]
