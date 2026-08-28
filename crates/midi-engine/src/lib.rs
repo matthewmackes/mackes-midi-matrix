@@ -1157,6 +1157,17 @@ pub fn stable_endpoint_id(name: &str, direction: EndpointDirection) -> String {
     )
 }
 
+/// Converts a stable endpoint identifier into the numeric domain endpoint ID.
+/// The conversion is deterministic and shared by adapters and IPC capture paths.
+#[must_use]
+pub fn numeric_endpoint_id(stable_id: &str) -> Option<mackes_domain::EndpointId> {
+    let value = stable_id
+        .bytes()
+        .fold(0_u64, |hash, byte| hash.wrapping_mul(257).wrapping_add(u64::from(byte)))
+        .max(1);
+    mackes_domain::EndpointId::new(value)
+}
+
 /// Enumerates physical MIDI ports through the Fedora `midir` backend.
 ///
 /// The returned data is descriptive only; opening a port is deliberately a
@@ -3077,13 +3088,7 @@ impl MidirInputCapture {
                 return Err(error);
             }
         };
-        let endpoint = mackes_domain::EndpointId::new(
-            stable_endpoint_id(&self.info.name, EndpointDirection::Input)
-                .bytes()
-                .fold(0_u64, |hash, byte| hash.wrapping_mul(257).wrapping_add(u64::from(byte)))
-                .max(1),
-        )
-        .ok_or("invalid input endpoint")?;
+        let endpoint = numeric_endpoint_id(&self.info.id).ok_or("invalid input endpoint")?;
         Ok(Some(MidiEvent { timestamp, sequence, endpoint, message }))
     }
 

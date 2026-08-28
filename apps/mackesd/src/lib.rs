@@ -1276,7 +1276,13 @@ impl Daemon {
                 let endpoint = value
                     .get("endpoint")
                     .and_then(serde_json::Value::as_u64)
-                    .and_then(mackes_domain::EndpointId::new);
+                    .and_then(mackes_domain::EndpointId::new)
+                    .or_else(|| {
+                        value
+                            .get("endpoint_id")
+                            .and_then(serde_json::Value::as_str)
+                            .and_then(mackes_midi_engine::numeric_endpoint_id)
+                    });
                 let limit = value
                     .get("limit")
                     .and_then(serde_json::Value::as_u64)
