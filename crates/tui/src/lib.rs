@@ -616,6 +616,8 @@ pub struct MappingDraft {
     pub curve: mackes_midi_engine::Curve,
     /// Additional engine predicates applied by this mapping.
     pub filters: MappingFilterDraft,
+    /// Explicitly authorizes this route to participate in a bounded cycle.
+    pub allow_cycle: bool,
 }
 
 /// Transactional fine-grained filter draft for a mapping editor.
@@ -775,6 +777,7 @@ impl Default for MappingDraft {
             priority: 0,
             curve: mackes_midi_engine::Curve::Linear,
             filters: MappingFilterDraft { predicates: Vec::new() },
+            allow_cycle: false,
         }
     }
 }
@@ -1694,6 +1697,7 @@ impl LearnWorkspace {
             priority: 0,
             curve: mackes_midi_engine::Curve::Linear,
             filters: MappingFilterDraft::default(),
+            allow_cycle: false,
         })
     }
     /// Returns the durable mapping, including the captured source signature
@@ -3358,6 +3362,7 @@ mod tests {
             priority: 0,
             curve: mackes_midi_engine::Curve::Linear,
             filters: MappingFilterDraft::default(),
+            allow_cycle: false,
         };
         assert!(draft.validate().is_ok());
         assert_eq!(draft.curve, mackes_midi_engine::Curve::Linear);
@@ -3417,6 +3422,7 @@ mod tests {
             priority: 0,
             curve: mackes_midi_engine::Curve::Linear,
             filters: MappingFilterDraft::default(),
+            allow_cycle: false,
         };
         let mut editor = RoutingEditor::from_bank(&MappingBank::new());
         editor.add(draft).expect("draft");

@@ -311,6 +311,7 @@ fn command_ack(
                         "source": route.source.get(), "destination": route.destination.get(),
                         "channel": route.channel.map(mackes_domain::MidiChannel::one_based),
                         "class": route.class.map(|class| format!("{class:?}")),
+                        "allow_cycle": route.allow_cycle,
                     })
                 })
                 .collect::<Vec<_>>();

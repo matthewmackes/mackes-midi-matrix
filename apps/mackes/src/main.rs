@@ -285,6 +285,7 @@ fn run_tui() -> Result<(), String> {
                                     .unwrap_or(u16::MAX),
                                 curve: mackes_midi_engine::Curve::Linear,
                                 filters: mackes_tui::MappingFilterDraft::default(),
+                                allow_cycle: false,
                             };
                             if routing_editor.add(draft).is_err() {
                                 "route-add-rejected".clone_into(&mut dashboard.health);
@@ -1510,6 +1511,9 @@ fn save_routes(editor: &mackes_tui::RoutingEditor, current_generation: u64) -> S
                 "destination": destination,
                 "channel": draft.channel,
                 "class": class,
+                // Preserve the daemon route contract even when the current editor
+                // does not expose cycle authorization as a separate control.
+                "allow_cycle": draft.allow_cycle,
             }))
         })
         .collect::<Vec<_>>();
@@ -1605,6 +1609,10 @@ fn project_routes(editor: &mut mackes_tui::RoutingEditor, payload: &serde_json::
                 priority: 0,
                 curve: mackes_midi_engine::Curve::Linear,
                 filters: mackes_tui::MappingFilterDraft::default(),
+                allow_cycle: route
+                    .get("allow_cycle")
+                    .and_then(serde_json::Value::as_bool)
+                    .unwrap_or(false),
             })
         })
         .collect::<Vec<_>>();
@@ -1885,6 +1893,7 @@ mod tests {
             priority: 0,
             curve: mackes_midi_engine::Curve::Linear,
             filters: mackes_tui::MappingFilterDraft::default(),
+            allow_cycle: false,
         });
         project_routes(
             &mut editor,
