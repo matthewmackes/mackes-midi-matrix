@@ -1554,11 +1554,15 @@ fn apply_routes_cli(path: &str) {
         eprintln!("mackes-midi-matrix: invalid routes JSON: {error}");
         std::process::exit(2);
     });
-    if value.get("routes").and_then(serde_json::Value::as_array).is_none() {
-        eprintln!("mackes-midi-matrix: routes file must contain a routes array");
+    let document = if value.as_array().is_some() {
+        serde_json::json!({ "routes": value })
+    } else if value.get("routes").and_then(serde_json::Value::as_array).is_some() {
+        value
+    } else {
+        eprintln!("mackes-midi-matrix: routes file must be an array or contain a routes array");
         std::process::exit(2);
-    }
-    let encoded = serde_json::to_vec(&value).expect("validated routes JSON is serializable");
+    };
+    let encoded = serde_json::to_vec(&document).expect("validated routes JSON is serializable");
     let response = daemon_request(mackes_ipc::Command::Routes, &encoded);
     println!("{response}");
     if response.contains("\"ok\":false") {

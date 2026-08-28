@@ -112,7 +112,8 @@ mackes-midi-matrix sysex <output-id> "F0 7D 01 02 F7" --confirm
 
 Both commands fail closed for unknown profiles or controls, invalid MIDI ranges, malformed
 SysEx, unavailable destinations, or missing confirmation. Querying devices and inspecting
-routes remain read-only operations.
+Route inspection remains read-only; `routes apply <routes.json>` performs an explicit,
+bounded atomic route replacement through the daemon.
 
 ## Verification and testing
 
