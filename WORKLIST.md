@@ -2643,6 +2643,7 @@ New requests enter here before implementation.
 | 2026-08-28 | W010/W052/W053 | codex | signal-aware nonblocking daemon accept → implemented | Production daemon control-socket accepts are nonblocking with a bounded idle wait, allowing registered SIGTERM/SIGINT handlers to reach the shutdown boundary; rebuilt release process exits 0 on SIGTERM, and archive checksum passes. |
 | 2026-08-28 | W010/W052/W053 | codex | bounded stalled-client shutdown → implemented | Added a 100 ms control-stream read timeout so an incomplete client frame cannot prevent lifecycle shutdown; release daemon exits 0 on SIGTERM with a stalled connected client, and daemon tests/archive checksum pass. |
 | 2026-08-28 | W010 | codex | nonblocking accept regression coverage → implemented | Added a daemon test proving a production-configured nonblocking control socket returns `WouldBlock` without a client, preserving the signal-aware loop contract; daemon tests (23) and strict Clippy pass. |
+| 2026-08-28 | W040/W045 | codex | default TUI dispatch → implemented | Invoking the operator binary without arguments now launches the same TUI entry point as the explicit `tui` command; release build smoke reaches terminal initialization and exits clearly when no terminal is available. |
 
 The worklist is complete only when W053 is `DONE`. A feature demonstration, passing unit
 tests, or code presence alone is not release completion.

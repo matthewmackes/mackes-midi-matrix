@@ -187,6 +187,12 @@ fn print_default_provider(path: &str, capability: &str, json: bool) -> Result<()
 fn main() {
     let arguments: Vec<String> = std::env::args().skip(1).collect();
     match arguments.as_slice() {
+        [] => {
+            if let Err(error) = run_tui() {
+                eprintln!("tui failed: {error}");
+                std::process::exit(2);
+            }
+        }
         [command] if command == "tui" => {
             if let Err(error) = run_tui() {
                 eprintln!("tui failed: {error}");

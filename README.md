@@ -65,7 +65,7 @@ cargo run --package mackes-midi-matrix
 cargo run --package mackesd
 ```
 
-Launch the interactive terminal UI with `mackes-midi-matrix tui`. While it is running,
+Launch the interactive terminal UI with `mackes-midi-matrix` (or `mackes-midi-matrix tui`). While it is running,
 number keys select the available workspaces: `1` Dashboard, `2` MIDI Learn, `3` Reflex,
 `4` Eventide, and `5` Routing. From the dashboard, `n`/`p` navigate scenes, `!` issues
 the governed panic command, and `q` exits. The UI restores the terminal state on normal
