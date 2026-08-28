@@ -573,6 +573,7 @@ fn main() {
             );
             println!("  mackes-midi-matrix scene actions <config> <project> <scene> [--json]");
             println!("  mackes-midi-matrix scene plan <config> <project> <scene> [--json]");
+            println!("  mackes-midi-matrix routes apply <routes.json>");
         }
         [command, action, path, capability] if command == "default" && action == "get" => {
             if let Err(error) = print_default_provider(path, capability, false) {
@@ -720,6 +721,9 @@ fn main() {
         }
         [command] if command == "routes" => {
             print_daemon_command(mackes_ipc::Command::Routes);
+        }
+        [command, action, path] if command == "routes" && action == "apply" => {
+            apply_routes_cli(path);
         }
         [command, flag] if command == "monitor" && flag == "--json" => {
             print_daemon_command(mackes_ipc::Command::Monitor);
@@ -1539,6 +1543,27 @@ fn save_routes(editor: &mackes_tui::RoutingEditor, current_generation: u64) -> S
     }))
     .expect("route save payload is serializable");
     daemon_request(mackes_ipc::Command::Routes, &payload)
+}
+
+fn apply_routes_cli(path: &str) {
+    let bytes = std::fs::read(path).unwrap_or_else(|error| {
+        eprintln!("mackes-midi-matrix: cannot read routes file: {error}");
+        std::process::exit(2);
+    });
+    let value = serde_json::from_slice::<serde_json::Value>(&bytes).unwrap_or_else(|error| {
+        eprintln!("mackes-midi-matrix: invalid routes JSON: {error}");
+        std::process::exit(2);
+    });
+    if value.get("routes").and_then(serde_json::Value::as_array).is_none() {
+        eprintln!("mackes-midi-matrix: routes file must contain a routes array");
+        std::process::exit(2);
+    }
+    let encoded = serde_json::to_vec(&value).expect("validated routes JSON is serializable");
+    let response = daemon_request(mackes_ipc::Command::Routes, &encoded);
+    println!("{response}");
+    if response.contains("\"ok\":false") {
+        std::process::exit(2);
+    }
 }
 
 fn endpoint_pair_for_new_route() -> Option<(u64, u64)> {
