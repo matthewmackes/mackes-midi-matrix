@@ -574,6 +574,8 @@ pub struct LearnWorkspace {
     pub selected: Option<usize>,
     /// Globally configured input endpoint alias; capture requires this to be set.
     pub learn_input_alias: Option<String>,
+    /// Resolved stable endpoint ID used for bounded daemon capture.
+    pub learn_endpoint_id: Option<String>,
     /// Explicit exact/any channel policy for the selected candidate.
     pub channel_policy: Option<LearnChannelPolicy>,
     /// Validated destination identifier and mapping class.
@@ -1394,6 +1396,7 @@ impl LearnWorkspace {
             candidates: Vec::new(),
             selected: None,
             learn_input_alias: None,
+            learn_endpoint_id: None,
             channel_policy: None,
             destination: None,
             live_test_passed: false,
@@ -1416,6 +1419,10 @@ impl LearnWorkspace {
         } else {
             Err("Learn input cannot change during capture")
         }
+    }
+    /// Sets the daemon-resolved endpoint for the configured alias.
+    pub fn set_endpoint_id(&mut self, endpoint_id: impl Into<String>) {
+        self.learn_endpoint_id = Some(endpoint_id.into());
     }
     /// Begins bounded capture.
     pub fn start_capture(&mut self) {

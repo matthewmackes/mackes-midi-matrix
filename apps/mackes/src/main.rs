@@ -61,6 +61,9 @@ fn run_tui() -> Result<(), String> {
             client_state.begin_reconnect();
             needs_snapshot = true;
         }
+        if workspace == 2 && learn_workspace.phase == mackes_tui::LearnPhase::Capturing {
+            poll_learn_capture(&mut learn_workspace);
+        }
         terminal
             .draw(|frame| match workspace {
                 2 => mackes_tui::draw_learn(frame, frame.area(), &learn_workspace),
@@ -121,6 +124,14 @@ fn run_tui() -> Result<(), String> {
                             "setlists-save-failed".to_owned()
                         };
                     }
+                    KeyCode::Char('l') if workspace == 2 => learn_workspace.start_capture(),
+                    KeyCode::Enter
+                        if workspace == 2
+                            && learn_workspace.phase == mackes_tui::LearnPhase::Capturing =>
+                    {
+                        poll_learn_capture(&mut learn_workspace);
+                    }
+                    KeyCode::Esc if workspace == 2 => learn_workspace.cancel(),
                     KeyCode::Char('d') if workspace == 5 => {
                         if let Some(index) = routing_editor.selected {
                             let _ = routing_editor.remove(index);
@@ -945,6 +956,70 @@ fn project_learn_alias(learn: &mut mackes_tui::LearnWorkspace, payload: &serde_j
     if learn.learn_input_alias.is_none() {
         let _ = learn.set_input_alias(alias);
     }
+    if let Some(endpoint_id) = payload
+        .get("catalog")
+        .and_then(|catalog| catalog.get("learn_endpoint_id"))
+        .and_then(serde_json::Value::as_str)
+    {
+        learn.set_endpoint_id(endpoint_id);
+    }
+}
+
+fn poll_learn_capture(learn: &mut mackes_tui::LearnWorkspace) {
+    let Some(endpoint_id) = learn.learn_endpoint_id.as_deref() else { return };
+    let payload = serde_json::json!({"endpoint_id": endpoint_id, "limit": 128});
+    let Ok(bytes) = serde_json::to_vec(&payload) else { return };
+    let response = daemon_request(mackes_ipc::Command::Learn, &bytes);
+    let Ok(value) = serde_json::from_str::<serde_json::Value>(&response) else { return };
+    let Some(candidates) = value.get("candidates").cloned() else { return };
+    let candidates = candidates
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|candidate| {
+            let kind = match candidate.get("kind")?.as_str()? {
+                "noteon" => mackes_midi_engine::LearnMessageKind::NoteOn,
+                "noteoff" => mackes_midi_engine::LearnMessageKind::NoteOff,
+                "polypressure" => mackes_midi_engine::LearnMessageKind::PolyPressure,
+                "controlchange" => mackes_midi_engine::LearnMessageKind::ControlChange,
+                "programchange" => mackes_midi_engine::LearnMessageKind::ProgramChange,
+                "channelpressure" => mackes_midi_engine::LearnMessageKind::ChannelPressure,
+                "pitchbend" => mackes_midi_engine::LearnMessageKind::PitchBend,
+                "systemcommon" => mackes_midi_engine::LearnMessageKind::SystemCommon,
+                "realtime" => mackes_midi_engine::LearnMessageKind::Realtime,
+                "sysex" => mackes_midi_engine::LearnMessageKind::SysEx,
+                _ => return None,
+            };
+            let raw = candidate
+                .get("raw")?
+                .as_array()?
+                .iter()
+                .map(|v| v.as_u64().and_then(|value| u8::try_from(value).ok()))
+                .collect::<Option<Vec<_>>>()?;
+            Some(mackes_midi_engine::MidiLearnCandidate {
+                kind,
+                channel: candidate
+                    .get("channel")
+                    .and_then(serde_json::Value::as_u64)
+                    .and_then(|v| u8::try_from(v).ok()),
+                number: candidate
+                    .get("number")
+                    .and_then(serde_json::Value::as_u64)
+                    .and_then(|v| u8::try_from(v).ok()),
+                observations: u32::try_from(candidate.get("observations")?.as_u64()?).ok()?,
+                minimum: candidate
+                    .get("minimum")
+                    .and_then(serde_json::Value::as_u64)
+                    .and_then(|v| u16::try_from(v).ok()),
+                maximum: candidate
+                    .get("maximum")
+                    .and_then(serde_json::Value::as_u64)
+                    .and_then(|v| u16::try_from(v).ok()),
+                raw,
+            })
+        })
+        .collect::<Vec<_>>();
+    learn.finish_capture(candidates);
 }
 
 fn save_routes(editor: &mackes_tui::RoutingEditor, current_generation: u64) -> String {
