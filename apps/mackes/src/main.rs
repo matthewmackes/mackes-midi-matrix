@@ -80,6 +80,14 @@ fn run_tui() -> Result<(), String> {
         if event::poll(std::time::Duration::from_millis(250)).map_err(|error| error.to_string())? {
             if let Event::Key(key) = event::read().map_err(|error| error.to_string())? {
                 match key.code {
+                    KeyCode::Char('q') if workspace == 4 => {
+                        let response = daemon_request(mackes_ipc::Command::DeviceQuery, b"{}");
+                        dashboard.health = if response.contains("\"ok\":true") {
+                            "device-query-complete".to_owned()
+                        } else {
+                            "device-query-failed".to_owned()
+                        };
+                    }
                     KeyCode::Char('q') => break Ok(()),
                     KeyCode::Char(value) if ('1'..='9').contains(&value) => {
                         workspace = value

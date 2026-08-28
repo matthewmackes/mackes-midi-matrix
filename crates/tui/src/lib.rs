@@ -2092,7 +2092,8 @@ impl DeviceWorkspace {
     /// flow, selected block, and profile-owned control ordering.
     #[must_use]
     pub fn frame_lines(&self, viewport: Viewport) -> Vec<String> {
-        let mut lines = vec![format!("{} [{}]", self.device_label, self.device_id)];
+        let mut lines =
+            vec![format!("{} [{}] (q query device)", self.device_label, self.device_id)];
         if let Some(notice) = self.diagram_notice() {
             lines.push(notice.to_owned());
         } else {
