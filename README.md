@@ -74,6 +74,8 @@ and error exits.
 
 Scenes can also be selected exactly from the CLI with `mackes-midi-matrix scene select <scene-id>`;
 the daemon validates the active catalog and persists the selection.
+Scene action records may additionally declare a validated `destination` and complete MIDI `message`
+payload for executable scene operations; legacy metadata-only actions remain supported.
 
 For system-wide installation and service operation, see [`docs/installation-fedora.md`](docs/installation-fedora.md).
 
