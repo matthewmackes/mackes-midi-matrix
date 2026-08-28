@@ -81,10 +81,25 @@ fn run_tui() -> Result<(), String> {
             if let Event::Key(key) = event::read().map_err(|error| error.to_string())? {
                 match key.code {
                     KeyCode::Char('q') if workspace == 4 => {
-                        let response = daemon_request(mackes_ipc::Command::DeviceQuery, b"{}");
+                        let response = daemon_request(
+                            mackes_ipc::Command::DeviceQuery,
+                            br#"{"profile_id":"eventide.micropitch"}"#,
+                        );
                         let populated = serde_json::from_str::<serde_json::Value>(&response)
                             .ok()
-                            .and_then(|value| value.get("devices")?.as_array().map(Vec::len))
+                            .and_then(|value| {
+                                value
+                                    .get("devices")
+                                    .and_then(serde_json::Value::as_array)
+                                    .map(Vec::len)
+                                    .or_else(|| {
+                                        value
+                                            .get("profile")?
+                                            .get("controls")?
+                                            .as_array()
+                                            .map(Vec::len)
+                                    })
+                            })
                             .is_some_and(|count| count > 0);
                         dashboard.health = if populated {
                             "device-query-complete".to_owned()

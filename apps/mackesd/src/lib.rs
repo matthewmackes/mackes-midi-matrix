@@ -1364,6 +1364,43 @@ impl Daemon {
                     value.get("direction").and_then(serde_json::Value::as_str) != Some("previous");
                 self.navigate_scene(next);
             }
+            if command == Some(Command::DeviceQuery) {
+                let value =
+                    serde_json::from_slice::<serde_json::Value>(&request).unwrap_or_default();
+                if let Some(profile_id) =
+                    value.get("profile_id").and_then(serde_json::Value::as_str)
+                {
+                    let Some(profile) = mackes_profiles::builtin_profile(profile_id) else {
+                        return stream
+                            .write_all(b"{\"ok\":false,\"error\":\"unknown device profile\"}\n");
+                    };
+                    let controls = profile
+                        .controls
+                        .iter()
+                        .take(256)
+                        .map(|control| {
+                            serde_json::json!({
+                                "label": control.label,
+                                "cc": control.cc,
+                                "program": control.program,
+                                "range": [control.range.0, control.range.1],
+                            })
+                        })
+                        .collect::<Vec<_>>();
+                    let response = serde_json::json!({
+                        "ok": true,
+                        "generation": self.generation,
+                        "profile": {
+                            "id": profile.id,
+                            "name": profile.name,
+                            "capabilities": profile.capabilities.iter().map(|capability| &capability.id).collect::<Vec<_>>(),
+                            "controls": controls,
+                            "query_count": profile.queries.len(),
+                        },
+                    });
+                    return stream.write_all(format!("{response}\n").as_bytes());
+                }
+            }
             if let Some(command) = command {
                 if !matches!(
                     command,
