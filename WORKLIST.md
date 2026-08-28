@@ -2551,6 +2551,7 @@ Redacted fixture filenames and hashes:
 | 2026-08-28 | W040/W041 | codex | typed dashboard payload projection → implemented | Moved daemon JSON payload decoding into the TUI crate as `DashboardEvent::from_payload`; the executable now consumes the shared typed projection, with coverage for health, scene, routing, activity, and activation result fields. Full release gate pending. |
 | 2026-08-28 | W041/W046 | codex | explicit mapped-MIDI dashboard bindings → implemented | Added configuration-driven note-on/control-change trigger types and a fail-closed resolver that maps only one exact binding to an existing governed `UiCommand`; unmapped, invalid, and ambiguous inputs are rejected, with regression coverage. Full release gate passes. |
 | 2026-08-28 | W040/W041/W046 | codex | bounded mapped-MIDI polling seam → implemented | Added `poll_dashboard_actions` over the existing `MidiInputAdapter`; it consumes at most 128 events, resolves explicit bindings, and returns governed UI commands without opening ports, routing events, or bypassing IPC. TUI tests (31), strict Clippy, and full release gate pass. |
+| 2026-08-28 | W040/W041/W046 | codex | persisted dashboard MIDI bindings → implemented | Added config-native serialized note-on/CC bindings with command allowlisting, range validation, duplicate-trigger rejection, JSON round-trip coverage, and schema definitions. Config tests (19), strict Clippy, and full release gate pending. |
 
 ## 6. Proposed changes and decisions queue
 

@@ -265,6 +265,69 @@ pub struct Settings {
     /// Globally selected endpoint alias used by MIDI Learn.
     #[serde(default)]
     pub learn_input_alias: Option<String>,
+    /// Explicit MIDI triggers for dashboard commands.
+    #[serde(default)]
+    pub dashboard_midi_bindings: Vec<DashboardMidiBinding>,
+}
+
+/// Persisted MIDI trigger kind for a dashboard action.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum DashboardMidiTrigger {
+    /// Match an exact note-on channel and note.
+    NoteOn {
+        /// One-based MIDI channel.
+        channel: u8,
+        /// Note number.
+        note: u8,
+    },
+    /// Match an exact CC channel/controller and optionally its value.
+    ControlChange {
+        /// One-based MIDI channel.
+        channel: u8,
+        /// Controller number.
+        controller: u8,
+        /// Optional exact value.
+        value: Option<u8>,
+    },
+}
+
+/// Persisted one-to-one MIDI dashboard action binding.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct DashboardMidiBinding {
+    /// Explicit trigger.
+    pub trigger: DashboardMidiTrigger,
+    /// Governed command tag (`panic`, `next_scene`, or `previous_scene`).
+    pub command: String,
+}
+
+impl DashboardMidiBinding {
+    /// Validates MIDI ranges, command allowlisting, and nonblank identifiers.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the trigger is out of range or the command is not
+    /// one of the supported dashboard commands.
+    pub fn validate(&self) -> Result<(), &'static str> {
+        let valid_trigger = match &self.trigger {
+            DashboardMidiTrigger::NoteOn { channel, note } => {
+                (1..=16).contains(channel) && *note <= 127
+            }
+            DashboardMidiTrigger::ControlChange { channel, controller, value } => {
+                (1..=16).contains(channel)
+                    && *controller <= 127
+                    && value.is_none_or(|value| value <= 127)
+            }
+        };
+        if !valid_trigger {
+            return Err("dashboard MIDI trigger is out of range");
+        }
+        if !matches!(self.command.as_str(), "panic" | "next_scene" | "previous_scene") {
+            return Err("dashboard MIDI command is not allowed");
+        }
+        Ok(())
+    }
 }
 
 /// Explicit channel matching policy for a persisted learned mapping.
@@ -938,6 +1001,15 @@ pub fn validate(document: &ConfigDocument) -> Result<(), String> {
             return Err(format!("Learn input references unknown endpoint '{alias}'"));
         }
     }
+    let mut dashboard_triggers = std::collections::HashSet::new();
+    for binding in &document.settings.dashboard_midi_bindings {
+        binding.validate().map_err(str::to_owned)?;
+        let key =
+            serde_json::to_string(&binding.trigger).map_err(|_| "invalid dashboard trigger")?;
+        if !dashboard_triggers.insert(key) {
+            return Err("duplicate dashboard MIDI trigger".into());
+        }
+    }
     for mapping in &document.learned_mappings {
         validate_learned_mapping(mapping, &document.endpoints)?;
     }
@@ -1111,6 +1183,7 @@ mod tests {
                 active_scene: None,
                 default_providers: Vec::new(),
                 learn_input_alias: None,
+                dashboard_midi_bindings: Vec::new(),
             },
             endpoints: vec![],
             projects: vec![Project {
@@ -1128,6 +1201,22 @@ mod tests {
         let text = "{schema_version:1, settings:{active_project:'demo'}, projects:[{id:'demo',scenes:[]}]}";
         assert_eq!(json5::from_str::<ConfigDocument>(text).expect("valid").schema_version, 1);
         assert!(json5::from_str::<ConfigDocument>("{schema_version:1, unknown:true}").is_err());
+    }
+
+    #[test]
+    fn dashboard_bindings_round_trip_and_reject_duplicates() {
+        let mut value = document();
+        let binding = DashboardMidiBinding {
+            trigger: DashboardMidiTrigger::NoteOn { channel: 1, note: 36 },
+            command: "panic".into(),
+        };
+        value.settings.dashboard_midi_bindings = vec![binding.clone()];
+        let encoded = serde_json::to_string(&value).expect("encode");
+        let decoded: ConfigDocument = serde_json::from_str(&encoded).expect("decode");
+        assert_eq!(decoded.settings.dashboard_midi_bindings, vec![binding.clone()]);
+        assert!(validate(&decoded).is_ok());
+        value.settings.dashboard_midi_bindings.push(binding);
+        assert_eq!(validate(&value), Err("duplicate dashboard MIDI trigger".into()));
     }
 
     #[test]
