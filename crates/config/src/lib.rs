@@ -851,16 +851,32 @@ pub fn copy_scene(project: &Project, source_id: &str, new_id: &str) -> Result<Pr
     if !project.scenes.iter().any(|scene| scene.id == source_id) {
         return Err(format!("unknown scene ID '{source_id}'"));
     }
+    let Some(source) = project.scenes.iter().find(|scene| scene.id == source_id) else {
+        return Err(format!("unknown scene ID '{source_id}'"));
+    };
     let mut result = project.clone();
-    result.scenes.push(SceneRef { id: new_id.to_owned(), name: None, category: None });
+    result.scenes.push(SceneRef {
+        id: new_id.to_owned(),
+        name: source.name.clone(),
+        category: source.category.clone(),
+    });
     Ok(result)
 }
 
-/// Finds scenes whose IDs contain a case-insensitive query, preserving project order.
+/// Finds scenes whose ID, name, or category contains a case-insensitive query, preserving order.
 #[must_use]
 pub fn search_scenes<'a>(project: &'a Project, query: &str) -> Vec<&'a SceneRef> {
     let query = query.to_ascii_lowercase();
-    project.scenes.iter().filter(|scene| scene.id.to_ascii_lowercase().contains(&query)).collect()
+    project
+        .scenes
+        .iter()
+        .filter(|scene| {
+            [Some(scene.id.as_str()), scene.name.as_deref(), scene.category.as_deref()]
+                .into_iter()
+                .flatten()
+                .any(|value| value.to_ascii_lowercase().contains(&query))
+        })
+        .collect()
 }
 
 /// Finds projects whose ID or ordered scene IDs contain a case-insensitive query.
@@ -1441,12 +1457,20 @@ mod tests {
 
     #[test]
     fn scene_reorder_and_copy_are_explicit_and_non_mutating() {
-        let project = document().projects[0].clone();
+        let mut project = document().projects[0].clone();
+        project.scenes[0].name = Some("Intro ambience".into());
+        project.scenes[0].category = Some("opening".into());
         let reordered = reorder_scenes(&project, &["intro"]).expect("reorder");
         assert_eq!(reordered.scenes, project.scenes);
         let copied = copy_scene(&project, "intro", "intro-copy").expect("copy");
         assert_eq!(project.scenes.len(), 1);
         assert_eq!(copied.scenes.last().map(|scene| scene.id.as_str()), Some("intro-copy"));
+        assert_eq!(search_scenes(&project, "ambience").len(), 1);
+        assert_eq!(search_scenes(&project, "OPENING").len(), 1);
+        assert_eq!(
+            copied.scenes.last().and_then(|scene| scene.category.as_deref()),
+            Some("opening")
+        );
         let copied_project = copy_project(std::slice::from_ref(&project), "demo", "demo-copy")
             .expect("project copy");
         assert_eq!(copied_project.id, "demo-copy");
