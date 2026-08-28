@@ -308,6 +308,11 @@ fn run_tui() -> Result<(), String> {
                             "route-enable-edit-rejected".clone_into(&mut dashboard.health);
                         }
                     }
+                    KeyCode::Char('y') if workspace == 5 => {
+                        if routing_editor.toggle_selected_cycle().is_err() {
+                            "route-cycle-edit-rejected".clone_into(&mut dashboard.health);
+                        }
+                    }
                     KeyCode::Char('+') if workspace == 5 => {
                         if routing_editor.adjust_selected_priority(1).is_err() {
                             "route-priority-edit-rejected".clone_into(&mut dashboard.health);

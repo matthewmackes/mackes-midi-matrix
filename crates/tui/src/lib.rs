@@ -1045,19 +1045,21 @@ impl RoutingEditor {
     #[must_use]
     pub fn frame_lines(&self, viewport: Viewport) -> Vec<String> {
         let mut lines = vec![
-            "Routing & mappings — uncommitted draft (a add, j/k select, m mode, c channel, +/- priority, e enable, d remove, s save)"
+            "Routing & mappings — uncommitted draft (a add, j/k select, m mode, c channel, +/- priority, e enable, y cycle, d remove, s save)"
                 .into(),
         ];
         lines.extend(self.drafts.iter().enumerate().map(|(index, draft)| {
             format!(
-                "{} p{} {} -> {} {:?} ch={:?} {}",
+                "{} p{} {} -> {} {:?} ch={:?} {} curve={:?} cycle={}",
                 if self.selected == Some(index) { ">" } else { " " },
                 draft.priority,
                 draft.source,
                 draft.destination,
                 draft.mode,
                 draft.channel,
-                if draft.enabled { "enabled" } else { "disabled" }
+                if draft.enabled { "enabled" } else { "disabled" },
+                draft.curve,
+                if draft.allow_cycle { "allowed" } else { "denied" }
             )
         }));
         clamp_lines(lines, viewport, usize::from(viewport.width))
@@ -1486,6 +1488,20 @@ impl RoutingEditor {
             return Err("selected mapping is out of range".into());
         };
         draft.enabled = !draft.enabled;
+        Ok(())
+    }
+
+    /// Toggles explicit bounded-cycle authorization for the selected route.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when no valid row is selected.
+    pub fn toggle_selected_cycle(&mut self) -> Result<(), String> {
+        let index = self.selected.ok_or("no mapping is selected")?;
+        let Some(draft) = self.drafts.get_mut(index) else {
+            return Err("selected mapping is out of range".into());
+        };
+        draft.allow_cycle = !draft.allow_cycle;
         Ok(())
     }
 
