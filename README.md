@@ -74,6 +74,27 @@ and error exits.
 
 For system-wide installation and service operation, see [`docs/installation-fedora.md`](docs/installation-fedora.md).
 
+### Device and SysEx commands
+
+The CLI exposes the same daemon-owned validation boundary used by the TUI. Device controls
+require a profile control label, a one-based channel, a value within the profile range, a
+registered output endpoint, and an explicit confirmation flag:
+
+```bash
+mackes-midi-matrix device-control eventide.micropitch Mix 1 64 <output-id> --confirm
+```
+
+Raw SysEx is bounded to 1–1024 bytes, must be written as framed `F0 ... F7` hexadecimal, and
+also requires explicit confirmation and a registered output:
+
+```bash
+mackes-midi-matrix sysex <output-id> "F0 7D 01 02 F7" --confirm
+```
+
+Both commands fail closed for unknown profiles or controls, invalid MIDI ranges, malformed
+SysEx, unavailable destinations, or missing confirmation. Querying devices and inspecting
+routes remain read-only operations.
+
 ## Verification and testing
 
 The default suite is deterministic and must not require hardware, network peers, privileged paths, sleeps, or external services:
@@ -110,7 +131,7 @@ hardware/network soaks remain explicit post-release qualification activities.
 
 ## Safety and contributing
 
-Hardware writes, bulk dumps, and dense MIDI traffic are potentially destructive. Such tests are opt-in, display their exact destination and operation, and require explicit arming. Do not guess vendor SysEx bytes, checksums, LED messages, or reply semantics: changes must be supported by cited documentation, redacted fixtures, or physical validation.
+Hardware writes, bulk dumps, and dense MIDI traffic are potentially destructive. Such tests are opt-in, display their exact destination and operation, and require explicit confirmation. Do not guess vendor SysEx bytes, checksums, LED messages, or reply semantics: changes must be supported by cited documentation, redacted fixtures, or physical validation.
 
 Read `WORKLIST.md`, relevant ADRs, and [`CONTRIBUTING.md`](CONTRIBUTING.md) before contributing. Security concerns belong in [`SECURITY.md`](SECURITY.md). The project is licensed under the MIT License (`LICENSE`).
 
