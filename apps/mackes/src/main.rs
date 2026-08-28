@@ -560,6 +560,7 @@ fn main() {
             println!("  mackes-midi-matrix device-query <profile-id>");
             println!("  mackes-midi-matrix device-query <profile-id> <query-id>");
             println!("  mackes-midi-matrix scene next|previous");
+            println!("  mackes-midi-matrix scene select <scene-id>");
             println!("  mackes-midi-matrix scene plan <config> <project> <scene> [--json]");
         }
         [command, action, path, capability] if command == "default" && action == "get" => {
@@ -686,6 +687,15 @@ fn main() {
             if command == "scene" && matches!(direction.as_str(), "next" | "previous") =>
         {
             navigate_scene_cli(direction);
+        }
+        [command, subcommand, scene] if command == "scene" && subcommand == "select" => {
+            let payload = serde_json::to_vec(&serde_json::json!({"scene": scene}))
+                .expect("scene selection payload is serializable");
+            let response = daemon_request(mackes_ipc::Command::Scenes, &payload);
+            println!("{response}");
+            if response.contains("\"ok\":false") {
+                std::process::exit(2);
+            }
         }
         [command, direction, flag]
             if command == "scene"

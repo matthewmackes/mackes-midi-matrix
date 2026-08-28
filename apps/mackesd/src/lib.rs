@@ -679,6 +679,23 @@ impl Daemon {
         Some(scene)
     }
 
+    /// Selects an exact scene from the daemon-owned catalog and persists it.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the scene is absent or persistence fails.
+    pub fn select_scene(&mut self, scene: &str) -> Result<String, &'static str> {
+        if !self.scene_ids.iter().any(|candidate| candidate == scene) {
+            return Err("scene is not present in the active catalog");
+        }
+        let selected = scene.to_owned();
+        self.set_active_scene(Some(selected.clone()));
+        if let Some(path) = self.config_path.as_deref() {
+            persist_active_scene(path, Some(scene)).map_err(|_| "scene persistence failed")?;
+        }
+        Ok(selected)
+    }
+
     /// Registers one explicitly opened input adapter with the daemon.
     ///
     /// # Errors
@@ -1364,9 +1381,17 @@ impl Daemon {
             if command == Some(Command::Scenes) {
                 let value =
                     serde_json::from_slice::<serde_json::Value>(&request).unwrap_or_default();
-                let next =
-                    value.get("direction").and_then(serde_json::Value::as_str) != Some("previous");
-                self.navigate_scene(next);
+                if let Some(scene) = value.get("scene").and_then(serde_json::Value::as_str) {
+                    if let Err(error) = self.select_scene(scene) {
+                        return stream.write_all(
+                            format!("{{\"ok\":false,\"error\":\"{error}\"}}\n").as_bytes(),
+                        );
+                    }
+                } else {
+                    let next = value.get("direction").and_then(serde_json::Value::as_str)
+                        != Some("previous");
+                    self.navigate_scene(next);
+                }
             }
             if command == Some(Command::DeviceQuery) {
                 let value =

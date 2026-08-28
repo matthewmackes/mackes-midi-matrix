@@ -72,6 +72,9 @@ From the dashboard, `n`/`p` navigate scenes, `!` issues
 the governed panic command, and `q` exits. The UI restores the terminal state on normal
 and error exits.
 
+Scenes can also be selected exactly from the CLI with `mackes-midi-matrix scene select <scene-id>`;
+the daemon validates the active catalog and persists the selection.
+
 For system-wide installation and service operation, see [`docs/installation-fedora.md`](docs/installation-fedora.md).
 
 ### Device and SysEx commands
