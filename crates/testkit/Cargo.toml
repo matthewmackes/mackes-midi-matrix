@@ -1,0 +1,20 @@
+[package]
+name = "mackes-testkit"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+mackes-domain = { path = "../domain" }
+mackes-midi-engine = { path = "../midi-engine" }
+mackes-tui = { path = "../tui" }
+mackes-scene-engine = { path = "../scene-engine" }
+mackes-ipc = { path = "../ipc" }
+mackes-profiles = { path = "../profiles" }
+
+[lints]
+workspace = true
+
+[lib]
+path = "src/lib.rs"

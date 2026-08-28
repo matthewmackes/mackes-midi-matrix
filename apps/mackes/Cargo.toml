@@ -1,0 +1,24 @@
+[package]
+name = "mackes-midi-matrix"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+mackes-config = { path = "../../crates/config" }
+mackes-domain = { path = "../../crates/domain" }
+mackes-tui = { path = "../../crates/tui" }
+ratatui.workspace = true
+crossterm.workspace = true
+mackes-profiles = { path = "../../crates/profiles" }
+mackes-midi-engine = { path = "../../crates/midi-engine", features = ["midir-backend"] }
+mackes-ipc = { path = "../../crates/ipc" }
+serde_json.workspace = true
+
+[lints]
+workspace = true
+
+[[bin]]
+name = "mackes-midi-matrix"
+path = "src/main.rs"

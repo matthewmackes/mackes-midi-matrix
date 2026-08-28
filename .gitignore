@@ -1,0 +1,11 @@
+/target/
+*.swp
+*.tmp
+*.log
+.idea/
+.vscode/
+.env
+*.pcap
+*.syx
+docs/hardware-validation/*-private.*
+fixtures/local/

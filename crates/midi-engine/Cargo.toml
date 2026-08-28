@@ -1,0 +1,20 @@
+[package]
+name = "mackes-midi-engine"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+mackes-domain = { path = "../domain" }
+midir = { workspace = true, optional = true }
+
+[features]
+default = []
+midir-backend = ["dep:midir"]
+
+[lints]
+workspace = true
+
+[lib]
+path = "src/lib.rs"

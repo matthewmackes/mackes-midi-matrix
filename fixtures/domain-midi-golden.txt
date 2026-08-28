@@ -1,0 +1,5 @@
+# Redacted, synthetic MIDI domain golden vectors. Format: name = hexadecimal bytes.
+note_on_channel_1_middle_c = 90 3C 64
+program_change_channel_1_zero = C0 00
+pitch_bend_channel_1_center = E0 00 40
+sysex_payload_01_7f = F0 01 7F F7

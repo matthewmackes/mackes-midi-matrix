@@ -1,0 +1,26 @@
+[package]
+name = "mackesd"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+mackes-config = { path = "../../crates/config" }
+mackes-domain = { path = "../../crates/domain" }
+mackes-ipc = { path = "../../crates/ipc" }
+mackes-midi-engine = { path = "../../crates/midi-engine", features = ["midir-backend"] }
+mackes-profiles = { path = "../../crates/profiles" }
+mackes-scene-engine = { path = "../../crates/scene-engine" }
+serde_json.workspace = true
+signal-hook.workspace = true
+
+[lints]
+workspace = true
+
+[[bin]]
+name = "mackes-midi-matrixd"
+path = "src/main.rs"
+
+[lib]
+path = "src/lib.rs"

@@ -1,0 +1,100 @@
+# Fedora installation
+
+Build the x86_64 release bundle from the repository root:
+
+```text
+cargo build --release
+sudo scripts/install-fedora.sh --check
+sudo scripts/install-fedora.sh
+```
+
+When upgrading an installation that already contains `/etc/mackes-midi-matrix` entries, provide
+an explicit backup acknowledgement:
+
+```text
+sudo MACKES_CONFIRM_CONFIG_BACKUP=1 scripts/install-fedora.sh
+```
+
+For an existing `/etc/mackes-midi-matrix`, the installer requires an explicit backup acknowledgement:
+
+```text
+sudo MACKES_CONFIRM_CONFIG_BACKUP=1 scripts/install-fedora.sh
+```
+
+The installer places `mackes-midi-matrix` in `/usr/local/bin`, `mackes-midi-matrixd` in
+`/usr/local/libexec/mackes-midi-matrix`, configuration in `/etc/mackes-midi-matrix`, state in
+`/var/lib/mackes-midi-matrix`, and the runtime socket directory in `/run/mackes-midi-matrix`. It creates the
+system account `mackes` and group `mackes-control`; it never adds an operator to that
+group implicitly.
+
+Enable the service explicitly:
+
+```text
+sudo systemctl enable --now mackes-midi-matrix.service
+systemctl status mackes-midi-matrix.service
+```
+
+The service validates `/etc/mackes-midi-matrix/config.json5` before accepting IPC. For a development
+instance, use an explicit configuration path: `mackesd --config PATH`.
+
+The CLI queries daemon health through `/run/mackes-midi-matrix/control.sock` by default. For a
+temporary or development daemon, override the path with `MACKES_SOCKET`:
+
+```text
+MACKES_SOCKET=/tmp/mackes/control.sock mackes-midi-matrix status --json
+```
+
+The local control socket is restricted to its owner and `mackes-control` group. Add a
+trusted operator only after reviewing local access:
+
+```text
+sudo usermod --append --groups mackes-control "$USER"
+```
+
+Log out and back in after group enrollment. Network MIDI peers are not granted local
+IPC authority; configure and review RTP-MIDI trust separately. Do not put preshared keys
+or device serials in shared fixtures or logs. Use `mackes doctor` before connecting
+hardware, and retain configuration backups before upgrades.
+
+Qualification commands are available from the repository root:
+
+```text
+scripts/qualify-hardware.sh
+scripts/installer-smoke.sh
+scripts/dependency-audit.sh
+scripts/benchmark-routing.sh
+scripts/soak-routing.sh 3600
+scripts/release-gate.sh
+scripts/integration-suite.sh
+```
+
+The hardware report is observation-only and never sends MIDI. Physical vendor-map
+validation and long-duration soak evidence must be recorded separately before release.
+
+Qualification commands are observation/test procedures:
+
+```text
+scripts/qualify-hardware.sh
+scripts/installer-smoke.sh
+scripts/benchmark-routing.sh
+scripts/soak-routing.sh 3600
+scripts/release-gate.sh
+scripts/physical-write-guard.sh path/to/verified-map.record
+```
+
+The hardware report never sends MIDI. Physical vendor-map validation and long-duration
+soak evidence must be recorded separately before production release.
+The current per-device qualification matrix is maintained in
+`docs/hardware-qualification.md`.
+
+For MIDISPORT 4x4 qualification on Fedora, install the firmware loader and
+ALSA diagnostic tools before connecting or re-triggering the device:
+
+```text
+sudo dnf install fxload midisport-firmware alsa-utils
+```
+
+The production daemon only requires the ALSA runtime library; these packages
+are qualification prerequisites and are not silently installed by MACKES.
+Physical writes additionally require a map record containing `status=verified` and
+`physical_test=pass`, plus `MACKES_CONFIRM_PHYSICAL_WRITE=1`.

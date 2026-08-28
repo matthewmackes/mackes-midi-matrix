@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mackes.invalid/schema/config.schema.json",
+  "title": "MACKES configuration",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "settings", "endpoints", "projects", "profiles"],
+  "properties": {
+    "schema_version": { "type": "integer", "const": 1 },
+    "settings": { "$ref": "#/$defs/settings" },
+    "endpoints": { "type": "array", "items": { "$ref": "#/$defs/endpoint" } },
+    "projects": { "type": "array", "items": { "$ref": "#/$defs/project" } },
+    "profiles": { "type": "array", "items": { "$ref": "#/$defs/profile" } }
+  },
+  "$defs": {
+    "settings": { "type": "object", "additionalProperties": false, "properties": { "active_project": { "type": ["string", "null"] } } },
+    "endpoint": { "type": "object", "additionalProperties": false, "required": ["id"], "properties": { "id": { "type": "string", "minLength": 1 }, "name": { "type": ["string", "null"] }, "vendor_id": { "type": ["integer", "null"], "minimum": 0, "maximum": 65535 }, "product_id": { "type": ["integer", "null"], "minimum": 0, "maximum": 65535 }, "serial": { "type": ["string", "null"] } } },
+    "project": { "type": "object", "additionalProperties": false, "required": ["id", "scenes"], "properties": { "id": { "type": "string", "minLength": 1 }, "scenes": { "type": "array", "items": { "$ref": "#/$defs/scene" } } } },
+    "scene": { "type": "object", "additionalProperties": false, "required": ["id"], "properties": { "id": { "type": "string", "minLength": 1 } } },
+    "profile": { "type": "object", "additionalProperties": false, "required": ["id", "version"], "properties": { "id": { "type": "string", "minLength": 1 }, "version": { "type": "integer", "minimum": 1 } } }
+  }
+}

@@ -1,0 +1,41 @@
+[workspace]
+resolver = "2"
+members = [
+  "apps/mackes",
+  "apps/mackesd",
+  "crates/domain",
+  "crates/config",
+  "crates/ipc",
+  "crates/midi-engine",
+  "crates/profiles",
+  "crates/scene-engine",
+  "crates/tui",
+  "crates/testkit",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+rust-version = "1.85"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+missing_debug_implementations = "warn"
+missing_docs = "warn"
+
+[workspace.lints.clippy]
+all = "warn"
+pedantic = "warn"
+nursery = "warn"
+
+[workspace.dependencies]
+json5 = "0.4"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+signal-hook = "0.3"
+nix = { version = "0.30", features = ["socket", "user"] }
+midir = "0.10"
+ratatui = "0.30.2"
+crossterm = "0.29.0"
+sha2 = "0.10"

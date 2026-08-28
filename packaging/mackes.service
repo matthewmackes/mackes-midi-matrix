@@ -1,0 +1,18 @@
+[Unit]
+Description=mackes-midi-matrix MIDI controller daemon
+After=sound.target
+
+[Service]
+Type=simple
+User=mackes
+Group=mackes-control
+ExecStart=/usr/local/libexec/mackes-midi-matrix/mackes-midi-matrixd
+RuntimeDirectory=mackes-midi-matrix
+RuntimeDirectoryMode=0750
+UMask=007
+Restart=on-failure
+NoNewPrivileges=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target

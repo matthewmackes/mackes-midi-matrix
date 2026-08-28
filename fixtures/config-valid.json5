@@ -1,0 +1,7 @@
+{
+  schema_version: 1,
+  settings: { active_project: 'demo' },
+  endpoints: [],
+  projects: [{ id: 'demo', scenes: [{ id: 'intro' }] }],
+  profiles: []
+}

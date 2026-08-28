@@ -1,0 +1,19 @@
+[package]
+name = "mackes-config"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+mackes-domain = { path = "../domain" }
+json5.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+
+[lints]
+workspace = true
+
+[lib]
+path = "src/lib.rs"

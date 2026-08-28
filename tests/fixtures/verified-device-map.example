@@ -1,0 +1,3 @@
+# Example only; no real device identifiers or vendor payloads.
+status=verified
+physical_test=pass
