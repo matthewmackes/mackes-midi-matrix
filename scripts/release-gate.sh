@@ -36,4 +36,7 @@ artifact_tmp="$(mktemp -d)"
 trap 'rm -rf -- "$artifact_tmp"' EXIT
 tar -xzf dist/mackes-midi-matrix-0.1.0-test.1-linux-x86_64.tar.gz -C "$artifact_tmp"
 "$artifact_tmp/mackes-midi-matrix-0.1.0-test.1-linux-x86_64/scripts/install-fedora.sh" --check
+target/release/mackes-midi-matrix validate fixtures/config-scenes-valid.json5 >/dev/null
+target/release/mackes-midi-matrix scene plan fixtures/config-scenes-valid.json5 demo verse --json \
+  | rg -q '"unsafe":true'
 printf 'release-gate: PASS\n'
