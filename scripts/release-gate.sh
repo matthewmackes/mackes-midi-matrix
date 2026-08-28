@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ $# -ne 0 ]]; then
-  printf 'usage: %s\n' "$0" >&2
+version="${1:-0.1.0}"
+if [[ $# -gt 1 || ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-test\.[0-9]+)?$ ]]; then
+  printf 'usage: %s [VERSION]\n' "$0" >&2
   exit 64
 fi
 
@@ -25,19 +26,20 @@ scripts/integration-suite.sh
 printf 'release-gate: installer smoke\n'
 scripts/installer-smoke.sh
 printf 'release-gate: release artifact\n'
-scripts/package-test-release.sh 0.1.0 >/dev/null
-(cd dist && sha256sum -c mackes-midi-matrix-0.1.0-linux-x86_64.tar.gz.sha256)
-archive_listing="$(tar -tzf dist/mackes-midi-matrix-0.1.0-linux-x86_64.tar.gz)"
-rg -q 'mackes-midi-matrix-0.1.0-linux-x86_64/target/release/mackes-midi-matrix$' \
+scripts/package-test-release.sh "$version" >/dev/null
+archive="dist/mackes-midi-matrix-${version}-linux-x86_64.tar.gz"
+(cd dist && sha256sum -c "mackes-midi-matrix-${version}-linux-x86_64.tar.gz.sha256")
+archive_listing="$(tar -tzf "$archive")"
+rg -q "mackes-midi-matrix-${version}-linux-x86_64/target/release/mackes-midi-matrix$" \
   <<<"$archive_listing"
-rg -q 'mackes-midi-matrix-0.1.0-linux-x86_64/target/release/mackes-midi-matrixd$' \
+rg -q "mackes-midi-matrix-${version}-linux-x86_64/target/release/mackes-midi-matrixd$" \
   <<<"$archive_listing"
-rg -q 'mackes-midi-matrix-0.1.0-linux-x86_64/BUILD_PROVENANCE$' \
+rg -q "mackes-midi-matrix-${version}-linux-x86_64/BUILD_PROVENANCE$" \
   <<<"$archive_listing"
 artifact_tmp="$(mktemp -d)"
 trap 'rm -rf -- "$artifact_tmp"' EXIT
-tar -xzf dist/mackes-midi-matrix-0.1.0-linux-x86_64.tar.gz -C "$artifact_tmp"
-"$artifact_tmp/mackes-midi-matrix-0.1.0-linux-x86_64/scripts/install-fedora.sh" --check
+tar -xzf "$archive" -C "$artifact_tmp"
+"$artifact_tmp/mackes-midi-matrix-${version}-linux-x86_64/scripts/install-fedora.sh" --check
 target/release/mackes-midi-matrix validate fixtures/config-scenes-valid.json5 >/dev/null
 target/release/mackes-midi-matrix scene plan fixtures/config-scenes-valid.json5 demo verse --json \
   | rg -q '"unsafe":true'
