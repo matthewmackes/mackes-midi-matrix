@@ -1,6 +1,13 @@
 {
   schema_version: 1,
-  settings: { active_project: 'demo' },
+  settings: {
+    active_project: 'demo',
+    // Explicit dashboard actions are opt-in; no factory MIDI map is assumed.
+    dashboard_midi_bindings: [
+      { trigger: { kind: 'note_on', channel: 1, note: 36 }, command: 'panic' },
+      { trigger: { kind: 'control_change', channel: 1, controller: 20, value: null }, command: 'next_scene' },
+    ],
+  },
   endpoints: [],
   projects: [{ id: 'demo', scenes: [{ id: 'intro' }] }],
   profiles: []
