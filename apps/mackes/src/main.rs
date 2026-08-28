@@ -23,7 +23,7 @@ fn run_tui() -> Result<(), String> {
     let routing_editor = mackes_tui::RoutingEditor::from_bank(&mackes_tui::MappingBank::new());
     let mut workspace = 1_u8;
     let mut needs_snapshot = true;
-    let result = loop {
+    let result = (|| loop {
         let synchronized = if needs_snapshot {
             synchronize_snapshot(&mut client_state, &mut dashboard)
         } else {
@@ -80,10 +80,11 @@ fn run_tui() -> Result<(), String> {
                 }
             }
         }
-    };
-    disable_raw_mode().map_err(|error| error.to_string())?;
+    })();
+    let cleanup_result = disable_raw_mode().map_err(|error| error.to_string());
     execute!(terminal.backend_mut(), LeaveAlternateScreen).map_err(|error| error.to_string())?;
     terminal.show_cursor().map_err(|error| error.to_string())?;
+    cleanup_result?;
     result
 }
 
