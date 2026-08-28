@@ -1378,6 +1378,62 @@ impl Daemon {
                         return stream
                             .write_all(b"{\"ok\":false,\"error\":\"unknown device profile\"}\n");
                     };
+                    if let Some(query_id) =
+                        value.get("query_id").and_then(serde_json::Value::as_str)
+                    {
+                        let parameters = match value.get("parameters") {
+                            None => Vec::new(),
+                            Some(value) => {
+                                let Some(bytes) = value.as_array() else {
+                                    return stream.write_all(b"{\"ok\":false,\"error\":\"query parameters are invalid\"}\n");
+                                };
+                                let Some(parameters) = bytes
+                                    .iter()
+                                    .map(|byte| {
+                                        byte.as_u64().and_then(|byte| u8::try_from(byte).ok())
+                                    })
+                                    .collect::<Option<Vec<_>>>()
+                                else {
+                                    return stream.write_all(b"{\"ok\":false,\"error\":\"query parameters are invalid\"}\n");
+                                };
+                                parameters
+                            }
+                        };
+                        if parameters.len() > 128 {
+                            return stream.write_all(
+                                b"{\"ok\":false,\"error\":\"query parameters exceed bound\"}\n",
+                            );
+                        }
+                        let Ok(request) = profile.render_query_request(query_id, &parameters)
+                        else {
+                            return stream.write_all(
+                                b"{\"ok\":false,\"error\":\"query cannot be rendered\"}\n",
+                            );
+                        };
+                        let Some(query) = profile.queries.iter().find(|query| query.id == query_id)
+                        else {
+                            return stream
+                                .write_all(b"{\"ok\":false,\"error\":\"query not found\"}\n");
+                        };
+                        let Some(reply) =
+                            profile.replies.iter().find(|reply| reply.id == query.reply_id)
+                        else {
+                            return stream.write_all(
+                                b"{\"ok\":false,\"error\":\"query reply not found\"}\n",
+                            );
+                        };
+                        let response = serde_json::json!({
+                            "ok": true,
+                            "generation": self.generation,
+                            "profile_id": profile.id,
+                            "query_id": query.id,
+                            "reply_id": reply.id,
+                            "request": request,
+                            "reply_value": reply.value,
+                            "reply_mask": reply.mask,
+                        });
+                        return stream.write_all(format!("{response}\n").as_bytes());
+                    }
                     let controls = profile
                         .controls
                         .iter()

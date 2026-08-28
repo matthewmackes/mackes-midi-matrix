@@ -543,6 +543,7 @@ fn main() {
             println!("  mackes-midi-matrix sysex <destination-id> <hex-bytes> --confirm");
             println!("  mackes-midi-matrix device-control <profile-id> <control> <channel> <value> <destination-id> --confirm");
             println!("  mackes-midi-matrix device-query <profile-id>");
+            println!("  mackes-midi-matrix device-query <profile-id> <query-id>");
             println!("  mackes-midi-matrix scene next|previous");
             println!("  mackes-midi-matrix scene plan <config> <project> <scene> [--json]");
         }
@@ -637,6 +638,18 @@ fn main() {
         }
         [command, profile] if command == "device-query" => {
             let payload = serde_json::json!({ "profile_id": profile });
+            let response = daemon_request(
+                mackes_ipc::Command::DeviceQuery,
+                &serde_json::to_vec(&payload).expect("device query payload is serializable"),
+            );
+            println!("{response}");
+            if response.contains("\"ok\":false") {
+                std::process::exit(2);
+            }
+        }
+        [command, profile, query] if command == "device-query" => {
+            let payload =
+                serde_json::json!({ "profile_id": profile, "query_id": query, "parameters": [] });
             let response = daemon_request(
                 mackes_ipc::Command::DeviceQuery,
                 &serde_json::to_vec(&payload).expect("device query payload is serializable"),

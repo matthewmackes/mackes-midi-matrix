@@ -82,6 +82,7 @@ registered output endpoint, and an explicit confirmation flag:
 
 ```bash
 mackes-midi-matrix device-control eventide.micropitch Mix 1 64 <output-id> --confirm
+mackes-midi-matrix device-query <profile-id> <query-id>
 ```
 
 Raw SysEx is bounded to 1–1024 bytes, must be written as framed `F0 ... F7` hexadecimal, and
