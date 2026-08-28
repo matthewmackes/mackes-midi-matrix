@@ -185,14 +185,17 @@ fn run_tui() -> Result<(), String> {
                         };
                     }
                     KeyCode::Char('u') if (workspace == 5 || workspace == 1) => {
-                        if let Some(previous) = mapping_undo.pop() {
-                            routing_editor.drafts = previous;
+                        let response =
+                            daemon_request(mackes_ipc::Command::Routes, br#"{"action":"undo"}"#);
+                        dashboard.health = if response.contains("\"ok\":true") {
+                            dashboard.mapping_dirty = false;
                             routing_editor.selected = None;
-                            dashboard.mapping_dirty = true;
-                            "mapping-undo".clone_into(&mut dashboard.health);
+                            "mapping-undo".to_owned()
+                        } else if mapping_undo.pop().is_some() {
+                            "mapping-undo-local-only".to_owned()
                         } else {
-                            "mapping-undo-empty".clone_into(&mut dashboard.health);
-                        }
+                            "mapping-undo-empty".to_owned()
+                        };
                     }
                     KeyCode::Char('D') if workspace == 1 => {
                         dashboard.cycle_destination();

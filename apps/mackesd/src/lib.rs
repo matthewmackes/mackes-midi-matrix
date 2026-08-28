@@ -241,6 +241,7 @@ pub struct Daemon {
     activity: mackes_midi_engine::ActivityCoalescer,
     last_activity: Option<serde_json::Value>,
     last_activity_publish: Instant,
+    route_undo: Option<serde_json::Value>,
     activation_result: Option<String>,
     state_sequence: u64,
     state_events: VecDeque<mackes_ipc::StateEvent>,
@@ -308,9 +309,26 @@ fn routes_path(config_path: &std::path::Path) -> std::path::PathBuf {
 }
 
 #[cfg(target_os = "linux")]
+fn routes_undo_path(config_path: &std::path::Path) -> std::path::PathBuf {
+    config_path.with_extension("routes.undo.json")
+}
+
+#[cfg(target_os = "linux")]
 fn persist_routes(config_path: &std::path::Path, routes: &serde_json::Value) -> io::Result<()> {
     let path = routes_path(config_path);
     let temporary = path.with_extension("routes.json.tmp");
+    let bytes = serde_json::to_vec_pretty(routes).map_err(io::Error::other)?;
+    std::fs::write(&temporary, bytes)?;
+    std::fs::rename(temporary, path)
+}
+
+#[cfg(target_os = "linux")]
+fn persist_routes_undo(
+    config_path: &std::path::Path,
+    routes: &serde_json::Value,
+) -> io::Result<()> {
+    let path = routes_undo_path(config_path);
+    let temporary = path.with_extension("routes.undo.json.tmp");
     let bytes = serde_json::to_vec_pretty(routes).map_err(io::Error::other)?;
     std::fs::write(&temporary, bytes)?;
     std::fs::rename(temporary, path)
@@ -513,6 +531,7 @@ impl Daemon {
                 .ok_or_else(|| io::Error::other("activity capacity must be positive"))?,
             last_activity: None,
             last_activity_publish: Instant::now(),
+            route_undo: None,
             activation_result: None,
             state_sequence: 0,
             state_events: VecDeque::with_capacity(256),
@@ -1550,6 +1569,37 @@ impl Daemon {
             }
             if command == Some(Command::Routes) {
                 if let Ok(value) = serde_json::from_slice::<serde_json::Value>(&request) {
+                    if value.get("action").and_then(serde_json::Value::as_str) == Some("undo") {
+                        let Some(previous) = self.route_undo.clone() else {
+                            return stream.write_all(
+                                b"{\"ok\":false,\"error\":\"route undo history is empty\"}\n",
+                            );
+                        };
+                        let generation = self.route_generation().unwrap_or(0).saturating_add(1);
+                        let encoded = serde_json::to_vec(&previous).map_err(io::Error::other)?;
+                        if let Err(error) = self.replace_routes_json(&encoded, generation, 8) {
+                            return stream.write_all(
+                                format!("{{\"ok\":false,\"error\":\"{error}\"}}\n").as_bytes(),
+                            );
+                        }
+                        if let Some(path) = self.config_path.as_deref() {
+                            if let Err(error) =
+                                persist_routes(path, &serde_json::json!({"routes": previous}))
+                            {
+                                return stream.write_all(
+                                    format!("{{\"ok\":false,\"error\":\"route undo persistence failed: {error}\"}}\n").as_bytes(),
+                                );
+                            }
+                            let _ = fs::remove_file(routes_undo_path(path));
+                        }
+                        self.route_undo = None;
+                        return stream.write_all(
+                            format!(
+                                "{{\"ok\":true,\"undo\":true,\"route_generation\":{generation}}}\n"
+                            )
+                            .as_bytes(),
+                        );
+                    }
                     if let Some(route_values) = value.get("routes") {
                         let generation = value
                             .get("route_generation")
@@ -1560,6 +1610,17 @@ impl Daemon {
                             .and_then(serde_json::Value::as_u64)
                             .and_then(|value| u8::try_from(value).ok())
                             .unwrap_or(8);
+                        let current_routes =
+                            serde_json::from_str::<serde_json::Value>(&command_ack(
+                                Command::Routes,
+                                self.health,
+                                self.generation,
+                                &[],
+                                self.route_generation(),
+                                &self.router.routes(),
+                            ))
+                            .ok()
+                            .and_then(|value| value.get("routes").cloned());
                         let encoded = serde_json::to_vec(route_values).map_err(io::Error::other)?;
                         if let Err(error) =
                             self.replace_routes_json(&encoded, generation, hop_limit)
@@ -1576,7 +1637,15 @@ impl Daemon {
                                     format!("{{\"ok\":false,\"error\":\"route persistence failed: {error}\"}}\n").as_bytes(),
                                 );
                             }
+                            if let Some(previous) = current_routes.clone() {
+                                if let Err(error) = persist_routes_undo(path, &previous) {
+                                    return stream.write_all(
+                                        format!("{{\"ok\":false,\"error\":\"route undo persistence failed: {error}\"}}\n").as_bytes(),
+                                    );
+                                }
+                            }
                         }
+                        self.route_undo = current_routes;
                     }
                 }
             }
@@ -1973,6 +2042,9 @@ impl Daemon {
     /// Sets the daemon-owned configuration path for authorized persistence.
     pub fn set_config_path(&mut self, path: impl Into<std::path::PathBuf>) {
         let path = path.into();
+        if let Ok(bytes) = std::fs::read(routes_undo_path(&path)) {
+            self.route_undo = serde_json::from_slice(&bytes).ok();
+        }
         if let Ok(bytes) = std::fs::read(routes_path(&path)) {
             if let Ok(value) = serde_json::from_slice::<serde_json::Value>(&bytes) {
                 if let Some(routes) = value.get("routes") {
@@ -2653,5 +2725,26 @@ mod tests {
         assert_eq!(daemon.router.routes().len(), 1);
         assert_eq!(daemon.route_generation(), Some(1));
         let _ = fs::remove_file(persisted);
+    }
+
+    #[test]
+    fn configured_route_undo_record_restores_after_daemon_rebind() {
+        let socket =
+            std::env::temp_dir().join(format!("mackes-route-undo-{}.sock", std::process::id()));
+        let config =
+            std::env::temp_dir().join(format!("mackes-route-undo-{}.json5", std::process::id()));
+        let undo = routes_undo_path(&config);
+        fs::write(&config, "{}\n").expect("config");
+        fs::write(&undo, br#"[{"source":3,"destination":4,"class":"Note"}]"#).expect("undo record");
+        let mut daemon = Daemon::bind(&socket).expect("daemon");
+        daemon.set_config_path(&config);
+        assert!(daemon.route_undo.is_some());
+        assert_eq!(
+            daemon.route_undo.as_ref().and_then(serde_json::Value::as_array).map(Vec::len),
+            Some(1)
+        );
+        let _ = fs::remove_file(socket);
+        let _ = fs::remove_file(config);
+        let _ = fs::remove_file(undo);
     }
 }
