@@ -1403,6 +1403,29 @@ pub fn startup_restore(path: &Path) -> Result<RestoreResult, ConfigError> {
     })
 }
 
+/// Compiles one persisted scene's actions into the ordinary activation planner.
+///
+/// # Errors
+///
+/// Returns the planner validation error when the action graph is invalid.
+#[cfg(target_os = "linux")]
+pub fn compile_scene_actions(
+    scene: &mackes_config::SceneRef,
+) -> Result<mackes_scene_engine::ActivationPlan, &'static str> {
+    mackes_scene_engine::ActivationPlan::compile(
+        scene
+            .actions
+            .iter()
+            .map(|action| mackes_scene_engine::ActivationAction {
+                id: action.id.clone(),
+                description: action.description.clone(),
+                unsafe_action: action.unsafe_action,
+                depends_on: action.depends_on.clone(),
+            })
+            .collect(),
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1796,6 +1819,25 @@ mod tests {
             serde_json::from_str(&daemon.scenes_response()).expect("response");
         assert_eq!(response["scenes"], serde_json::json!(["intro", "verse"]));
         assert_eq!(response["active_scene"], "verse");
+    }
+
+    #[test]
+    fn persisted_scene_actions_compile_to_ordinary_activation_plan() {
+        let scene = mackes_config::SceneRef {
+            id: "intro".into(),
+            name: Some("Intro".into()),
+            category: Some("opening".into()),
+            actions: vec![mackes_config::SceneAction {
+                id: "set-level".into(),
+                description: "Set level".into(),
+                unsafe_action: true,
+                depends_on: None,
+            }],
+        };
+        let plan = compile_scene_actions(&scene).expect("compile");
+        assert_eq!(plan.actions.len(), 1);
+        assert_eq!(plan.actions[0].id, "set-level");
+        assert!(plan.actions[0].unsafe_action);
     }
 
     #[test]
