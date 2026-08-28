@@ -208,6 +208,7 @@ fn main() {
             );
             println!("  mackes-midi-matrix learn <endpoint-id> [limit]");
             println!("  mackes-midi-matrix scene next|previous");
+            println!("  mackes-midi-matrix scene plan <config> <project> <scene> [--json]");
         }
         [command, action, path, capability] if command == "default" && action == "get" => {
             if let Err(error) = print_default_provider(path, capability, false) {
@@ -404,6 +405,16 @@ fn main() {
                 }
             }
         }
+        [command, subcommand, path, project, scene]
+            if command == "scene" && subcommand == "plan" =>
+        {
+            scene_plan_cli(path, project, scene, false);
+        }
+        [command, subcommand, path, project, scene, flag]
+            if command == "scene" && subcommand == "plan" && flag == "--json" =>
+        {
+            scene_plan_cli(path, project, scene, true);
+        }
         [command, subcommand, path, flag]
             if command == "scene" && subcommand == "list" && flag == "--json" =>
         {
@@ -563,6 +574,68 @@ fn navigate_scene_cli(direction: &str) {
     println!("{response}");
     if response.contains("\"ok\":false") {
         std::process::exit(2);
+    }
+}
+
+fn scene_plan_cli(path: &str, project_id: &str, scene_id: &str, json: bool) {
+    let result = (|| -> Result<serde_json::Value, String> {
+        let document =
+            mackes_config::load(std::path::Path::new(path)).map_err(|error| error.to_string())?;
+        let project = document
+            .projects
+            .iter()
+            .find(|project| project.id == project_id)
+            .ok_or_else(|| format!("project '{project_id}' was not found"))?;
+        let scene =
+            project.scenes.iter().find(|scene| scene.id == scene_id).ok_or_else(|| {
+                format!("scene '{scene_id}' was not found in project '{project_id}'")
+            })?;
+        let plan = mackes_scene_engine::ActivationPlan::compile(
+            scene
+                .actions
+                .iter()
+                .map(|action| mackes_scene_engine::ActivationAction {
+                    id: action.id.clone(),
+                    description: action.description.clone(),
+                    unsafe_action: action.unsafe_action,
+                    depends_on: action.depends_on.clone(),
+                })
+                .collect(),
+        )
+        .map_err(str::to_owned)?;
+        Ok(serde_json::json!({
+            "ok": true,
+            "project": project_id,
+            "scene": scene_id,
+            "actions": plan.actions.iter().map(|action| serde_json::json!({
+                "id": action.id,
+                "description": action.description,
+                "unsafe": action.unsafe_action,
+                "depends_on": action.depends_on,
+            })).collect::<Vec<_>>(),
+        }))
+    })();
+    match result {
+        Ok(value) if json => println!("{value}"),
+        Ok(value) => {
+            println!("scene plan: {project_id}/{scene_id}");
+            for action in value["actions"].as_array().into_iter().flatten() {
+                println!(
+                    "  {}{}: {}",
+                    action["id"].as_str().unwrap_or("?"),
+                    if action["unsafe"].as_bool() == Some(true) { " [unsafe]" } else { "" },
+                    action["description"].as_str().unwrap_or("?")
+                );
+            }
+        }
+        Err(error) => {
+            if json {
+                println!("{}", serde_json::json!({"ok": false, "error": error}));
+            } else {
+                eprintln!("scene plan failed: {error}");
+            }
+            std::process::exit(2);
+        }
     }
 }
 

@@ -14,6 +14,7 @@ crossterm.workspace = true
 mackes-profiles = { path = "../../crates/profiles" }
 mackes-midi-engine = { path = "../../crates/midi-engine", features = ["midir-backend"] }
 mackes-ipc = { path = "../../crates/ipc" }
+mackes-scene-engine = { path = "../../crates/scene-engine" }
 serde_json.workspace = true
 
 [lints]

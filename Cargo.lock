@@ -732,6 +732,7 @@ dependencies = [
  "mackes-ipc",
  "mackes-midi-engine",
  "mackes-profiles",
+ "mackes-scene-engine",
  "mackes-tui",
  "ratatui",
  "serde_json",
