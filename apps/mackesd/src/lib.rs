@@ -1105,6 +1105,7 @@ impl Daemon {
             "sent": self.sent_events,
             "dropped": self.dropped_events,
             "activation_result": self.activation_result.as_deref(),
+            "catalog": self.catalog,
             "health": match self.health {
                 Health::Starting => "starting",
                 Health::Ready => "ready",
@@ -1131,6 +1132,7 @@ impl Daemon {
             "dropped": self.dropped_events,
             "activation_result": self.activation_result.as_deref(),
             "last_sequence": self.state_sequence,
+            "catalog": self.catalog,
             "health": match self.health {
                 Health::Starting => "starting",
                 Health::Ready => "ready",
