@@ -1071,6 +1071,9 @@ pub fn validate(document: &ConfigDocument) -> Result<(), String> {
             return Err(format!("project {} has empty scene ID", project.id));
         }
         for scene in &project.scenes {
+            if scene.actions.len() > 128 {
+                return Err(format!("scene {} has more than 128 actions", scene.id));
+            }
             unique(scene.actions.iter().map(|action| action.id.as_str()), "scene action")?;
             if scene.actions.iter().any(|action| action.description.trim().is_empty()) {
                 return Err(format!("scene {} has an empty action description", scene.id));
@@ -1523,6 +1526,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::too_many_lines)]
     fn scene_reorder_and_copy_are_explicit_and_non_mutating() {
         let mut project = document().projects[0].clone();
         project.scenes[0].name = Some("Intro ambience".into());
@@ -1563,6 +1567,16 @@ mod tests {
             },
         ];
         assert!(validate(&cyclic).is_err());
+        let mut oversized = document();
+        oversized.projects[0].scenes[0].actions = (0..129)
+            .map(|index| SceneAction {
+                id: format!("action-{index}"),
+                description: "bounded action".into(),
+                unsafe_action: false,
+                depends_on: None,
+            })
+            .collect();
+        assert!(validate(&oversized).is_err());
         let copied_project = copy_project(std::slice::from_ref(&project), "demo", "demo-copy")
             .expect("project copy");
         assert_eq!(copied_project.id, "demo-copy");
