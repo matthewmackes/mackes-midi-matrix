@@ -66,6 +66,89 @@ pub const fn ipc_command_for(command: UiCommand) -> Option<mackes_ipc::Command> 
     }
 }
 
+/// A deliberately explicit MIDI trigger for a dashboard command.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum DashboardMidiTrigger {
+    /// Match a note-on on an exact one-based channel and note.
+    NoteOn {
+        /// One-based MIDI channel.
+        channel: u8,
+        /// Note number.
+        note: u8,
+    },
+    /// Match a control change, optionally requiring an exact value.
+    ControlChange {
+        /// One-based MIDI channel.
+        channel: u8,
+        /// Controller number.
+        controller: u8,
+        /// Optional exact value; `None` matches every value.
+        value: Option<u8>,
+    },
+}
+
+/// One configured MIDI-to-dashboard command binding.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct DashboardMidiBinding {
+    /// Trigger to match.
+    pub trigger: DashboardMidiTrigger,
+    /// Existing governed UI command to dispatch after a match.
+    pub command: UiCommand,
+}
+
+/// Resolves one MIDI message through explicit dashboard bindings.
+///
+/// Invalid MIDI ranges, unmapped messages, and ambiguous matches all fail closed.
+#[must_use]
+pub fn ui_command_for_midi(
+    message: &mackes_domain::MidiMessage,
+    bindings: &[DashboardMidiBinding],
+) -> Option<UiCommand> {
+    let mut match_result = None;
+    for binding in bindings {
+        let matched = match (&binding.trigger, message) {
+            (
+                DashboardMidiTrigger::NoteOn { channel, note },
+                mackes_domain::MidiMessage::NoteOn {
+                    channel: actual_channel,
+                    note: actual_note,
+                    ..
+                },
+            ) => {
+                *channel >= 1
+                    && *channel <= 16
+                    && *note <= 127
+                    && actual_channel.one_based() == *channel
+                    && actual_note.as_u8() == *note
+            }
+            (
+                DashboardMidiTrigger::ControlChange { channel, controller, value },
+                mackes_domain::MidiMessage::ControlChange {
+                    channel: actual_channel,
+                    controller: actual_controller,
+                    value: actual_value,
+                },
+            ) => {
+                *channel >= 1
+                    && *channel <= 16
+                    && *controller <= 127
+                    && value
+                        .is_none_or(|expected| expected <= 127 && expected == actual_value.as_u8())
+                    && actual_channel.one_based() == *channel
+                    && actual_controller.as_u8() == *controller
+            }
+            _ => false,
+        };
+        if matched {
+            if match_result.is_some() {
+                return None;
+            }
+            match_result = Some(binding.command);
+        }
+    }
+    match_result
+}
+
 /// Deterministic default keymap; device actions still travel through IPC.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct Keymap;
@@ -2390,6 +2473,26 @@ mod tests {
         assert_eq!(ipc_command_for(UiCommand::Panic), Some(mackes_ipc::Command::Panic));
         assert_eq!(ipc_command_for(UiCommand::NextScene), Some(mackes_ipc::Command::Scenes));
         assert_eq!(ipc_command_for(UiCommand::OpenWorkspace(3)), None);
+    }
+
+    #[test]
+    fn mapped_midi_dashboard_actions_require_one_explicit_match() {
+        let note = mackes_domain::MidiMessage::NoteOn {
+            channel: mackes_domain::MidiChannel::new(1).expect("channel"),
+            note: mackes_domain::SevenBit::new(36).expect("note"),
+            velocity: mackes_domain::SevenBit::new(127).expect("velocity"),
+        };
+        let binding = DashboardMidiBinding {
+            trigger: DashboardMidiTrigger::NoteOn { channel: 1, note: 36 },
+            command: UiCommand::Panic,
+        };
+        assert_eq!(ui_command_for_midi(&note, &[binding]), Some(UiCommand::Panic));
+        assert_eq!(ui_command_for_midi(&note, &[]), None);
+        assert_eq!(
+            ui_command_for_midi(&note, &[binding, binding]),
+            None,
+            "ambiguous mappings must not dispatch"
+        );
     }
 
     #[test]

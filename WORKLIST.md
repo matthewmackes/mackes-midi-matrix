@@ -2549,6 +2549,7 @@ Redacted fixture filenames and hashes:
 | 2026-08-28 | W010/W041 | codex | startup active-scene publication → implemented | Validated startup restore now carries its active scene into daemon state; snapshots and journal events expose it for dashboard projection, with dedicated regression coverage and strict targeted checks. |
 | 2026-08-28 | W010/W031/W041 | codex | activation-result publication → implemented | Mutable daemon scene execution now summarizes terminal action outcomes, stores a bounded human-readable result, and publishes it in snapshots and journal events; daemon regression coverage and strict targeted checks pass. |
 | 2026-08-28 | W040/W041 | codex | typed dashboard payload projection → implemented | Moved daemon JSON payload decoding into the TUI crate as `DashboardEvent::from_payload`; the executable now consumes the shared typed projection, with coverage for health, scene, routing, activity, and activation result fields. Full release gate pending. |
+| 2026-08-28 | W041/W046 | codex | explicit mapped-MIDI dashboard bindings → implemented | Added configuration-driven note-on/control-change trigger types and a fail-closed resolver that maps only one exact binding to an existing governed `UiCommand`; unmapped, invalid, and ambiguous inputs are rejected, with regression coverage. Full release gate passes. |
 
 ## 6. Proposed changes and decisions queue
 
