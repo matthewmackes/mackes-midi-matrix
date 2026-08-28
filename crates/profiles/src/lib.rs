@@ -4383,6 +4383,15 @@ mod tests {
         assert_eq!(mvave_ir_box_preset_sysex(32).expect("preset")[18..20], [0x38, 0x03]);
         assert!(mvave_ir_box_preset_sysex(0).is_err());
         assert!(mvave_ir_box_preset_sysex(33).is_err());
+        let profile = mvave_ir_box_profile();
+        assert_eq!(
+            profile.render_control_message("IR", 1, 1).expect("IR control"),
+            mvave_ir_box_module_sysex(MvaveIrBoxModule::Ir, true)
+        );
+        assert_eq!(
+            profile.render_control_message("EQ", 1, 0).expect("EQ control"),
+            mvave_ir_box_module_sysex(MvaveIrBoxModule::Eq, false)
+        );
         assert_eq!(
             mvave_ir_box_module_sysex(MvaveIrBoxModule::Ir, true),
             vec![

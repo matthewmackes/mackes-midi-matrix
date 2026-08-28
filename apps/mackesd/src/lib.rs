@@ -1500,6 +1500,7 @@ impl Daemon {
                                 "cc": control.cc,
                                 "program": control.program,
                                 "range": [control.range.0, control.range.1],
+                                "operation": control.operation,
                             })
                         })
                         .collect::<Vec<_>>();
