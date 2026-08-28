@@ -250,6 +250,7 @@ pub fn classify_command(request: &[u8]) -> Option<Command> {
         (Command::Configuration, b"configuration"),
         (Command::Endpoints, b"endpoints"),
         (Command::Routes, b"routes"),
+        (Command::Learn, b"learn"),
         (Command::Scenes, b"scenes"),
         (Command::DeviceQuery, b"device_query"),
         (Command::Sysex, b"sysex"),
@@ -311,6 +312,9 @@ fn command_ack(
                 .collect::<Vec<_>>();
             let encoded = serde_json::to_string(&payload).unwrap_or_else(|_| "[]".to_owned());
             format!("{{\"ok\":true,\"generation\":{generation},\"routes\":{encoded},\"route_generation\":{}}}\n", route_generation.unwrap_or(0))
+        }
+        Command::Learn => {
+            format!("{{\"ok\":true,\"generation\":{generation},\"learn\":true}}\n")
         }
         Command::DeviceQuery => {
             format!("{{\"ok\":true,\"generation\":{generation},\"devices\":[]}}\n")
@@ -1138,6 +1142,7 @@ impl Daemon {
     /// # Errors
     ///
     /// Returns an I/O error for accept/read/write failures.
+    #[allow(clippy::too_many_lines)]
     pub fn serve_once(&mut self, policy: AccessPolicy) -> io::Result<()> {
         let _ = self.drain_virtual_input();
         let (mut stream, identity) = self.server.accept_authorized(policy)?;
@@ -1186,6 +1191,46 @@ impl Daemon {
                         }
                     }
                 }
+            }
+            if command == Some(Command::Learn) {
+                let value =
+                    serde_json::from_slice::<serde_json::Value>(&request).unwrap_or_default();
+                let endpoint = value
+                    .get("endpoint")
+                    .and_then(serde_json::Value::as_u64)
+                    .and_then(mackes_domain::EndpointId::new);
+                let limit = value
+                    .get("limit")
+                    .and_then(serde_json::Value::as_u64)
+                    .and_then(|value| usize::try_from(value).ok())
+                    .unwrap_or(128);
+                if let Some(endpoint) = endpoint {
+                    let candidates = self.capture_learn_candidates(endpoint, limit);
+                    let encoded = candidates
+                        .iter()
+                        .map(|candidate| {
+                            serde_json::json!({
+                                "kind": format!("{:?}", candidate.kind).to_lowercase(),
+                                "channel": candidate.channel,
+                                "number": candidate.number,
+                                "observations": candidate.observations,
+                                "minimum": candidate.minimum,
+                                "maximum": candidate.maximum,
+                                "raw": candidate.raw,
+                            })
+                        })
+                        .collect::<Vec<_>>();
+                    return stream.write_all(
+                        format!(
+                            "{{\"ok\":true,\"generation\":{},\"candidates\":{}}}\n",
+                            self.generation,
+                            serde_json::to_string(&encoded).unwrap_or_else(|_| "[]".into())
+                        )
+                        .as_bytes(),
+                    );
+                }
+                return stream
+                    .write_all(b"{\"ok\":false,\"error\":\"learn endpoint is required\"}\n");
             }
             if let Some(command) = command {
                 if !matches!(

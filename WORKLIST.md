@@ -2615,6 +2615,7 @@ New requests enter here before implementation.
 | 2026-08-28 | W042 | codex | filter-bearing mapping editor draft → implemented | Extended transactional `MappingDraft` with the bounded `MappingFilterDraft`, so editor validation now includes the same engine predicates used by persisted learned mappings. Full release gate passes. |
 | 2026-08-28 | W004/W042 | codex | configuration schema synchronization → implemented | Added schema coverage for persisted setlists, learned mappings, and bounded learned filters, closing drift between the typed config document and the committed JSON Schema. Full release gate passes. |
 | 2026-08-28 | W016/W042 | codex | learned-filter persistence evidence → implemented | Added direct config round-trip and invalid-bound tests plus all-variant persisted-filter-to-engine conversion coverage. Full release gate passes. |
+| 2026-08-28 | W016/W005/W010 | codex | IPC MIDI Learn capture request → implemented | Added a local `learn` command with bounded endpoint/limit input and structured candidate output from daemon-owned observational capture; no routing or transmission occurs. Full release gate passes. |
 
 The worklist is complete only when W053 is `DONE`. A feature demonstration, passing unit
 tests, or code presence alone is not release completion.

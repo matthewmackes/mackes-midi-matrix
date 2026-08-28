@@ -90,6 +90,8 @@ pub enum Command {
     Endpoints,
     /// Inspect or mutate routes.
     Routes,
+    /// Capture bounded observational MIDI Learn candidates.
+    Learn,
     /// Inspect or activate scenes.
     Scenes,
     /// Query a profile-backed device.
@@ -122,6 +124,7 @@ impl Command {
             Self::Configuration => "configuration",
             Self::Endpoints => "endpoints",
             Self::Routes => "routes",
+            Self::Learn => "learn",
             Self::Scenes => "scenes",
             Self::DeviceQuery => "device_query",
             Self::Sysex => "sysex",
