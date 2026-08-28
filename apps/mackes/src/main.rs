@@ -20,6 +20,7 @@ fn run_tui() -> Result<(), String> {
     let reflex_workspace =
         mackes_tui::ReflexWorkspace::from_compiled_algorithm(1).map_err(str::to_owned)?;
     let eventide_workspace = mackes_tui::DeviceWorkspace::eventide_micropitch();
+    let routing_editor = mackes_tui::RoutingEditor::from_bank(&mackes_tui::MappingBank::new());
     let mut workspace = 1_u8;
     let mut needs_snapshot = true;
     let result = loop {
@@ -41,6 +42,7 @@ fn run_tui() -> Result<(), String> {
                 2 => mackes_tui::draw_learn(frame, frame.area(), &learn_workspace),
                 3 => mackes_tui::draw_reflex(frame, frame.area(), &reflex_workspace),
                 4 => mackes_tui::draw_device(frame, frame.area(), &eventide_workspace),
+                5 => mackes_tui::draw_routing(frame, frame.area(), &routing_editor),
                 _ => mackes_tui::draw_dashboard(frame, frame.area(), &dashboard),
             })
             .map_err(|error| error.to_string())?;
@@ -48,7 +50,7 @@ fn run_tui() -> Result<(), String> {
             if let Event::Key(key) = event::read().map_err(|error| error.to_string())? {
                 match key.code {
                     KeyCode::Char('q') => break Ok(()),
-                    KeyCode::Char(value) if ('1'..='4').contains(&value) => {
+                    KeyCode::Char(value) if ('1'..='5').contains(&value) => {
                         workspace = value
                             .to_digit(10)
                             .and_then(|number| u8::try_from(number).ok())
