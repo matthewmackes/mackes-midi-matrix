@@ -222,6 +222,7 @@ pub struct Daemon {
     health: Health,
     generation: u64,
     active_scene: Option<String>,
+    scene_ids: Vec<String>,
     router: mackes_midi_engine::RouterStore,
     rtp_peer: mackes_midi_engine::RtpMidiPeer,
     outputs: mackes_midi_engine::OutputRegistry,
@@ -368,6 +369,7 @@ impl Daemon {
             health: Health::Starting,
             generation: 0,
             active_scene: None,
+            scene_ids: Vec::new(),
             router: mackes_midi_engine::RouterStore::new(Vec::new(), 0, 8)
                 .map_err(io::Error::other)?,
             rtp_peer: mackes_midi_engine::RtpMidiPeer::new(0, 32).map_err(io::Error::other)?,
@@ -1243,6 +1245,7 @@ impl Daemon {
             match command {
                 Some(Command::Snapshot) => self.snapshot_response(),
                 Some(Command::Subscribe) => self.subscribe_response(&request),
+                Some(Command::Scenes) => self.scenes_response(),
                 Some(command) => {
                     let endpoints = if command == Command::Endpoints {
                         self.discover_endpoints().unwrap_or_default()
@@ -1294,6 +1297,22 @@ impl Daemon {
     #[must_use]
     pub const fn health(&self) -> Health {
         self.health
+    }
+
+    /// Installs the validated active-project scene catalog for read-only IPC queries.
+    pub fn set_scene_ids(&mut self, scene_ids: Vec<String>) {
+        self.scene_ids = scene_ids;
+    }
+
+    fn scenes_response(&self) -> String {
+        serde_json::json!({
+            "ok": true,
+            "generation": self.generation,
+            "scenes": self.scene_ids,
+            "active_scene": self.active_scene,
+        })
+        .to_string()
+            + "\n"
     }
 }
 
@@ -1732,6 +1751,18 @@ mod tests {
             command_ack(Command::Health, Health::Degraded, 11, &[], None, &[]),
             "{\"ok\":true,\"generation\":11,\"health\":\"degraded\"}\n"
         );
+    }
+
+    #[test]
+    fn scenes_query_projects_daemon_scene_catalog() {
+        let path = std::env::temp_dir().join(format!("mackes-scenes-{}.sock", std::process::id()));
+        let mut daemon = Daemon::bind(&path).expect("daemon");
+        daemon.set_scene_ids(vec!["intro".into(), "verse".into()]);
+        daemon.set_active_scene(Some("verse".into()));
+        let response: serde_json::Value =
+            serde_json::from_str(&daemon.scenes_response()).expect("response");
+        assert_eq!(response["scenes"], serde_json::json!(["intro", "verse"]));
+        assert_eq!(response["active_scene"], "verse");
     }
 
     #[test]

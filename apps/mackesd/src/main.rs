@@ -115,6 +115,18 @@ fn main() {
         daemon.mark_degraded();
     }
     daemon.set_active_scene(restored_scene);
+    if let Ok(document) = mackes_config::load(&config) {
+        let scene_ids = document
+            .settings
+            .active_project
+            .as_deref()
+            .and_then(|project_id| {
+                document.projects.iter().find(|project| project.id == project_id)
+            })
+            .map(|project| project.scenes.iter().map(|scene| scene.id.clone()).collect())
+            .unwrap_or_default();
+        daemon.set_scene_ids(scene_ids);
+    }
     if let Err(error) = daemon.enable_virtual_ports() {
         eprintln!("mackes-midi-matrixd: virtual ALSA ports unavailable: {error}");
     }
