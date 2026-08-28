@@ -27,6 +27,69 @@ pub struct EndpointInfo {
     pub direction: EndpointDirection,
 }
 
+/// Connection state of a physical MIDI device projection.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum PhysicalDeviceState {
+    /// The device has at least one currently visible MIDI port.
+    Connected,
+    /// The device identity is present in persisted state but no port is visible.
+    Offline,
+    /// More than one visible device could satisfy the same persisted identity.
+    Ambiguous,
+    /// No profile identity could be established from the endpoint metadata.
+    Unknown,
+}
+
+/// Deterministic physical-device projection grouped from MIDI endpoints.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PhysicalDevice {
+    /// Stable grouping key derived from the endpoint name.
+    pub id: String,
+    /// Display name shared by the grouped ports.
+    pub name: String,
+    /// Input endpoint IDs belonging to this device.
+    pub inputs: Vec<String>,
+    /// Output endpoint IDs belonging to this device.
+    pub outputs: Vec<String>,
+    /// Current identity state.
+    pub state: PhysicalDeviceState,
+}
+
+/// Groups endpoint metadata without guessing across distinct names.
+#[must_use]
+pub fn group_physical_devices(endpoints: &[EndpointInfo]) -> Vec<PhysicalDevice> {
+    let mut devices: Vec<PhysicalDevice> = Vec::new();
+    for endpoint in endpoints {
+        let device_name = endpoint
+            .name
+            .split_once(':')
+            .map_or(endpoint.name.as_str(), |(device, _)| device)
+            .trim();
+        let id = device_name.to_ascii_lowercase();
+        if id.is_empty() {
+            continue;
+        }
+        let index = devices.iter().position(|device| device.id == id).unwrap_or_else(|| {
+            devices.push(PhysicalDevice {
+                id: id.clone(),
+                name: device_name.to_owned(),
+                inputs: Vec::new(),
+                outputs: Vec::new(),
+                state: PhysicalDeviceState::Unknown,
+            });
+            devices.len() - 1
+        });
+        let device = &mut devices[index];
+        match endpoint.direction {
+            EndpointDirection::Input => device.inputs.push(endpoint.id.clone()),
+            EndpointDirection::Output => device.outputs.push(endpoint.id.clone()),
+        }
+        device.state = PhysicalDeviceState::Connected;
+    }
+    devices.sort_by(|left, right| left.id.cmp(&right.id));
+    devices
+}
+
 /// Canonical virtual MIDI input port name exposed by MACKES.
 pub const VIRTUAL_INPUT_NAME: &str = "MACKES DAW In";
 /// Canonical virtual MIDI output port name exposed by MACKES.
@@ -1313,6 +1376,15 @@ impl InputRegistry {
         true
     }
 
+    /// Returns the stable endpoint key for a numeric event endpoint.
+    #[must_use]
+    pub fn stable_id_for_endpoint(&self, endpoint: mackes_domain::EndpointId) -> Option<String> {
+        self.inputs.iter().find_map(|input| {
+            (numeric_endpoint_id(&input.info().id) == Some(endpoint))
+                .then(|| input.info().id.clone())
+        })
+    }
+
     /// Polls each input once in stable registration order.
     #[must_use]
     pub fn poll_once(&mut self) -> Vec<MidiEvent> {
@@ -1466,7 +1538,7 @@ pub struct EndpointStats {
 }
 
 /// Coarse MIDI message class used by route filters.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum MessageClass {
     /// Note on/off or poly pressure.
     Note,
@@ -1494,6 +1566,90 @@ impl MessageClass {
             MidiMessage::SysEx(_) => Self::SysEx,
             _ => Self::Other,
         }
+    }
+}
+
+/// Stable identity for one physical MIDI control stream.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct ActivityKey {
+    /// Source endpoint identity.
+    pub endpoint: EndpointId,
+    /// MIDI message family.
+    pub class: MessageClass,
+    /// Note/controller/program number when the message has one.
+    pub number: Option<u8>,
+}
+
+/// Latest observed value for one activity key.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ActivitySample {
+    /// Stable control identity.
+    pub key: ActivityKey,
+    /// Latest source event sequence.
+    pub sequence: u64,
+    /// Latest source timestamp.
+    pub timestamp: mackes_domain::TimestampNanos,
+    /// Latest value, when the message family carries one.
+    pub value: Option<u16>,
+}
+
+/// Bounded coalescer retaining only the newest sample per physical control.
+#[derive(Clone, Debug)]
+pub struct ActivityCoalescer {
+    capacity: usize,
+    samples: HashMap<ActivityKey, ActivitySample>,
+}
+
+impl ActivityCoalescer {
+    /// Creates a coalescer with a positive maximum number of controls.
+    #[must_use]
+    pub fn new(capacity: usize) -> Option<Self> {
+        (capacity > 0).then(|| Self { capacity, samples: HashMap::new() })
+    }
+
+    /// Inserts a sample, replacing only an older sample for the same control.
+    ///
+    /// Returns `false` when the sample is stale or the bounded store is full.
+    pub fn push(&mut self, event: &mackes_domain::MidiEvent) -> bool {
+        let key = ActivityKey {
+            endpoint: event.endpoint,
+            class: MessageClass::of(&event.message),
+            number: message_number(&event.message),
+        };
+        let sample = ActivitySample {
+            key,
+            sequence: event.sequence,
+            timestamp: event.timestamp,
+            value: message_value(&event.message),
+        };
+        if self.samples.get(&key).is_some_and(|old| old.sequence >= sample.sequence) {
+            return false;
+        }
+        if self.samples.len() >= self.capacity && !self.samples.contains_key(&key) {
+            return false;
+        }
+        self.samples.insert(key, sample);
+        true
+    }
+
+    /// Returns newest samples in deterministic endpoint/class/number order and clears them.
+    pub fn drain(&mut self) -> Vec<ActivitySample> {
+        let mut samples: Vec<_> = self.samples.drain().map(|(_, sample)| sample).collect();
+        samples
+            .sort_by_key(|sample| (sample.key.endpoint.get(), sample.key.class, sample.key.number));
+        samples
+    }
+
+    /// Returns the number of currently coalesced controls.
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.samples.len()
+    }
+
+    /// Returns whether no coalesced activity samples are pending.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.samples.is_empty()
     }
 }
 
@@ -4351,6 +4507,126 @@ mod tests {
         stats.received = u64::MAX;
         stats.record_received();
         assert_eq!(stats.received, u64::MAX);
+    }
+
+    #[test]
+    fn physical_devices_group_matching_ports_deterministically() {
+        let endpoints = vec![
+            EndpointInfo {
+                id: "out-b".into(),
+                name: "Launch Control XL".into(),
+                direction: EndpointDirection::Output,
+            },
+            EndpointInfo {
+                id: "in-b".into(),
+                name: "Launch Control XL".into(),
+                direction: EndpointDirection::Input,
+            },
+            EndpointInfo {
+                id: "in-a".into(),
+                name: "MIDI Interface".into(),
+                direction: EndpointDirection::Input,
+            },
+        ];
+        let devices = group_physical_devices(&endpoints);
+        assert_eq!(devices.len(), 2);
+        assert_eq!(devices[0].name, "Launch Control XL");
+        assert_eq!(devices[0].inputs, ["in-b"]);
+        assert_eq!(devices[0].outputs, ["out-b"]);
+        assert_eq!(devices[0].state, PhysicalDeviceState::Connected);
+        assert_eq!(devices[1].name, "MIDI Interface");
+        assert_eq!(devices[1].outputs, Vec::<String>::new());
+    }
+
+    #[test]
+    fn physical_device_grouping_does_not_merge_distinct_names() {
+        let endpoints = vec![
+            EndpointInfo {
+                id: "a".into(),
+                name: "Controller A".into(),
+                direction: EndpointDirection::Input,
+            },
+            EndpointInfo {
+                id: "b".into(),
+                name: "Controller B".into(),
+                direction: EndpointDirection::Input,
+            },
+        ];
+        let devices = group_physical_devices(&endpoints);
+        assert_eq!(
+            devices.iter().map(|device| device.name.as_str()).collect::<Vec<_>>(),
+            ["Controller A", "Controller B"]
+        );
+    }
+
+    #[test]
+    fn physical_device_grouping_normalizes_alsa_device_prefixes() {
+        let endpoints = vec![
+            EndpointInfo {
+                id: "in-a".into(),
+                name: "Launch Control XL:Launch Control XL Launch Contro 28:0".into(),
+                direction: EndpointDirection::Input,
+            },
+            EndpointInfo {
+                id: "in-b".into(),
+                name: "Launch Control XL:Launch Control XL HUI 28:1".into(),
+                direction: EndpointDirection::Input,
+            },
+            EndpointInfo {
+                id: "out-a".into(),
+                name: "Launch Control XL:Launch Control XL Launch Contro 28:0".into(),
+                direction: EndpointDirection::Output,
+            },
+        ];
+        let devices = group_physical_devices(&endpoints);
+        assert_eq!(devices.len(), 1);
+        assert_eq!(devices[0].name, "Launch Control XL");
+        assert_eq!(devices[0].inputs, vec!["in-a", "in-b"]);
+        assert_eq!(devices[0].outputs, vec!["out-a"]);
+    }
+
+    #[test]
+    fn activity_coalescer_keeps_newest_value_per_control() {
+        let endpoint = mackes_domain::EndpointId::new(4).expect("endpoint");
+        let event = |sequence, value| mackes_domain::MidiEvent {
+            timestamp: mackes_domain::TimestampNanos::new(sequence),
+            sequence,
+            endpoint,
+            message: mackes_domain::MidiMessage::ControlChange {
+                channel: mackes_domain::MidiChannel::new(1).expect("channel"),
+                controller: mackes_domain::SevenBit::new(21).expect("controller"),
+                value: mackes_domain::SevenBit::new(value).expect("value"),
+            },
+        };
+        let mut coalescer = ActivityCoalescer::new(2).expect("capacity");
+        assert!(coalescer.push(&event(1, 10)));
+        assert!(coalescer.push(&event(3, 99)));
+        assert!(!coalescer.push(&event(2, 50)));
+        assert_eq!(coalescer.len(), 1);
+        let samples = coalescer.drain();
+        assert_eq!(samples.len(), 1);
+        assert_eq!(samples[0].sequence, 3);
+        assert_eq!(samples[0].value, Some(99));
+        assert_eq!(coalescer.len(), 0);
+    }
+
+    #[test]
+    fn activity_coalescer_bounds_distinct_controls() {
+        let event = |endpoint: u64, number: u8| mackes_domain::MidiEvent {
+            timestamp: mackes_domain::TimestampNanos::new(u64::from(number)),
+            sequence: u64::from(number),
+            endpoint: mackes_domain::EndpointId::new(endpoint).expect("endpoint"),
+            message: mackes_domain::MidiMessage::ControlChange {
+                channel: mackes_domain::MidiChannel::new(1).expect("channel"),
+                controller: mackes_domain::SevenBit::new(number.into()).expect("controller"),
+                value: mackes_domain::SevenBit::new(number.into()).expect("value"),
+            },
+        };
+        let mut coalescer = ActivityCoalescer::new(1).expect("capacity");
+        assert!(coalescer.push(&event(2, 2)));
+        assert!(!coalescer.push(&event(1, 1)));
+        assert_eq!(coalescer.drain()[0].key.endpoint.get(), 2);
+        assert!(ActivityCoalescer::new(0).is_none());
     }
 
     #[test]

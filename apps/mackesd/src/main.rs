@@ -166,6 +166,34 @@ fn main() {
     if let Err(error) = daemon.enable_virtual_ports() {
         eprintln!("mackes-midi-matrixd: virtual ALSA ports unavailable: {error}");
     }
+    if let Ok(endpoints) = mackes_midi_engine::enumerate_midir_ports() {
+        let physical_endpoints = endpoints
+            .iter()
+            .filter(|endpoint| {
+                !endpoint.name.starts_with("MACKES ") && !endpoint.name.starts_with("Midi Through")
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+        daemon.set_physical_devices(&physical_endpoints);
+        for endpoint in endpoints.iter().filter(|endpoint| {
+            endpoint.direction == mackes_midi_engine::EndpointDirection::Input
+                && !endpoint.name.starts_with("MACKES ")
+                && !endpoint.name.starts_with("Midi Through")
+        }) {
+            if let Err(error) = daemon.provision_input(&endpoint.name) {
+                eprintln!("mackes-midi-matrixd: input unavailable {}: {error}", endpoint.name);
+            }
+        }
+        for endpoint in endpoints.iter().filter(|endpoint| {
+            endpoint.direction == mackes_midi_engine::EndpointDirection::Output
+                && !endpoint.name.starts_with("MACKES ")
+                && !endpoint.name.starts_with("Midi Through")
+        }) {
+            if let Err(error) = daemon.provision_output(&endpoint.id) {
+                eprintln!("mackes-midi-matrixd: output unavailable {}: {error}", endpoint.name);
+            }
+        }
+    }
     let daemon_uid = std::process::Command::new("id")
         .args(["-u", "mackes"])
         .output()
@@ -196,6 +224,7 @@ fn main() {
             break;
         }
         let mapped = daemon.process_dashboard_commands(&dashboard_bindings, 128);
+        let _ = daemon.poll_and_dispatch_inputs(128);
         if !mapped.is_empty() {
             eprint!(
                 "{}",

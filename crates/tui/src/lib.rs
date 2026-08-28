@@ -3,8 +3,9 @@
 use mackes_ipc::{StateEvent, StateSnapshot};
 use mackes_midi_engine::MidiLearnCandidate;
 use ratatui::{
-    layout::Rect,
-    style::Style,
+    layout::{Constraint, Direction, Layout, Rect},
+    style::{Color, Modifier, Style},
+    text::{Line, Span},
     widgets::{Block, Borders, Paragraph},
     Frame,
 };
@@ -533,6 +534,54 @@ pub struct DashboardState {
     pub device_health: Vec<(String, String)>,
     /// Bounded newest-first operator notifications.
     pub notifications: Vec<Notification>,
+    /// Latest bounded source-to-destination MIDI activity.
+    pub live_activity: Option<LiveActivity>,
+    /// Whether the mapping editor contains changes not yet committed to the daemon.
+    pub mapping_dirty: bool,
+    /// Selected output destination in the flattened visible inventory.
+    pub selected_destination: Option<usize>,
+    /// Selected parameter within the active profile-backed destination.
+    pub selected_parameter: Option<usize>,
+    /// Currently visible physical MIDI devices and their port identities.
+    pub physical_devices: Vec<PhysicalDevice>,
+}
+
+/// Renderer-safe physical MIDI device inventory record.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct PhysicalDevice {
+    /// Stable normalized device identity.
+    pub id: String,
+    /// Human-readable device name.
+    pub name: String,
+    /// Input endpoint identities.
+    pub inputs: Vec<String>,
+    /// Output endpoint identities.
+    pub outputs: Vec<String>,
+    /// Connection state reported by the daemon.
+    pub state: String,
+}
+
+/// One renderer-safe MIDI activity sample from the daemon.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct LiveActivity {
+    /// Source endpoint identity.
+    pub source_endpoint: u64,
+    /// Stable inventory endpoint identity, when the daemon resolved it.
+    pub source_endpoint_id: Option<String>,
+    /// Stable source-control identity used by mapping projections.
+    pub control_id: String,
+    /// Monotonic source timestamp used for client-side age/highlight calculation.
+    pub timestamp_nanos: u64,
+    /// MIDI message family.
+    pub kind: String,
+    /// Optional note/controller/program number.
+    pub number: Option<u8>,
+    /// Optional MIDI value.
+    pub value: Option<u16>,
+    /// Routed destination endpoint identities.
+    pub destination_endpoints: Vec<u64>,
+    /// Source event sequence.
+    pub sequence: u64,
 }
 
 /// A renderer-neutral notification suitable for a status area or overlay.
@@ -1932,13 +1981,17 @@ pub enum DashboardEvent {
         /// Safe display message.
         message: String,
     },
+    /// Latest bounded source-to-destination activity sample.
+    LiveActivity(LiveActivity),
+    /// Replaces the physical-device inventory projection.
+    PhysicalDevices(Vec<PhysicalDevice>),
 }
 
 impl DashboardEvent {
     /// Decodes the bounded fields understood by dashboard widgets from one daemon payload.
     #[must_use]
     pub fn from_payload(payload: &serde_json::Value) -> Vec<Self> {
-        let mut events = Vec::with_capacity(6);
+        let mut events = Vec::with_capacity(8);
         if let Some(value) = payload.get("health").and_then(serde_json::Value::as_str) {
             events.push(Self::Health(value.to_owned()));
         }
@@ -1964,8 +2017,75 @@ impl DashboardEvent {
         if let Some(value) = payload.get("activation_result").and_then(serde_json::Value::as_str) {
             events.push(Self::ActivationResult(value.to_owned()));
         }
+        if let Some(activity) = payload.get("last_activity").and_then(parse_live_activity) {
+            events.push(Self::LiveActivity(activity));
+        }
+        if let Some(devices) = payload.get("physical_devices").and_then(parse_physical_devices) {
+            events.push(Self::PhysicalDevices(devices));
+        }
         events
     }
+}
+
+fn parse_physical_devices(value: &serde_json::Value) -> Option<Vec<PhysicalDevice>> {
+    value.as_array()?.iter().map(parse_physical_device).collect()
+}
+
+fn parse_physical_device(value: &serde_json::Value) -> Option<PhysicalDevice> {
+    let object = value.as_object()?;
+    let strings = |key: &str| {
+        object
+            .get(key)?
+            .as_array()?
+            .iter()
+            .map(serde_json::Value::as_str)
+            .map(|value| value.map(str::to_owned))
+            .collect::<Option<Vec<_>>>()
+    };
+    Some(PhysicalDevice {
+        id: object.get("id")?.as_str()?.to_owned(),
+        name: object.get("name")?.as_str()?.to_owned(),
+        inputs: strings("inputs")?,
+        outputs: strings("outputs")?,
+        state: object.get("state")?.as_str()?.to_owned(),
+    })
+}
+
+fn parse_live_activity(value: &serde_json::Value) -> Option<LiveActivity> {
+    let object = value.as_object()?;
+    let source_endpoint = object.get("source_endpoint")?.as_u64()?;
+    let source_endpoint_id =
+        object.get("source_endpoint_id").and_then(|value| value.as_str().map(str::to_owned));
+    let kind = object.get("kind")?.as_str()?.to_owned();
+    let control_id = object.get("control_id")?.as_str()?.to_owned();
+    let timestamp_nanos = object.get("timestamp_nanos")?.as_u64()?;
+    let number = object
+        .get("number")
+        .filter(|value| !value.is_null())
+        .and_then(serde_json::Value::as_u64)
+        .and_then(|value| u8::try_from(value).ok());
+    let value = object
+        .get("value")
+        .filter(|value| !value.is_null())
+        .and_then(serde_json::Value::as_u64)
+        .and_then(|value| u16::try_from(value).ok());
+    let destination_endpoints = object
+        .get("destination_endpoints")?
+        .as_array()?
+        .iter()
+        .map(serde_json::Value::as_u64)
+        .collect::<Option<Vec<_>>>()?;
+    Some(LiveActivity {
+        source_endpoint,
+        source_endpoint_id,
+        control_id,
+        timestamp_nanos,
+        kind,
+        number,
+        value,
+        destination_endpoints,
+        sequence: object.get("sequence")?.as_u64()?,
+    })
 }
 
 /// Bounded controller-page navigation state.
@@ -2553,7 +2673,69 @@ impl DashboardState {
             DashboardEvent::ActivationResult(value) => self.activation_result = Some(value),
             DashboardEvent::DeviceHealth(values) => self.set_device_health(values),
             DashboardEvent::Notification { severity, message } => self.notify(severity, message),
+            DashboardEvent::LiveActivity(activity) => self.live_activity = Some(activity),
+            DashboardEvent::PhysicalDevices(devices) => self.physical_devices = devices,
         }
+    }
+
+    /// Advances the selected output destination with wraparound.
+    pub fn cycle_destination(&mut self) {
+        let count = self.physical_devices.iter().map(|device| device.outputs.len()).sum::<usize>();
+        self.selected_destination = if count == 0 {
+            None
+        } else {
+            Some(self.selected_destination.map_or(0, |index| (index + 1) % count))
+        };
+        self.selected_parameter = None;
+    }
+
+    /// Advances the selected profile parameter for the selected destination.
+    pub fn cycle_parameter(&mut self) {
+        let Some(destination) = self.selected_destination else { return };
+        let Some((device, _)) = self
+            .physical_devices
+            .iter()
+            .flat_map(|device| device.outputs.iter().map(move |endpoint| (device, endpoint)))
+            .nth(destination)
+        else {
+            return;
+        };
+        let count = if device.name.to_ascii_lowercase().contains("micropitch") {
+            DeviceWorkspace::eventide_micropitch()
+                .groups
+                .iter()
+                .map(|group| group.control_ids.len())
+                .sum()
+        } else {
+            0
+        };
+        if count > 0 {
+            self.selected_parameter =
+                Some(self.selected_parameter.map_or(0, |index| (index + 1) % count));
+        }
+    }
+
+    /// Returns the selected output as the numeric route endpoint contract.
+    #[must_use]
+    pub fn selected_destination_endpoint(&self) -> Option<u64> {
+        let index = self.selected_destination?;
+        self.physical_devices
+            .iter()
+            .flat_map(|device| device.outputs.iter())
+            .nth(index)
+            .and_then(|endpoint| mackes_midi_engine::numeric_endpoint_id(endpoint))
+            .map(mackes_domain::EndpointId::get)
+    }
+
+    /// Returns the first visible physical input as the numeric route endpoint contract.
+    #[must_use]
+    pub fn first_input_endpoint(&self) -> Option<u64> {
+        self.physical_devices
+            .iter()
+            .flat_map(|device| device.inputs.iter())
+            .next()
+            .and_then(|endpoint| mackes_midi_engine::numeric_endpoint_id(endpoint))
+            .map(mackes_domain::EndpointId::get)
     }
 
     /// Returns the canonical compact dashboard lines for terminal renderers.
@@ -2911,6 +3093,305 @@ pub fn draw_routing(frame: &mut Frame<'_>, area: Rect, editor: &RoutingEditor) {
     );
 }
 
+/// Draws the operator-facing Launch Control XL mapping surface.
+///
+/// The hardware layout is intentionally spatial: the three rotary rows, two
+/// button rows, and eight faders match the controller so an operator can read
+/// the screen from a distance and locate a physical control immediately.
+#[allow(clippy::too_many_lines)]
+pub fn draw_controller_mapping(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    dashboard: &DashboardState,
+    editor: &RoutingEditor,
+) {
+    let vertical = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Length(3), Constraint::Min(12), Constraint::Length(8)])
+        .split(area);
+    let online = dashboard.health == "online";
+    let status_style = Style::default().fg(if online { Color::Green } else { Color::Yellow });
+    frame.render_widget(
+        Paragraph::new(Line::from(vec![
+            Span::styled(
+                " MIDI MAPPING ",
+                Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+            ),
+            Span::styled("│ ", Style::default().fg(Color::DarkGray)),
+            Span::styled(
+                format!("SCENE {:<12}", dashboard.active_scene.as_deref().unwrap_or("NONE")),
+                Style::default().fg(Color::White),
+            ),
+            Span::styled("│ ", Style::default().fg(Color::DarkGray)),
+            Span::styled(
+                format!("IN {:>5}  OUT {:>5}", dashboard.received, dashboard.sent),
+                Style::default().fg(Color::LightBlue),
+            ),
+            Span::styled("│ ", Style::default().fg(Color::DarkGray)),
+            Span::styled(
+                if online { "● ONLINE" } else { "● DEGRADED" },
+                status_style.add_modifier(Modifier::BOLD),
+            ),
+            Span::styled("│ ", Style::default().fg(Color::DarkGray)),
+            Span::styled(
+                if dashboard.mapping_dirty { "◆ SAVE REQUIRED" } else { "✓ SAVED" },
+                Style::default()
+                    .fg(if dashboard.mapping_dirty { Color::Yellow } else { Color::Green })
+                    .add_modifier(Modifier::BOLD),
+            ),
+        ]))
+        .block(
+            Block::default().borders(Borders::ALL).title("MACKES  /  NOVATION LAUNCH CONTROL XL"),
+        ),
+        vertical[0],
+    );
+
+    let compact = area.width < 108;
+    let main = if compact {
+        Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Min(1)])
+            .split(vertical[1])
+    } else {
+        Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Min(68), Constraint::Length(28)])
+            .split(vertical[1])
+    };
+    let mut lines = vec![
+        "  KNOBS                                      BUTTONS                         FADERS"
+            .into(),
+        "  ┌────────┬────────┬────────┬────────┬────────┬────────┬────────┬────────┐".into(),
+    ];
+    for row in 0..3 {
+        let mut line = format!(
+            "  │ {}",
+            (0..8)
+                .map(|column| {
+                    let index = row * 8 + column;
+                    control_cell(index, editor)
+                })
+                .collect::<Vec<_>>()
+                .join(" │ ")
+        );
+        line.push_str(" │");
+        lines.push(line);
+        lines.push(
+            "  ├────────┼────────┼────────┼────────┼────────┼────────┼────────┼────────┤".into(),
+        );
+    }
+    lines.push("  │  BUTTONS:  [01] [02] [03] [04] [05] [06] [07] [08] [09] [10] [11] [12] [13] [14] [15] [16] │".into());
+    lines.push("  └──────────────────────────────────────────────────────────────────────────────────────┘".into());
+    lines.push(String::new());
+    lines.push(
+        "  FADERS:   [01]     [02]     [03]     [04]     [05]     [06]     [07]     [08]".into(),
+    );
+    lines.push("            │  ░░  │  ░░  │  ░░  │  ░░  │  ░░  │  ░░  │  ░░  │  ░░  │".into());
+    lines.push(format!(
+        "  ACTIVE CHAIN: {}",
+        if editor.drafts.is_empty() { "NO MAPPINGS" } else { "MAPPING BANK" }
+    ));
+    lines.push(format!("  ROUTES: {}", mapping_chain_line(&editor.drafts)));
+    lines.push(format!("  DEVICES: {}", device_inventory_line(&dashboard.physical_devices)));
+    lines.push(format!(
+        "  DESTINATIONS: {}",
+        destination_inventory_line(&dashboard.physical_devices, dashboard.selected_destination)
+    ));
+    lines.push(format!(
+        "  PARAMETERS: {}",
+        destination_parameter_line(
+            &dashboard.physical_devices,
+            dashboard.selected_destination,
+            dashboard.selected_parameter,
+        )
+    ));
+    if let Some(activity) = &dashboard.live_activity {
+        let value = activity.value.map_or_else(|| "--".to_owned(), |value| value.to_string());
+        let number = activity.number.map_or_else(|| "--".to_owned(), |number| number.to_string());
+        lines.push(format!(
+            "  LIVE: {}  #{}  VALUE {}  → {} DESTINATION(S)",
+            activity.kind,
+            number,
+            value,
+            activity.destination_endpoints.len()
+        ));
+        lines.push(format!(
+            "  LEVEL: {}  SOURCE EP {:>3}  SEQ {:>6}  T={}",
+            activity.value.map_or_else(|| "N/A".to_owned(), value_bar),
+            activity.source_endpoint,
+            activity.sequence,
+            activity.timestamp_nanos
+        ));
+        lines.push(format!(
+            "  SOURCE ID: {}  CONTROL ID: {}",
+            activity.source_endpoint_id.as_deref().unwrap_or("unresolved"),
+            activity.control_id
+        ));
+    } else {
+        lines.push("  LIVE: waiting for MIDI activity".into());
+    }
+    let surface_title = if editor.drafts.is_empty() {
+        "CONTROL SURFACE  ·  NO ACTIVE MAPPINGS"
+    } else {
+        "CONTROL SURFACE  ·  ACTIVE MAPPINGS"
+    };
+    frame.render_widget(
+        Paragraph::new(lines.join("\n"))
+            .style(Style::default().fg(Color::Gray))
+            .block(Block::default().borders(Borders::ALL).title(surface_title)),
+        main[0],
+    );
+
+    let selected = editor.selected.and_then(|index| editor.drafts.get(index));
+    let inspector = selected.map_or_else(
+        || " SELECT A CONTROL\n\n j/k  move mapping\n a    add mapping\n e    enable/disable\n s    save changes\n !    panic\n\n No control selected".into(),
+        |mapping| format!(
+            " SELECTED CONTROL\n\n SOURCE\n {}\n\n MESSAGE\n {:?}\n\n DESTINATION\n {}\n\n STATE\n {}\n\n PRIORITY\n {}",
+            mapping.source, mapping.mode, mapping.destination,
+            if mapping.enabled { "● ENABLED" } else { "○ DISABLED" }, mapping.priority
+        ),
+    );
+    if !compact {
+        frame.render_widget(
+            Paragraph::new(inspector)
+                .style(Style::default().fg(Color::White))
+                .block(Block::default().borders(Borders::ALL).title("MAPPING INSPECTOR")),
+            main[1],
+        );
+    }
+    frame.render_widget(
+        Paragraph::new(Line::from(vec![
+            Span::styled(" 1 HOME ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                " 2 LEARN ",
+                Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                " 5 ROUTING ",
+                Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                "  j/k SELECT  D DESTINATION  P PARAMETER  a ADD  u UNDO  s SAVE  ",
+                Style::default().fg(Color::White),
+            ),
+            Span::styled("! PANIC ", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
+            Span::styled(" q QUIT", Style::default().fg(Color::White)),
+        ]))
+        .block(Block::default().borders(Borders::ALL).title("OPERATOR CONTROLS")),
+        vertical[2],
+    );
+}
+
+fn value_bar(value: u16) -> String {
+    let bounded = value.min(127);
+    let filled = usize::from(bounded.saturating_mul(16) / 127);
+    format!("[{}{}]", "#".repeat(filled), "-".repeat(16 - filled))
+}
+
+fn device_inventory_line(devices: &[PhysicalDevice]) -> String {
+    if devices.is_empty() {
+        return "NO MIDI DEVICES DETECTED".to_owned();
+    }
+    devices
+        .iter()
+        .take(4)
+        .map(|device| {
+            format!(
+                "{} [{} I/{} O] {}",
+                device.name,
+                device.inputs.len(),
+                device.outputs.len(),
+                device.state.to_ascii_uppercase()
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("  •  ")
+}
+
+fn mapping_chain_line(drafts: &[MappingDraft]) -> String {
+    if drafts.is_empty() {
+        return "NONE — press a to add a source → destination route".to_owned();
+    }
+    drafts
+        .iter()
+        .take(4)
+        .map(|draft| {
+            format!(
+                "{} {}→{}",
+                if draft.enabled { "●" } else { "○" },
+                draft.source,
+                draft.destination
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("  |  ")
+}
+
+fn destination_inventory_line(devices: &[PhysicalDevice], selected: Option<usize>) -> String {
+    let destinations = devices
+        .iter()
+        .flat_map(|device| {
+            device.outputs.iter().map(|endpoint| (device.name.clone(), endpoint.clone()))
+        })
+        .take(6)
+        .enumerate()
+        .map(|(index, (device, endpoint))| {
+            format!("{}{}:{}", if selected == Some(index) { ">" } else { " " }, device, endpoint)
+        })
+        .collect::<Vec<_>>();
+    if destinations.is_empty() {
+        "NO OUTPUT DESTINATIONS".to_owned()
+    } else {
+        destinations.join("  →  ")
+    }
+}
+
+fn destination_parameter_line(
+    devices: &[PhysicalDevice],
+    selected: Option<usize>,
+    selected_parameter: Option<usize>,
+) -> String {
+    let Some(index) = selected else { return "SELECT A DESTINATION WITH D".to_owned() };
+    let Some((device, _)) = devices
+        .iter()
+        .flat_map(|device| device.outputs.iter().map(move |endpoint| (device, endpoint)))
+        .nth(index)
+    else {
+        return "DESTINATION UNAVAILABLE".to_owned();
+    };
+    if device.name.to_ascii_lowercase().contains("micropitch") {
+        let workspace = DeviceWorkspace::eventide_micropitch();
+        let mut parameter_index = 0;
+        return workspace
+            .groups
+            .iter()
+            .map(|group| {
+                let controls = group
+                    .control_ids
+                    .iter()
+                    .map(|control| {
+                        let marker =
+                            if selected_parameter == Some(parameter_index) { ">" } else { "" };
+                        parameter_index += 1;
+                        format!("{marker}{control}")
+                    })
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                format!("{}: {}", group.label, controls)
+            })
+            .collect::<Vec<_>>()
+            .join(" | ");
+    }
+    "PROFILE PARAMETERS UNVERIFIED".to_owned()
+}
+
+fn control_cell(index: usize, editor: &RoutingEditor) -> String {
+    let marker = if editor.selected == Some(index) { ">" } else { " " };
+    let mapped =
+        editor.drafts.get(index).map_or("·", |draft| if draft.enabled { "●" } else { "○" });
+    format!("{marker}{mapped}K{:02}", index + 1)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -3259,7 +3740,25 @@ mod tests {
             "received": 10,
             "sent": 8,
             "dropped": 2,
-            "activation_result": "total=2 succeeded=2 failed=0"
+            "activation_result": "total=2 succeeded=2 failed=0",
+            "physical_devices": [{
+                "id": "launch control xl",
+                "name": "Launch Control XL",
+                "inputs": ["input-1"],
+                "outputs": ["output-1"],
+                "state": "connected"
+            }],
+            "last_activity": {
+                "source_endpoint": 11,
+                "source_endpoint_id": "midir-in-source",
+                "control_id": "endpoint:11:control_change:21",
+                "timestamp_nanos": 123_456,
+                "kind": "control_change",
+                "number": 21,
+                "value": 96,
+                "destination_endpoints": [22, 23],
+                "sequence": 44
+            }
         });
         let mut dashboard = DashboardState::initial();
         for event in DashboardEvent::from_payload(&payload) {
@@ -3270,6 +3769,78 @@ mod tests {
         assert_eq!(dashboard.route_generation, 7);
         assert_eq!((dashboard.received, dashboard.sent, dashboard.dropped), (10, 8, 2));
         assert_eq!(dashboard.activation_result.as_deref(), Some("total=2 succeeded=2 failed=0"));
+        assert_eq!(dashboard.physical_devices.len(), 1);
+        assert_eq!(dashboard.physical_devices[0].name, "Launch Control XL");
+        assert_eq!(dashboard.physical_devices[0].inputs, vec!["input-1"]);
+        assert_eq!(dashboard.physical_devices[0].outputs, vec!["output-1"]);
+        let activity = dashboard.live_activity.expect("activity");
+        assert_eq!(activity.source_endpoint, 11);
+        assert_eq!(activity.source_endpoint_id.as_deref(), Some("midir-in-source"));
+        assert_eq!(activity.control_id, "endpoint:11:control_change:21");
+        assert_eq!(activity.timestamp_nanos, 123_456);
+        assert_eq!(activity.kind, "control_change");
+        assert_eq!(activity.number, Some(21));
+        assert_eq!(activity.value, Some(96));
+        assert_eq!(activity.destination_endpoints, vec![22, 23]);
+        assert_eq!(activity.sequence, 44);
+        assert!(DashboardEvent::from_payload(&serde_json::json!({
+            "last_activity": {"kind": "invalid"}
+        }))
+        .iter()
+        .all(|event| !matches!(event, DashboardEvent::LiveActivity(_))));
+    }
+
+    #[test]
+    fn mapping_chain_line_exposes_enabled_state_and_destination() {
+        let draft = MappingDraft {
+            source: "Launch Control XL / K01".into(),
+            destination: "MicroPitch / Mix".into(),
+            enabled: true,
+            ..MappingDraft::default()
+        };
+        let line = mapping_chain_line(&[draft]);
+        assert!(line.contains("● Launch Control XL / K01→MicroPitch / Mix"));
+        assert_eq!(mapping_chain_line(&[]), "NONE — press a to add a source → destination route");
+    }
+
+    #[test]
+    fn live_value_bar_is_bounded_and_monotonic() {
+        assert_eq!(value_bar(0), "[----------------]");
+        assert_eq!(value_bar(127), "[################]");
+        assert!(value_bar(96).contains("############"));
+        assert_eq!(value_bar(u16::MAX).len(), value_bar(127).len());
+    }
+
+    #[test]
+    fn destination_inventory_line_is_bounded_and_explicit() {
+        let devices = vec![PhysicalDevice {
+            name: "MicroPitch Pedal".into(),
+            inputs: vec!["midir-in-pedal".into()],
+            outputs: vec!["midir-out-pedal".into()],
+            ..PhysicalDevice::default()
+        }];
+        assert_eq!(destination_inventory_line(&devices, None), " MicroPitch Pedal:midir-out-pedal");
+        assert_eq!(
+            destination_inventory_line(&devices, Some(0)),
+            ">MicroPitch Pedal:midir-out-pedal"
+        );
+        assert_eq!(destination_inventory_line(&[], None), "NO OUTPUT DESTINATIONS");
+        let mut dashboard = DashboardState::initial();
+        dashboard.physical_devices = devices;
+        dashboard.cycle_destination();
+        assert_eq!(dashboard.selected_destination, Some(0));
+        assert!(dashboard.first_input_endpoint().is_some());
+        assert!(dashboard.selected_destination_endpoint().is_some());
+        assert!(
+            destination_parameter_line(&dashboard.physical_devices, Some(0), None).contains("Mix")
+        );
+        dashboard.cycle_parameter();
+        assert!(destination_parameter_line(
+            &dashboard.physical_devices,
+            Some(0),
+            dashboard.selected_parameter
+        )
+        .contains('>'));
     }
 
     #[test]

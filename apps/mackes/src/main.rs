@@ -12,7 +12,12 @@ fn run_tui() -> Result<(), String> {
 
     enable_raw_mode().map_err(|error| error.to_string())?;
     let mut output = stdout();
-    execute!(output, EnterAlternateScreen).map_err(|error| error.to_string())?;
+    execute!(
+        output,
+        EnterAlternateScreen,
+        crossterm::terminal::Clear(crossterm::terminal::ClearType::All)
+    )
+    .map_err(|error| error.to_string())?;
     let backend = CrosstermBackend::new(output);
     let mut terminal = Terminal::new(backend).map_err(|error| error.to_string())?;
     let mut dashboard = mackes_tui::DashboardState::initial();
@@ -22,6 +27,7 @@ fn run_tui() -> Result<(), String> {
         mackes_tui::ReflexWorkspace::from_compiled_algorithm(1).map_err(str::to_owned)?;
     let mut eventide_workspace = mackes_tui::DeviceWorkspace::eventide_micropitch();
     let mut routing_editor = mackes_tui::RoutingEditor::from_bank(&mackes_tui::MappingBank::new());
+    let mut mapping_undo: Vec<Vec<mackes_tui::MappingDraft>> = Vec::new();
     let mut diagnostics = mackes_tui::DiagnosticsState::default();
     let mut monitor = mackes_tui::MonitorState::new(128).expect("valid monitor capacity");
     let backup_workspace = mackes_tui::BackupWorkspace::default();
@@ -74,6 +80,12 @@ fn run_tui() -> Result<(), String> {
                 7 => mackes_tui::draw_monitor(frame, frame.area(), &monitor),
                 8 => mackes_tui::draw_backups(frame, frame.area(), &backup_workspace),
                 9 => mackes_tui::draw_setlists(frame, frame.area(), &setlist_editor),
+                1 => mackes_tui::draw_controller_mapping(
+                    frame,
+                    frame.area(),
+                    &dashboard,
+                    &routing_editor,
+                ),
                 _ => mackes_tui::draw_dashboard(frame, frame.area(), &dashboard),
             })
             .map_err(|error| error.to_string())?;
@@ -161,14 +173,31 @@ fn run_tui() -> Result<(), String> {
                             "panic-failed".to_owned()
                         };
                     }
-                    KeyCode::Char('s') if workspace == 5 => {
+                    KeyCode::Char('s') if workspace == 5 || workspace == 1 => {
                         let response = save_routes(&routing_editor, route_generation);
                         dashboard.health = if response.contains("\"ok\":true") {
                             route_generation = route_generation.saturating_add(1);
+                            dashboard.mapping_dirty = false;
                             "routes-saved".to_owned()
                         } else {
                             "routes-save-failed".to_owned()
                         };
+                    }
+                    KeyCode::Char('u') if (workspace == 5 || workspace == 1) => {
+                        if let Some(previous) = mapping_undo.pop() {
+                            routing_editor.drafts = previous;
+                            routing_editor.selected = None;
+                            dashboard.mapping_dirty = true;
+                            "mapping-undo".clone_into(&mut dashboard.health);
+                        } else {
+                            "mapping-undo-empty".clone_into(&mut dashboard.health);
+                        }
+                    }
+                    KeyCode::Char('D') if workspace == 1 => {
+                        dashboard.cycle_destination();
+                    }
+                    KeyCode::Char('P') if workspace == 1 => {
+                        dashboard.cycle_parameter();
                     }
                     KeyCode::Char('s') if workspace == 9 => {
                         let response = save_setlists(&setlist_editor);
@@ -270,67 +299,105 @@ fn run_tui() -> Result<(), String> {
                     KeyCode::Esc if workspace == 2 => learn_workspace.cancel(),
                     KeyCode::Char('d') if workspace == 5 => {
                         if let Some(index) = routing_editor.selected {
+                            remember_mapping_undo(&mut mapping_undo, &routing_editor);
                             let _ = routing_editor.remove(index);
+                            dashboard.mapping_dirty = true;
                         }
                     }
-                    KeyCode::Char('a') if workspace == 5 => match endpoint_pair_for_new_route() {
-                        Some((source, destination)) => {
-                            let draft = mackes_tui::MappingDraft {
-                                source: source.to_string(),
-                                destination: destination.to_string(),
-                                channel: None,
-                                enabled: true,
-                                mode: mackes_tui::MappingMode::Cc,
-                                priority: u16::try_from(routing_editor.drafts.len())
-                                    .unwrap_or(u16::MAX),
-                                curve: mackes_midi_engine::Curve::Linear,
-                                filters: mackes_tui::MappingFilterDraft::default(),
-                                allow_cycle: false,
-                            };
-                            if routing_editor.add(draft).is_err() {
-                                "route-add-rejected".clone_into(&mut dashboard.health);
+                    KeyCode::Char('a') if workspace == 5 || workspace == 1 => {
+                        let pair = if workspace == 1 {
+                            dashboard
+                                .first_input_endpoint()
+                                .zip(dashboard.selected_destination_endpoint())
+                        } else {
+                            endpoint_pair_for_new_route()
+                        };
+                        match pair {
+                            Some((source, destination)) => {
+                                let draft = mackes_tui::MappingDraft {
+                                    source: source.to_string(),
+                                    destination: destination.to_string(),
+                                    channel: None,
+                                    enabled: true,
+                                    mode: mackes_tui::MappingMode::Cc,
+                                    priority: u16::try_from(routing_editor.drafts.len())
+                                        .unwrap_or(u16::MAX),
+                                    curve: mackes_midi_engine::Curve::Linear,
+                                    filters: mackes_tui::MappingFilterDraft::default(),
+                                    allow_cycle: false,
+                                };
+                                remember_mapping_undo(&mut mapping_undo, &routing_editor);
+                                if routing_editor.add(draft).is_err() {
+                                    "route-add-rejected".clone_into(&mut dashboard.health);
+                                } else {
+                                    dashboard.mapping_dirty = true;
+                                }
                             }
+                            None => "route-endpoints-unavailable".clone_into(&mut dashboard.health),
                         }
-                        None => "route-endpoints-unavailable".clone_into(&mut dashboard.health),
-                    },
+                    }
                     KeyCode::Char('m') if workspace == 5 => {
+                        remember_mapping_undo(&mut mapping_undo, &routing_editor);
                         if routing_editor.cycle_selected_mode().is_err() {
                             "route-edit-rejected".clone_into(&mut dashboard.health);
+                        } else {
+                            dashboard.mapping_dirty = true;
                         }
                     }
                     KeyCode::Char('c') if workspace == 5 => {
+                        remember_mapping_undo(&mut mapping_undo, &routing_editor);
                         if routing_editor.cycle_selected_channel().is_err() {
                             "route-channel-edit-rejected".clone_into(&mut dashboard.health);
+                        } else {
+                            dashboard.mapping_dirty = true;
                         }
                     }
                     KeyCode::Char('r') if workspace == 5 => {
+                        remember_mapping_undo(&mut mapping_undo, &routing_editor);
                         if routing_editor.cycle_selected_curve().is_err() {
                             "route-curve-edit-rejected".clone_into(&mut dashboard.health);
+                        } else {
+                            dashboard.mapping_dirty = true;
                         }
                     }
                     KeyCode::Char('f') if workspace == 5 => {
+                        remember_mapping_undo(&mut mapping_undo, &routing_editor);
                         if routing_editor.cycle_selected_filter().is_err() {
                             "route-filter-edit-rejected".clone_into(&mut dashboard.health);
+                        } else {
+                            dashboard.mapping_dirty = true;
                         }
                     }
                     KeyCode::Char('e') if workspace == 5 => {
+                        remember_mapping_undo(&mut mapping_undo, &routing_editor);
                         if routing_editor.toggle_selected_enabled().is_err() {
                             "route-enable-edit-rejected".clone_into(&mut dashboard.health);
+                        } else {
+                            dashboard.mapping_dirty = true;
                         }
                     }
                     KeyCode::Char('y') if workspace == 5 => {
+                        remember_mapping_undo(&mut mapping_undo, &routing_editor);
                         if routing_editor.toggle_selected_cycle().is_err() {
                             "route-cycle-edit-rejected".clone_into(&mut dashboard.health);
+                        } else {
+                            dashboard.mapping_dirty = true;
                         }
                     }
                     KeyCode::Char('+') if workspace == 5 => {
+                        remember_mapping_undo(&mut mapping_undo, &routing_editor);
                         if routing_editor.adjust_selected_priority(1).is_err() {
                             "route-priority-edit-rejected".clone_into(&mut dashboard.health);
+                        } else {
+                            dashboard.mapping_dirty = true;
                         }
                     }
                     KeyCode::Char('-') if workspace == 5 => {
+                        remember_mapping_undo(&mut mapping_undo, &routing_editor);
                         if routing_editor.adjust_selected_priority(-1).is_err() {
                             "route-priority-edit-rejected".clone_into(&mut dashboard.health);
+                        } else {
+                            dashboard.mapping_dirty = true;
                         }
                     }
                     KeyCode::Char('j') if workspace == 4 => eventide_workspace.move_control(1),
@@ -341,7 +408,7 @@ fn run_tui() -> Result<(), String> {
                     KeyCode::Char('-') if workspace == 4 => {
                         eventide_workspace.adjust_control_value(-1);
                     }
-                    KeyCode::Char('j') if workspace == 5 => {
+                    KeyCode::Char('j') if (workspace == 5 || workspace == 1) => {
                         if !routing_editor.drafts.is_empty() {
                             let next = routing_editor.selected.map_or(0, |index| {
                                 (index + 1).min(routing_editor.drafts.len() - 1)
@@ -349,7 +416,10 @@ fn run_tui() -> Result<(), String> {
                             routing_editor.selected = Some(next);
                         }
                     }
-                    KeyCode::Char('k') if workspace == 5 && !routing_editor.drafts.is_empty() => {
+                    KeyCode::Char('k')
+                        if (workspace == 5 || workspace == 1)
+                            && !routing_editor.drafts.is_empty() =>
+                    {
                         let next = routing_editor.selected.unwrap_or(0).saturating_sub(1);
                         routing_editor.selected = Some(next);
                     }
@@ -1251,7 +1321,7 @@ fn daemon_status(json: bool) -> String {
     let request = mackes_ipc::Envelope {
         version: mackes_ipc::ProtocolVersion::current(),
         request_id: mackes_ipc::RequestId::new(1).expect("nonzero request ID"),
-        command: mackes_ipc::Command::Health,
+        command: mackes_ipc::Command::Snapshot,
         payload: b"{}".to_vec(),
     };
     let response = mackes_ipc::LocalClient::connect(&socket)
@@ -1270,6 +1340,16 @@ fn daemon_status(json: bool) -> String {
             "{\"daemon\":\"unavailable\",\"reason\":\"runtime IPC is not connected\"}".into()
         }
         (false, None) => "daemon=unavailable (runtime IPC is not connected)".into(),
+    }
+}
+
+fn remember_mapping_undo(
+    history: &mut Vec<Vec<mackes_tui::MappingDraft>>,
+    editor: &mackes_tui::RoutingEditor,
+) {
+    history.push(editor.drafts.clone());
+    if history.len() > 32 {
+        history.remove(0);
     }
 }
 

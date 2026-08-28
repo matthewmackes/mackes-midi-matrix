@@ -7,7 +7,7 @@
 
 | Field | Value |
 |---|---|
-| Worklist version | 1.7 |
+| Worklist version | 1.8 |
 | Product stage | 0.1.6 public release / integration qualification |
 | Target release | v1.0 |
 | Primary platform | Fedora Linux 44, x86_64 |
@@ -846,6 +846,33 @@ The ownership table is a routing contract, not proof that every listed subtype i
 the current firmware. Each entry must carry its evidence status in the profile. The Arena2000
 deep USB/BLE editor protocol remains gated until captured and decoded. Lexicon deep controls use
 the compiled bidirectional SysEx implementation; Eventide uses its documented MIDI contract.
+
+### 1.10 Connected-device mapping TUI decisions
+
+The 2026-08-28 operator survey commits the following requirements for W054–W061:
+
+- The primary workspace uses source and destination lanes. Bidirectional controllers/HUDs appear
+  in both lanes with a shared identity marker. One physical device groups all of its MIDI ports.
+- Every known device uses a profile-specific faceplate. Unknown devices remain visible through a
+  generic live faceplate with an immediate Learn action. Ambiguous identical devices are blocked
+  until explicitly identified; disconnected devices remain in place and restore safely.
+- Multiple controllers retain complete faceplates for every knob, fader, button, and pad. Device
+  tabs page between full faceplates when they cannot fit simultaneously.
+- Control movement updates the source control, selected/active mapping path, and destination
+  parameter together. Activity fades after one second while the latest value remains. High-rate
+  input is coalesced to latest state at an approximately 30 Hz render cadence.
+- Each control shows a live value, short mapping destination, enabled state, and activity state.
+  Continuous controls use a large bar plus raw 0–127 value; buttons show their explicit mode and
+  current state.
+- Mapping is destination-first: select a categorized processor parameter, then bind a source by
+  moving hardware or selecting its faceplate control. A valid mapping activates and autosaves
+  immediately; bounded Undo restores both runtime and persisted state.
+- The visual target is a distance-first rack appliance at 100×37 on the Linux TTY, using ANSI
+  16-color high-contrast styling, restrained borders, LED-like indicators, persistent alerts,
+  context-sensitive key legends, and non-color markers for every state.
+- End-to-end acceptance requires local hardware detection, mapping by both source-selection paths,
+  real-time source/route/destination response, autosave, Undo, restart restoration, and safe
+  disconnect/reconnect behavior.
 
 ## 2. Target architecture and contracts
 
@@ -2067,6 +2094,243 @@ validation record.
   verified maps, full renderer integration, and physical validation remain explicitly scoped for
   final review.
 
+### Connected-device mapping TUI redesign
+
+#### [ ] W054 — Physical-device inventory and identity projection
+
+- **Status:** `IN_PROGRESS`
+- **Owner:** codex
+- **Start date:** 2026-08-28
+- **Depends on:** W010, W020, W025
+- **Parallel with:** W056 after shared state names are agreed
+- **Implementation:** introduce a daemon-owned physical-device inventory that groups related input
+  and output endpoints, resolves stable aliases/profile identity, records port badges/directions,
+  and projects connected, offline, ambiguous, and unknown states through snapshot and sequenced
+  event IPC. Preserve a disconnected device's stable slot and mapping identity. Never infer that
+  two similarly named ports are one device without profile, serial, or explicit operator evidence.
+- **Public contracts changed:** versioned IPC device inventory payload; renderer-neutral device,
+  endpoint badge, identity-resolution, support-level, and connection-state types. Record an ADR and
+  compatibility fixture before changing the payload.
+- **Allowed files:** `apps/mackesd`, `crates/ipc`, `crates/profiles`, plus one ADR and fixtures
+  directly covering the new contract.
+- **Excluded behavior:** rendering, mapping mutation, MIDI transmission, guessed vendor identity,
+  and physical control-value tracking.
+- **Tests to add before implementation:** endpoint grouping, input/output pairing, stable ordering,
+  unknown profile, ambiguous identical devices, disconnect retention, reconnect identity, stale
+  generation, payload bounds, malformed payload, and backward-compatible snapshot decoding.
+- **Commands:** focused crate tests; `cargo test --workspace --all-features`; strict workspace
+  Clippy; `scripts/verify-repository.sh`; `scripts/integration-suite.sh`.
+- **Hardware prerequisites:** none for software acceptance; connected-device enumeration is W061
+  evidence. Use sanitized endpoint fixtures only.
+- **Acceptance:** every discovered endpoint is represented exactly once under a deterministic
+  physical device or explicit unknown/ambiguous record; no ambiguity silently changes mappings.
+- **Luna checkpoint:** finish the typed contract and fixtures first, obtain review, then wire daemon
+  projection. Stop if a stable grouping fact is unavailable.
+
+#### [~] W055 — Per-control real-time activity stream
+
+- **Status:** `IN_PROGRESS`
+- **Owner:** codex
+- **Start date:** 2026-08-28
+- **Depends on:** W014, W054
+- **Parallel with:** W058 after the activity payload is reviewed
+- **Implementation:** add bounded daemon state for the latest control value/button state per physical
+  device and the most recent source → route → destination activity. Coalesce repeated input by
+  control identity, publish no faster than approximately 30 Hz, retain the latest value, and emit a
+  monotonic timestamp/sequence suitable for a one-second client-side highlight. Track dropped and
+  unmatched events explicitly without exposing unbounded raw traffic in snapshots.
+- **Public contracts changed:** versioned `ControlActivity`, `DestinationActivity`, and bounded
+  activity-batch IPC payloads with stable device/control/mapping IDs and raw 0–127 values.
+- **Allowed files:** `crates/midi-engine`, `apps/mackesd`, `crates/ipc`, plus activity fixtures.
+- **Excluded behavior:** terminal rendering, profile faceplate geometry, autosave, and control-label
+  guesses. SysEx payload bytes remain redacted and bounded.
+- **Tests to add before implementation:** CC/note/program/pitch activity, button press/release,
+  source-route-destination correlation, latest-value coalescing, 30 Hz bound with fake time,
+  one-second age calculation, reconnect reset, queue saturation, drops, and sequence continuity.
+- **Commands:** focused engine/daemon/IPC tests; workspace tests and strict Clippy; routing benchmark;
+  hermetic integration suite.
+- **Hardware prerequisites:** none; simulator-first. W061 verifies physical slider reaction.
+- **Acceptance:** sustained input cannot grow memory or event queues, the latest value is never
+  replaced by an older event, and every published activity record resolves to inventory IDs.
+- **Luna checkpoint:** implement pure coalescer tests before daemon wiring; record CPU/queue evidence
+  before handoff.
+
+#### [~] W056 — ANSI rack-appliance design system
+
+- **Status:** `IN_PROGRESS`
+- **Owner:** codex
+- **Start date:** 2026-08-28
+- **Depends on:** W040, W048
+- **Parallel with:** W054, W055
+- **Implementation:** build shared Ratatui components for the 100×37 rack-appliance shell: status
+  and persistent-alert bands, numbered tabs, source/destination lane headers, panel titles,
+  LED-like lamps, horizontal value bars, button states, route pulses, context key legend, offline
+  treatment, inverse selection, and compact detail overlays. Use ANSI 16 colors only for the
+  canonical theme: white labels, cyan focus/navigation, green connected/enabled, amber warning or
+  dirty state, red error/panic/blocked, and dim gray unavailable/offline.
+- **Public contracts changed:** extend semantic tokens only when a state cannot use an existing
+  role; add renderer-neutral rack widget view models. Theme meaning remains immutable.
+- **Allowed files:** `crates/tui`, renderer snapshots/fixtures, and the visual-language section of
+  user documentation.
+- **Excluded behavior:** daemon/device discovery, MIDI reads/writes, profile-specific control maps,
+  and dependence on mouse, X/Wayland, truecolor, blinking, or rare Unicode glyphs.
+- **Tests to add before implementation:** 100×37 and 80×24 snapshots, ANSI 16 and monochrome output,
+  long labels, every semantic state, alert overflow, tab overflow, terminal resize, no overlap or
+  wrapping of critical state, and panic visibility.
+- **Commands:** TUI tests; snapshot review; workspace tests and strict Clippy; repository checks.
+- **Hardware prerequisites:** none.
+- **Acceptance:** all critical states remain distinguishable without color; the 100×37 view has no
+  clipping, overlap, stale background, or hidden alert/panic action and is readable at 4–8 feet.
+- **Luna checkpoint:** land shared primitives and golden snapshots before any device faceplate.
+
+#### [~] W057 — Profile-specific controller and HUD faceplates
+
+- **Status:** `IN_PROGRESS`
+- **Owner:** codex
+- **Start date:** 2026-08-28
+- **Depends on:** W025, W054, W055, W056
+- **Parallel with:** W058 after shared panel contracts stabilize
+- **Implementation:** render full profile-owned control geometry with device tabs. Implement the
+  Launch Control XL Mk1 first, covering every documented knob, fader, channel button, utility
+  button, navigation control, template/page indicator, and port badge. Each control displays a
+  short profile label, large live value/bar or explicit button mode/state, mapping destination,
+  enabled/offline/unknown state, and recent activity. Add a generic unknown-device faceplate and a
+  bidirectional interactive-HUD faceplate contract without inventing unsupported controls.
+- **Public contracts changed:** profile presentation metadata for stable control ID, physical group,
+  row/column/order, control kind, short label, and feedback capability. Keep wire protocol metadata
+  separate from presentation geometry.
+- **Allowed files:** `crates/profiles`, `crates/tui`, Launch Control fixtures/tests.
+- **Excluded behavior:** effects-processor parameter browser, route persistence, guessed factory CC
+  assignments, and unverified HUD protocols.
+- **Tests to add before implementation:** all Launch Control indices represented once, geometry and
+  tab order, value/button activity, mapped/unmapped/disabled/offline/unknown states, multiple full
+  devices, generic Learn prompt, bidirectional identity marker, 100×37 snapshots, and label bounds.
+- **Commands:** profile and TUI tests; workspace tests/Clippy; repository checks; release gate after
+  public profile schema review.
+- **Hardware prerequisites:** none for implementation; W061 checks physical layout/activity.
+- **Acceptance:** the active device page shows every control clearly, all additional devices are
+  reachable through persistent tabs, and no faceplate claims unavailable hardware feedback.
+- **Luna checkpoint:** complete Launch Control golden geometry before generic/HUD variants.
+
+#### [~] W058 — Effects-processor destination panels and parameter browser
+
+- **Status:** `IN_PROGRESS`
+- **Owner:** codex
+- **Start date:** 2026-08-28
+- **Depends on:** W020, W043, W049, W056
+- **Parallel with:** W057
+- **Implementation:** create destination-lane panels for connected processors using profile-owned
+  identity, support level, connection state, preset, categorized parameters, legal range, current
+  value/unknown state, read/write capability, mapping count, and hazard marker. Show mapped
+  parameters by default and provide a keyboard-only categorized browser for destination-first
+  mapping. Use exact profile labels and hide incompatible devices from parameter selection.
+- **Public contracts changed:** renderer-neutral destination parameter catalog and selection types;
+  profile controls must expose category, support level, readable/writable/feedback state, and
+  bounded display labels.
+- **Allowed files:** `crates/profiles`, `crates/tui`, relevant profile fixtures/tests.
+- **Excluded behavior:** invented deep controls, mapping commits, hardware writes during browsing,
+  audio routing/reordering, and unsupported value synchronization.
+- **Tests to add before implementation:** Eventide/Reflex/M-VAVE catalogs, categories, exact labels,
+  support warnings, read-only/write-only/unknown values, offline processors, incompatible filtering,
+  mapped-only summary, browser navigation, and 100×37 snapshots.
+- **Commands:** profile/TUI tests; workspace tests/Clippy; repository checks.
+- **Hardware prerequisites:** none; unsupported vendor facts remain unavailable, never blockers for
+  other devices.
+- **Acceptance:** an operator can identify a connected processor and select any supported mapping
+  destination without knowing a CC number or editing JSON5.
+- **Luna checkpoint:** prove catalog derivation from profile metadata before rendering browser UI.
+
+#### [~] W059 — Atomic mapping autosave and bounded Undo
+
+- **Status:** `IN_PROGRESS`
+- **Owner:** codex
+- **Start date:** 2026-08-28
+- **Depends on:** W005, W014, W023, W042, W046, W054, W058
+- **Parallel with:** none; this owns mapping mutation contracts
+- **Implementation:** replace the destination/source Learn commit boundary with a destination-first
+  mapping transaction. A valid destination plus unambiguous learned or faceplate-selected source
+  activates and persists atomically. Maintain a bounded daemon-owned Undo log containing the prior
+  routing/config generation and redacted mapping delta. Undo must restore runtime routing and the
+  durable configuration together; write or generation failure leaves both unchanged. Preserve
+  import compatibility for existing learned mappings and document the changed Learn semantics.
+- **Public contracts changed:** mapping transaction/Undo IPC commands and results, persisted mapping
+  identity/control destination fields, generation preconditions, and a replacement ADR for the
+  mandatory live-test/explicit-commit decision in ADR-0003. Schema changes require migration and
+  old/new fixture round trips.
+- **Allowed files:** `crates/config`, `crates/ipc`, `apps/mackesd`, `crates/tui`, one replacement ADR,
+  schema and compatibility fixtures.
+- **Excluded behavior:** destructive processor writes, unlimited history, silent conflict
+  resolution, cross-device identity guesses, and partial runtime-only success.
+- **Tests to add before implementation:** hardware-learn source, faceplate source, immediate active
+  route, atomic save, save failure rollback, generation race, duplicate/conflict rejection, Undo
+  success/failure, history bound, restart restoration, old configuration migration, and IPC denial.
+- **Commands:** config/IPC/daemon/TUI tests; workspace tests and strict Clippy; integration suite;
+  release gate after migration review.
+- **Hardware prerequisites:** none for software acceptance. W061 validates physical behavior.
+- **Acceptance:** successful mapping returns only after runtime and disk agree; failed mapping leaves
+  both unchanged; Undo is deterministic, bounded, authorized, and restart-safe.
+- **Luna checkpoint:** obtain ADR/schema review before production changes; implement persistence
+  transaction tests before the TUI calls the command.
+
+#### [~] W060 — Source/destination mapping workspace integration
+
+- **Status:** `IN_PROGRESS`
+- **Owner:** codex
+- **Start date:** 2026-08-28
+- **Depends on:** W055, W057, W058, W059
+- **Parallel with:** none
+- **Implementation:** replace the temporary controller overview with the complete source/mapping/
+  destination workspace. Keep full device tabs, selected and active route paths, destination-first
+  parameter selection, armed Learn, direct faceplate source selection, immediate autosave result,
+  Undo, live source/route/destination animation, one-second pulse decay, persistent alerts, and
+  context-sensitive keys. Inactive routes are summarized rather than all drawn simultaneously.
+- **Public contracts changed:** only TUI-local reducer/focus/workflow state; all daemon mutations use
+  W059 commands and all live state uses W054/W055 payloads.
+- **Allowed files:** `apps/mackes`, `crates/tui`, TUI/integration snapshots and operator help.
+- **Excluded behavior:** direct file/MIDI access, audio-chain editing, mouse-only controls, hidden
+  key actions, and screen-local copies of profile or daemon truth.
+- **Tests to add before implementation:** complete keyboard workflow, hardware and faceplate source
+  paths, activity pulse/decay with fake time, device tabs, unknown Learn, ambiguous block, offline
+  retention, alerts, autosave/Undo results, reconnect snapshot, resize, 100×37 snapshots, and panic.
+- **Commands:** TUI/CLI tests; workspace tests and strict Clippy; integration suite; terminal cleanup
+  smoke; repository checks.
+- **Hardware prerequisites:** none for automated acceptance.
+- **Acceptance:** from the primary screen, an operator can see every connected device, observe a
+  moved control in real time, select a processor parameter, create/undo a mapping, and understand
+  every blocked or degraded state without opening another workspace.
+- **Luna checkpoint:** implement reducer tests and static snapshots first, then daemon integration,
+  then keyboard workflow; never combine all three in one unreviewed change.
+
+#### [~] W061 — Local hardware, performance, and usability qualification
+
+- **Status:** `IN_PROGRESS`
+- **Owner:** codex
+- **Start date:** 2026-08-28
+- **Depends on:** W050, W051, W052, W060
+- **Parallel with:** none
+- **Implementation:** qualify the completed workspace on the Fedora TTY test seat with the actual
+  connected rig. Record device inventory, profile/firmware/endpoint identity, terminal size/font,
+  control reaction, mapping actions, reconnect behavior, CPU/RSS, redraw rate, queue high-water
+  marks, drops, and screenshots or legal text captures. Do not change production code under this
+  item; defects return to the owning item with a reproducible finding.
+- **Public contracts changed:** none.
+- **Allowed files:** hardware qualification records, redacted test reports, and work-log evidence.
+- **Excluded behavior:** guessed protocol enablement, bypassing write guards, storing private device
+  serials, and accepting visual review without functional evidence.
+- **Tests:** detect every connected device; bind one processor parameter by moving hardware and one
+  by faceplate selection; observe source/path/destination activity; verify autosave, Undo, daemon
+  restart, TUI restart, disconnect/reconnect, ambiguity handling, dropped-event alert, panic, and
+  sustained high-rate movement at the 30 Hz UI bound.
+- **Commands:** release gate, hardware qualification script, bounded routing benchmark/soak, service
+  status/journal review, and the exact local launch command. Record versions and results.
+- **Hardware prerequisites:** Launch Control XL Mk1 plus at least one supported effects processor;
+  optional interactive HUD is qualified only when an evidenced profile exists.
+- **Acceptance:** the complete end-to-end survey scenario passes on the local host with no jumbled
+  rendering, stale terminal content, silent mapping switch, lost persisted state, or unreported
+  dropped activity. Independent reviewer reproduces the evidence before `DONE`.
+- **Luna checkpoint:** this item begins only after W060 is reviewed; every defect is filed against
+  W054–W060 and qualification resumes from the failed step after repair.
+
 ### Integration, performance, and release
 
 #### [x] W050 — Full virtual-MIDI and RTP-MIDI integration suite
@@ -2207,6 +2471,13 @@ W016 + W040 + W042 ──────────── W046
 W024 + W040 + W043 + W048 ─────── W047
 W026 + W027 + W040 + W043 + W048 ── W049
 
+W010 + W020 + W025 ── W054 ── W055
+W040 + W048 ───────── W056
+W025 + W054 + W055 + W056 ── W057
+W020 + W043 + W049 + W056 ── W058
+W005 + W014 + W023 + W042 + W046 + W054 + W058 ── W059
+W055 + W057 + W058 + W059 ── W060 ── W061
+
 W015 + W031 + W040 ── W050 ── W051
 W010 + W045 ───────── W052
 hardware + UI + integration + qualification ── W053
@@ -2231,6 +2502,7 @@ following order is the default scheduler; a human may record an ADR-approved exc
 | 5 TUI/CLI | W040–W049 | Client reducer, operational views, Learn, themes, Reflex, and Eventide workspaces consume frozen contracts. |
 | 6 Integration | W050–W052 | Virtual/internet interoperability, soak/fault evidence, installer, service, and operator docs pass. |
 | 7 Release | W053 | Automated gates pass; enabled profiles and any pending physical/network validation are visible and documented; release checklist is signed. Physical disconnect/reconnect and external network tests are post-release qualification, not release blockers. |
+| 8 Connected-device TUI | W054–W061 | Physical-device identity, live per-control activity, rack-appliance rendering, destination-first autosave/Undo, integrated workflow, and local hardware qualification pass. |
 
 W027 is complete as a retired-device removal record and has no downstream release capability.
 When W015 lacks an approved AppleMIDI
@@ -2567,7 +2839,7 @@ New requests enter here before implementation.
 
 | ID | Proposal | Rationale | Impacted items | Decision/status | Approver |
 |---|---|---|---|---|---|
-| — | — | — | — | — | — |
+| P001 | Connected-device rack-appliance mapping TUI | Make every connected device and live control/mapping relationship clear from a distance on the Linux TTY. | W054–W061 | `APPROVED`; entered as governed work items in version 1.8 | operator |
 
 ## 7. Release-level acceptance matrix
 
@@ -2724,3 +2996,30 @@ tests, or code presence alone is not release completion.
 | 2026-08-28 | W011/W040 | confirmation-gated SysEx transmission | implemented | SysEx IPC now validates explicit confirmation, destination, 1–1024 byte bounds, F0/F7 framing, and registered output ownership before sending. |
 | 2026-08-28 | W013/W040 | executable route state | implemented | Route enabled state, priority ordering, CC curves, cycle authorization, and bounded predicates now execute in the engine and round-trip through daemon JSON and the TUI editor. |
 | 2026-08-28 | W013/W053 | route contract regression evidence | verified | Daemon and engine tests cover route-state and predicate round trips, disabled-route suppression, priority ordering, and deterministic CC curve output; the public test artifact was refreshed. |
+| 2026-08-28 | WORKLIST/W054–W061 | codex | proposal → governed workstream | Added the approved connected-device rack-appliance TUI plan as eight dependency-ordered Luna task packets, including public-contract boundaries, allowed files, exclusions, test-first checkpoints, commands, hardware prerequisites, acceptance evidence, dependency-map integration, and execution wave 8. |
+| 2026-08-28 | W056/W060 | codex | presentation slice → verified | Added the first rack-appliance presentation slice to the primary TUI workspace: ANSI-color status hierarchy, connected/degraded lamps, panel titles, operator-control legend, responsive narrow-terminal handling, explicit terminal clearing, and no-overlap layout behavior. Focused and full workspace tests, strict Clippy, worklist validation, and `scripts/release-gate.sh` pass. Device inventory, per-control live activity, processor destination browsing, autosave/Undo, and hardware qualification remain W054–W061 work. |
+| 2026-08-28 | W054 | codex | `IN_PROGRESS` → contract increment | Added deterministic `PhysicalDevice` grouping from endpoint metadata and exposed grouped `physical_devices` records in DeviceQuery/Endpoints IPC responses; input/output ports with identical names are grouped, distinct names are not merged, and 50 engine plus 24 daemon tests pass with strict Clippy. Profile identity, persisted offline slots, and TUI projection remain in W054. |
+| 2026-08-28 | W055 | codex | activity contract increment | Added daemon snapshots/journal payloads for the latest bounded MIDI activity record: source endpoint, message family, number/value where applicable, routed destination endpoints, and input sequence. Contract is now available for TUI projection; coalescing, per-control identity, and live rendering remain in W055. |
+| 2026-08-28 | W055/W040 | codex | activity-to-TUI projection increment | Added renderer-safe `LiveActivity` parsing and dashboard state projection for source endpoint, MIDI family, number/value, destinations, and sequence; the primary mapping surface now exposes the latest live message and destination count. Focused TUI/CLI tests and strict Clippy pass. Coalescing, per-control identity, and hardware reaction remain. |
+| 2026-08-28 | W055 | codex | bounded activity coalescing increment | Added a capacity-bounded per-endpoint/message-control coalescer that retains only the newest sequence value, rejects stale samples, and drains deterministically; focused tests, workspace strict Clippy, and `scripts/release-gate.sh` pass. Stable physical control identity and hardware qualification remain. |
+| 2026-08-28 | W054/W056 | codex | connected-device TUI projection increment | Added renderer-safe physical-device parsing and dashboard projection for normalized identity, display name, input/output endpoint IDs, and connection state; the primary mapping surface now shows a bounded device inventory. Focused tests and `scripts/release-gate.sh` pass. Persisted offline identity, per-control visualization, and hardware qualification remain. |
+| 2026-08-28 | W057 | codex | mapping faceplate increment | Added an explicit active route chain to the Launch Control XL surface, showing enabled/disabled source-to-destination relationships in the primary appliance view; added deterministic renderer coverage. TUI tests, strict Clippy, and `scripts/release-gate.sh` pass. Full profile control/value faceplate and hardware qualification remain. |
+| 2026-08-28 | W059 | codex | bounded mapping undo increment | Added a 32-entry in-memory undo history for TTY mapping edits, `u` recovery action, and persistent SAVE REQUIRED/SAVED status on the primary mapping surface. App tests, strict Clippy, and `scripts/release-gate.sh` pass. Durable autosave, audit/confirmation semantics, and rollback persistence remain. |
+| 2026-08-28 | W059 | codex | durable route persistence increment | Successful daemon route commits now atomically persist a bounded JSON sidecar beside the configured state file, and configured daemon startup restores the route set with generation validation; rebind regression coverage passes. Full release gate passes. Audit/confirmation semantics and rollback persistence remain. |
+| 2026-08-28 | W055/W056/W057 | codex | live appliance level increment | Added a fixed-width ASCII activity level bar with source endpoint and sequence context to the primary mapping surface; value bounds and endpoint-independent rendering are tested. Full release gate passes and the local service was reinstalled. Per-control identity/highlighting and hardware reaction remain. |
+| 2026-08-28 | W055/W057 | codex | stable control identity increment | Added a stable `endpoint:<id>:<kind>[:<number>]` control ID to daemon activity records and TUI projection, and displayed it beside the live level/value context. Daemon/TUI tests, strict Clippy, and the full release gate pass. Physical hardware reaction remains. |
+| 2026-08-28 | W055 | codex | activity publication rate increment | Added a daemon-side approximately 30 Hz journal publication gate while retaining the latest bounded snapshot value; burst regression coverage proves immediate input does not grow the published event stream. Daemon tests, strict Clippy, and full release gate pass. Fake-time age tests and physical qualification remain. |
+| 2026-08-28 | W055 | codex | activity timestamp increment | Added bounded source timestamp propagation to live activity payloads and TUI projection, enabling client-side highlight-age calculation without wall-clock assumptions; daemon/TUI assertions cover the field. Strict Clippy and full release gate pass. Fake-time age rendering remains. |
+| 2026-08-28 | W061 | codex | local observation qualification | `scripts/qualify-hardware.sh` passed on the local TTY seat; observed Launch Control XL, Eventide MicroPitch Pedal, Arena 2000, and all four MidiSport 4x4 MIDI ports. No physical writes or LED assumptions were made; write qualification remains pending. |
+| 2026-08-28 | W055/W061 | codex | physical input runtime increment | Daemon startup now auto-provisions discovered non-virtual ALSA inputs and polls bounded batches into the normal routing/activity path; post-install `aconnect -l` confirms MACKES input clients connected to MidiSport ports, Launch Control XL ports, and MicroPitch Pedal. Output writes remain unqualified. |
+| 2026-08-28 | W061 | codex | physical output runtime increment | Daemon startup now auto-provisions discovered non-virtual ALSA outputs into the bounded output registry, completing the safe input/output runtime path without sending a physical test message. Release gate passes and the service is active. Output signal/LED qualification remains pending. |
+| 2026-08-28 | W054/W056/W061 | codex | authoritative snapshot inventory increment | Fixed the daemon snapshot/state projection to carry the startup physical-device inventory used by the TUI, eliminating the query-only inventory gap; focused tests, strict Clippy, release gate, and installed-service verification pass. |
+| 2026-08-28 | W061 | codex | stable output provisioning correction | Corrected startup output provisioning to pass stable endpoint IDs to the ID-based adapter API; after reinstall, `aconnect -l` confirms MACKES output clients connected to all four MidiSport ports, both Launch Control XL ports, and MicroPitch Pedal. No test message was sent. |
+| 2026-08-28 | W054/W061 | codex | operator status projection increment | Changed read-only `status --json` to request the authoritative daemon snapshot, exposing health, route generation, physical devices, and latest activity for local testing; refreshed root group credentials with `sg mackes-control` and verified seven connected device-port records. |
+| 2026-08-28 | W054/W056/W061 | codex | ALSA device grouping correction | Normalized explicit ALSA `Device:Port` names so the installed authoritative status now reports one Launch Control XL (2 inputs/2 outputs), one MicroPitch Pedal, and one MidiSport 4x4 (4 inputs/4 outputs); grouping regression, strict Clippy, release gate, and runtime status verification pass. |
+| 2026-08-28 | W055/W054 | codex | live activity inventory identity increment | Added stable endpoint-key lookup in the input registry so activity records resolve to inventory endpoint IDs when sourced from a registered physical input, while synthetic events retain a deterministic fallback; focused tests, strict Clippy, release gate, and local install pass. |
+| 2026-08-28 | W058/W056 | codex | destination lane increment | Added a bounded primary-surface DESTINATIONS lane derived from authoritative physical output inventory, making processor/output targets visible next to the active route chain; TUI tests and full release gate pass. Categorized profile parameter browsing remains. |
+| 2026-08-28 | W058/W060 | codex | destination selection increment | Added keyboard-only `D` cycling across visible physical output destinations with explicit `>` selection marking in the primary mapping surface; focused TUI/app tests, strict Clippy, and full release gate pass. Parameter-category browsing and route mutation against the selected target remain. |
+| 2026-08-28 | W058/W060 | codex | selected-target route creation increment | Primary-screen `a` now creates a route against the selected physical output destination, using shared stable endpoint-to-route conversion and a visible physical input source; focused tests, strict Clippy, and full release gate pass. Profile parameter browsing remains. |
+| 2026-08-28 | W058 | codex | profile parameter browser increment | Selected destinations now expose profile-owned MicroPitch parameter groups and exact control labels in the primary TTY surface; unsupported device profiles remain explicitly unverified. TUI tests, strict Clippy, full release gate, and local installation pass. |
+| 2026-08-28 | W058/W060 | codex | parameter focus increment | Added keyboard-only `P` cycling through the selected MicroPitch destination's profile-owned parameters, with explicit `>` focus marking; TUI/app tests, strict Clippy, and full release gate pass. Parameter-to-route mutation remains. |

@@ -8,6 +8,7 @@ use std::{
     io::{self, Read, Write},
     path::{Path, PathBuf},
     sync::mpsc::{self, Receiver, Sender},
+    time::{Duration, Instant},
 };
 
 /// Daemon health state.
@@ -224,6 +225,7 @@ pub struct Daemon {
     active_scene: Option<String>,
     scene_ids: Vec<String>,
     catalog: serde_json::Value,
+    physical_devices: serde_json::Value,
     config_path: Option<std::path::PathBuf>,
     router: mackes_midi_engine::RouterStore,
     rtp_peer: mackes_midi_engine::RtpMidiPeer,
@@ -236,6 +238,9 @@ pub struct Daemon {
     received_events: u64,
     sent_events: u64,
     dropped_events: u64,
+    activity: mackes_midi_engine::ActivityCoalescer,
+    last_activity: Option<serde_json::Value>,
+    last_activity_publish: Instant,
     activation_result: Option<String>,
     state_sequence: u64,
     state_events: VecDeque<mackes_ipc::StateEvent>,
@@ -271,6 +276,94 @@ pub fn classify_command(request: &[u8]) -> Option<Command> {
         needle.extend_from_slice(tag);
         needle.push(b'"');
         request.windows(needle.len()).any(|window| window == needle).then_some(*command)
+    })
+}
+
+#[cfg(target_os = "linux")]
+fn physical_devices_json(endpoints: &[mackes_midi_engine::EndpointInfo]) -> String {
+    let devices = mackes_midi_engine::group_physical_devices(endpoints)
+        .into_iter()
+        .map(|device| {
+            serde_json::json!({
+                "id": device.id,
+                "name": device.name,
+                "inputs": device.inputs,
+                "outputs": device.outputs,
+                "state": format!("{:?}", device.state).to_lowercase(),
+            })
+        })
+        .collect::<Vec<_>>();
+    serde_json::to_string(&devices).unwrap_or_else(|_| "[]".to_owned())
+}
+
+#[cfg(target_os = "linux")]
+fn physical_devices_value(endpoints: &[mackes_midi_engine::EndpointInfo]) -> serde_json::Value {
+    serde_json::from_str(&physical_devices_json(endpoints))
+        .unwrap_or_else(|_| serde_json::json!([]))
+}
+
+#[cfg(target_os = "linux")]
+fn routes_path(config_path: &std::path::Path) -> std::path::PathBuf {
+    config_path.with_extension("routes.json")
+}
+
+#[cfg(target_os = "linux")]
+fn persist_routes(config_path: &std::path::Path, routes: &serde_json::Value) -> io::Result<()> {
+    let path = routes_path(config_path);
+    let temporary = path.with_extension("routes.json.tmp");
+    let bytes = serde_json::to_vec_pretty(routes).map_err(io::Error::other)?;
+    std::fs::write(&temporary, bytes)?;
+    std::fs::rename(temporary, path)
+}
+
+#[cfg(target_os = "linux")]
+fn midi_activity_json(
+    event: &mackes_domain::MidiEvent,
+    routed: &[mackes_midi_engine::RoutedEvent],
+    stable_endpoint: Option<&str>,
+) -> serde_json::Value {
+    let (kind, number, value) = match &event.message {
+        mackes_domain::MidiMessage::ControlChange { controller, value, .. } => {
+            ("control_change", Some(controller.as_u8()), Some(u16::from(value.as_u8())))
+        }
+        mackes_domain::MidiMessage::NoteOn { note, velocity, .. } => {
+            ("note_on", Some(note.as_u8()), Some(u16::from(velocity.as_u8())))
+        }
+        mackes_domain::MidiMessage::NoteOff { note, velocity, .. } => {
+            ("note_off", Some(note.as_u8()), Some(u16::from(velocity.as_u8())))
+        }
+        mackes_domain::MidiMessage::ProgramChange { program, .. } => {
+            ("program_change", Some(program.as_u8()), None)
+        }
+        mackes_domain::MidiMessage::PitchBend { value, .. } => {
+            ("pitch_bend", None, Some(value.get()))
+        }
+        mackes_domain::MidiMessage::PolyPressure { note, pressure, .. } => {
+            ("poly_pressure", Some(note.as_u8()), Some(u16::from(pressure.as_u8())))
+        }
+        mackes_domain::MidiMessage::ChannelPressure { pressure, .. } => {
+            ("channel_pressure", None, Some(u16::from(pressure.as_u8())))
+        }
+        mackes_domain::MidiMessage::SysEx(_) => ("sysex", None, None),
+        mackes_domain::MidiMessage::SystemCommon(_) => ("system_common", None, None),
+        mackes_domain::MidiMessage::Realtime(_) => ("realtime", None, None),
+    };
+    let endpoint_key =
+        stable_endpoint.map_or_else(|| event.endpoint.get().to_string(), str::to_owned);
+    let control_id = number.map_or_else(
+        || format!("endpoint:{endpoint_key}:{kind}"),
+        |number| format!("endpoint:{endpoint_key}:{kind}:{number}"),
+    );
+    serde_json::json!({
+        "source_endpoint": event.endpoint.get(),
+        "source_endpoint_id": stable_endpoint,
+        "control_id": control_id,
+        "timestamp_nanos": event.timestamp.get(),
+        "kind": kind,
+        "number": number,
+        "value": value,
+        "destination_endpoints": routed.iter().map(|item| item.event.endpoint.get()).collect::<Vec<_>>(),
+        "sequence": event.sequence,
     })
 }
 
@@ -341,8 +434,9 @@ fn command_ack(
                 })
                 .collect::<Vec<_>>();
             format!(
-                "{{\"ok\":true,\"generation\":{generation},\"devices\":{}}}\n",
-                serde_json::to_string(&devices).unwrap_or_else(|_| "[]".into())
+                "{{\"ok\":true,\"generation\":{generation},\"devices\":{},\"physical_devices\":{}}}\n",
+                serde_json::to_string(&devices).unwrap_or_else(|_| "[]".into()),
+                physical_devices_json(endpoints)
             )
         }
         Command::DeviceControl => {
@@ -365,7 +459,8 @@ fn command_ack(
                 })
                 .collect::<Vec<_>>();
             let encoded = serde_json::to_string(&payload).unwrap_or_else(|_| "[]".to_owned());
-            format!("{{\"ok\":true,\"generation\":{generation},\"endpoints\":{encoded}}}\n")
+            let physical_encoded = physical_devices_json(endpoints);
+            format!("{{\"ok\":true,\"generation\":{generation},\"endpoints\":{encoded},\"physical_devices\":{physical_encoded}}}\n")
         }
         Command::Validate => {
             format!("{{\"ok\":true,\"generation\":{generation},\"valid\":true}}\n")
@@ -399,6 +494,7 @@ impl Daemon {
             active_scene: None,
             scene_ids: Vec::new(),
             catalog: serde_json::json!({"projects": [], "setlists": []}),
+            physical_devices: serde_json::json!([]),
             config_path: None,
             router: mackes_midi_engine::RouterStore::new(Vec::new(), 0, 8)
                 .map_err(io::Error::other)?,
@@ -412,6 +508,10 @@ impl Daemon {
             received_events: 0,
             sent_events: 0,
             dropped_events: 0,
+            activity: mackes_midi_engine::ActivityCoalescer::new(128)
+                .ok_or_else(|| io::Error::other("activity capacity must be positive"))?,
+            last_activity: None,
+            last_activity_publish: Instant::now(),
             activation_result: None,
             state_sequence: 0,
             state_events: VecDeque::with_capacity(256),
@@ -659,13 +759,21 @@ impl Daemon {
     /// Dispatches one event through the daemon-owned output registry.
     #[must_use]
     pub fn dispatch_registered(&mut self, event: &mackes_domain::MidiEvent) -> (usize, usize) {
+        let _ = self.activity.push(event);
+        let stable_endpoint = self.inputs.stable_id_for_endpoint(event.endpoint);
+        let routed = self.route_event(event);
         let (sent, unmatched) = self.outputs.dispatch(&self.router, event);
         self.received_events = self.received_events.saturating_add(1);
         self.sent_events = self.sent_events.saturating_add(sent as u64);
         self.dropped_events = self.dropped_events.saturating_add(unmatched as u64);
+        let first_activity = self.last_activity.is_none();
+        self.last_activity = Some(midi_activity_json(event, &routed, stable_endpoint.as_deref()));
         // Publish the post-dispatch counters so subscribed dashboards receive live activity
         // without needing a second command to trigger a journal append.
-        self.record_state_event(Command::Monitor);
+        if first_activity || self.last_activity_publish.elapsed() >= Duration::from_millis(33) {
+            self.last_activity_publish = Instant::now();
+            self.record_state_event(Command::Monitor);
+        }
         (sent, unmatched)
     }
 
@@ -781,6 +889,23 @@ impl Daemon {
     #[must_use]
     pub fn poll_inputs(&mut self) -> Vec<mackes_domain::MidiEvent> {
         self.inputs.poll_once()
+    }
+
+    /// Polls registered MIDI inputs and routes a bounded batch through the normal path.
+    ///
+    /// The bound prevents a busy physical controller from starving IPC and scene work.
+    pub fn poll_and_dispatch_inputs(&mut self, limit: usize) -> (usize, usize, usize) {
+        let events = self.poll_inputs();
+        let mut processed = 0;
+        let mut sent = 0;
+        let mut unmatched = 0;
+        for event in events.into_iter().take(limit.min(128)) {
+            let (event_sent, event_unmatched) = self.dispatch_registered(&event);
+            processed += 1;
+            sent += event_sent;
+            unmatched += event_unmatched;
+        }
+        (processed, sent, unmatched)
     }
 
     /// Polls registered inputs and resolves persisted dashboard bindings.
@@ -1243,8 +1368,10 @@ impl Daemon {
             "received": self.received_events,
             "sent": self.sent_events,
             "dropped": self.dropped_events,
+            "last_activity": self.last_activity,
             "activation_result": self.activation_result.as_deref(),
             "catalog": self.catalog,
+            "physical_devices": self.physical_devices,
             "health": match self.health {
                 Health::Starting => "starting",
                 Health::Ready => "ready",
@@ -1269,9 +1396,11 @@ impl Daemon {
             "received": self.received_events,
             "sent": self.sent_events,
             "dropped": self.dropped_events,
+            "last_activity": self.last_activity,
             "activation_result": self.activation_result.as_deref(),
             "last_sequence": self.state_sequence,
             "catalog": self.catalog,
+            "physical_devices": self.physical_devices,
             "health": match self.health {
                 Health::Starting => "starting",
                 Health::Ready => "ready",
@@ -1433,6 +1562,15 @@ impl Daemon {
                             return stream.write_all(
                                 format!("{{\"ok\":false,\"error\":\"{error}\"}}\n").as_bytes(),
                             );
+                        }
+                        if let Some(path) = self.config_path.as_deref() {
+                            if let Err(error) =
+                                persist_routes(path, &serde_json::json!({"routes": route_values}))
+                            {
+                                return stream.write_all(
+                                    format!("{{\"ok\":false,\"error\":\"route persistence failed: {error}\"}}\n").as_bytes(),
+                                );
+                            }
                         }
                     }
                 }
@@ -1822,9 +1960,24 @@ impl Daemon {
         self.catalog = catalog;
     }
 
+    /// Installs the daemon-owned physical-device inventory for snapshots.
+    pub fn set_physical_devices(&mut self, endpoints: &[mackes_midi_engine::EndpointInfo]) {
+        self.physical_devices = physical_devices_value(endpoints);
+    }
+
     /// Sets the daemon-owned configuration path for authorized persistence.
     pub fn set_config_path(&mut self, path: impl Into<std::path::PathBuf>) {
-        self.config_path = Some(path.into());
+        let path = path.into();
+        if let Ok(bytes) = std::fs::read(routes_path(&path)) {
+            if let Ok(value) = serde_json::from_slice::<serde_json::Value>(&bytes) {
+                if let Some(routes) = value.get("routes") {
+                    if let Ok(encoded) = serde_json::to_vec(routes) {
+                        let _ = self.replace_routes_json(&encoded, 1, 8);
+                    }
+                }
+            }
+        }
+        self.config_path = Some(path);
     }
 
     fn scenes_response(&self) -> String {
@@ -1834,6 +1987,7 @@ impl Daemon {
             "scenes": self.scene_ids,
             "active_scene": self.active_scene,
             "catalog": self.catalog,
+            "physical_devices": self.physical_devices,
         })
         .to_string()
             + "\n"
@@ -2160,6 +2314,16 @@ mod tests {
         )
         .expect("payload");
         assert_eq!(event_payload["received"], 1);
+        assert_eq!(event_payload["last_activity"]["kind"], "control_change");
+        assert_eq!(event_payload["last_activity"]["control_id"], "endpoint:1:control_change:1");
+        assert_eq!(event_payload["last_activity"]["timestamp_nanos"], 1);
+        assert_eq!(event_payload["last_activity"]["number"], 1);
+        assert_eq!(event_payload["last_activity"]["value"], 2);
+        assert_eq!(event_payload["last_activity"]["sequence"], 1);
+        let mut burst_event = event.clone();
+        burst_event.sequence = 2;
+        assert_eq!(daemon.dispatch_registered(&burst_event), (0, 0));
+        assert_eq!(daemon.state_events.len(), 1, "activity journal must be rate-limited");
         let _ = fs::remove_file(path);
     }
 
@@ -2328,7 +2492,7 @@ mod tests {
         );
         assert_eq!(
             command_ack(Command::DeviceQuery, Health::Ready, 8, &[], None, &[]),
-            "{\"ok\":true,\"generation\":8,\"devices\":[]}\n"
+            "{\"ok\":true,\"generation\":8,\"devices\":[],\"physical_devices\":[]}\n"
         );
         assert_eq!(
             command_ack(Command::Monitor, Health::Ready, 9, &[], None, &[]),
@@ -2465,5 +2629,23 @@ mod tests {
         assert_eq!(daemon.route_generation(), Some(4));
         drop(daemon);
         let _ = fs::remove_file(path);
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn configured_route_store_restores_after_daemon_rebind() {
+        let config =
+            std::env::temp_dir().join(format!("mackes-route-restore-{}.json5", std::process::id()));
+        let persisted = routes_path(&config);
+        fs::write(&persisted, br#"{"routes":[{"source":1,"destination":2,"class":"Note"}]}"#)
+            .expect("write route store");
+        let mut daemon = Daemon::bind(
+            std::env::temp_dir().join(format!("mackes-route-sock-{}", std::process::id())),
+        )
+        .expect("daemon");
+        daemon.set_config_path(&config);
+        assert_eq!(daemon.router.routes().len(), 1);
+        assert_eq!(daemon.route_generation(), Some(1));
+        let _ = fs::remove_file(persisted);
     }
 }

@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Always use a fresh group context. This also fixes shells that were opened
+# before the installer added the operator to mackes-control.
+exec sg mackes-control -c 'exec /usr/local/bin/mackes-midi-matrix'

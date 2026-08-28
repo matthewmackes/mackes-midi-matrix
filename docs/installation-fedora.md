@@ -24,14 +24,21 @@ sudo MACKES_CONFIRM_CONFIG_BACKUP=1 scripts/install-fedora.sh
 The installer places `mackes-midi-matrix` in `/usr/local/bin`, `mackes-midi-matrixd` in
 `/usr/local/libexec/mackes-midi-matrix`, configuration in `/etc/mackes-midi-matrix`, state in
 `/var/lib/mackes-midi-matrix`, and the runtime socket directory in `/run/mackes-midi-matrix`. It creates the
-system account `mackes` and group `mackes-control`; it never adds an operator to that
-group implicitly.
+system account `mackes` and group `mackes-control`. When Fedora's `audio` group is
+available, the installer adds the daemon account to it so ALSA MIDI devices can be opened.
+It never adds an operator to `mackes-control` implicitly.
 
-Enable the service explicitly:
+The installer enables and starts the service automatically:
 
 ```text
-sudo systemctl enable --now mackes-midi-matrix.service
 systemctl status mackes-midi-matrix.service
+```
+
+For local testing from a shell that has not yet refreshed its group membership, launch the
+TUI through the installed session wrapper:
+
+```text
+mackes-midi-matrix-local
 ```
 
 The service validates `/etc/mackes-midi-matrix/config.json5` before accepting IPC. For a development
