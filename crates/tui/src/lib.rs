@@ -3370,6 +3370,9 @@ mod tests {
             .iter()
             .all(|label| rendered.iter().filter(|item| *item == label).count() == 1));
         assert_eq!(workspace.diagram_notice(), None);
+        let frame = workspace.frame_lines(Viewport::new(80, 24));
+        assert!(frame.iter().any(|line| line.contains("Eventide MicroPitch")));
+        assert!(frame.iter().any(|line| line.contains("Logical/control view")));
     }
 
     #[test]
