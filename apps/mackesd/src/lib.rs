@@ -221,6 +221,7 @@ pub struct Daemon {
     server: LocalServer,
     health: Health,
     generation: u64,
+    active_scene: Option<String>,
     router: mackes_midi_engine::RouterStore,
     rtp_peer: mackes_midi_engine::RtpMidiPeer,
     outputs: mackes_midi_engine::OutputRegistry,
@@ -361,6 +362,7 @@ impl Daemon {
             server: LocalServer::bind(control_path)?,
             health: Health::Starting,
             generation: 0,
+            active_scene: None,
             router: mackes_midi_engine::RouterStore::new(Vec::new(), 0, 8)
                 .map_err(io::Error::other)?,
             rtp_peer: mackes_midi_engine::RtpMidiPeer::new(0, 32).map_err(io::Error::other)?,
@@ -602,6 +604,12 @@ impl Daemon {
     #[must_use]
     pub const fn activity_counters(&self) -> (u64, u64, u64) {
         (self.received_events, self.sent_events, self.dropped_events)
+    }
+
+    /// Records a validated startup scene for dashboard snapshots and events.
+    pub fn set_active_scene(&mut self, scene: Option<String>) {
+        self.active_scene = scene;
+        self.record_state_event(Command::Scenes);
     }
 
     /// Registers one explicitly opened input adapter with the daemon.
@@ -918,6 +926,7 @@ impl Daemon {
             "command": command.tag(),
             "generation": self.generation,
             "route_generation": self.route_generation(),
+            "active_scene": self.active_scene.as_deref(),
             "received": self.received_events,
             "sent": self.sent_events,
             "dropped": self.dropped_events,
@@ -941,6 +950,7 @@ impl Daemon {
             "ok": true,
             "generation": self.generation,
             "route_generation": self.route_generation(),
+            "active_scene": self.active_scene.as_deref(),
             "received": self.received_events,
             "sent": self.sent_events,
             "dropped": self.dropped_events,
@@ -1374,6 +1384,24 @@ mod tests {
         )
         .expect("payload");
         assert_eq!(event_payload["received"], 1);
+        let _ = fs::remove_file(path);
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn active_scene_is_published_to_snapshot_and_journal() {
+        let path =
+            std::env::temp_dir().join(format!("mackes-scene-state-{}.sock", std::process::id()));
+        let mut daemon = Daemon::bind(&path).expect("daemon");
+        daemon.set_active_scene(Some("intro".to_owned()));
+        let snapshot = serde_json::from_str::<serde_json::Value>(&daemon.snapshot_response())
+            .expect("snapshot");
+        assert_eq!(snapshot["active_scene"], "intro");
+        let event = serde_json::from_slice::<serde_json::Value>(
+            &daemon.state_events.back().expect("event").payload,
+        )
+        .expect("event payload");
+        assert_eq!(event["active_scene"], "intro");
         let _ = fs::remove_file(path);
     }
 

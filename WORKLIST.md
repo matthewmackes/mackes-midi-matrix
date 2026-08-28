@@ -2546,6 +2546,7 @@ Redacted fixture filenames and hashes:
 | 2026-08-28 | W010/W040/W041 | codex | route-generation event authority → implemented | Daemon snapshots and journal events now expose the router's actual `route_generation`; the TUI consumes that field rather than daemon lifecycle generation. Daemon/TUI tests and strict Clippy pass; activity/scene event producers and mapped-MIDI actions remain for final review. |
 | 2026-08-28 | W010/W041 | codex | daemon MIDI activity counters → implemented | The common registered-dispatch boundary now maintains saturating received/sent/dropped counters and publishes them in snapshots and journal payloads; daemon tests, strict Clippy, and the full release gate pass. Physical/backend-specific activity qualification and mapped-MIDI dashboard actions remain for final review. |
 | 2026-08-28 | W010/W040/W041 | codex | live activity event publication → implemented | Each registered dispatch now appends a bounded monitor journal event after updating counters, allowing subscribed dashboards to observe activity without a follow-up command; regression coverage verifies the post-dispatch payload and sequence. Full release gate passes. |
+| 2026-08-28 | W010/W041 | codex | startup active-scene publication → implemented | Validated startup restore now carries its active scene into daemon state; snapshots and journal events expose it for dashboard projection, with dedicated regression coverage and strict targeted checks. |
 
 ## 6. Proposed changes and decisions queue
 

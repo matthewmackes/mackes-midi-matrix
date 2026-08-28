@@ -23,6 +23,7 @@ fn main() {
     let mut lock_path = PathBuf::from("/run/mackes-midi-matrix/mackes-midi-matrixd.lock");
     let mut config = PathBuf::from("/etc/mackes-midi-matrix/config.json5");
     let mut restore_degraded = false;
+    let mut restored_scene = None;
     let mut args = env::args().skip(1);
     while let Some(argument) = args.next() {
         match argument.as_str() {
@@ -76,6 +77,7 @@ fn main() {
     if config.exists() {
         match mackesd::startup_restore(&config) {
             Ok(result) => {
+                restored_scene.clone_from(&result.active_scene);
                 let detail = format!(
                     "project={:?} scene={:?} scenes={} unsafe_actions_blocked={}",
                     result.active_project,
@@ -108,6 +110,7 @@ fn main() {
     if restore_degraded {
         daemon.mark_degraded();
     }
+    daemon.set_active_scene(restored_scene);
     if let Err(error) = daemon.enable_virtual_ports() {
         eprintln!("mackes-midi-matrixd: virtual ALSA ports unavailable: {error}");
     }
