@@ -126,6 +126,7 @@ fn main() {
                 "scenes": project.scenes.iter().map(|scene| scene.id.clone()).collect::<Vec<_>>(),
             })).collect::<Vec<_>>(),
             "setlists": document.setlists,
+            "learn_input_alias": document.settings.learn_input_alias,
         });
         daemon.set_catalog(catalog);
     }

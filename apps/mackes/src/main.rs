@@ -17,7 +17,7 @@ fn run_tui() -> Result<(), String> {
     let mut terminal = Terminal::new(backend).map_err(|error| error.to_string())?;
     let mut dashboard = mackes_tui::DashboardState::initial();
     let mut client_state = mackes_tui::ClientState::default();
-    let learn_workspace = mackes_tui::LearnWorkspace::new();
+    let mut learn_workspace = mackes_tui::LearnWorkspace::new();
     let reflex_workspace =
         mackes_tui::ReflexWorkspace::from_compiled_algorithm(1).map_err(str::to_owned)?;
     let eventide_workspace = mackes_tui::DeviceWorkspace::eventide_micropitch();
@@ -39,6 +39,7 @@ fn run_tui() -> Result<(), String> {
                 &mut monitor,
                 &mut diagnostics,
                 &mut setlist_editor,
+                &mut learn_workspace,
             )
         } else {
             synchronize_events(
@@ -49,6 +50,7 @@ fn run_tui() -> Result<(), String> {
                 &mut monitor,
                 &mut diagnostics,
                 &mut setlist_editor,
+                &mut learn_workspace,
             )
         };
         if let Ok(health) = synchronized {
@@ -806,6 +808,7 @@ fn daemon_request(command: mackes_ipc::Command, payload: &[u8]) -> String {
         .unwrap_or_else(|| "{\"ok\":false,\"error\":\"runtime IPC is not connected\"}".into())
 }
 
+#[allow(clippy::too_many_arguments)]
 fn synchronize_snapshot(
     state: &mut mackes_tui::ClientState,
     dashboard: &mut mackes_tui::DashboardState,
@@ -814,6 +817,7 @@ fn synchronize_snapshot(
     monitor: &mut mackes_tui::MonitorState,
     diagnostics: &mut mackes_tui::DiagnosticsState,
     setlists: &mut mackes_tui::SetlistEditor,
+    learn: &mut mackes_tui::LearnWorkspace,
 ) -> Result<String, String> {
     let response = daemon_request(mackes_ipc::Command::Snapshot, b"{}");
     let value: serde_json::Value =
@@ -839,6 +843,7 @@ fn synchronize_snapshot(
     project_routes(routing, &value);
     project_observability(monitor, diagnostics, &value);
     project_setlists(setlists, &value);
+    project_learn_alias(learn, &value);
     if let Some(generation) = value.get("route_generation").and_then(serde_json::Value::as_u64) {
         *route_generation = generation;
     }
@@ -929,6 +934,19 @@ fn project_setlists(editor: &mut mackes_tui::SetlistEditor, payload: &serde_json
     editor.selected = None;
 }
 
+fn project_learn_alias(learn: &mut mackes_tui::LearnWorkspace, payload: &serde_json::Value) {
+    let Some(alias) = payload
+        .get("catalog")
+        .and_then(|catalog| catalog.get("learn_input_alias"))
+        .and_then(serde_json::Value::as_str)
+    else {
+        return;
+    };
+    if learn.learn_input_alias.is_none() {
+        let _ = learn.set_input_alias(alias);
+    }
+}
+
 fn save_routes(editor: &mackes_tui::RoutingEditor, current_generation: u64) -> String {
     let routes = editor
         .drafts
@@ -1010,6 +1028,7 @@ fn project_routes(editor: &mut mackes_tui::RoutingEditor, payload: &serde_json::
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn synchronize_events(
     state: &mut mackes_tui::ClientState,
     dashboard: &mut mackes_tui::DashboardState,
@@ -1018,6 +1037,7 @@ fn synchronize_events(
     monitor: &mut mackes_tui::MonitorState,
     diagnostics: &mut mackes_tui::DiagnosticsState,
     setlists: &mut mackes_tui::SetlistEditor,
+    learn: &mut mackes_tui::LearnWorkspace,
 ) -> Result<String, String> {
     let payload = serde_json::to_vec(&serde_json::json!({
         "after_sequence": state.last_sequence,
@@ -1052,6 +1072,7 @@ fn synchronize_events(
         project_routes(routing, payload);
         project_observability(monitor, diagnostics, payload);
         project_setlists(setlists, payload);
+        project_learn_alias(learn, payload);
         if let Some(generation) =
             payload.get("route_generation").and_then(serde_json::Value::as_u64)
         {
