@@ -74,8 +74,9 @@ and error exits.
 
 Scenes can also be selected exactly from the CLI with `mackes-midi-matrix scene select <scene-id>`;
 the daemon validates the active catalog and persists the selection.
-Executable SysEx actions can be added atomically with `scene action-add <config> <project> <scene>
-<action-id> <description> <destination> <sysex-hex> [--unsafe]`.
+Executable MIDI actions can be added atomically with `scene action-add <config> <project> <scene>
+<action-id> <description> <destination> <midi-hex> [--unsafe]`; the payload may be a valid CC,
+Program Change, note, or framed SysEx message.
 Scene action records may additionally declare a validated `destination` and complete MIDI `message`
 payload for executable scene operations; legacy metadata-only actions remain supported.
 

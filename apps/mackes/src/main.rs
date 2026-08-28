@@ -561,7 +561,7 @@ fn main() {
             println!("  mackes-midi-matrix device-query <profile-id> <query-id>");
             println!("  mackes-midi-matrix scene next|previous");
             println!("  mackes-midi-matrix scene select <scene-id>");
-            println!("  mackes-midi-matrix scene action-add <config> <project> <scene> <action-id> <description> <destination> <sysex-hex> [--unsafe]");
+            println!("  mackes-midi-matrix scene action-add <config> <project> <scene> <action-id> <description> <destination> <midi-hex> [--unsafe]");
             println!("  mackes-midi-matrix scene plan <config> <project> <scene> [--json]");
         }
         [command, action, path, capability] if command == "default" && action == "get" => {
@@ -1082,7 +1082,7 @@ fn scene_action_add_cli(
             .iter()
             .find(|project| project.id == project_id)
             .ok_or_else(|| format!("project '{project_id}' was not found"))?;
-        let message = mackes_profiles::parse_sysex_hex(hex).map_err(str::to_owned)?;
+        let message = parse_midi_hex(hex)?;
         let updated_project = mackes_config::add_scene_action(
             project,
             scene_id,
@@ -1107,6 +1107,20 @@ fn scene_action_add_cli(
             std::process::exit(2);
         }
     }
+}
+
+fn parse_midi_hex(input: &str) -> Result<Vec<u8>, String> {
+    let bytes = input
+        .split_whitespace()
+        .map(|token| u8::from_str_radix(token.trim_start_matches("0x"), 16))
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|_| "MIDI payload contains invalid hexadecimal".to_owned())?;
+    if bytes.is_empty() || bytes.len() > 8192 {
+        return Err("MIDI payload must contain 1..=8192 bytes".into());
+    }
+    mackes_domain::MidiMessage::from_wire(&bytes)
+        .map_err(|error| format!("MIDI payload is invalid: {error}"))?;
+    Ok(bytes)
 }
 
 fn daemon_status(json: bool) -> String {
@@ -1731,7 +1745,16 @@ const fn restore_result_status(result: &mackes_config::RestoreResult) -> &'stati
 
 #[cfg(test)]
 mod tests {
-    use super::{project_observability, project_routes, project_setlists};
+    use super::{parse_midi_hex, project_observability, project_routes, project_setlists};
+
+    #[test]
+    fn scene_midi_payload_parser_accepts_all_supported_wire_families() {
+        assert_eq!(parse_midi_hex("B0 14 40").expect("CC"), vec![0xB0, 0x14, 0x40]);
+        assert_eq!(parse_midi_hex("C0 05").expect("program"), vec![0xC0, 0x05]);
+        assert!(parse_midi_hex("F0 7D 01 F7").is_ok());
+        assert!(parse_midi_hex("B0 14").is_err());
+        assert!(parse_midi_hex("F0 80 F7").is_err());
+    }
 
     #[test]
     fn route_projection_converts_supported_daemon_routes() {
