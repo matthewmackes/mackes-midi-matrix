@@ -623,6 +623,25 @@ pub struct SceneRef {
     /// Optional category used by setlist/editor filtering.
     #[serde(default)]
     pub category: Option<String>,
+    /// Ordered actions executed when the scene is activated.
+    #[serde(default)]
+    pub actions: Vec<SceneAction>,
+}
+
+/// Persisted action metadata consumed by the activation planner.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct SceneAction {
+    /// Stable action identifier within the scene.
+    pub id: String,
+    /// Operator-facing action description.
+    pub description: String,
+    /// Whether this action requires unsafe mode.
+    #[serde(default)]
+    pub unsafe_action: bool,
+    /// Optional prerequisite action identifier.
+    #[serde(default)]
+    pub depends_on: Option<String>,
 }
 
 /// Replaces one project only after validating the complete resulting document.
@@ -808,6 +827,7 @@ pub fn copy_project(
             id: format!("{new_id}.scene-{}-{}", index + 1, scene.id),
             name: scene.name.clone(),
             category: scene.category.clone(),
+            actions: scene.actions.clone(),
         })
         .collect();
     Ok(Project { id: new_id.to_owned(), scenes })
@@ -859,6 +879,7 @@ pub fn copy_scene(project: &Project, source_id: &str, new_id: &str) -> Result<Pr
         id: new_id.to_owned(),
         name: source.name.clone(),
         category: source.category.clone(),
+        actions: source.actions.clone(),
     });
     Ok(result)
 }
@@ -1048,6 +1069,22 @@ pub fn validate(document: &ConfigDocument) -> Result<(), String> {
         unique(project.scenes.iter().map(|entry| entry.id.as_str()), "scene")?;
         if project.scenes.iter().any(|scene| scene.id.trim().is_empty()) {
             return Err(format!("project {} has empty scene ID", project.id));
+        }
+        for scene in &project.scenes {
+            unique(scene.actions.iter().map(|action| action.id.as_str()), "scene action")?;
+            if scene.actions.iter().any(|action| action.description.trim().is_empty()) {
+                return Err(format!("scene {} has an empty action description", scene.id));
+            }
+            for action in &scene.actions {
+                if let Some(dependency) = &action.depends_on {
+                    if !scene.actions.iter().any(|candidate| candidate.id == *dependency) {
+                        return Err(format!(
+                            "scene action '{}' has unknown dependency '{}'",
+                            action.id, dependency
+                        ));
+                    }
+                }
+            }
         }
     }
     for setlist in &document.setlists {
@@ -1284,7 +1321,12 @@ mod tests {
             endpoints: vec![],
             projects: vec![Project {
                 id: "demo".to_owned(),
-                scenes: vec![SceneRef { id: "intro".to_owned(), name: None, category: None }],
+                scenes: vec![SceneRef {
+                    id: "intro".to_owned(),
+                    name: None,
+                    category: None,
+                    actions: Vec::new(),
+                }],
             }],
             profiles: vec![],
             setlists: vec![],
@@ -1473,6 +1515,12 @@ mod tests {
         let mut project = document().projects[0].clone();
         project.scenes[0].name = Some("Intro ambience".into());
         project.scenes[0].category = Some("opening".into());
+        project.scenes[0].actions = vec![SceneAction {
+            id: "fade-in".into(),
+            description: "Set opening level".into(),
+            unsafe_action: false,
+            depends_on: None,
+        }];
         let reordered = reorder_scenes(&project, &["intro"]).expect("reorder");
         assert_eq!(reordered.scenes, project.scenes);
         let copied = copy_scene(&project, "intro", "intro-copy").expect("copy");
@@ -1486,6 +1534,7 @@ mod tests {
             copied.scenes.last().and_then(|scene| scene.category.as_deref()),
             Some("opening")
         );
+        assert_eq!(copied.scenes.last().map(|scene| scene.actions.len()), Some(1));
         let copied_project = copy_project(std::slice::from_ref(&project), "demo", "demo-copy")
             .expect("project copy");
         assert_eq!(copied_project.id, "demo-copy");
@@ -1521,14 +1570,24 @@ mod tests {
             project.clone(),
             Project {
                 id: "live".into(),
-                scenes: vec![SceneRef { id: "outro".into(), name: None, category: None }],
+                scenes: vec![SceneRef {
+                    id: "outro".into(),
+                    name: None,
+                    category: None,
+                    actions: Vec::new(),
+                }],
             },
         ];
         assert_eq!(search_projects(&projects, "OUT"), vec![&projects[1]]);
         assert_eq!(search_projects(&projects, "DEMO"), vec![&projects[0]]);
         assert!(search_projects(&projects, "missing").is_empty());
         let mut invalid = project.clone();
-        invalid.scenes.push(SceneRef { id: "intro".into(), name: None, category: None });
+        invalid.scenes.push(SceneRef {
+            id: "intro".into(),
+            name: None,
+            category: None,
+            actions: Vec::new(),
+        });
         assert!(replace_project(
             &ConfigDocument { projects: vec![project], ..document() },
             invalid
