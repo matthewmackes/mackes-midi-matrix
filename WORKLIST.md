@@ -2647,6 +2647,7 @@ New requests enter here before implementation.
 | 2026-08-28 | W010 | codex | active-scene persistence boundary → implemented | Production daemon state changes now persist accepted active-scene transitions through validated `set_active_scene` and atomic rotating `save`; daemon tests (23), strict Clippy, and locked workspace checks pass. |
 | 2026-08-28 | W010 | codex | active-scene persistence round-trip coverage → implemented | Promoted the persistence boundary into the daemon library and added an isolated config copy/reload test proving the selected scene survives an atomic save; daemon tests (24) and strict Clippy pass. |
 | 2026-08-28 | W045/W030/W031 | codex | scene navigation JSON compatibility → implemented | Added the standard trailing `--json` form to `scene next|previous`; both human/default and explicit JSON paths use the same daemon response and invalid forms remain rejected. |
+| 2026-08-28 | W040/W041 | codex | persistent dashboard navigation legend → implemented | Added expanded and compact width-bounded shortcut footers for workspace selection, scene navigation, panic, and quit; TUI tests (33) and strict Clippy pass. |
 | 2026-08-28 | W045/W031 | codex | safe scene plan CLI → implemented | Added `scene plan <config> <project> <scene> [--json]`, compiling validated persisted actions into the ordinary activation plan without transmission; valid empty plans and missing-scene exit-2 JSON errors are verified. |
 
 The worklist is complete only when W053 is `DONE`. A feature demonstration, passing unit

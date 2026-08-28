@@ -2278,6 +2278,8 @@ impl DashboardState {
             ),
             format!("activation_result={}", self.activation_result.as_deref().unwrap_or("none")),
             format!("PANIC: {}", if self.panic_available { "available" } else { "unavailable" }),
+            "keys: 1 dashboard 2 learn 3 reflex 4 eventide 5 routing | n/p scene | ! panic | q quit"
+                .into(),
         ];
         lines.extend(
             self.device_health
@@ -2308,6 +2310,7 @@ impl DashboardState {
                 format!("result={}", self.activation_result.as_deref().unwrap_or("none")),
                 format!("devices={}", self.device_health.len()),
                 format!("PANIC {}", if self.panic_available { "ON" } else { "OFF" }),
+                "keys: 1-5 workspaces n/p scenes ! panic q quit".into(),
             ]
         } else {
             self.frame_lines()
@@ -2871,6 +2874,11 @@ mod tests {
             .frame_lines_for(Viewport::new(6, 10))
             .iter()
             .any(|line| line == "PANIC "));
+        assert!(dashboard.frame_lines().iter().any(|line| line.contains("keys:")));
+        assert!(dashboard
+            .frame_lines_for(Viewport::new(20, 10))
+            .iter()
+            .any(|line| line.starts_with("keys: 1-5")));
         assert!(!dashboard.performance_locked);
         assert_eq!(dashboard.activation_progress, (0, 0));
         let mut dashboard = dashboard;
