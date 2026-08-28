@@ -301,13 +301,14 @@ fn main() {
         [command, direction]
             if command == "scene" && matches!(direction.as_str(), "next" | "previous") =>
         {
-            let payload = serde_json::to_vec(&serde_json::json!({"direction": direction}))
-                .expect("scene navigation payload is serializable");
-            let response = daemon_request(mackes_ipc::Command::Scenes, &payload);
-            println!("{response}");
-            if response.contains("\"ok\":false") {
-                std::process::exit(2);
-            }
+            navigate_scene_cli(direction);
+        }
+        [command, direction, flag]
+            if command == "scene"
+                && matches!(direction.as_str(), "next" | "previous")
+                && flag == "--json" =>
+        {
+            navigate_scene_cli(direction);
         }
         [command] if command == "monitor" => {
             print_daemon_command(mackes_ipc::Command::Monitor);
@@ -552,6 +553,16 @@ fn main() {
             eprintln!("  mackes-midi-matrix learn <endpoint-id> [limit]");
             std::process::exit(64);
         }
+    }
+}
+
+fn navigate_scene_cli(direction: &str) {
+    let payload = serde_json::to_vec(&serde_json::json!({"direction": direction}))
+        .expect("scene navigation payload is serializable");
+    let response = daemon_request(mackes_ipc::Command::Scenes, &payload);
+    println!("{response}");
+    if response.contains("\"ok\":false") {
+        std::process::exit(2);
     }
 }
 
