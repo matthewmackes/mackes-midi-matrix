@@ -1566,6 +1566,20 @@ mod tests {
 
     #[cfg(target_os = "linux")]
     #[test]
+    fn nonblocking_control_socket_returns_without_client() {
+        let path =
+            std::env::temp_dir().join(format!("mackes-nonblocking-{}.sock", std::process::id()));
+        let mut daemon = Daemon::bind(&path).expect("daemon");
+        daemon.set_nonblocking(true).expect("nonblocking listener");
+        let error = daemon
+            .serve_once(AccessPolicy { control_gid: 0, daemon_uid: 0 })
+            .expect_err("no client should produce WouldBlock");
+        assert_eq!(error.kind(), std::io::ErrorKind::WouldBlock);
+        let _ = fs::remove_file(path);
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
     fn invalid_restore_can_leave_daemon_degraded_without_stopping() {
         let path =
             std::env::temp_dir().join(format!("mackes-degraded-{}.sock", std::process::id()));
