@@ -775,6 +775,7 @@ dependencies = [
  "mackes-midi-engine",
  "mackes-profiles",
  "ratatui",
+ "serde_json",
 ]
 
 [[package]]

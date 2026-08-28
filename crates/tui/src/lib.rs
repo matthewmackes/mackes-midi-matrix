@@ -1402,6 +1402,40 @@ pub enum DashboardEvent {
     },
 }
 
+impl DashboardEvent {
+    /// Decodes the bounded fields understood by dashboard widgets from one daemon payload.
+    #[must_use]
+    pub fn from_payload(payload: &serde_json::Value) -> Vec<Self> {
+        let mut events = Vec::with_capacity(6);
+        if let Some(value) = payload.get("health").and_then(serde_json::Value::as_str) {
+            events.push(Self::Health(value.to_owned()));
+        }
+        if let Some(value) = payload.get("active_scene").and_then(|value| {
+            if value.is_null() {
+                Some(None)
+            } else {
+                value.as_str().map(|value| Some(value.to_owned()))
+            }
+        }) {
+            events.push(Self::ActiveScene(value));
+        }
+        if let Some(value) = payload.get("route_generation").and_then(serde_json::Value::as_u64) {
+            events.push(Self::RouteGeneration(value));
+        }
+        if let (Some(received), Some(sent), Some(dropped)) = (
+            payload.get("received").and_then(serde_json::Value::as_u64),
+            payload.get("sent").and_then(serde_json::Value::as_u64),
+            payload.get("dropped").and_then(serde_json::Value::as_u64),
+        ) {
+            events.push(Self::Activity { received, sent, dropped });
+        }
+        if let Some(value) = payload.get("activation_result").and_then(serde_json::Value::as_str) {
+            events.push(Self::ActivationResult(value.to_owned()));
+        }
+        events
+    }
+}
+
 /// Bounded controller-page navigation state.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct PageState {
@@ -2497,6 +2531,28 @@ mod tests {
             .notifications
             .iter()
             .any(|notice| notice.message == "peer reconnecting"));
+    }
+
+    #[test]
+    fn dashboard_payload_projection_decodes_authoritative_fields() {
+        let payload = serde_json::json!({
+            "health": "ready",
+            "active_scene": "intro",
+            "route_generation": 7,
+            "received": 10,
+            "sent": 8,
+            "dropped": 2,
+            "activation_result": "total=2 succeeded=2 failed=0"
+        });
+        let mut dashboard = DashboardState::initial();
+        for event in DashboardEvent::from_payload(&payload) {
+            dashboard.apply_event(event);
+        }
+        assert_eq!(dashboard.health, "ready");
+        assert_eq!(dashboard.active_scene.as_deref(), Some("intro"));
+        assert_eq!(dashboard.route_generation, 7);
+        assert_eq!((dashboard.received, dashboard.sent, dashboard.dropped), (10, 8, 2));
+        assert_eq!(dashboard.activation_result.as_deref(), Some("total=2 succeeded=2 failed=0"));
     }
 
     #[test]

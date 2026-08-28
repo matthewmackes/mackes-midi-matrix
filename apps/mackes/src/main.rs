@@ -590,9 +590,10 @@ fn apply_dashboard_payload(
     dashboard: &mut mackes_tui::DashboardState,
     payload: &serde_json::Value,
 ) {
-    if let Some(health) = payload.get("health").and_then(serde_json::Value::as_str) {
-        dashboard.apply_event(mackes_tui::DashboardEvent::Health(health.to_owned()));
+    for event in mackes_tui::DashboardEvent::from_payload(payload) {
+        dashboard.apply_event(event);
     }
+    /*
     if let Some(scene) = payload.get("active_scene").and_then(|value| {
         if value.is_null() {
             Some(None)
@@ -624,6 +625,7 @@ fn apply_dashboard_payload(
     if let Some(result) = payload.get("activation_result").and_then(serde_json::Value::as_str) {
         dashboard.apply_event(mackes_tui::DashboardEvent::ActivationResult(result.to_owned()));
     }
+    */
 }
 
 fn synchronize_events(

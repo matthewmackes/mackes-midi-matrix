@@ -12,6 +12,7 @@ mackes-domain = { path = "../domain" }
 mackes-midi-engine = { path = "../midi-engine" }
 mackes-profiles = { path = "../profiles" }
 ratatui.workspace = true
+serde_json.workspace = true
 
 [lints]
 workspace = true
