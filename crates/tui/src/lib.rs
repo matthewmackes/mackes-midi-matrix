@@ -1045,7 +1045,7 @@ impl RoutingEditor {
     #[must_use]
     pub fn frame_lines(&self, viewport: Viewport) -> Vec<String> {
         let mut lines = vec![
-            "Routing & mappings — uncommitted draft (a add, j/k select, m mode, c channel, +/- priority, e enable, y cycle, d remove, s save)"
+            "Routing & mappings — uncommitted draft (a add, j/k select, m mode, c channel, r curve, f filter, +/- priority, e enable, y cycle, d remove, s save)"
                 .into(),
         ];
         lines.extend(self.drafts.iter().enumerate().map(|(index, draft)| {
@@ -1523,6 +1523,46 @@ impl RoutingEditor {
             draft.priority.saturating_add(u16::try_from(delta).unwrap_or(u16::MAX))
         };
         Ok(())
+    }
+
+    /// Cycles the selected route through the bounded engine curves.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when no valid row is selected.
+    pub fn cycle_selected_curve(&mut self) -> Result<(), String> {
+        let index = self.selected.ok_or("no mapping is selected")?;
+        let Some(draft) = self.drafts.get_mut(index) else {
+            return Err("selected mapping is out of range".into());
+        };
+        draft.curve = match draft.curve {
+            mackes_midi_engine::Curve::Linear => mackes_midi_engine::Curve::Square,
+            mackes_midi_engine::Curve::Square => mackes_midi_engine::Curve::SquareRoot,
+            mackes_midi_engine::Curve::SquareRoot => mackes_midi_engine::Curve::Linear,
+        };
+        Ok(())
+    }
+
+    /// Cycles common bounded filter presets for the selected route.
+    ///
+    /// The cycle is no filter, MIDI-number lower half, value upper half, then no filter.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when no valid row is selected or the edited filter is invalid.
+    pub fn cycle_selected_filter(&mut self) -> Result<(), String> {
+        let index = self.selected.ok_or("no mapping is selected")?;
+        let Some(draft) = self.drafts.get_mut(index) else {
+            return Err("selected mapping is out of range".into());
+        };
+        draft.filters.predicates = match draft.filters.predicates.as_slice() {
+            [] => vec![mackes_midi_engine::RoutePredicate::NumberRange { minimum: 0, maximum: 63 }],
+            [mackes_midi_engine::RoutePredicate::NumberRange { .. }] => {
+                vec![mackes_midi_engine::RoutePredicate::ValueRange { minimum: 64, maximum: 127 }]
+            }
+            _ => Vec::new(),
+        };
+        draft.filters.validate().map_err(str::to_owned)
     }
     /// Reorders rows using a complete permutation after validation.
     ///
@@ -3424,6 +3464,14 @@ mod tests {
         assert_eq!(bank.generation(), 2);
         let mut editor = RoutingEditor::from_bank(&bank);
         assert!(editor.reorder(&[0]).is_ok());
+        editor.selected = Some(0);
+        editor.cycle_selected_curve().expect("curve");
+        assert_eq!(editor.drafts[0].curve, mackes_midi_engine::Curve::Square);
+        editor.cycle_selected_filter().expect("number filter");
+        assert_eq!(editor.drafts[0].filters.predicates.len(), 1);
+        editor.cycle_selected_filter().expect("value filter");
+        editor.cycle_selected_filter().expect("clear filter");
+        assert!(editor.drafts[0].filters.predicates.is_empty());
         assert_eq!(editor.remove(4), Err("mapping index is out of range"));
     }
 

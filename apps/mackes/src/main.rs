@@ -303,6 +303,16 @@ fn run_tui() -> Result<(), String> {
                             "route-channel-edit-rejected".clone_into(&mut dashboard.health);
                         }
                     }
+                    KeyCode::Char('r') if workspace == 5 => {
+                        if routing_editor.cycle_selected_curve().is_err() {
+                            "route-curve-edit-rejected".clone_into(&mut dashboard.health);
+                        }
+                    }
+                    KeyCode::Char('f') if workspace == 5 => {
+                        if routing_editor.cycle_selected_filter().is_err() {
+                            "route-filter-edit-rejected".clone_into(&mut dashboard.health);
+                        }
+                    }
                     KeyCode::Char('e') if workspace == 5 => {
                         if routing_editor.toggle_selected_enabled().is_err() {
                             "route-enable-edit-rejected".clone_into(&mut dashboard.health);
