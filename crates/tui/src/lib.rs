@@ -96,6 +96,49 @@ pub struct DashboardMidiBinding {
     pub command: UiCommand,
 }
 
+/// Converts validated persisted bindings into runtime bindings for the TUI.
+///
+/// # Errors
+///
+/// Returns an error if a persisted command or trigger cannot be represented by
+/// the runtime dashboard contract.
+pub fn dashboard_bindings_from_config(
+    bindings: &[mackes_config::DashboardMidiBinding],
+) -> Result<Vec<DashboardMidiBinding>, &'static str> {
+    let mut runtime = Vec::with_capacity(bindings.len().min(128));
+    for binding in bindings.iter().take(128) {
+        binding.validate()?;
+        let trigger = match &binding.trigger {
+            mackes_config::DashboardMidiTrigger::NoteOn { channel, note } => {
+                DashboardMidiTrigger::NoteOn { channel: *channel, note: *note }
+            }
+            mackes_config::DashboardMidiTrigger::ControlChange { channel, controller, value } => {
+                DashboardMidiTrigger::ControlChange {
+                    channel: *channel,
+                    controller: *controller,
+                    value: *value,
+                }
+            }
+        };
+        let command = match binding.command.as_str() {
+            "panic" => UiCommand::Panic,
+            "next_scene" => UiCommand::NextScene,
+            "previous_scene" => UiCommand::PreviousScene,
+            _ => return Err("dashboard MIDI command is not allowed"),
+        };
+        runtime.push(DashboardMidiBinding { trigger, command });
+    }
+    if bindings.len() > 128 {
+        return Err("dashboard MIDI binding limit exceeded");
+    }
+    if runtime.iter().enumerate().any(|(index, binding)| {
+        runtime[..index].iter().any(|previous| previous.trigger == binding.trigger)
+    }) {
+        return Err("duplicate dashboard MIDI trigger");
+    }
+    Ok(runtime)
+}
+
 /// Resolves one MIDI message through explicit dashboard bindings.
 ///
 /// Invalid MIDI ranges, unmapped messages, and ambiguous matches all fail closed.
@@ -2513,6 +2556,25 @@ mod tests {
             None,
             "ambiguous mappings must not dispatch"
         );
+    }
+
+    #[test]
+    fn persisted_dashboard_bindings_convert_to_runtime_commands() {
+        let bindings = vec![mackes_config::DashboardMidiBinding {
+            trigger: mackes_config::DashboardMidiTrigger::ControlChange {
+                channel: 1,
+                controller: 20,
+                value: None,
+            },
+            command: "next_scene".into(),
+        }];
+        let runtime = dashboard_bindings_from_config(&bindings).expect("runtime bindings");
+        assert_eq!(runtime[0].command, UiCommand::NextScene);
+        assert!(dashboard_bindings_from_config(&[mackes_config::DashboardMidiBinding {
+            trigger: mackes_config::DashboardMidiTrigger::NoteOn { channel: 0, note: 1 },
+            command: "panic".into(),
+        }])
+        .is_err());
     }
 
     #[test]
