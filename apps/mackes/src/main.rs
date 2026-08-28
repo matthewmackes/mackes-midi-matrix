@@ -1,5 +1,6 @@
 //! MACKES operator entry point.
 
+#[allow(clippy::too_many_lines)]
 fn run_tui() -> Result<(), String> {
     use crossterm::{
         event::{self, Event, KeyCode},
@@ -27,11 +28,22 @@ fn run_tui() -> Result<(), String> {
     let setlist_editor = mackes_tui::SetlistEditor::from_snapshot(&[]);
     let mut workspace = 1_u8;
     let mut needs_snapshot = true;
+    let mut route_generation = 0_u64;
     let result = (|| loop {
         let synchronized = if needs_snapshot {
-            synchronize_snapshot(&mut client_state, &mut dashboard, &mut routing_editor)
+            synchronize_snapshot(
+                &mut client_state,
+                &mut dashboard,
+                &mut routing_editor,
+                &mut route_generation,
+            )
         } else {
-            synchronize_events(&mut client_state, &mut dashboard, &mut routing_editor)
+            synchronize_events(
+                &mut client_state,
+                &mut dashboard,
+                &mut routing_editor,
+                &mut route_generation,
+            )
         };
         if let Ok(health) = synchronized {
             dashboard.health = health;
@@ -83,6 +95,20 @@ fn run_tui() -> Result<(), String> {
                         } else {
                             "panic-failed".to_owned()
                         };
+                    }
+                    KeyCode::Char('s') if workspace == 5 => {
+                        let response = save_routes(&routing_editor, route_generation);
+                        dashboard.health = if response.contains("\"ok\":true") {
+                            route_generation = route_generation.saturating_add(1);
+                            "routes-saved".to_owned()
+                        } else {
+                            "routes-save-failed".to_owned()
+                        };
+                    }
+                    KeyCode::Char('d') if workspace == 5 => {
+                        if let Some(index) = routing_editor.selected {
+                            let _ = routing_editor.remove(index);
+                        }
                     }
                     _ => {}
                 }
@@ -704,6 +730,7 @@ fn synchronize_snapshot(
     state: &mut mackes_tui::ClientState,
     dashboard: &mut mackes_tui::DashboardState,
     routing: &mut mackes_tui::RoutingEditor,
+    route_generation: &mut u64,
 ) -> Result<String, String> {
     let response = daemon_request(mackes_ipc::Command::Snapshot, b"{}");
     let value: serde_json::Value =
@@ -727,6 +754,9 @@ fn synchronize_snapshot(
     // The dashboard is intentionally not reconstructed from local files or MIDI state.
     apply_dashboard_payload(dashboard, &value);
     project_routes(routing, &value);
+    if let Some(generation) = value.get("route_generation").and_then(serde_json::Value::as_u64) {
+        *route_generation = generation;
+    }
     Ok(health)
 }
 
@@ -770,6 +800,39 @@ fn apply_dashboard_payload(
         dashboard.apply_event(mackes_tui::DashboardEvent::ActivationResult(result.to_owned()));
     }
     */
+}
+
+fn save_routes(editor: &mackes_tui::RoutingEditor, current_generation: u64) -> String {
+    let routes = editor
+        .drafts
+        .iter()
+        .filter_map(|draft| {
+            let source = draft.source.trim().parse::<u64>().ok()?;
+            let destination = draft.destination.trim().parse::<u64>().ok()?;
+            let class = match draft.mode {
+                mackes_tui::MappingMode::Cc => "ControlChange",
+                mackes_tui::MappingMode::ProgramChange => "ProgramChange",
+                mackes_tui::MappingMode::Note => "Note",
+                mackes_tui::MappingMode::PitchBend => "PitchBend",
+                mackes_tui::MappingMode::Sysex => "SysEx",
+            };
+            Some(serde_json::json!({
+                "source": source,
+                "destination": destination,
+                "channel": draft.channel,
+                "class": class,
+            }))
+        })
+        .collect::<Vec<_>>();
+    if routes.len() != editor.drafts.len() {
+        return "{\"ok\":false,\"error\":\"routing draft contains invalid endpoint IDs\"}".into();
+    }
+    let payload = serde_json::to_vec(&serde_json::json!({
+        "routes": routes,
+        "route_generation": current_generation.saturating_add(1),
+    }))
+    .expect("route save payload is serializable");
+    daemon_request(mackes_ipc::Command::Routes, &payload)
 }
 
 fn project_routes(editor: &mut mackes_tui::RoutingEditor, payload: &serde_json::Value) {
@@ -818,6 +881,7 @@ fn synchronize_events(
     state: &mut mackes_tui::ClientState,
     dashboard: &mut mackes_tui::DashboardState,
     routing: &mut mackes_tui::RoutingEditor,
+    route_generation: &mut u64,
 ) -> Result<String, String> {
     let payload = serde_json::to_vec(&serde_json::json!({
         "after_sequence": state.last_sequence,
@@ -850,6 +914,11 @@ fn synchronize_events(
         let payload = event.get("payload").ok_or("event payload is missing")?;
         apply_dashboard_payload(dashboard, payload);
         project_routes(routing, payload);
+        if let Some(generation) =
+            payload.get("route_generation").and_then(serde_json::Value::as_u64)
+        {
+            *route_generation = generation;
+        }
         if let Some(event_health) = payload.get("health").and_then(serde_json::Value::as_str) {
             event_health.clone_into(&mut health);
         }
