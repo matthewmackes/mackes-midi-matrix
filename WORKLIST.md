@@ -2634,6 +2634,7 @@ New requests enter here before implementation.
 | 2026-08-28 | W005/W016 | codex | MIDI Learn IPC contract regression coverage → implemented | Added Learn classification and stable acknowledgment assertions to the daemon IPC contract tests; focused daemon tests and the full release gate pass. |
 | 2026-08-28 | W045/W016 | codex | MIDI Learn invalid-usage discoverability → implemented | Added the Learn invocation to the CLI invalid-argument usage path and verified both help surfaces plus exit-64 behavior. Full release gate passes. |
 | 2026-08-28 | W052/W053 | codex | rebuilt test-release artifact qualification → verified | Rebuilt `0.1.0-test.1` from the current main tree; SHA-256 verification, extracted CLI `--version`, extracted daemon `--help`, and bundled release-note/README checks pass. |
+| 2026-08-28 | W030/W031/W045 | codex | CLI scene navigation → implemented | Added explicit `scene next` and `scene previous` commands, forwarding direction through the existing daemon-owned scene IPC boundary; locked build, help-surface, formatting, and diff checks pass. |
 
 The worklist is complete only when W053 is `DONE`. A feature demonstration, passing unit
 tests, or code presence alone is not release completion.

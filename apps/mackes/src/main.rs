@@ -184,6 +184,7 @@ fn main() {
                 "mackes-midi-matrix: TUI/CLI\n\nUsage:\n  mackes-midi-matrix tui\n  mackes-midi-matrix validate <path> [--json]\n  mackes-midi-matrix export <config> <directory>\n  mackes-midi-matrix doctor [--json]\n  mackes-midi-matrix status [--json]\n  mackes-midi-matrix panic\n  mackes-midi-matrix endpoints [--json]\n  mackes-midi-matrix default get <config> <capability> [--json]\n  mackes-midi-matrix default set <config> <capability> <profile-id>\n  mackes-midi-matrix mvave preset <1-32> [--dry-run]\n  mackes-midi-matrix mvave ir|eq on|off --confirm-unverified\n  mackes-midi-matrix scenes|devices|routes|monitor [--json]\n  mackes-midi-matrix scene list <config> [--json]\n  mackes-midi-matrix backup list|inspect ...\n  mackes-midi-matrix profile validate [--json]\n  mackes-midi-matrix --version"
             );
             println!("  mackes-midi-matrix learn <endpoint-id> [limit]");
+            println!("  mackes-midi-matrix scene next|previous");
         }
         [command, action, path, capability] if command == "default" && action == "get" => {
             if let Err(error) = print_default_provider(path, capability, false) {
@@ -273,6 +274,17 @@ fn main() {
                 mackes_ipc::Command::DeviceQuery
             };
             print_daemon_command(ipc_command);
+        }
+        [command, direction]
+            if command == "scene" && matches!(direction.as_str(), "next" | "previous") =>
+        {
+            let payload = serde_json::to_vec(&serde_json::json!({"direction": direction}))
+                .expect("scene navigation payload is serializable");
+            let response = daemon_request(mackes_ipc::Command::Scenes, &payload);
+            println!("{response}");
+            if response.contains("\"ok\":false") {
+                std::process::exit(2);
+            }
         }
         [command] if command == "monitor" => {
             print_daemon_command(mackes_ipc::Command::Monitor);
