@@ -635,6 +635,56 @@ impl MappingFilterDraft {
     }
 }
 
+/// Converts persisted learned filters into validated engine predicates.
+///
+/// # Errors
+///
+/// Returns the first predicate validation error.
+pub fn predicates_from_learned_filters(
+    filters: &[mackes_config::LearnedFilter],
+) -> Result<Vec<mackes_midi_engine::RoutePredicate>, &'static str> {
+    let predicates = filters
+        .iter()
+        .map(|filter| match filter {
+            mackes_config::LearnedFilter::NumberRange { minimum, maximum } => {
+                mackes_midi_engine::RoutePredicate::NumberRange {
+                    minimum: *minimum,
+                    maximum: *maximum,
+                }
+            }
+            mackes_config::LearnedFilter::ValueRange { minimum, maximum } => {
+                mackes_midi_engine::RoutePredicate::ValueRange {
+                    minimum: *minimum,
+                    maximum: *maximum,
+                }
+            }
+            mackes_config::LearnedFilter::Realtime { message } => {
+                let message = match message {
+                    mackes_config::LearnedRealtime::Clock => mackes_domain::RealtimeMessage::Clock,
+                    mackes_config::LearnedRealtime::Start => mackes_domain::RealtimeMessage::Start,
+                    mackes_config::LearnedRealtime::Continue => {
+                        mackes_domain::RealtimeMessage::Continue
+                    }
+                    mackes_config::LearnedRealtime::Stop => mackes_domain::RealtimeMessage::Stop,
+                    mackes_config::LearnedRealtime::ActiveSensing => {
+                        mackes_domain::RealtimeMessage::ActiveSensing
+                    }
+                    mackes_config::LearnedRealtime::Reset => mackes_domain::RealtimeMessage::Reset,
+                };
+                mackes_midi_engine::RoutePredicate::Realtime(message)
+            }
+            mackes_config::LearnedFilter::SysExMask { pattern, mask } => {
+                mackes_midi_engine::RoutePredicate::SysExMask {
+                    pattern: pattern.clone(),
+                    mask: mask.clone(),
+                }
+            }
+        })
+        .collect::<Vec<_>>();
+    MappingFilterDraft { predicates: predicates.clone() }.validate()?;
+    Ok(predicates)
+}
+
 /// Supported operator-facing mapping classes.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum MappingMode {
@@ -1437,6 +1487,7 @@ impl LearnWorkspace {
             mode: mapping_mode_name(mode).to_owned(),
             enabled: true,
             priority: 0,
+            filters: Vec::new(),
         })
     }
     /// Applies the committed mapping and global input to a configuration copy.

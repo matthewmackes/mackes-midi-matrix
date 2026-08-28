@@ -342,6 +342,54 @@ pub enum LearnedChannelPolicy {
     NotApplicable,
 }
 
+/// Serializable filter captured alongside a learned mapping.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+#[allow(missing_docs)]
+pub enum LearnedFilter {
+    NumberRange { minimum: u8, maximum: u8 },
+    ValueRange { minimum: u16, maximum: u16 },
+    Realtime { message: LearnedRealtime },
+    SysExMask { pattern: Vec<u8>, mask: Vec<u8> },
+}
+
+/// MIDI real-time values supported by persisted learned filters.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+#[allow(missing_docs)]
+pub enum LearnedRealtime {
+    Clock,
+    Start,
+    Continue,
+    Stop,
+    ActiveSensing,
+    Reset,
+}
+
+impl LearnedFilter {
+    fn validate(&self) -> Result<(), String> {
+        match self {
+            Self::NumberRange { minimum, maximum } if minimum > maximum => {
+                Err("learned filter number range must be ordered".into())
+            }
+            Self::ValueRange { minimum, maximum } if minimum > maximum || *maximum > 16_383 => {
+                Err("learned filter value range must be 0..=16383 and ordered".into())
+            }
+            Self::SysExMask { pattern, mask }
+                if pattern.is_empty() || pattern.len() != mask.len() =>
+            {
+                Err("learned SysEx filter requires equal non-empty pattern and mask".into())
+            }
+            Self::SysExMask { pattern, mask }
+                if pattern.len() > 1_024 || pattern.iter().chain(mask).any(|byte| *byte > 127) =>
+            {
+                Err("learned SysEx filter bytes must be seven-bit and bounded".into())
+            }
+            _ => Ok(()),
+        }
+    }
+}
+
 /// Durable evidence and destination for one learned MIDI mapping.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -364,6 +412,9 @@ pub struct LearnedMapping {
     pub enabled: bool,
     /// Lower values execute first.
     pub priority: u16,
+    #[serde(default)]
+    #[allow(missing_docs)]
+    pub filters: Vec<LearnedFilter>,
 }
 
 /// One persistent default device assignment for an effect capability.
@@ -1065,6 +1116,12 @@ fn validate_learned_mapping(
         }
         _ => {}
     }
+    if mapping.filters.len() > 32 {
+        return Err("learned mapping filter count exceeds 32".into());
+    }
+    for filter in &mapping.filters {
+        filter.validate()?;
+    }
     Ok(())
 }
 
@@ -1307,6 +1364,7 @@ mod tests {
             mode: "cc".into(),
             enabled: true,
             priority: 0,
+            filters: Vec::new(),
         };
         let mapped = add_learned_mapping(&selected, mapping.clone()).expect("mapping");
         assert_eq!(mapped.learned_mappings, vec![mapping.clone()]);
