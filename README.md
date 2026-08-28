@@ -6,7 +6,7 @@ The daemon owns MIDI I/O and continues running when the TUI exits, while the ope
 
 ## Project status
 
-This repository is in foundation implementation and integration work toward v1.0. The current release line is `0.1.6`. Hardware and network interoperability features are deliberately opt-in until they have the required documentation, fixtures, and validation evidence.
+This repository is in foundation implementation and integration work toward v1.0. The current release line is `0.1.7`. Hardware and network interoperability features are deliberately opt-in until they have the required documentation, fixtures, and validation evidence.
 
 ## What it provides
 
@@ -129,17 +129,17 @@ Hardware and RTP/network interoperability tests are ignored by default, require 
 
 ## Test-release qualification
 
-The current release is `0.1.6`. Recreate its Fedora/Linux x86_64 bundle with:
+The current release is `0.1.7`. Recreate its Fedora/Linux x86_64 bundle with:
 
-The published pre-release is available at
-[`v0.1.6`](https://github.com/matthewmackes/mackes-midi-matrix/releases/tag/v0.1.6),
-with assets named `mackes-midi-matrix-0.1.6-linux-x86_64.tar.gz` and its `.sha256`
+The published release is available at
+[`v0.1.7`](https://github.com/matthewmackes/mackes-midi-matrix/releases/tag/v0.1.7),
+with assets named `mackes-midi-matrix-0.1.7-linux-x86_64.tar.gz` and its `.sha256`
 manifest.
 
 ```bash
 cargo build --workspace --release --locked
-bash scripts/package-release.sh 0.1.6
-(cd dist && sha256sum -c mackes-midi-matrix-0.1.6-linux-x86_64.tar.gz.sha256)
+bash scripts/package-release.sh 0.1.7
+(cd dist && sha256sum -c mackes-midi-matrix-0.1.7-linux-x86_64.tar.gz.sha256)
 ```
 
 The bundle contains both binaries, the Fedora installer and service unit, the locked dependency
