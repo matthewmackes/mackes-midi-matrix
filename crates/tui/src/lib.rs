@@ -606,6 +606,8 @@ pub struct MappingDraft {
     pub priority: u16,
     /// Engine-owned value curve applied to continuous inputs.
     pub curve: mackes_midi_engine::Curve,
+    /// Additional engine predicates applied by this mapping.
+    pub filters: MappingFilterDraft,
 }
 
 /// Transactional fine-grained filter draft for a mapping editor.
@@ -710,6 +712,7 @@ impl Default for MappingDraft {
             mode: MappingMode::Cc,
             priority: 0,
             curve: mackes_midi_engine::Curve::Linear,
+            filters: MappingFilterDraft::default(),
         }
     }
 }
@@ -1110,6 +1113,7 @@ impl MappingDraft {
         if self.channel.is_some_and(|channel| !(1..=16).contains(&channel)) {
             return Err("mapping channel must be between 1 and 16");
         }
+        self.filters.validate()?;
         Ok(())
     }
 
@@ -1459,6 +1463,7 @@ impl LearnWorkspace {
             mode,
             priority: 0,
             curve: mackes_midi_engine::Curve::Linear,
+            filters: MappingFilterDraft::default(),
         })
     }
     /// Returns the durable mapping, including the captured source signature
@@ -3034,11 +3039,22 @@ mod tests {
             mode: MappingMode::Cc,
             priority: 0,
             curve: mackes_midi_engine::Curve::Linear,
+            filters: MappingFilterDraft::default(),
         };
         assert!(draft.validate().is_ok());
         assert_eq!(draft.curve, mackes_midi_engine::Curve::Linear);
         let curved = MappingDraft { curve: mackes_midi_engine::Curve::Square, ..draft.clone() };
         assert!(curved.validate().is_ok());
+        let filtered = MappingDraft {
+            filters: MappingFilterDraft {
+                predicates: vec![mackes_midi_engine::RoutePredicate::NumberRange {
+                    minimum: 10,
+                    maximum: 20,
+                }],
+            },
+            ..draft.clone()
+        };
+        assert!(filtered.validate().is_ok());
         let invalid = MappingDraft { channel: Some(17), ..draft.clone() };
         assert!(invalid.validate().is_err());
         let duplicate = MappingDraft { priority: 1, ..draft.clone() };
