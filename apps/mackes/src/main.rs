@@ -1189,7 +1189,7 @@ const fn restore_result_status(result: &mackes_config::RestoreResult) -> &'stati
 
 #[cfg(test)]
 mod tests {
-    use super::{project_observability, project_routes};
+    use super::{project_observability, project_routes, project_setlists};
 
     #[test]
     fn route_projection_converts_supported_daemon_routes() {
@@ -1242,5 +1242,24 @@ mod tests {
         assert_eq!(monitor.entries.len(), 1);
         assert_eq!(diagnostics.entries.len(), 1);
         assert!(diagnostics.entries[0].line().contains("inspect"));
+    }
+
+    #[test]
+    fn setlist_projection_accepts_valid_catalog_and_preserves_on_malformed_data() {
+        let mut editor = mackes_tui::SetlistEditor::from_snapshot(&[]);
+        project_setlists(
+            &mut editor,
+            &serde_json::json!({
+                "catalog": {"setlists": [{"id": "live", "projects": ["demo"]}]}
+            }),
+        );
+        assert_eq!(editor.drafts.len(), 1);
+        assert_eq!(editor.drafts[0].id, "live");
+        project_setlists(
+            &mut editor,
+            &serde_json::json!({"catalog": {"setlists": [{"id": 4, "projects": []}]}}),
+        );
+        assert_eq!(editor.drafts.len(), 1);
+        assert_eq!(editor.drafts[0].id, "live");
     }
 }
