@@ -223,6 +223,7 @@ pub struct Daemon {
     generation: u64,
     active_scene: Option<String>,
     scene_ids: Vec<String>,
+    catalog: serde_json::Value,
     router: mackes_midi_engine::RouterStore,
     rtp_peer: mackes_midi_engine::RtpMidiPeer,
     outputs: mackes_midi_engine::OutputRegistry,
@@ -370,6 +371,7 @@ impl Daemon {
             generation: 0,
             active_scene: None,
             scene_ids: Vec::new(),
+            catalog: serde_json::json!({"projects": [], "setlists": []}),
             router: mackes_midi_engine::RouterStore::new(Vec::new(), 0, 8)
                 .map_err(io::Error::other)?,
             rtp_peer: mackes_midi_engine::RtpMidiPeer::new(0, 32).map_err(io::Error::other)?,
@@ -1354,12 +1356,18 @@ impl Daemon {
         self.scene_ids = scene_ids;
     }
 
+    /// Installs the validated project/setlist catalog for read-only UI queries.
+    pub fn set_catalog(&mut self, catalog: serde_json::Value) {
+        self.catalog = catalog;
+    }
+
     fn scenes_response(&self) -> String {
         serde_json::json!({
             "ok": true,
             "generation": self.generation,
             "scenes": self.scene_ids,
             "active_scene": self.active_scene,
+            "catalog": self.catalog,
         })
         .to_string()
             + "\n"

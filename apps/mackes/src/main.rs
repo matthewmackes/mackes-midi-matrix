@@ -25,7 +25,7 @@ fn run_tui() -> Result<(), String> {
     let mut diagnostics = mackes_tui::DiagnosticsState::default();
     let mut monitor = mackes_tui::MonitorState::new(128).expect("valid monitor capacity");
     let backup_workspace = mackes_tui::BackupWorkspace::default();
-    let setlist_editor = mackes_tui::SetlistEditor::from_snapshot(&[]);
+    let mut setlist_editor = mackes_tui::SetlistEditor::from_snapshot(&[]);
     let mut workspace = 1_u8;
     let mut needs_snapshot = true;
     let mut route_generation = 0_u64;
@@ -38,6 +38,7 @@ fn run_tui() -> Result<(), String> {
                 &mut route_generation,
                 &mut monitor,
                 &mut diagnostics,
+                &mut setlist_editor,
             )
         } else {
             synchronize_events(
@@ -47,6 +48,7 @@ fn run_tui() -> Result<(), String> {
                 &mut route_generation,
                 &mut monitor,
                 &mut diagnostics,
+                &mut setlist_editor,
             )
         };
         if let Ok(health) = synchronized {
@@ -749,6 +751,7 @@ fn synchronize_snapshot(
     route_generation: &mut u64,
     monitor: &mut mackes_tui::MonitorState,
     diagnostics: &mut mackes_tui::DiagnosticsState,
+    setlists: &mut mackes_tui::SetlistEditor,
 ) -> Result<String, String> {
     let response = daemon_request(mackes_ipc::Command::Snapshot, b"{}");
     let value: serde_json::Value =
@@ -773,6 +776,7 @@ fn synchronize_snapshot(
     apply_dashboard_payload(dashboard, &value);
     project_routes(routing, &value);
     project_observability(monitor, diagnostics, &value);
+    project_setlists(setlists, &value);
     if let Some(generation) = value.get("route_generation").and_then(serde_json::Value::as_u64) {
         *route_generation = generation;
     }
@@ -844,6 +848,23 @@ fn project_observability(
             remediation: "inspect the latest daemon status and event details".into(),
         });
     }
+}
+
+fn project_setlists(editor: &mut mackes_tui::SetlistEditor, payload: &serde_json::Value) {
+    let Some(values) = payload
+        .get("catalog")
+        .and_then(|v| v.get("setlists"))
+        .and_then(serde_json::Value::as_array)
+    else {
+        return;
+    };
+    let Ok(setlists) = serde_json::from_value::<Vec<mackes_config::Setlist>>(
+        serde_json::Value::Array(values.clone()),
+    ) else {
+        return;
+    };
+    editor.drafts = setlists;
+    editor.selected = None;
 }
 
 fn save_routes(editor: &mackes_tui::RoutingEditor, current_generation: u64) -> String {
@@ -928,6 +949,7 @@ fn synchronize_events(
     route_generation: &mut u64,
     monitor: &mut mackes_tui::MonitorState,
     diagnostics: &mut mackes_tui::DiagnosticsState,
+    setlists: &mut mackes_tui::SetlistEditor,
 ) -> Result<String, String> {
     let payload = serde_json::to_vec(&serde_json::json!({
         "after_sequence": state.last_sequence,
@@ -961,6 +983,7 @@ fn synchronize_events(
         apply_dashboard_payload(dashboard, payload);
         project_routes(routing, payload);
         project_observability(monitor, diagnostics, payload);
+        project_setlists(setlists, payload);
         if let Some(generation) =
             payload.get("route_generation").and_then(serde_json::Value::as_u64)
         {

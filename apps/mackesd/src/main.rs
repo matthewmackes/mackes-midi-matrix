@@ -118,6 +118,16 @@ fn main() {
     if restore_degraded {
         daemon.mark_degraded();
     }
+    if let Ok(document) = mackes_config::load(&config) {
+        let catalog = serde_json::json!({
+            "projects": document.projects.iter().map(|project| serde_json::json!({
+                "id": project.id,
+                "scenes": project.scenes.iter().map(|scene| scene.id.clone()).collect::<Vec<_>>(),
+            })).collect::<Vec<_>>(),
+            "setlists": document.setlists,
+        });
+        daemon.set_catalog(catalog);
+    }
     daemon.set_active_scene(restored_scene);
     let mut persisted_scene = daemon.active_scene().map(str::to_owned);
     if let Ok(document) = mackes_config::load(&config) {
