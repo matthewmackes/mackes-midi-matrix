@@ -1786,8 +1786,8 @@ pub fn eventide_micropitch_profile() -> DeviceProfile {
 
 /// Conservative built-in profile for the M-VAVE IR Box MIDI endpoint.
 ///
-/// The endpoint identity is known from host enumeration; no vendor-specific
-/// commands are enabled until an authoritative MIDI map is available.
+/// The endpoint identity is known from host enumeration; only experimentally captured
+/// preset/module operations are enabled, and they remain explicitly sent-unverified.
 #[must_use]
 pub fn mvave_ir_box_profile() -> DeviceProfile {
     DeviceProfile {
@@ -1802,22 +1802,34 @@ pub fn mvave_ir_box_profile() -> DeviceProfile {
             transport: ControlTransport::Midi,
             unsafe_on_connect: false,
         }],
-        controls: vec![
-            ControlDefinition {
-                label: "IR".into(),
-                cc: None,
-                program: None,
-                range: (0, 1),
-                operation: Some("mvave_ir".into()),
-            },
-            ControlDefinition {
-                label: "EQ".into(),
-                cc: None,
-                program: None,
-                range: (0, 1),
-                operation: Some("mvave_eq".into()),
-            },
-        ],
+        controls: {
+            let mut controls = (1_u8..=32)
+                .map(|preset| ControlDefinition {
+                    label: format!("Preset {preset}"),
+                    cc: None,
+                    program: None,
+                    range: (0, 0),
+                    operation: Some(format!("mvave_preset:{preset}")),
+                })
+                .collect::<Vec<_>>();
+            controls.extend([
+                ControlDefinition {
+                    label: "IR".into(),
+                    cc: None,
+                    program: None,
+                    range: (0, 1),
+                    operation: Some("mvave_ir".into()),
+                },
+                ControlDefinition {
+                    label: "EQ".into(),
+                    cc: None,
+                    program: None,
+                    range: (0, 1),
+                    operation: Some("mvave_eq".into()),
+                },
+            ]);
+            controls
+        },
         queries: Vec::new(),
         replies: Vec::new(),
         templates: Vec::new(),
@@ -3268,6 +3280,11 @@ impl DeviceProfile {
             return match operation {
                 "mvave_ir" => Ok(mvave_ir_box_module_sysex(MvaveIrBoxModule::Ir, value != 0)),
                 "mvave_eq" => Ok(mvave_ir_box_module_sysex(MvaveIrBoxModule::Eq, value != 0)),
+                operation if operation.starts_with("mvave_preset:") => operation
+                    .strip_prefix("mvave_preset:")
+                    .and_then(|preset| preset.parse::<u8>().ok())
+                    .ok_or("control operation is unsupported")
+                    .and_then(mvave_ir_box_preset_sysex),
                 _ => Err("control operation is unsupported"),
             };
         }
@@ -4391,6 +4408,10 @@ mod tests {
         assert_eq!(
             profile.render_control_message("EQ", 1, 0).expect("EQ control"),
             mvave_ir_box_module_sysex(MvaveIrBoxModule::Eq, false)
+        );
+        assert_eq!(
+            profile.render_control_message("Preset 5", 1, 0).expect("preset control"),
+            mvave_ir_box_preset_sysex(5).expect("preset frame")
         );
         assert_eq!(
             mvave_ir_box_module_sysex(MvaveIrBoxModule::Ir, true),
