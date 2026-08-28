@@ -2687,3 +2687,4 @@ The worklist is complete only when W053 is `DONE`. A feature demonstration, pass
 tests, or code presence alone is not release completion.
 
 | 2026-08-28 | W016/W040/W046 | Learn destination and live-test controls | implemented | Added explicit `r` destination selection, `t` live-test start, phase-aware Enter completion, and commit handling; destination compatibility and mandatory passed-test checks remain enforced by the shared Learn state machine. |
+| 2026-08-28 | W016/W040/W046 | durable learned-mapping persistence | implemented | Committed Learn mappings now travel through daemon-owned Configuration IPC, append to existing validated mappings, survive atomic config save, and appear in the catalog snapshot. |

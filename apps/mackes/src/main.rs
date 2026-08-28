@@ -204,6 +204,14 @@ fn run_tui() -> Result<(), String> {
                             && learn_workspace.phase == mackes_tui::LearnPhase::Destination =>
                     {
                         learn_workspace.commit();
+                        if let Some(mapping) = learn_workspace.committed_learned_mapping() {
+                            let response = save_learned_mapping(&mapping);
+                            dashboard.health = if response.contains("\"ok\":true") {
+                                "learn-saved".to_owned()
+                            } else {
+                                "learn-save-failed".to_owned()
+                            };
+                        }
                     }
                     KeyCode::Esc if workspace == 2 => learn_workspace.cancel(),
                     KeyCode::Char('d') if workspace == 5 => {
@@ -1132,6 +1140,12 @@ fn save_routes(editor: &mackes_tui::RoutingEditor, current_generation: u64) -> S
 fn save_setlists(editor: &mackes_tui::SetlistEditor) -> String {
     let payload = serde_json::to_vec(&serde_json::json!({"setlists": editor.drafts}))
         .expect("setlist save payload is serializable");
+    daemon_request(mackes_ipc::Command::Configuration, &payload)
+}
+
+fn save_learned_mapping(mapping: &mackes_config::LearnedMapping) -> String {
+    let payload = serde_json::to_vec(&serde_json::json!({"learned_mappings": [mapping]}))
+        .expect("learned mapping payload is serializable");
     daemon_request(mackes_ipc::Command::Configuration, &payload)
 }
 

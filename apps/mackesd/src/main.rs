@@ -143,6 +143,7 @@ fn main() {
                 "scenes": project.scenes.iter().map(|scene| scene.id.clone()).collect::<Vec<_>>(),
             })).collect::<Vec<_>>(),
             "setlists": document.setlists,
+            "learned_mappings": document.learned_mappings,
             "learn_input_alias": document.settings.learn_input_alias,
             "learn_endpoint_id": learn_endpoint_id,
         });

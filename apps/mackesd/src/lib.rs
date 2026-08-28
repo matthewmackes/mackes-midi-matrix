@@ -1221,30 +1221,56 @@ impl Daemon {
             if command == Some(Command::Configuration) {
                 let value =
                     serde_json::from_slice::<serde_json::Value>(&request).unwrap_or_default();
-                if let Some(values) = value.get("setlists") {
+                if value.get("setlists").is_some() || value.get("learned_mappings").is_some() {
                     let Some(path) = self.config_path.clone() else {
                         return stream.write_all(
                             b"{\"ok\":false,\"error\":\"configuration path is unavailable\"}\n",
                         );
-                    };
-                    let Ok(setlists) =
-                        serde_json::from_value::<Vec<mackes_config::Setlist>>(values.clone())
-                    else {
-                        return stream
-                            .write_all(b"{\"ok\":false,\"error\":\"invalid setlists\"}\n");
                     };
                     let Ok(mut document) = mackes_config::load(&path) else {
                         return stream.write_all(
                             b"{\"ok\":false,\"error\":\"configuration load failed\"}\n",
                         );
                     };
-                    document.setlists = setlists;
+                    if let Some(values) = value.get("setlists") {
+                        let Ok(setlists) =
+                            serde_json::from_value::<Vec<mackes_config::Setlist>>(values.clone())
+                        else {
+                            return stream
+                                .write_all(b"{\"ok\":false,\"error\":\"invalid setlists\"}\n");
+                        };
+                        document.setlists = setlists;
+                    }
+                    if let Some(values) = value.get("learned_mappings") {
+                        let Ok(mappings) = serde_json::from_value::<
+                            Vec<mackes_config::LearnedMapping>,
+                        >(values.clone()) else {
+                            return stream.write_all(
+                                b"{\"ok\":false,\"error\":\"invalid learned mappings\"}\n",
+                            );
+                        };
+                        for mapping in mappings {
+                            let updated = mackes_config::add_learned_mapping(&document, mapping)
+                                .map_err(io::Error::other);
+                            let Ok(updated) = updated else {
+                                return stream.write_all(
+                                    b"{\"ok\":false,\"error\":\"invalid learned mapping\"}\n",
+                                );
+                            };
+                            document = updated;
+                        }
+                    }
+                    if let Err(error) = mackes_config::validate(&document) {
+                        return stream.write_all(
+                            format!("{{\"ok\":false,\"error\":\"{error}\"}}\n").as_bytes(),
+                        );
+                    }
                     if let Err(error) = mackes_config::save(&path, &document, 5) {
                         return stream.write_all(
                             format!("{{\"ok\":false,\"error\":\"{error}\"}}\n").as_bytes(),
                         );
                     }
-                    self.catalog = serde_json::json!({"projects": document.projects.iter().map(|project| serde_json::json!({"id": project.id, "scenes": project.scenes.iter().map(|scene| scene.id.clone()).collect::<Vec<_>>() })).collect::<Vec<_>>(), "setlists": document.setlists});
+                    self.catalog = serde_json::json!({"projects": document.projects.iter().map(|project| serde_json::json!({"id": project.id, "scenes": project.scenes.iter().map(|scene| scene.id.clone()).collect::<Vec<_>>() })).collect::<Vec<_>>(), "setlists": document.setlists, "learned_mappings": document.learned_mappings});
                 }
             }
             if command == Some(Command::Routes) {
