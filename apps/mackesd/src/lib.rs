@@ -692,6 +692,37 @@ impl Daemon {
         self.set_active_scene(Some(selected.clone()));
         if let Some(path) = self.config_path.as_deref() {
             persist_active_scene(path, Some(scene)).map_err(|_| "scene persistence failed")?;
+            let document = mackes_config::load(path).map_err(|_| "scene load failed")?;
+            let active_project = document
+                .settings
+                .active_project
+                .as_deref()
+                .and_then(|id| document.projects.iter().find(|project| project.id == id))
+                .ok_or("active project is unavailable")?;
+            let scene_ref = active_project
+                .scenes
+                .iter()
+                .find(|candidate| candidate.id == scene)
+                .ok_or("scene is not present in the active project")?;
+            let plan = compile_scene_actions(scene_ref).map_err(|_| "scene plan is invalid")?;
+            let outputs = &mut self.outputs;
+            let results = plan.execute_with(false, false, |action| {
+                match (&action.destination, &action.message) {
+                    (Some(destination), Some(message)) => outputs
+                        .send_direct(destination, message)
+                        .map_or(mackes_scene_engine::ActionResult::Failed, |()| {
+                            mackes_scene_engine::ActionResult::Succeeded
+                        }),
+                    _ => mackes_scene_engine::ActionResult::Succeeded,
+                }
+            });
+            self.publish_activation_result(&results);
+            if results
+                .iter()
+                .any(|(_, result)| matches!(result, mackes_scene_engine::ActionResult::Failed))
+            {
+                return Err("scene operation failed");
+            }
         }
         Ok(selected)
     }
@@ -1768,6 +1799,8 @@ pub fn compile_scene_actions(
                 description: action.description.clone(),
                 unsafe_action: action.unsafe_action,
                 depends_on: action.depends_on.clone(),
+                destination: action.destination.clone(),
+                message: action.message.clone(),
             })
             .collect(),
     )
@@ -2073,6 +2106,8 @@ mod tests {
                 description: "write".into(),
                 unsafe_action: false,
                 depends_on: None,
+                destination: None,
+                message: None,
             },
         ])
         .expect("plan");
@@ -2097,12 +2132,16 @@ mod tests {
                 description: "safe".into(),
                 unsafe_action: false,
                 depends_on: None,
+                destination: None,
+                message: None,
             },
             mackes_scene_engine::ActivationAction {
                 id: "unsafe".into(),
                 description: "unsafe".into(),
                 unsafe_action: true,
                 depends_on: Some("safe".into()),
+                destination: None,
+                message: None,
             },
         ])
         .expect("plan");
@@ -2219,6 +2258,8 @@ mod tests {
                 description: "Set level".into(),
                 unsafe_action: true,
                 depends_on: None,
+                destination: None,
+                message: None,
             }],
         };
         let plan = compile_scene_actions(&scene).expect("compile");

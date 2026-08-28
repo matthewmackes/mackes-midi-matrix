@@ -992,6 +992,8 @@ fn scene_plan_cli(path: &str, project_id: &str, scene_id: &str, json: bool) {
                     description: action.description.clone(),
                     unsafe_action: action.unsafe_action,
                     depends_on: action.depends_on.clone(),
+                    destination: action.destination.clone(),
+                    message: action.message.clone(),
                 })
                 .collect(),
         )

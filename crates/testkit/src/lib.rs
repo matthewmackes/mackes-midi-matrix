@@ -280,18 +280,24 @@ mod tests {
                 description: "route".into(),
                 unsafe_action: false,
                 depends_on: None,
+                destination: None,
+                message: None,
             },
             ActivationAction {
                 id: "write-reflex".into(),
                 description: "write".into(),
                 unsafe_action: true,
                 depends_on: Some("route".into()),
+                destination: None,
+                message: None,
             },
             ActivationAction {
                 id: "verify".into(),
                 description: "verify".into(),
                 unsafe_action: false,
                 depends_on: Some("write-reflex".into()),
+                destination: None,
+                message: None,
             },
         ])
         .expect("plan");

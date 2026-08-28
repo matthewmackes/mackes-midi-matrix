@@ -119,6 +119,10 @@ pub struct ActivationAction {
     pub unsafe_action: bool,
     /// Optional prerequisite action ID.
     pub depends_on: Option<String>,
+    /// Optional named MIDI destination for a concrete scene operation.
+    pub destination: Option<String>,
+    /// Optional validated MIDI wire payload for a concrete scene operation.
+    pub message: Option<Vec<u8>>,
 }
 
 /// Resolves one activation alias without guessing between candidates.
@@ -612,6 +616,8 @@ mod tests {
             description: id.into(),
             unsafe_action,
             depends_on: depends_on.map(str::to_owned),
+            destination: None,
+            message: None,
         }
     }
 
