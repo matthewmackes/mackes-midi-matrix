@@ -879,6 +879,19 @@ pub fn search_scenes<'a>(project: &'a Project, query: &str) -> Vec<&'a SceneRef>
         .collect()
 }
 
+/// Returns scenes in declaration order whose category exactly matches the normalized query.
+#[must_use]
+pub fn scenes_in_category<'a>(project: &'a Project, category: &str) -> Vec<&'a SceneRef> {
+    let category = category.trim().to_ascii_lowercase();
+    project
+        .scenes
+        .iter()
+        .filter(|scene| {
+            scene.category.as_deref().is_some_and(|value| value.to_ascii_lowercase() == category)
+        })
+        .collect()
+}
+
 /// Finds projects whose ID or ordered scene IDs contain a case-insensitive query.
 #[must_use]
 pub fn search_projects<'a>(projects: &'a [Project], query: &str) -> Vec<&'a Project> {
@@ -1467,6 +1480,8 @@ mod tests {
         assert_eq!(copied.scenes.last().map(|scene| scene.id.as_str()), Some("intro-copy"));
         assert_eq!(search_scenes(&project, "ambience").len(), 1);
         assert_eq!(search_scenes(&project, "OPENING").len(), 1);
+        assert_eq!(scenes_in_category(&project, " opening ").len(), 1);
+        assert!(scenes_in_category(&project, "missing").is_empty());
         assert_eq!(
             copied.scenes.last().and_then(|scene| scene.category.as_deref()),
             Some("opening")
