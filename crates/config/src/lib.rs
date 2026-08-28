@@ -915,6 +915,34 @@ pub fn add_scene_action(
     Ok(result)
 }
 
+/// Removes one action from a named scene and validates the resulting project.
+///
+/// # Errors
+///
+/// Returns an error when the scene/action is missing or another action depends on it.
+pub fn remove_scene_action(
+    project: &Project,
+    scene_id: &str,
+    action_id: &str,
+) -> Result<Project, String> {
+    let mut result = project.clone();
+    let scene = result
+        .scenes
+        .iter_mut()
+        .find(|scene| scene.id == scene_id)
+        .ok_or_else(|| format!("unknown scene ID '{scene_id}'"))?;
+    if scene.actions.iter().any(|action| action.depends_on.as_deref() == Some(action_id)) {
+        return Err(format!("scene action '{action_id}' is required by another action"));
+    }
+    let Some(index) = scene.actions.iter().position(|action| action.id == action_id) else {
+        return Err(format!("unknown scene action '{action_id}'"));
+    };
+    scene.actions.remove(index);
+    let document = ConfigDocument { projects: vec![result.clone()], ..ConfigDocument::default() };
+    validate(&document)?;
+    Ok(result)
+}
+
 /// Finds scenes whose ID, name, or category contains a case-insensitive query, preserving order.
 #[must_use]
 pub fn search_scenes<'a>(project: &'a Project, query: &str) -> Vec<&'a SceneRef> {

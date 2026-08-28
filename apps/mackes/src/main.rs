@@ -562,6 +562,9 @@ fn main() {
             println!("  mackes-midi-matrix scene next|previous");
             println!("  mackes-midi-matrix scene select <scene-id>");
             println!("  mackes-midi-matrix scene action-add <config> <project> <scene> <action-id> <description> <destination> <midi-hex> [--unsafe|--depends-on=<action-id>]");
+            println!(
+                "  mackes-midi-matrix scene action-remove <config> <project> <scene> <action-id>"
+            );
             println!("  mackes-midi-matrix scene plan <config> <project> <scene> [--json]");
         }
         [command, action, path, capability] if command == "default" && action == "get" => {
@@ -818,6 +821,11 @@ fn main() {
                 false,
                 None,
             );
+        }
+        [command, subcommand, path, project, scene, action_id]
+            if command == "scene" && subcommand == "action-remove" =>
+        {
+            scene_action_remove_cli(path, project, scene, action_id);
         }
         [command, subcommand, path, project, scene, action_id, description, destination, hex, flag]
             if command == "scene" && subcommand == "action-add" && flag == "--unsafe" =>
@@ -1141,6 +1149,30 @@ fn parse_midi_hex(input: &str) -> Result<Vec<u8>, String> {
     mackes_domain::MidiMessage::from_wire(&bytes)
         .map_err(|error| format!("MIDI payload is invalid: {error}"))?;
     Ok(bytes)
+}
+
+fn scene_action_remove_cli(path: &str, project_id: &str, scene_id: &str, action_id: &str) {
+    let result = (|| -> Result<(), String> {
+        let document =
+            mackes_config::load(std::path::Path::new(path)).map_err(|error| error.to_string())?;
+        let project = document
+            .projects
+            .iter()
+            .find(|project| project.id == project_id)
+            .ok_or_else(|| format!("project '{project_id}' was not found"))?;
+        let updated_project = mackes_config::remove_scene_action(project, scene_id, action_id)?;
+        let updated = mackes_config::replace_project(&document, updated_project)?;
+        mackes_config::save(std::path::Path::new(path), &updated, 10)
+            .map_err(|error| error.to_string())?;
+        Ok(())
+    })();
+    match result {
+        Ok(()) => println!("scene action removed: {project_id}/{scene_id}/{action_id}"),
+        Err(error) => {
+            eprintln!("scene action remove failed: {error}");
+            std::process::exit(2);
+        }
+    }
 }
 
 fn daemon_status(json: bool) -> String {
