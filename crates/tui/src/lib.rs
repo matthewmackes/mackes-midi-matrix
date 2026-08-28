@@ -653,6 +653,8 @@ pub struct MappingDraft {
     pub source: String,
     /// Destination endpoint alias.
     pub destination: String,
+    /// Optional profile-owned destination parameter selected by the operator.
+    pub destination_parameter: Option<String>,
     /// Optional MIDI channel filter (1–16).
     pub channel: Option<u8>,
     /// Whether the draft is enabled.
@@ -820,6 +822,7 @@ impl Default for MappingDraft {
         Self {
             source: String::new(),
             destination: String::new(),
+            destination_parameter: None,
             channel: None,
             enabled: false,
             mode: MappingMode::Cc,
@@ -1808,6 +1811,7 @@ impl LearnWorkspace {
         Some(MappingDraft {
             source,
             destination,
+            destination_parameter: None,
             channel,
             enabled: true,
             mode,
@@ -2715,6 +2719,26 @@ impl DashboardState {
         }
     }
 
+    /// Returns the selected profile-owned destination parameter label.
+    #[must_use]
+    pub fn selected_parameter_label(&self) -> Option<String> {
+        let destination = self.selected_destination?;
+        let (device, _) = self
+            .physical_devices
+            .iter()
+            .flat_map(|device| device.outputs.iter().map(move |endpoint| (device, endpoint)))
+            .nth(destination)?;
+        if !device.name.to_ascii_lowercase().contains("micropitch") {
+            return None;
+        }
+        DeviceWorkspace::eventide_micropitch()
+            .groups
+            .iter()
+            .flat_map(|group| group.control_ids.iter())
+            .nth(self.selected_parameter.unwrap_or(0))
+            .cloned()
+    }
+
     /// Returns the selected output as the numeric route endpoint contract.
     #[must_use]
     pub fn selected_destination_endpoint(&self) -> Option<u64> {
@@ -3246,8 +3270,9 @@ pub fn draw_controller_mapping(
     let inspector = selected.map_or_else(
         || " SELECT A CONTROL\n\n j/k  move mapping\n a    add mapping\n e    enable/disable\n s    save changes\n !    panic\n\n No control selected".into(),
         |mapping| format!(
-            " SELECTED CONTROL\n\n SOURCE\n {}\n\n MESSAGE\n {:?}\n\n DESTINATION\n {}\n\n STATE\n {}\n\n PRIORITY\n {}",
+            " SELECTED CONTROL\n\n SOURCE\n {}\n\n MESSAGE\n {:?}\n\n DESTINATION\n {}\n PARAMETER\n {}\n\n STATE\n {}\n\n PRIORITY\n {}",
             mapping.source, mapping.mode, mapping.destination,
+            mapping.destination_parameter.as_deref().unwrap_or("not selected"),
             if mapping.enabled { "● ENABLED" } else { "○ DISABLED" }, mapping.priority
         ),
     );
@@ -3795,6 +3820,7 @@ mod tests {
         let draft = MappingDraft {
             source: "Launch Control XL / K01".into(),
             destination: "MicroPitch / Mix".into(),
+            destination_parameter: None,
             enabled: true,
             ..MappingDraft::default()
         };
@@ -3995,6 +4021,7 @@ mod tests {
         let draft = MappingDraft {
             source: "launchpad".into(),
             destination: "reflex".into(),
+            destination_parameter: None,
             channel: Some(1),
             enabled: true,
             mode: MappingMode::Cc,
@@ -4065,6 +4092,7 @@ mod tests {
         let draft = MappingDraft {
             source: "1".into(),
             destination: "2".into(),
+            destination_parameter: None,
             channel: None,
             enabled: true,
             mode: MappingMode::Cc,

@@ -317,6 +317,7 @@ fn run_tui() -> Result<(), String> {
                                 let draft = mackes_tui::MappingDraft {
                                     source: source.to_string(),
                                     destination: destination.to_string(),
+                                    destination_parameter: dashboard.selected_parameter_label(),
                                     channel: None,
                                     enabled: true,
                                     mode: mackes_tui::MappingMode::Cc,
@@ -1608,6 +1609,7 @@ fn save_routes(editor: &mackes_tui::RoutingEditor, current_generation: u64) -> S
             Some(serde_json::json!({
                 "source": source,
                 "destination": destination,
+                "destination_parameter": draft.destination_parameter,
                 "channel": draft.channel,
                 "class": class,
                 // Preserve the daemon route contract even when the current editor
@@ -1735,6 +1737,10 @@ fn project_routes(editor: &mut mackes_tui::RoutingEditor, payload: &serde_json::
             Some(mackes_tui::MappingDraft {
                 source: source.to_string(),
                 destination: destination.to_string(),
+                destination_parameter: route
+                    .get("destination_parameter")
+                    .and_then(serde_json::Value::as_str)
+                    .map(str::to_owned),
                 channel,
                 enabled: route.get("enabled").and_then(serde_json::Value::as_bool).unwrap_or(true),
                 mode,
@@ -2032,6 +2038,7 @@ mod tests {
         editor.drafts.push(mackes_tui::MappingDraft {
             source: "old".into(),
             destination: "target".into(),
+            destination_parameter: None,
             channel: Some(1),
             enabled: true,
             mode: mackes_tui::MappingMode::Cc,
