@@ -2326,7 +2326,7 @@ impl DashboardState {
                 format!("result={}", self.activation_result.as_deref().unwrap_or("none")),
                 format!("devices={}", self.device_health.len()),
                 format!("PANIC {}", if self.panic_available { "ON" } else { "OFF" }),
-                "keys: 1-5 workspaces n/p scenes ! panic q quit".into(),
+                "keys: 1-9 workspaces n/p scenes ! panic q quit".into(),
             ]
         } else {
             self.frame_lines()
@@ -2394,7 +2394,7 @@ impl Keymap {
             '!' => Some("Panic"),
             ':' => Some("Command palette"),
             'q' => Some("Quit"),
-            '1'..='5' => Some("Open workspace"),
+            '1'..='9' => Some("Open workspace"),
             _ => None,
         }
     }
@@ -2906,7 +2906,7 @@ mod tests {
         assert!(dashboard
             .frame_lines_for(Viewport::new(20, 10))
             .iter()
-            .any(|line| line.starts_with("keys: 1-5")));
+            .any(|line| line.starts_with("keys: 1-9")));
         assert!(!dashboard.performance_locked);
         assert_eq!(dashboard.activation_progress, (0, 0));
         let mut dashboard = dashboard;
