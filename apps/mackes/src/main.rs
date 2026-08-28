@@ -219,6 +219,25 @@ fn run_tui() -> Result<(), String> {
                             let _ = routing_editor.remove(index);
                         }
                     }
+                    KeyCode::Char('a') if workspace == 5 => match endpoint_pair_for_new_route() {
+                        Some((source, destination)) => {
+                            let draft = mackes_tui::MappingDraft {
+                                source: source.to_string(),
+                                destination: destination.to_string(),
+                                channel: None,
+                                enabled: true,
+                                mode: mackes_tui::MappingMode::Cc,
+                                priority: u16::try_from(routing_editor.drafts.len())
+                                    .unwrap_or(u16::MAX),
+                                curve: mackes_midi_engine::Curve::Linear,
+                                filters: mackes_tui::MappingFilterDraft::default(),
+                            };
+                            if routing_editor.add(draft).is_err() {
+                                "route-add-rejected".clone_into(&mut dashboard.health);
+                            }
+                        }
+                        None => "route-endpoints-unavailable".clone_into(&mut dashboard.health),
+                    },
                     KeyCode::Char('m') if workspace == 5 => {
                         if routing_editor.cycle_selected_mode().is_err() {
                             "route-edit-rejected".clone_into(&mut dashboard.health);
@@ -1140,6 +1159,27 @@ fn save_routes(editor: &mackes_tui::RoutingEditor, current_generation: u64) -> S
     }))
     .expect("route save payload is serializable");
     daemon_request(mackes_ipc::Command::Routes, &payload)
+}
+
+fn endpoint_pair_for_new_route() -> Option<(u64, u64)> {
+    let response = daemon_request(mackes_ipc::Command::Endpoints, b"{}");
+    let value = serde_json::from_str::<serde_json::Value>(&response).ok()?;
+    let endpoints = value.get("endpoints")?.as_array()?;
+    let input = endpoints
+        .iter()
+        .find(|endpoint| {
+            endpoint.get("direction").and_then(serde_json::Value::as_str) == Some("input")
+        })?
+        .get("id")?
+        .as_u64()?;
+    let output = endpoints
+        .iter()
+        .find(|endpoint| {
+            endpoint.get("direction").and_then(serde_json::Value::as_str) == Some("output")
+        })?
+        .get("id")?
+        .as_u64()?;
+    Some((input, output))
 }
 
 fn save_setlists(editor: &mackes_tui::SetlistEditor) -> String {
