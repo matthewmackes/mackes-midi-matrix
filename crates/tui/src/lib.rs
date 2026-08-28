@@ -442,7 +442,7 @@ pub enum DashboardPanel {
     Panic,
 }
 
-/// Returns the canonical workspace name for a direct shortcut (1–5).
+/// Returns the canonical workspace name for a direct shortcut (1–9).
 #[must_use]
 pub const fn workspace_name(shortcut: u8) -> Option<&'static str> {
     match shortcut {
@@ -451,6 +451,10 @@ pub const fn workspace_name(shortcut: u8) -> Option<&'static str> {
         3 => Some("Reflex"),
         4 => Some("Eventide"),
         5 => Some("Routing"),
+        6 => Some("Diagnostics"),
+        7 => Some("Monitor"),
+        8 => Some("Backups"),
+        9 => Some("Setlists"),
         _ => None,
     }
 }
@@ -1098,6 +1102,18 @@ impl MonitorState {
 }
 
 impl BackupWorkspace {
+    /// Returns a bounded, non-actionable backup status view.
+    #[must_use]
+    pub fn frame_lines(&self, viewport: Viewport) -> Vec<String> {
+        let mut lines = vec![format!("Backups — {:?}", self.phase)];
+        lines.push(format!("selected={}", self.selected.as_deref().unwrap_or("none")));
+        lines.push(format!("identity_warning={}", self.identity_warning));
+        if let Some(message) = &self.message {
+            lines.push(format!("message={message}"));
+        }
+        clamp_lines(lines, viewport, usize::from(viewport.width))
+    }
+
     /// Creates an empty listing view.
     #[must_use]
     pub const fn new() -> Self {
@@ -2578,6 +2594,16 @@ pub fn draw_monitor(frame: &mut Frame<'_>, area: Rect, monitor: &MonitorState) {
     );
 }
 
+/// Draws the backup operation workspace.
+pub fn draw_backups(frame: &mut Frame<'_>, area: Rect, workspace: &BackupWorkspace) {
+    draw_lines(
+        frame,
+        area,
+        "Backups",
+        &workspace.frame_lines(Viewport::new(area.width, area.height)),
+    );
+}
+
 /// Draws the transactional setlist editor.
 pub fn draw_setlists(frame: &mut Frame<'_>, area: Rect, editor: &SetlistEditor) {
     draw_lines(
@@ -2668,7 +2694,9 @@ mod tests {
         assert_eq!(keymap.command_for('3'), Some(UiCommand::OpenWorkspace(3)));
         assert_eq!(workspace_name(1), Some("Dashboard"));
         assert_eq!(workspace_name(5), Some("Routing"));
-        assert_eq!(workspace_name(6), None);
+        assert_eq!(workspace_name(6), Some("Diagnostics"));
+        assert_eq!(workspace_name(9), Some("Setlists"));
+        assert_eq!(workspace_name(10), None);
         assert_eq!(keymap.description('h'), Some("Left"));
         assert_eq!(keymap.description('!'), Some("Panic"));
         assert_eq!(keymap.description('x'), None);

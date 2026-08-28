@@ -21,6 +21,10 @@ fn run_tui() -> Result<(), String> {
         mackes_tui::ReflexWorkspace::from_compiled_algorithm(1).map_err(str::to_owned)?;
     let eventide_workspace = mackes_tui::DeviceWorkspace::eventide_micropitch();
     let mut routing_editor = mackes_tui::RoutingEditor::from_bank(&mackes_tui::MappingBank::new());
+    let diagnostics = mackes_tui::DiagnosticsState::default();
+    let monitor = mackes_tui::MonitorState::new(128).expect("valid monitor capacity");
+    let backup_workspace = mackes_tui::BackupWorkspace::default();
+    let setlist_editor = mackes_tui::SetlistEditor::from_snapshot(&[]);
     let mut workspace = 1_u8;
     let mut needs_snapshot = true;
     let result = (|| loop {
@@ -43,6 +47,10 @@ fn run_tui() -> Result<(), String> {
                 3 => mackes_tui::draw_reflex(frame, frame.area(), &reflex_workspace),
                 4 => mackes_tui::draw_device(frame, frame.area(), &eventide_workspace),
                 5 => mackes_tui::draw_routing(frame, frame.area(), &routing_editor),
+                6 => mackes_tui::draw_diagnostics(frame, frame.area(), &diagnostics),
+                7 => mackes_tui::draw_monitor(frame, frame.area(), &monitor),
+                8 => mackes_tui::draw_backups(frame, frame.area(), &backup_workspace),
+                9 => mackes_tui::draw_setlists(frame, frame.area(), &setlist_editor),
                 _ => mackes_tui::draw_dashboard(frame, frame.area(), &dashboard),
             })
             .map_err(|error| error.to_string())?;
@@ -50,7 +58,7 @@ fn run_tui() -> Result<(), String> {
             if let Event::Key(key) = event::read().map_err(|error| error.to_string())? {
                 match key.code {
                     KeyCode::Char('q') => break Ok(()),
-                    KeyCode::Char(value) if ('1'..='5').contains(&value) => {
+                    KeyCode::Char(value) if ('1'..='9').contains(&value) => {
                         workspace = value
                             .to_digit(10)
                             .and_then(|number| u8::try_from(number).ok())
