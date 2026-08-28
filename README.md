@@ -85,6 +85,23 @@ cargo test --workspace --all-features
 
 Hardware and RTP/network interoperability tests are ignored by default, require explicit features and named targets, and follow the safety rules in [`docs/testing.md`](docs/testing.md) and [`docs/hardware-qualification.md`](docs/hardware-qualification.md).
 
+## Test-release qualification
+
+The current test release is `0.1.0-test.1`. Recreate its Fedora/Linux x86_64 bundle with:
+
+```bash
+cargo build --workspace --release --locked
+bash scripts/package-test-release.sh 0.1.0-test.1
+(cd dist && sha256sum -c mackes-midi-matrix-0.1.0-test.1-linux-x86_64.tar.gz.sha256)
+```
+
+The bundle contains both binaries, the Fedora installer and service unit, the locked dependency
+file, documentation, license, release notes, and a checksum manifest. The automated release gate
+verifies formatting, repository policy, dependency advisories, workspace tests and documentation,
+strict Clippy, optimized routing throughput, hermetic integration scenarios, and installer
+preflight. Physical MIDI cabling, device writes, independent RTP-MIDI peers, and long-duration
+hardware/network soaks remain explicit post-release qualification activities.
+
 ## Safety and contributing
 
 Hardware writes, bulk dumps, and dense MIDI traffic are potentially destructive. Such tests are opt-in, display their exact destination and operation, and require explicit arming. Do not guess vendor SysEx bytes, checksums, LED messages, or reply semantics: changes must be supported by cited documentation, redacted fixtures, or physical validation.
