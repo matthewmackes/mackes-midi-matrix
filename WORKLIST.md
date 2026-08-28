@@ -2617,6 +2617,7 @@ New requests enter here before implementation.
 | 2026-08-28 | W016/W042 | codex | learned-filter persistence evidence → implemented | Added direct config round-trip and invalid-bound tests plus all-variant persisted-filter-to-engine conversion coverage. Full release gate passes. |
 | 2026-08-28 | W016/W005/W010 | codex | IPC MIDI Learn capture request → implemented | Added a local `learn` command with bounded endpoint/limit input and structured candidate output from daemon-owned observational capture; no routing or transmission occurs. Full release gate passes. |
 | 2026-08-28 | W016/W045 | codex | CLI MIDI Learn capture request → implemented | Added `mackes learn <endpoint-id> [limit]`, validating the bounded limit locally and forwarding the request through the shared IPC command boundary. |
+| 2026-08-28 | W045 | codex | MIDI Learn CLI discoverability → implemented | Added the Learn command to the primary CLI help output; release gate and CLI build checks pass. |
 
 The worklist is complete only when W053 is `DONE`. A feature demonstration, passing unit
 tests, or code presence alone is not release completion.
