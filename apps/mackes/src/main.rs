@@ -256,6 +256,12 @@ fn main() {
                 std::process::exit(2);
             }
         }
+        [command, endpoint] if command == "learn" => {
+            print_learn(endpoint, 128);
+        }
+        [command, endpoint, limit] if command == "learn" => {
+            print_learn(endpoint, limit.parse().unwrap_or(0));
+        }
         [command] if command == "scenes" || command == "devices" => {
             let ipc_command = if command == "scenes" {
                 mackes_ipc::Command::Scenes
@@ -684,6 +690,24 @@ fn print_daemon_command(command: mackes_ipc::Command) {
     let unavailable = response.contains("\"ok\":false");
     println!("{response}");
     if unavailable {
+        std::process::exit(2);
+    }
+}
+
+fn print_learn(endpoint: &str, limit: usize) {
+    let endpoint = endpoint.parse::<u64>().unwrap_or(0);
+    if endpoint == 0 || !(1..=128).contains(&limit) {
+        eprintln!("mackes-midi-matrix: learn requires endpoint-id and limit 1..=128");
+        std::process::exit(64);
+    }
+    let payload = serde_json::to_vec(&serde_json::json!({
+        "endpoint": endpoint,
+        "limit": limit,
+    }))
+    .expect("learn payload is serializable");
+    let response = daemon_request(mackes_ipc::Command::Learn, &payload);
+    println!("{response}");
+    if response.contains("\"ok\":false") {
         std::process::exit(2);
     }
 }
