@@ -3206,6 +3206,42 @@ impl DeviceProfile {
         Ok(request)
     }
 
+    /// Renders a validated channel voice message for a documented control.
+    ///
+    /// This produces bytes only; transmission remains owned by the caller and its safety policy.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the control is unknown, the channel is invalid, or the value is
+    /// outside the control's declared range.
+    pub fn render_control_message(
+        &self,
+        label: &str,
+        channel: u8,
+        value: u16,
+    ) -> Result<Vec<u8>, &'static str> {
+        if !(1..=16).contains(&channel) {
+            return Err("MIDI channel must be between 1 and 16");
+        }
+        let control = self
+            .controls
+            .iter()
+            .find(|control| control.label == label)
+            .ok_or("control not found")?;
+        if value < control.range.0 || value > control.range.1 || value > 127 {
+            return Err("control value is outside its declared MIDI range");
+        }
+        let value = u8::try_from(value).map_err(|_| "control value is invalid")?;
+        let status = channel - 1;
+        if let Some(cc) = control.cc {
+            return Ok(vec![0xB0 | status, cc, value]);
+        }
+        if let Some(program) = control.program {
+            return Ok(vec![0xC0 | status, program]);
+        }
+        Err("control has no supported MIDI mapping")
+    }
+
     /// Validates profile identity, ranges, and mutually exclusive mappings.
     ///
     /// # Errors
@@ -3716,6 +3752,19 @@ mod tests {
         );
         assert!(!profile.controls.iter().any(|control| control.cc == Some(2)));
         assert_eq!(profile.controls[16].program, Some(1));
+    }
+
+    #[test]
+    fn profile_renders_validated_control_messages_without_transmitting() {
+        let profile = eventide_micropitch_profile();
+        assert_eq!(profile.render_control_message("Mix", 1, 64).expect("CC"), vec![0xB0, 20, 64]);
+        assert_eq!(
+            profile.render_control_message("Preset 1", 2, 0).expect("program"),
+            vec![0xC1, 1]
+        );
+        assert!(profile.render_control_message("Mix", 0, 64).is_err());
+        assert!(profile.render_control_message("Mix", 1, 128).is_err());
+        assert!(profile.render_control_message("missing", 1, 1).is_err());
     }
 
     #[test]
