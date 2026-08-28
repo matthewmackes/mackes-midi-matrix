@@ -19,9 +19,9 @@ fn run_tui() -> Result<(), String> {
     let mut needs_snapshot = true;
     let result = loop {
         let synchronized = if needs_snapshot {
-            synchronize_snapshot(&mut client_state)
+            synchronize_snapshot(&mut client_state, &mut dashboard)
         } else {
-            synchronize_events(&mut client_state)
+            synchronize_events(&mut client_state, &mut dashboard)
         };
         if let Ok(health) = synchronized {
             dashboard.health = health;
@@ -558,7 +558,10 @@ fn daemon_request(command: mackes_ipc::Command, payload: &[u8]) -> String {
         .unwrap_or_else(|| "{\"ok\":false,\"error\":\"runtime IPC is not connected\"}".into())
 }
 
-fn synchronize_snapshot(state: &mut mackes_tui::ClientState) -> Result<String, String> {
+fn synchronize_snapshot(
+    state: &mut mackes_tui::ClientState,
+    dashboard: &mut mackes_tui::DashboardState,
+) -> Result<String, String> {
     let response = daemon_request(mackes_ipc::Command::Snapshot, b"{}");
     let value: serde_json::Value =
         serde_json::from_str(&response).map_err(|error| error.to_string())?;
@@ -575,10 +578,58 @@ fn synchronize_snapshot(state: &mut mackes_tui::ClientState) -> Result<String, S
         last_sequence,
         payload: serde_json::to_vec(&value).map_err(|error| error.to_string())?,
     });
+    // Project the same authoritative snapshot into widgets before replay begins.
+    // Event replay then applies only subsequent changes.
+    //
+    // The dashboard is intentionally not reconstructed from local files or MIDI state.
+    apply_dashboard_payload(dashboard, &value);
     Ok(health)
 }
 
-fn synchronize_events(state: &mut mackes_tui::ClientState) -> Result<String, String> {
+fn apply_dashboard_payload(
+    dashboard: &mut mackes_tui::DashboardState,
+    payload: &serde_json::Value,
+) {
+    if let Some(health) = payload.get("health").and_then(serde_json::Value::as_str) {
+        dashboard.apply_event(mackes_tui::DashboardEvent::Health(health.to_owned()));
+    }
+    if let Some(scene) = payload.get("active_scene").and_then(|value| {
+        if value.is_null() {
+            Some(None)
+        } else {
+            value.as_str().map(|value| Some(value.to_owned()))
+        }
+    }) {
+        dashboard.apply_event(mackes_tui::DashboardEvent::ActiveScene(scene));
+    }
+    if let Some(generation) = payload.get("generation").and_then(serde_json::Value::as_u64) {
+        dashboard.apply_event(mackes_tui::DashboardEvent::RouteGeneration(generation));
+    }
+    if let (Some(received), Some(sent), Some(dropped)) = (
+        payload.get("received").and_then(serde_json::Value::as_u64),
+        payload.get("sent").and_then(serde_json::Value::as_u64),
+        payload.get("dropped").and_then(serde_json::Value::as_u64),
+    ) {
+        dashboard.apply_event(mackes_tui::DashboardEvent::Activity { received, sent, dropped });
+    }
+    if let (Some(completed), Some(total)) = (
+        payload.get("activation_completed").and_then(serde_json::Value::as_u64),
+        payload.get("activation_total").and_then(serde_json::Value::as_u64),
+    ) {
+        if let (Ok(completed), Ok(total)) = (u32::try_from(completed), u32::try_from(total)) {
+            dashboard
+                .apply_event(mackes_tui::DashboardEvent::ActivationProgress { completed, total });
+        }
+    }
+    if let Some(result) = payload.get("activation_result").and_then(serde_json::Value::as_str) {
+        dashboard.apply_event(mackes_tui::DashboardEvent::ActivationResult(result.to_owned()));
+    }
+}
+
+fn synchronize_events(
+    state: &mut mackes_tui::ClientState,
+    dashboard: &mut mackes_tui::DashboardState,
+) -> Result<String, String> {
     let payload = serde_json::to_vec(&serde_json::json!({
         "after_sequence": state.last_sequence,
     }))
@@ -608,6 +659,7 @@ fn synchronize_events(state: &mut mackes_tui::ClientState) -> Result<String, Str
             .and_then(serde_json::Value::as_u64)
             .ok_or("event sequence is missing")?;
         let payload = event.get("payload").ok_or("event payload is missing")?;
+        apply_dashboard_payload(dashboard, payload);
         if let Some(event_health) = payload.get("health").and_then(serde_json::Value::as_str) {
             event_health.clone_into(&mut health);
         }

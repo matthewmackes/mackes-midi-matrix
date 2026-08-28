@@ -2542,6 +2542,8 @@ Redacted fixture filenames and hashes:
 | 2026-08-27 | W046 | codex | `IN_PROGRESS` → `IN_REVIEW` | Verified explicit Learn state transitions and `committed_mapping()` as the persistence boundary: only a selected, channel-resolved candidate with a successful live test can produce a mapping; cancelled/uncommitted state produces none. TUI/engine tests and strict Clippy pass; daemon capture, transport, conflict projection, and durable persistence remain. |
 | 2026-08-27 | W044 | codex | `IN_PROGRESS` → `IN_REVIEW` | Verified pause/resume monitor collection, severity filtering, bounded retention, redacted export, and structured cause/remediation diagnostics. TUI tests (21), formatting, and worklist governance checks pass; setlist/editor and live event binding remain. |
 
+| 2026-08-28 | W040/W041 | codex | live daemon payload projection → implemented | The executable TUI now projects authoritative snapshot and sequenced event fields into typed dashboard state for health, active scene, route generation, activity counters, activation progress, and activation results; targeted build/tests and strict Clippy pass. Full daemon emission for every projected field and mapped-MIDI dashboard actions remain for final review. |
+
 ## 6. Proposed changes and decisions queue
 
 New requests enter here before implementation.
