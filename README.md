@@ -77,6 +77,7 @@ the daemon validates the active catalog and persists the selection.
 Executable MIDI actions can be added atomically with `scene action-add <config> <project> <scene>
 <action-id> <description> <destination> <midi-hex> [--unsafe]`; the payload may be a valid CC,
 Program Change, note, or framed SysEx message.
+Use `--depends-on=<action-id>` to place the new action after an existing action in the scene plan.
 Scene action records may additionally declare a validated `destination` and complete MIDI `message`
 payload for executable scene operations; legacy metadata-only actions remain supported.
 

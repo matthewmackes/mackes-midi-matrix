@@ -561,7 +561,7 @@ fn main() {
             println!("  mackes-midi-matrix device-query <profile-id> <query-id>");
             println!("  mackes-midi-matrix scene next|previous");
             println!("  mackes-midi-matrix scene select <scene-id>");
-            println!("  mackes-midi-matrix scene action-add <config> <project> <scene> <action-id> <description> <destination> <midi-hex> [--unsafe]");
+            println!("  mackes-midi-matrix scene action-add <config> <project> <scene> <action-id> <description> <destination> <midi-hex> [--unsafe|--depends-on=<action-id>]");
             println!("  mackes-midi-matrix scene plan <config> <project> <scene> [--json]");
         }
         [command, action, path, capability] if command == "default" && action == "get" => {
@@ -816,6 +816,7 @@ fn main() {
                 destination,
                 hex,
                 false,
+                None,
             );
         }
         [command, subcommand, path, project, scene, action_id, description, destination, hex, flag]
@@ -830,6 +831,24 @@ fn main() {
                 destination,
                 hex,
                 true,
+                None,
+            );
+        }
+        [command, subcommand, path, project, scene, action_id, description, destination, hex, flag]
+            if command == "scene"
+                && subcommand == "action-add"
+                && flag.starts_with("--depends-on=") =>
+        {
+            scene_action_add_cli(
+                path,
+                project,
+                scene,
+                action_id,
+                description,
+                destination,
+                hex,
+                false,
+                flag.strip_prefix("--depends-on=").map(str::to_owned),
             );
         }
         [command, subcommand, path, project, scene, flag]
@@ -1073,6 +1092,7 @@ fn scene_action_add_cli(
     destination: &str,
     hex: &str,
     unsafe_action: bool,
+    depends_on: Option<String>,
 ) {
     let result = (|| -> Result<(), String> {
         let document =
@@ -1090,7 +1110,7 @@ fn scene_action_add_cli(
                 id: action_id.to_owned(),
                 description: description.to_owned(),
                 unsafe_action,
-                depends_on: None,
+                depends_on,
                 destination: Some(destination.to_owned()),
                 message: Some(message),
             },
