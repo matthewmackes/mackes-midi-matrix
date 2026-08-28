@@ -8,6 +8,7 @@ fi
 
 version="$1"
 root_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source_commit="$(git -C "$root_dir" rev-parse HEAD)"
 dist_dir="$root_dir/dist"
 bundle_name="mackes-midi-matrix-$version-linux-x86_64"
 archive="$dist_dir/$bundle_name.tar.gz"
@@ -45,6 +46,7 @@ install -m 0644 "$root_dir/README.md" "$root_dir/LICENSE" "$root_dir/Cargo.lock"
 install -m 0644 "$root_dir/docs/installation-fedora.md" \
   "$root_dir/docs/hardware-qualification.md" "$staging/$bundle_name/docs/"
 install -m 0644 "$root_dir/docs/releases/$version.md" "$staging/$bundle_name/RELEASE_NOTES.md"
+printf 'version=%s\nsource_commit=%s\n' "$version" "$source_commit" >"$staging/$bundle_name/BUILD_PROVENANCE"
 
 install -d -m 0755 "$dist_dir"
 tar --sort=name --owner=0 --group=0 --numeric-owner \
