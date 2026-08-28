@@ -138,7 +138,7 @@ manifest.
 
 ```bash
 cargo build --workspace --release --locked
-bash scripts/package-test-release.sh 0.1.4
+bash scripts/package-release.sh 0.1.4
 (cd dist && sha256sum -c mackes-midi-matrix-0.1.4-linux-x86_64.tar.gz.sha256)
 ```
 

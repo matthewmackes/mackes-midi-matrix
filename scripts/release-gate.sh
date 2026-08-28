@@ -26,7 +26,7 @@ scripts/integration-suite.sh
 printf 'release-gate: installer smoke\n'
 scripts/installer-smoke.sh
 printf 'release-gate: release artifact\n'
-scripts/package-test-release.sh "$version" >/dev/null
+scripts/package-release.sh "$version" >/dev/null
 archive="dist/mackes-midi-matrix-${version}-linux-x86_64.tar.gz"
 (cd dist && sha256sum -c "mackes-midi-matrix-${version}-linux-x86_64.tar.gz.sha256")
 archive_listing="$(tar -tzf "$archive")"

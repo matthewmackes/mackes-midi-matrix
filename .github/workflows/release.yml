@@ -19,7 +19,7 @@ jobs:
       - name: Verify release gate
         run: scripts/release-gate.sh "${GITHUB_REF_NAME#v}"
       - name: Build tagged archive
-        run: scripts/package-test-release.sh "${GITHUB_REF_NAME#v}"
+        run: scripts/package-release.sh "${GITHUB_REF_NAME#v}"
       - name: Publish GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
