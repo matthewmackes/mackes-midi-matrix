@@ -3350,6 +3350,63 @@ mod tests {
     }
 
     #[test]
+    fn router_enforces_enabled_priority_and_cc_curve() {
+        let source = EndpointId::new(1).expect("source");
+        let first = EndpointId::new(2).expect("first");
+        let disabled = EndpointId::new(3).expect("disabled");
+        let router = Router::new(
+            vec![
+                Route {
+                    source,
+                    destination: disabled,
+                    channel: None,
+                    class: Some(MessageClass::ControlChange),
+                    enabled: false,
+                    priority: 0,
+                    curve: Curve::Linear,
+                    predicates: Vec::new(),
+                    allow_cycle: false,
+                },
+                Route {
+                    source,
+                    destination: first,
+                    channel: None,
+                    class: Some(MessageClass::ControlChange),
+                    enabled: true,
+                    priority: 7,
+                    curve: Curve::Square,
+                    predicates: Vec::new(),
+                    allow_cycle: false,
+                },
+            ],
+            1,
+            4,
+        )
+        .expect("router");
+        let event = MidiEvent {
+            timestamp: TimestampNanos::new(1),
+            sequence: 1,
+            endpoint: source,
+            message: MidiMessage::ControlChange {
+                channel: MidiChannel::new(1).expect("channel"),
+                controller: SevenBit::new(10).expect("controller"),
+                value: SevenBit::new(64).expect("value"),
+            },
+        };
+        let outputs = router.route(&event);
+        assert_eq!(outputs.len(), 1);
+        assert_eq!(outputs[0].event.endpoint, first);
+        assert_eq!(
+            outputs[0].event.message,
+            MidiMessage::ControlChange {
+                channel: MidiChannel::new(1).expect("channel"),
+                controller: SevenBit::new(10).expect("controller"),
+                value: SevenBit::new(apply_curve(64, Curve::Square).into()).expect("curve"),
+            }
+        );
+    }
+
+    #[test]
     fn router_applies_number_value_realtime_and_masked_sysex_predicates() {
         let source = EndpointId::new(1).expect("source");
         let destination = EndpointId::new(2).expect("destination");
