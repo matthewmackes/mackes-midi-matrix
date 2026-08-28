@@ -41,7 +41,11 @@ fn run_tui() -> Result<(), String> {
                 match key.code {
                     KeyCode::Char('q') => break Ok(()),
                     KeyCode::Char('n' | 'p') => {
-                        let response = daemon_command(mackes_ipc::Command::Scenes);
+                        let response = dispatch_ui_command(if key.code == KeyCode::Char('n') {
+                            mackes_tui::UiCommand::NextScene
+                        } else {
+                            mackes_tui::UiCommand::PreviousScene
+                        });
                         dashboard.health = if response.contains("\"ok\":true") {
                             "online".to_owned()
                         } else {
@@ -49,7 +53,7 @@ fn run_tui() -> Result<(), String> {
                         };
                     }
                     KeyCode::Char('!') => {
-                        let response = daemon_command(mackes_ipc::Command::Panic);
+                        let response = dispatch_ui_command(mackes_tui::UiCommand::Panic);
                         dashboard.health = if response.contains("\"ok\":true") {
                             "panic-sent".to_owned()
                         } else {
@@ -682,6 +686,13 @@ fn print_daemon_command(command: mackes_ipc::Command) {
     if unavailable {
         std::process::exit(2);
     }
+}
+
+fn dispatch_ui_command(command: mackes_tui::UiCommand) -> String {
+    let Some(ipc_command) = mackes_tui::ipc_command_for(command) else {
+        return "{\"ok\":false,\"error\":\"UI command is local-only\"}".to_owned();
+    };
+    daemon_command(ipc_command)
 }
 
 fn discovered_endpoints() -> Vec<String> {
