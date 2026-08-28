@@ -1084,6 +1084,18 @@ pub fn validate(document: &ConfigDocument) -> Result<(), String> {
                         ));
                     }
                 }
+                let mut visited = std::collections::BTreeSet::new();
+                let mut current = Some(action.id.as_str());
+                while let Some(id) = current {
+                    if !visited.insert(id) {
+                        return Err(format!("scene action dependency cycle includes '{id}'"));
+                    }
+                    current = scene
+                        .actions
+                        .iter()
+                        .find(|candidate| candidate.id == id)
+                        .and_then(|candidate| candidate.depends_on.as_deref());
+                }
             }
         }
     }
@@ -1535,6 +1547,22 @@ mod tests {
             Some("opening")
         );
         assert_eq!(copied.scenes.last().map(|scene| scene.actions.len()), Some(1));
+        let mut cyclic = document();
+        cyclic.projects[0].scenes[0].actions = vec![
+            SceneAction {
+                id: "a".into(),
+                description: "A".into(),
+                unsafe_action: false,
+                depends_on: Some("b".into()),
+            },
+            SceneAction {
+                id: "b".into(),
+                description: "B".into(),
+                unsafe_action: false,
+                depends_on: Some("a".into()),
+            },
+        ];
+        assert!(validate(&cyclic).is_err());
         let copied_project = copy_project(std::slice::from_ref(&project), "demo", "demo-copy")
             .expect("project copy");
         assert_eq!(copied_project.id, "demo-copy");
