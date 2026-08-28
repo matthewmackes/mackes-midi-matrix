@@ -2635,6 +2635,7 @@ New requests enter here before implementation.
 | 2026-08-28 | W045/W016 | codex | MIDI Learn invalid-usage discoverability → implemented | Added the Learn invocation to the CLI invalid-argument usage path and verified both help surfaces plus exit-64 behavior. Full release gate passes. |
 | 2026-08-28 | W052/W053 | codex | rebuilt test-release artifact qualification → verified | Rebuilt `0.1.0-test.1` from the current main tree; SHA-256 verification, extracted CLI `--version`, extracted daemon `--help`, and bundled release-note/README checks pass. |
 | 2026-08-28 | W030/W031/W045 | codex | CLI scene navigation → implemented | Added explicit `scene next` and `scene previous` commands, forwarding direction through the existing daemon-owned scene IPC boundary; locked build, help-surface, formatting, and diff checks pass. |
+| 2026-08-28 | W040/W041/W046/W047/W049 | codex | executable TUI workspace switching → implemented | Wired the terminal shell to render dashboard, MIDI Learn, Reflex, and Eventide workspaces via number-key navigation while preserving dashboard IPC actions; formatting, strict Clippy, and CLI package tests pass. |
 
 The worklist is complete only when W053 is `DONE`. A feature demonstration, passing unit
 tests, or code presence alone is not release completion.

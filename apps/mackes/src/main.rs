@@ -16,6 +16,11 @@ fn run_tui() -> Result<(), String> {
     let mut terminal = Terminal::new(backend).map_err(|error| error.to_string())?;
     let mut dashboard = mackes_tui::DashboardState::initial();
     let mut client_state = mackes_tui::ClientState::default();
+    let learn_workspace = mackes_tui::LearnWorkspace::new();
+    let reflex_workspace =
+        mackes_tui::ReflexWorkspace::from_compiled_algorithm(1).map_err(str::to_owned)?;
+    let eventide_workspace = mackes_tui::DeviceWorkspace::eventide_micropitch();
+    let mut workspace = 1_u8;
     let mut needs_snapshot = true;
     let result = loop {
         let synchronized = if needs_snapshot {
@@ -32,14 +37,23 @@ fn run_tui() -> Result<(), String> {
             needs_snapshot = true;
         }
         terminal
-            .draw(|frame| {
-                mackes_tui::draw_dashboard(frame, frame.area(), &dashboard);
+            .draw(|frame| match workspace {
+                2 => mackes_tui::draw_learn(frame, frame.area(), &learn_workspace),
+                3 => mackes_tui::draw_reflex(frame, frame.area(), &reflex_workspace),
+                4 => mackes_tui::draw_device(frame, frame.area(), &eventide_workspace),
+                _ => mackes_tui::draw_dashboard(frame, frame.area(), &dashboard),
             })
             .map_err(|error| error.to_string())?;
         if event::poll(std::time::Duration::from_millis(250)).map_err(|error| error.to_string())? {
             if let Event::Key(key) = event::read().map_err(|error| error.to_string())? {
                 match key.code {
                     KeyCode::Char('q') => break Ok(()),
+                    KeyCode::Char(value) if ('1'..='4').contains(&value) => {
+                        workspace = value
+                            .to_digit(10)
+                            .and_then(|number| u8::try_from(number).ok())
+                            .unwrap_or(1);
+                    }
                     KeyCode::Char('n' | 'p') => {
                         let response = dispatch_ui_command(if key.code == KeyCode::Char('n') {
                             mackes_tui::UiCommand::NextScene
