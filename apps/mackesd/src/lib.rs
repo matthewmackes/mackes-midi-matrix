@@ -973,9 +973,10 @@ impl Daemon {
         Ok(packets)
     }
 
-    /// Receives one authorized RTP-MIDI packet, decodes channel voice events,
+    /// Receives one authorized RTP-MIDI packet, decodes channel-voice events,
     /// and dispatches them through the daemon-owned router/output registry.
-    /// System-common and `SysEx` sections remain explicitly unsupported here.
+    /// System-common/realtime and `SysEx` packets use the dedicated sibling
+    /// pumps below so callers cannot accidentally process a packet twice.
     ///
     /// # Errors
     ///
