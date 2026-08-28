@@ -1214,7 +1214,7 @@ validation record.
 
 #### [~] W010 — Daemon lifecycle, persistence, and health
 
-- **Status:** `IN_PROGRESS`
+- **Status:** `IN_REVIEW`
 - **Owner:** codex
 - **Start date:** 2026-08-26
 - **Depends on:** W004, W005
@@ -2663,6 +2663,7 @@ New requests enter here before implementation.
 | 2026-08-28 | W011/W053 | codex | hardware qualification document reconciliation → implemented | Updated the hardware matrix to reflect installed Fedora firmware tooling and the observed MIDISPORT runtime transition to `0763:1021`; remaining routing/reconnect and vendor-write evidence is explicitly unchanged. |
 | 2026-08-28 | W043/W044 | codex | workspace navigation contract synchronization → implemented | Updated shared legends, key descriptions, renderer assertions, and README documentation from five to nine executable workspaces; focused TUI tests and strict Clippy pass. |
 | 2026-08-28 | W011/W053 | codex | multi-port ALSA read-probe checkpoint → verified | Bounded `amidi -d` probes opened all four MIDISPORT ports plus both Launch Control XL ports and MicroPitch; each remained open through the one-second no-data window, with no MIDI writes attempted. |
+| 2026-08-28 | W010 | codex | daemon lifecycle status reconciliation → IN_REVIEW | Current daemon evidence covers signal-aware nonblocking accept, bounded stalled-client shutdown, active-scene persistence, structured logs, and restart-safe health behavior; remaining physical/device and independent review evidence stays outside this software status. |
 | 2026-08-28 | W043/W044 | codex | executable read-only workspace navigation → implemented | Added direct TUI shortcuts for Diagnostics, Monitor, Backups, and Setlists using bounded existing renderer models; no unsafe device action is enabled, and focused tests plus strict Clippy pass. |
 | 2026-08-28 | W040/W042 | codex | route projection fallback coverage → implemented | Added executable-binary regression tests for supported route conversion and preservation of existing transactional drafts when a daemon route is malformed; focused package tests and strict Clippy pass. |
 
