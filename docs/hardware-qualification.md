@@ -5,7 +5,7 @@ does not authorize MIDI, SysEx, HID, or LED writes.
 
 | Device | USB identity | Host transport observed | Current status | Required before production |
 | --- | --- | --- | --- | --- |
-| Lexicon Reflex | DIN via MIDISPORT Port A (`hw:4,0,0`) | ALSA MIDI Port A | Parameter and register operations verified | Checksum/recovery and physical reconnect are post-release qualification |
+| Lexicon Reflex | DIN via MIDISPORT Port A (`hw:2,0,0`) | ALSA MIDI Port A | Parameter and register operations verified | Checksum/recovery and physical reconnect are post-release qualification |
 | Eventide MicroPitch | `1b12:003a` | ALSA MIDI (`MicroPitch Pedal MIDI 1`) | PC1, CC4 sweep, CC15, and ALSA reopen verified; an earlier CC2 transmission is not control evidence because the official map assigns ACTIVE/BYPASS to CC14 | Re-run reversible ACTIVE/BYPASS on CC14; independently confirm audio behavior |
 | Novation Launch Control XL Mk1 | `1235:0061` | ALSA MIDI plus HUI endpoint | Input/output endpoints visible; controls are user-template programmable | Bind imported template assignments, then verify page mapping and LED reports |
 | M-Audio MIDISPORT 4x4 | `0763:1020` loader → `0763:1021` runtime | ALSA USB-MIDI; four MIDI ports | Firmware-loaded and enumerated | Four-port routing and physical disconnect/reconnect are post-release qualification |
