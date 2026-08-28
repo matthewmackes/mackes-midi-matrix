@@ -919,8 +919,10 @@ impl Daemon {
                     let payload = [0xB0 | channel, controller, 0];
                     if self.outputs.send_direct(&destination, &payload).is_ok() {
                         sent += 1;
+                        self.sent_events = self.sent_events.saturating_add(1);
                     } else {
                         failed += 1;
+                        self.dropped_events = self.dropped_events.saturating_add(1);
                     }
                 }
             }
