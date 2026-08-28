@@ -794,10 +794,23 @@ impl Daemon {
         bindings: &[mackes_config::DashboardMidiBinding],
         limit: usize,
     ) -> Vec<Command> {
+        self.poll_dashboard_actions(bindings, limit)
+            .into_iter()
+            .map(|(command, _)| command)
+            .collect()
+    }
+
+    /// Polls registered inputs and retains dashboard scene direction.
+    #[must_use]
+    fn poll_dashboard_actions(
+        &mut self,
+        bindings: &[mackes_config::DashboardMidiBinding],
+        limit: usize,
+    ) -> Vec<(Command, bool)> {
         let events = self.inputs.poll_once();
         let mut commands = Vec::with_capacity(limit.min(32));
         for event in events.into_iter().take(limit.min(128)) {
-            let mut matched = None;
+            let mut matched: Option<(Command, bool)> = None;
             for binding in bindings {
                 let trigger_matches = match (&binding.trigger, &event.message) {
                     (
@@ -843,8 +856,9 @@ impl Daemon {
                         break;
                     }
                     matched = match binding.command.as_str() {
-                        "panic" => Some(Command::Panic),
-                        "next_scene" | "previous_scene" => Some(Command::Scenes),
+                        "panic" => Some((Command::Panic, true)),
+                        "next_scene" => Some((Command::Scenes, true)),
+                        "previous_scene" => Some((Command::Scenes, false)),
                         _ => None,
                     };
                 }
@@ -863,11 +877,16 @@ impl Daemon {
         bindings: &[mackes_config::DashboardMidiBinding],
         limit: usize,
     ) -> Vec<Command> {
-        let commands = self.poll_dashboard_commands(bindings, limit);
-        for command in &commands {
-            let _ = self.handle_dashboard_command(*command);
+        let actions = self.poll_dashboard_actions(bindings, limit);
+        for (command, next) in &actions {
+            if *command == Command::Scenes {
+                self.navigate_scene(*next);
+                self.record_state_event(*command);
+            } else {
+                let _ = self.handle_dashboard_command(*command);
+            }
         }
-        commands
+        actions.into_iter().map(|(command, _)| command).collect()
     }
 
     /// Handles one daemon-owned dashboard command using the same bounded
