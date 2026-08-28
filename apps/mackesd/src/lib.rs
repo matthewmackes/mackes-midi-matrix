@@ -1577,11 +1577,6 @@ impl Daemon {
                         };
                         let generation = self.route_generation().unwrap_or(0).saturating_add(1);
                         let encoded = serde_json::to_vec(&previous).map_err(io::Error::other)?;
-                        if let Err(error) = self.replace_routes_json(&encoded, generation, 8) {
-                            return stream.write_all(
-                                format!("{{\"ok\":false,\"error\":\"{error}\"}}\n").as_bytes(),
-                            );
-                        }
                         if let Some(path) = self.config_path.as_deref() {
                             if let Err(error) =
                                 persist_routes(path, &serde_json::json!({"routes": previous}))
@@ -1590,6 +1585,29 @@ impl Daemon {
                                     format!("{{\"ok\":false,\"error\":\"route undo persistence failed: {error}\"}}\n").as_bytes(),
                                 );
                             }
+                        }
+                        if let Err(error) = self.replace_routes_json(&encoded, generation, 8) {
+                            if let Some(path) = self.config_path.as_deref() {
+                                let current =
+                                    serde_json::from_str::<serde_json::Value>(&command_ack(
+                                        Command::Routes,
+                                        self.health,
+                                        self.generation,
+                                        &[],
+                                        self.route_generation(),
+                                        &self.router.routes(),
+                                    ))
+                                    .ok()
+                                    .and_then(|value| value.get("routes").cloned())
+                                    .unwrap_or_else(|| serde_json::json!([]));
+                                let _ =
+                                    persist_routes(path, &serde_json::json!({"routes": current}));
+                            }
+                            return stream.write_all(
+                                format!("{{\"ok\":false,\"error\":\"{error}\"}}\n").as_bytes(),
+                            );
+                        }
+                        if let Some(path) = self.config_path.as_deref() {
                             let _ = fs::remove_file(routes_undo_path(path));
                         }
                         self.route_undo = None;
@@ -1610,7 +1628,7 @@ impl Daemon {
                             .and_then(serde_json::Value::as_u64)
                             .and_then(|value| u8::try_from(value).ok())
                             .unwrap_or(8);
-                        let current_routes =
+                        let mut current_routes =
                             serde_json::from_str::<serde_json::Value>(&command_ack(
                                 Command::Routes,
                                 self.health,
@@ -1622,13 +1640,6 @@ impl Daemon {
                             .ok()
                             .and_then(|value| value.get("routes").cloned());
                         let encoded = serde_json::to_vec(route_values).map_err(io::Error::other)?;
-                        if let Err(error) =
-                            self.replace_routes_json(&encoded, generation, hop_limit)
-                        {
-                            return stream.write_all(
-                                format!("{{\"ok\":false,\"error\":\"{error}\"}}\n").as_bytes(),
-                            );
-                        }
                         if let Some(path) = self.config_path.as_deref() {
                             if let Err(error) =
                                 persist_routes(path, &serde_json::json!({"routes": route_values}))
@@ -1639,11 +1650,29 @@ impl Daemon {
                             }
                             if let Some(previous) = current_routes.clone() {
                                 if let Err(error) = persist_routes_undo(path, &previous) {
+                                    let _ = persist_routes(
+                                        path,
+                                        &serde_json::json!({"routes": previous}),
+                                    );
                                     return stream.write_all(
                                         format!("{{\"ok\":false,\"error\":\"route undo persistence failed: {error}\"}}\n").as_bytes(),
                                     );
                                 }
                             }
+                        }
+                        if let Err(error) =
+                            self.replace_routes_json(&encoded, generation, hop_limit)
+                        {
+                            if let (Some(path), Some(previous)) =
+                                (self.config_path.as_deref(), current_routes.take())
+                            {
+                                let _ =
+                                    persist_routes(path, &serde_json::json!({"routes": previous}));
+                                let _ = fs::remove_file(routes_undo_path(path));
+                            }
+                            return stream.write_all(
+                                format!("{{\"ok\":false,\"error\":\"{error}\"}}\n").as_bytes(),
+                            );
                         }
                         self.route_undo = current_routes;
                     }
