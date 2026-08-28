@@ -20,7 +20,7 @@ fn run_tui() -> Result<(), String> {
     let mut learn_workspace = mackes_tui::LearnWorkspace::new();
     let reflex_workspace =
         mackes_tui::ReflexWorkspace::from_compiled_algorithm(1).map_err(str::to_owned)?;
-    let eventide_workspace = mackes_tui::DeviceWorkspace::eventide_micropitch();
+    let mut eventide_workspace = mackes_tui::DeviceWorkspace::eventide_micropitch();
     let mut routing_editor = mackes_tui::RoutingEditor::from_bank(&mackes_tui::MappingBank::new());
     let mut diagnostics = mackes_tui::DiagnosticsState::default();
     let mut monitor = mackes_tui::MonitorState::new(128).expect("valid monitor capacity");
@@ -110,12 +110,14 @@ fn run_tui() -> Result<(), String> {
                         };
                     }
                     KeyCode::Char('W') if workspace == 4 => {
-                        if let Some(destination) = first_output_endpoint() {
+                        if let (Some(destination), Some((control, value))) =
+                            (first_output_endpoint(), eventide_workspace.selected_control_request())
+                        {
                             let payload = serde_json::json!({
                                 "profile_id": "eventide.micropitch",
-                                "control": "Mix",
+                                "control": control,
                                 "channel": 1,
-                                "value": 64,
+                                "value": value,
                                 "destination": destination,
                                 "confirm": true,
                             });
@@ -294,6 +296,14 @@ fn run_tui() -> Result<(), String> {
                         if routing_editor.cycle_selected_mode().is_err() {
                             "route-edit-rejected".clone_into(&mut dashboard.health);
                         }
+                    }
+                    KeyCode::Char('j') if workspace == 4 => eventide_workspace.move_control(1),
+                    KeyCode::Char('k') if workspace == 4 => eventide_workspace.move_control(-1),
+                    KeyCode::Char('+') if workspace == 4 => {
+                        eventide_workspace.adjust_control_value(1);
+                    }
+                    KeyCode::Char('-') if workspace == 4 => {
+                        eventide_workspace.adjust_control_value(-1);
                     }
                     KeyCode::Char('j') if workspace == 5 => {
                         if !routing_editor.drafts.is_empty() {

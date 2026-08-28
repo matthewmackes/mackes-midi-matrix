@@ -1965,6 +1965,12 @@ pub struct DeviceWorkspace {
     pub non_authoritative_diagram: bool,
     /// Currently selected diagram block.
     pub selected_block: Option<String>,
+    /// Profile-owned controls available for the bounded editor.
+    pub control_labels: Vec<String>,
+    /// Selected control index in `control_labels`.
+    pub selected_control: Option<usize>,
+    /// Current 7-bit value used by the control editor.
+    pub control_value: u8,
 }
 
 impl DeviceWorkspace {
@@ -2064,6 +2070,14 @@ impl DeviceWorkspace {
         {
             return Err("device workspace fields must not be empty");
         }
+        let mut control_labels = shared_controls.clone();
+        for group in &groups {
+            for control in &group.control_ids {
+                if !control_labels.iter().any(|existing| existing == control) {
+                    control_labels.push(control.clone());
+                }
+            }
+        }
         Ok(Self {
             device_id,
             device_label,
@@ -2072,6 +2086,9 @@ impl DeviceWorkspace {
             groups,
             non_authoritative_diagram,
             selected_block: None,
+            selected_control: (!control_labels.is_empty()).then_some(0),
+            control_labels,
+            control_value: 64,
         })
     }
 
@@ -2091,6 +2108,34 @@ impl DeviceWorkspace {
         Ok(self.groups.iter().filter(|group| group.block_id == block_id).collect())
     }
 
+    /// Moves the selected profile control by a bounded signed step.
+    pub fn move_control(&mut self, step: i8) {
+        if self.control_labels.is_empty() {
+            self.selected_control = None;
+            return;
+        }
+        let current = self.selected_control.unwrap_or(0);
+        let length = self.control_labels.len();
+        let next = if step.is_negative() {
+            current.saturating_sub(usize::from(step.unsigned_abs()))
+        } else {
+            current.saturating_add(usize::try_from(step).unwrap_or(0)).min(length - 1)
+        };
+        self.selected_control = Some(next);
+    }
+
+    /// Adjusts the selected control value within the MIDI 7-bit range.
+    pub fn adjust_control_value(&mut self, delta: i16) {
+        let value = i16::from(self.control_value).saturating_add(delta).clamp(0, 127);
+        self.control_value = u8::try_from(value).unwrap_or(0);
+    }
+
+    /// Returns the selected profile control and current value.
+    #[must_use]
+    pub fn selected_control_request(&self) -> Option<(&str, u8)> {
+        Some((self.control_labels.get(self.selected_control?)?.as_str(), self.control_value))
+    }
+
     /// Returns the permanent diagram notice required for inferred topologies.
     #[must_use]
     pub fn diagram_notice(&self) -> Option<&'static str> {
@@ -2102,14 +2147,20 @@ impl DeviceWorkspace {
     /// flow, selected block, and profile-owned control ordering.
     #[must_use]
     pub fn frame_lines(&self, viewport: Viewport) -> Vec<String> {
-        let mut lines =
-            vec![format!("{} [{}] (q query, W send Mix=64)", self.device_label, self.device_id)];
+        let mut lines = vec![format!(
+            "{} [{}] (q query, j/k control, +/- value, W send)",
+            self.device_label, self.device_id
+        )];
         if let Some(notice) = self.diagram_notice() {
             lines.push(notice.to_owned());
         } else {
             lines.push("Logical/control view".into());
         }
         lines.push(format!("shared: {}", self.shared_controls.join(" | ")));
+        if let Some((control, value)) = self.selected_control_request() {
+            lines
+                .push(format!("control: {control} value={value} (j/k select, +/- adjust, W send)"));
+        }
         for node in &self.diagram.nodes {
             let marker =
                 if self.selected_block.as_deref() == Some(node.id.as_str()) { ">" } else { " " };
