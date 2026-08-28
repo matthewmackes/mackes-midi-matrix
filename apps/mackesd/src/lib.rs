@@ -472,6 +472,9 @@ impl Daemon {
         generation: u64,
         hop_limit: u8,
     ) -> Result<(), &'static str> {
+        if self.route_generation().is_some_and(|current| generation <= current) {
+            return Err("route generation is stale");
+        }
         self.router.swap(routes, generation, hop_limit)
     }
 
@@ -1964,6 +1967,10 @@ mod tests {
         assert_eq!(daemon.route_generation(), Some(4));
         assert_eq!(daemon.router.routes().len(), 1);
         assert!(daemon.replace_routes_json(br#"[{"source":1,"destination":1}]"#, 5, 8).is_err());
+        assert_eq!(daemon.route_generation(), Some(4));
+        assert!(daemon
+            .replace_routes_json(br#"[{"source":1,"destination":2,"class":"Note"}]"#, 4, 8,)
+            .is_err());
         assert_eq!(daemon.route_generation(), Some(4));
         drop(daemon);
         let _ = fs::remove_file(path);
