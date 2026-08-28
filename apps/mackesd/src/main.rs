@@ -111,6 +111,10 @@ fn main() {
             std::process::exit(1);
         }
     };
+    if let Err(error) = daemon.set_nonblocking(true) {
+        eprintln!("mackes-midi-matrixd: cannot configure nonblocking control socket: {error}");
+        std::process::exit(1);
+    }
     if restore_degraded {
         daemon.mark_degraded();
     }
@@ -171,10 +175,13 @@ fn main() {
             );
         }
         if let Err(error) = daemon.serve_once(policy) {
-            eprint!(
-                "{}",
-                mackesd::structured_log_line("error", "request_failed", &error.to_string())
-            );
+            if error.kind() != std::io::ErrorKind::WouldBlock {
+                eprint!(
+                    "{}",
+                    mackesd::structured_log_line("error", "request_failed", &error.to_string())
+                );
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
         }
         if daemon.health() == mackesd::Health::Stopping {
             break;

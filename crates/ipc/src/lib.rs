@@ -480,6 +480,15 @@ impl LocalServer {
         self.listener.accept().map(|(stream, _)| stream)
     }
 
+    /// Configures whether accept should return immediately when no client is ready.
+    ///
+    /// # Errors
+    ///
+    /// Returns an I/O error when the listener cannot change its blocking mode.
+    pub fn set_nonblocking(&self, nonblocking: bool) -> io::Result<()> {
+        self.listener.set_nonblocking(nonblocking)
+    }
+
     /// Accepts one client only when its kernel credentials satisfy `policy`.
     ///
     /// # Errors

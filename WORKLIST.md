@@ -2640,6 +2640,7 @@ New requests enter here before implementation.
 | 2026-08-28 | W040 | codex | TUI error-path terminal restoration → implemented | Wrapped the event loop result so raw mode, alternate-screen teardown, and cursor restoration execute after rendering or input errors; formatting, strict Clippy, package tests, and diff checks pass. |
 | 2026-08-28 | W040/W046/W047/W049 | codex | canonical workspace labels → implemented | Corrected shared `workspace_name` metadata to match executable shortcuts: Dashboard, MIDI Learn, Reflex, Eventide, and Routing; focused TUI/CLI tests and strict Clippy pass. |
 | 2026-08-28 | W052/W053 | codex | release builder stale-binary prevention → implemented | The test-release script now performs a locked release build of both binaries before packaging; regenerated archive checksum passes and extracted CLI help includes current scene navigation. |
+| 2026-08-28 | W010/W052/W053 | codex | signal-aware nonblocking daemon accept → implemented | Production daemon control-socket accepts are nonblocking with a bounded idle wait, allowing registered SIGTERM/SIGINT handlers to reach the shutdown boundary; rebuilt release process exits 0 on SIGTERM, and archive checksum passes. |
 
 The worklist is complete only when W053 is `DONE`. A feature demonstration, passing unit
 tests, or code presence alone is not release completion.

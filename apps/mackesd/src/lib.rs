@@ -388,6 +388,15 @@ impl Daemon {
         })
     }
 
+    /// Enables or disables nonblocking accepts for the daemon-owned control socket.
+    ///
+    /// # Errors
+    ///
+    /// Returns an I/O error when the listener cannot change mode.
+    pub fn set_nonblocking(&self, nonblocking: bool) -> io::Result<()> {
+        self.server.set_nonblocking(nonblocking)
+    }
+
     /// Creates and owns the standard ALSA virtual MIDI pair until daemon shutdown.
     ///
     /// # Errors
