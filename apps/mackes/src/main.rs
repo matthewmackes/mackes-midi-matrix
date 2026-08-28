@@ -109,6 +109,29 @@ fn run_tui() -> Result<(), String> {
                             "device-query-failed".to_owned()
                         };
                     }
+                    KeyCode::Char('W') if workspace == 4 => {
+                        if let Some(destination) = first_output_endpoint() {
+                            let payload = serde_json::json!({
+                                "profile_id": "eventide.micropitch",
+                                "control": "Mix",
+                                "channel": 1,
+                                "value": 64,
+                                "destination": destination,
+                                "confirm": true,
+                            });
+                            let encoded =
+                                serde_json::to_vec(&payload).expect("device control payload");
+                            let response =
+                                daemon_request(mackes_ipc::Command::DeviceControl, &encoded);
+                            dashboard.health = if response.contains("\"ok\":true") {
+                                "device-control-sent".to_owned()
+                            } else {
+                                "device-control-failed".to_owned()
+                            };
+                        } else {
+                            "device-output-unavailable".clone_into(&mut dashboard.health);
+                        }
+                    }
                     KeyCode::Char('q') => break Ok(()),
                     KeyCode::Char(value) if ('1'..='9').contains(&value) => {
                         workspace = value
@@ -1243,6 +1266,21 @@ fn endpoint_pair_for_new_route() -> Option<(u64, u64)> {
         .get("id")?
         .as_u64()?;
     Some((input, output))
+}
+
+fn first_output_endpoint() -> Option<String> {
+    let response = daemon_request(mackes_ipc::Command::Endpoints, b"{}");
+    let value = serde_json::from_str::<serde_json::Value>(&response).ok()?;
+    value
+        .get("endpoints")?
+        .as_array()?
+        .iter()
+        .find(|endpoint| {
+            endpoint.get("direction").and_then(serde_json::Value::as_str) == Some("output")
+        })?
+        .get("id")?
+        .as_str()
+        .map(str::to_owned)
 }
 
 fn save_setlists(editor: &mackes_tui::SetlistEditor) -> String {

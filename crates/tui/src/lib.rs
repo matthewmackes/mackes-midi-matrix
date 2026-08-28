@@ -2103,7 +2103,7 @@ impl DeviceWorkspace {
     #[must_use]
     pub fn frame_lines(&self, viewport: Viewport) -> Vec<String> {
         let mut lines =
-            vec![format!("{} [{}] (q query device)", self.device_label, self.device_id)];
+            vec![format!("{} [{}] (q query, W send Mix=64)", self.device_label, self.device_id)];
         if let Some(notice) = self.diagram_notice() {
             lines.push(notice.to_owned());
         } else {
