@@ -447,10 +447,10 @@ pub enum DashboardPanel {
 pub const fn workspace_name(shortcut: u8) -> Option<&'static str> {
     match shortcut {
         1 => Some("Dashboard"),
-        2 => Some("Routing"),
-        3 => Some("Scenes"),
-        4 => Some("Diagnostics"),
-        5 => Some("Devices"),
+        2 => Some("MIDI Learn"),
+        3 => Some("Reflex"),
+        4 => Some("Eventide"),
+        5 => Some("Routing"),
         _ => None,
     }
 }
@@ -2664,7 +2664,7 @@ mod tests {
         assert_eq!(keymap.command_for('l'), Some(UiCommand::MoveRight));
         assert_eq!(keymap.command_for('3'), Some(UiCommand::OpenWorkspace(3)));
         assert_eq!(workspace_name(1), Some("Dashboard"));
-        assert_eq!(workspace_name(5), Some("Devices"));
+        assert_eq!(workspace_name(5), Some("Routing"));
         assert_eq!(workspace_name(6), None);
         assert_eq!(keymap.description('h'), Some("Left"));
         assert_eq!(keymap.description('!'), Some("Panic"));
