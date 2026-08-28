@@ -157,6 +157,54 @@ fn run_tui() -> Result<(), String> {
                             learn_workspace.select(index);
                         }
                     }
+                    KeyCode::Char('r')
+                        if workspace == 2
+                            && learn_workspace.phase == mackes_tui::LearnPhase::Destination =>
+                    {
+                        if let Some(index) = learn_workspace.selected {
+                            if let Some(candidate) = learn_workspace.candidates.get(index) {
+                                let mode = match candidate.kind {
+                                    mackes_midi_engine::LearnMessageKind::ControlChange => {
+                                        mackes_tui::MappingMode::Cc
+                                    }
+                                    mackes_midi_engine::LearnMessageKind::ProgramChange => {
+                                        mackes_tui::MappingMode::ProgramChange
+                                    }
+                                    mackes_midi_engine::LearnMessageKind::NoteOn
+                                    | mackes_midi_engine::LearnMessageKind::NoteOff
+                                    | mackes_midi_engine::LearnMessageKind::PolyPressure => {
+                                        mackes_tui::MappingMode::Note
+                                    }
+                                    mackes_midi_engine::LearnMessageKind::PitchBend => {
+                                        mackes_tui::MappingMode::PitchBend
+                                    }
+                                    mackes_midi_engine::LearnMessageKind::SysEx => {
+                                        mackes_tui::MappingMode::Sysex
+                                    }
+                                    _ => continue,
+                                };
+                                let _ = learn_workspace.set_destination("route.default", mode);
+                            }
+                        }
+                    }
+                    KeyCode::Char('t')
+                        if workspace == 2
+                            && learn_workspace.phase == mackes_tui::LearnPhase::Destination =>
+                    {
+                        learn_workspace.begin_live_test();
+                    }
+                    KeyCode::Enter
+                        if workspace == 2
+                            && learn_workspace.phase == mackes_tui::LearnPhase::Testing =>
+                    {
+                        learn_workspace.finish_live_test(true);
+                    }
+                    KeyCode::Enter
+                        if workspace == 2
+                            && learn_workspace.phase == mackes_tui::LearnPhase::Destination =>
+                    {
+                        learn_workspace.commit();
+                    }
                     KeyCode::Esc if workspace == 2 => learn_workspace.cancel(),
                     KeyCode::Char('d') if workspace == 5 => {
                         if let Some(index) = routing_editor.selected {

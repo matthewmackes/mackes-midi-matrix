@@ -2486,7 +2486,7 @@ impl LearnWorkspace {
     pub fn frame_lines(&self, viewport: Viewport) -> Vec<String> {
         let mut lines = vec![
             format!(
-                "MIDI Learn — {:?} (l capture, j/k select, Enter accept, Esc cancel)",
+                "MIDI Learn — {:?} (l capture, j/k select, Enter accept, r route, t test, Esc cancel)",
                 self.phase
             ),
             format!("input={}", self.learn_input_alias.as_deref().unwrap_or("not selected")),
