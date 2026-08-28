@@ -149,6 +149,26 @@ pub fn ui_command_for_midi(
     match_result
 }
 
+/// Polls a bounded number of events and resolves explicit dashboard actions.
+///
+/// The input adapter remains owned by the daemon or application boundary; this
+/// helper never opens ports, routes events, or dispatches commands itself.
+#[must_use]
+pub fn poll_dashboard_actions(
+    input: &mut dyn mackes_midi_engine::MidiInputAdapter,
+    bindings: &[DashboardMidiBinding],
+    limit: usize,
+) -> Vec<UiCommand> {
+    let mut commands = Vec::with_capacity(limit.min(32));
+    for _ in 0..limit.min(128) {
+        let Some(event) = input.receive() else { break };
+        if let Some(command) = ui_command_for_midi(&event.message, bindings) {
+            commands.push(command);
+        }
+    }
+    commands
+}
+
 /// Deterministic default keymap; device actions still travel through IPC.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct Keymap;
@@ -2493,6 +2513,46 @@ mod tests {
             None,
             "ambiguous mappings must not dispatch"
         );
+    }
+
+    #[test]
+    fn dashboard_action_polling_is_bounded_and_observational() {
+        struct FakeInput {
+            info: mackes_midi_engine::EndpointInfo,
+            events: std::collections::VecDeque<mackes_domain::MidiEvent>,
+        }
+        impl mackes_midi_engine::MidiInputAdapter for FakeInput {
+            fn info(&self) -> &mackes_midi_engine::EndpointInfo {
+                &self.info
+            }
+            fn receive(&mut self) -> Option<mackes_domain::MidiEvent> {
+                self.events.pop_front()
+            }
+        }
+        let event = mackes_domain::MidiEvent {
+            timestamp: mackes_domain::TimestampNanos::new(1),
+            sequence: 1,
+            endpoint: mackes_domain::EndpointId::new(1).expect("endpoint"),
+            message: mackes_domain::MidiMessage::NoteOn {
+                channel: mackes_domain::MidiChannel::new(1).expect("channel"),
+                note: mackes_domain::SevenBit::new(36).expect("note"),
+                velocity: mackes_domain::SevenBit::new(127).expect("velocity"),
+            },
+        };
+        let mut input = FakeInput {
+            info: mackes_midi_engine::EndpointInfo {
+                id: "learn-input".into(),
+                name: "test input".into(),
+                direction: mackes_midi_engine::EndpointDirection::Input,
+            },
+            events: std::collections::VecDeque::from([event.clone(), event]),
+        };
+        let binding = DashboardMidiBinding {
+            trigger: DashboardMidiTrigger::NoteOn { channel: 1, note: 36 },
+            command: UiCommand::NextScene,
+        };
+        assert_eq!(poll_dashboard_actions(&mut input, &[binding], 1), vec![UiCommand::NextScene]);
+        assert_eq!(input.events.len(), 1);
     }
 
     #[test]
