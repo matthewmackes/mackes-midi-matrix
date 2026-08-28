@@ -1839,8 +1839,8 @@ validation record.
   severity-tagged notifications, a typed `DashboardEvent` projection, and a generation-tagged
   signal-flow model. `draw_dashboard` and the executable TUI provide responsive rendering and
   keyboard scene/panic commands through the daemon IPC boundary. Dashboard, diagram, notification,
-  and Clippy checks pass; live daemon event binding and mapped-MIDI dashboard actions remain for
-  final review.
+  live daemon event replay, and mapped-MIDI dashboard actions are wired through the same bounded
+  command path; hardware-trigger qualification remains external review evidence.
 
 #### [~] W042 — Routing and mapping editor
 
@@ -1859,8 +1859,9 @@ validation record.
   validation, typed CC/program/note/pitch-bend/SysEx modes, explicit priority, duplicate-input
   conflict detection, batch validation, deterministic reordering before submission, engine-owned
   linear/square/square-root curve selection, and expected-generation
-  commit guards for concurrent daemon changes, with reducer coverage. Full matrix/filter/
-  transform widgets and daemon persistence remain explicitly scoped for final review.
+  commit guards for concurrent daemon changes, with reducer coverage. Rich route state now
+  persists through daemon JSON and the TUI projection; full matrix/filter/transform authoring
+  widgets and physical routing qualification remain explicitly scoped for final review.
 
 #### [~] W043 — Device, SysEx, and backup workspaces
 
