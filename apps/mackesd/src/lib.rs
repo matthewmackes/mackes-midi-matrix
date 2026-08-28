@@ -620,6 +620,26 @@ impl Daemon {
         self.record_state_event(Command::Scenes);
     }
 
+    /// Selects the next or previous scene in the daemon-owned catalog.
+    pub fn navigate_scene(&mut self, next: bool) -> Option<String> {
+        if self.scene_ids.is_empty() {
+            return self.active_scene.clone();
+        }
+        let current = self
+            .active_scene
+            .as_deref()
+            .and_then(|scene| self.scene_ids.iter().position(|id| id == scene))
+            .unwrap_or(0);
+        let index = if next {
+            (current + 1) % self.scene_ids.len()
+        } else {
+            current.checked_sub(1).unwrap_or(self.scene_ids.len() - 1)
+        };
+        let scene = self.scene_ids[index].clone();
+        self.set_active_scene(Some(scene.clone()));
+        Some(scene)
+    }
+
     /// Registers one explicitly opened input adapter with the daemon.
     ///
     /// # Errors
@@ -742,7 +762,11 @@ impl Daemon {
         if !matches!(command, Command::Panic | Command::Scenes) {
             return "{\"ok\":false,\"error\":\"dashboard command is not allowed\"}\n".to_owned();
         }
-        self.record_state_event(command);
+        if command == Command::Scenes {
+            self.navigate_scene(true);
+        } else {
+            self.record_state_event(command);
+        }
         command_ack(command, self.health, self.generation, &[], self.route_generation(), &[])
     }
 
@@ -1233,6 +1257,13 @@ impl Daemon {
                 }
                 return stream
                     .write_all(b"{\"ok\":false,\"error\":\"learn endpoint is required\"}\n");
+            }
+            if command == Some(Command::Scenes) {
+                let value =
+                    serde_json::from_slice::<serde_json::Value>(&request).unwrap_or_default();
+                let next =
+                    value.get("direction").and_then(serde_json::Value::as_str) != Some("previous");
+                self.navigate_scene(next);
             }
             if let Some(command) = command {
                 if !matches!(
@@ -1759,6 +1790,8 @@ mod tests {
         let mut daemon = Daemon::bind(&path).expect("daemon");
         daemon.set_scene_ids(vec!["intro".into(), "verse".into()]);
         daemon.set_active_scene(Some("verse".into()));
+        assert_eq!(daemon.navigate_scene(true).as_deref(), Some("intro"));
+        assert_eq!(daemon.navigate_scene(false).as_deref(), Some("verse"));
         let response: serde_json::Value =
             serde_json::from_str(&daemon.scenes_response()).expect("response");
         assert_eq!(response["scenes"], serde_json::json!(["intro", "verse"]));
