@@ -8,11 +8,11 @@
 | Field | Value |
 |---|---|
 | Worklist version | 1.7 |
-| Product stage | Foundation implementation / integration pending |
+| Product stage | 0.1.0-test.1 public test release / integration qualification |
 | Target release | v1.0 |
 | Primary platform | Fedora Linux 44, x86_64 |
 | Language | Rust |
-| Last updated | 2026-08-26 |
+| Last updated | 2026-08-28 |
 | Overall status | `IN_PROGRESS` |
 | Canonical file | `WORKLIST.md` |
 
@@ -2653,6 +2653,7 @@ New requests enter here before implementation.
 | 2026-08-28 | W052/W053 | codex | release-gate artifact verification → implemented | Extended the release gate to rebuild the test bundle, verify its SHA-256 manifest, and assert both packaged release binaries are present; fixed pipefail-safe archive listing checks and the full gate passes. |
 | 2026-08-28 | W052/W053 | codex | bundled installer artifact smoke → implemented | Release gate now extracts the generated archive and runs its bundled `install-fedora.sh --check` path without mutation; full gate passes including checksum, binary presence, and installer preflight. |
 | 2026-08-28 | W052/W053/W045/W031 | codex | release CLI workflow smoke → implemented | Release gate now validates the redacted two-scene fixture with the packaged release CLI and confirms JSON scene-plan output retains an unsafe-action marker; full gate passes. |
+| 2026-08-28 | WORKLIST/W053 | codex | release-stage metadata synchronization → implemented | Updated document control to identify the public `0.1.0-test.1` integration-qualification stage and current update date; repository policy and full release gate pass. |
 | 2026-08-28 | W052/W053 | codex | public test release publication → verified | Published GitHub pre-release `v0.1.0-test.1` with the Linux x86_64 tarball and SHA-256 manifest; GitHub confirms the release is public, non-draft, and marked pre-release. |
 | 2026-08-28 | W045/W031 | codex | safe scene plan CLI → implemented | Added `scene plan <config> <project> <scene> [--json]`, compiling validated persisted actions into the ordinary activation plan without transmission; valid empty plans and missing-scene exit-2 JSON errors are verified. |
 
