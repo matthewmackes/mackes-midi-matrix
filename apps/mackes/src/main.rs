@@ -263,6 +263,9 @@ fn main() {
         [command, endpoint, limit] if command == "learn" => {
             print_learn(endpoint, limit.parse().unwrap_or(0));
         }
+        [command, endpoint, limit, flag] if command == "learn" && flag == "--json" => {
+            print_learn(endpoint, limit.parse().unwrap_or(0));
+        }
         [command] if command == "scenes" || command == "devices" => {
             let ipc_command = if command == "scenes" {
                 mackes_ipc::Command::Scenes
