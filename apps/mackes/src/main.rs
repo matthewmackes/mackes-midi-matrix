@@ -297,6 +297,11 @@ fn run_tui() -> Result<(), String> {
                             "route-edit-rejected".clone_into(&mut dashboard.health);
                         }
                     }
+                    KeyCode::Char('c') if workspace == 5 => {
+                        if routing_editor.cycle_selected_channel().is_err() {
+                            "route-channel-edit-rejected".clone_into(&mut dashboard.health);
+                        }
+                    }
                     KeyCode::Char('j') if workspace == 4 => eventide_workspace.move_control(1),
                     KeyCode::Char('k') if workspace == 4 => eventide_workspace.move_control(-1),
                     KeyCode::Char('+') if workspace == 4 => {

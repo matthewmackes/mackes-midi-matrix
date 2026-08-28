@@ -1023,7 +1023,7 @@ impl RoutingEditor {
     #[must_use]
     pub fn frame_lines(&self, viewport: Viewport) -> Vec<String> {
         let mut lines = vec![
-            "Routing & mappings — uncommitted draft (a add, j/k select, m mode, d remove, s save)"
+            "Routing & mappings — uncommitted draft (a add, j/k select, m mode, c channel, d remove, s save)"
                 .into(),
         ];
         lines.extend(self.drafts.iter().enumerate().map(|(index, draft)| {
@@ -1427,6 +1427,27 @@ impl RoutingEditor {
             MappingMode::Sysex => MappingMode::Cc,
         };
         candidate[index].mode = mode;
+        validate_mapping_batch(&candidate)?;
+        self.drafts = candidate;
+        Ok(())
+    }
+
+    /// Cycles the selected mapping channel through any-channel and MIDI channels 1–16.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when no valid row is selected or the edited batch conflicts.
+    pub fn cycle_selected_channel(&mut self) -> Result<(), String> {
+        let index = self.selected.ok_or("no mapping is selected")?;
+        let mut candidate = self.drafts.clone();
+        if index >= candidate.len() {
+            return Err("selected mapping is out of range".into());
+        }
+        candidate[index].channel = match candidate[index].channel {
+            None => Some(1),
+            Some(channel) if channel < 16 => Some(channel + 1),
+            Some(_) => None,
+        };
         validate_mapping_batch(&candidate)?;
         self.drafts = candidate;
         Ok(())
@@ -3330,6 +3351,31 @@ mod tests {
         let mut editor = RoutingEditor::from_bank(&bank);
         assert!(editor.reorder(&[0]).is_ok());
         assert_eq!(editor.remove(4), Err("mapping index is out of range"));
+    }
+
+    #[test]
+    fn routing_editor_cycles_channels_transactionally() {
+        let draft = MappingDraft {
+            source: "1".into(),
+            destination: "2".into(),
+            channel: None,
+            enabled: true,
+            mode: MappingMode::Cc,
+            priority: 0,
+            curve: mackes_midi_engine::Curve::Linear,
+            filters: MappingFilterDraft::default(),
+        };
+        let mut editor = RoutingEditor::from_bank(&MappingBank::new());
+        editor.add(draft).expect("draft");
+        assert_eq!(editor.drafts[0].channel, None);
+        editor.cycle_selected_channel().expect("channel 1");
+        assert_eq!(editor.drafts[0].channel, Some(1));
+        for _ in 0..15 {
+            editor.cycle_selected_channel().expect("channel");
+        }
+        assert_eq!(editor.drafts[0].channel, Some(16));
+        editor.cycle_selected_channel().expect("any channel");
+        assert_eq!(editor.drafts[0].channel, None);
     }
 
     #[test]
