@@ -89,6 +89,11 @@ Hardware and RTP/network interoperability tests are ignored by default, require 
 
 The current test release is `0.1.0-test.1`. Recreate its Fedora/Linux x86_64 bundle with:
 
+The published pre-release is available at
+[`v0.1.0-test.1`](https://github.com/matthewmackes/mackes-midi-matrix/releases/tag/v0.1.0-test.1),
+with assets named `mackes-midi-matrix-0.1.0-test.1-linux-x86_64.tar.gz` and its `.sha256`
+manifest.
+
 ```bash
 cargo build --workspace --release --locked
 bash scripts/package-test-release.sh 0.1.0-test.1
