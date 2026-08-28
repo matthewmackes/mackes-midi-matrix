@@ -33,7 +33,8 @@ four MIDI input/output ports.
 Physical qualification must use a verified map record and explicit
 `MACKES_CONFIRM_PHYSICAL_WRITE=1`; see `scripts/physical-write-guard.sh`.
 
-The host does not currently have the `midisport-firmware` package installed.
-The Debian device database identifies this USB ID as requiring that firmware
-loader, so installing and validating the Fedora equivalent is a prerequisite
-for ALSA endpoint qualification.
+The Fedora `fxload` and `midisport-firmware` packages are installed on the
+qualification host, and the connected MIDISPORT has transitioned from loader
+identity `0763:1020` to runtime identity `0763:1021`. The four runtime ports
+are therefore available for the remaining physical routing and reconnect
+qualification; package installation is no longer a prerequisite.
