@@ -617,6 +617,12 @@ pub fn copy_setlist(
 pub struct SceneRef {
     /// Stable scene ID.
     pub id: String,
+    /// Optional operator-facing scene name.
+    #[serde(default)]
+    pub name: Option<String>,
+    /// Optional category used by setlist/editor filtering.
+    #[serde(default)]
+    pub category: Option<String>,
 }
 
 /// Replaces one project only after validating the complete resulting document.
@@ -798,7 +804,11 @@ pub fn copy_project(
         .scenes
         .iter()
         .enumerate()
-        .map(|(index, scene)| SceneRef { id: format!("{new_id}.scene-{}-{}", index + 1, scene.id) })
+        .map(|(index, scene)| SceneRef {
+            id: format!("{new_id}.scene-{}-{}", index + 1, scene.id),
+            name: scene.name.clone(),
+            category: scene.category.clone(),
+        })
         .collect();
     Ok(Project { id: new_id.to_owned(), scenes })
 }
@@ -842,7 +852,7 @@ pub fn copy_scene(project: &Project, source_id: &str, new_id: &str) -> Result<Pr
         return Err(format!("unknown scene ID '{source_id}'"));
     }
     let mut result = project.clone();
-    result.scenes.push(SceneRef { id: new_id.to_owned() });
+    result.scenes.push(SceneRef { id: new_id.to_owned(), name: None, category: None });
     Ok(result)
 }
 
@@ -1245,7 +1255,7 @@ mod tests {
             endpoints: vec![],
             projects: vec![Project {
                 id: "demo".to_owned(),
-                scenes: vec![SceneRef { id: "intro".to_owned() }],
+                scenes: vec![SceneRef { id: "intro".to_owned(), name: None, category: None }],
             }],
             profiles: vec![],
             setlists: vec![],
@@ -1470,13 +1480,16 @@ mod tests {
         .is_err());
         let projects = vec![
             project.clone(),
-            Project { id: "live".into(), scenes: vec![SceneRef { id: "outro".into() }] },
+            Project {
+                id: "live".into(),
+                scenes: vec![SceneRef { id: "outro".into(), name: None, category: None }],
+            },
         ];
         assert_eq!(search_projects(&projects, "OUT"), vec![&projects[1]]);
         assert_eq!(search_projects(&projects, "DEMO"), vec![&projects[0]]);
         assert!(search_projects(&projects, "missing").is_empty());
         let mut invalid = project.clone();
-        invalid.scenes.push(SceneRef { id: "intro".into() });
+        invalid.scenes.push(SceneRef { id: "intro".into(), name: None, category: None });
         assert!(replace_project(
             &ConfigDocument { projects: vec![project], ..document() },
             invalid
