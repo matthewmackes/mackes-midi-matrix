@@ -1515,7 +1515,7 @@ pub struct Route {
 }
 
 /// Fine-grained deterministic predicate applied after coarse route filters.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub enum RoutePredicate {
     /// Note, controller, or program number in an inclusive MIDI range.
     NumberRange {

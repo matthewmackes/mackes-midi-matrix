@@ -149,7 +149,7 @@ impl TimestampNanos {
 }
 
 /// MIDI system real-time messages.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, serde::Deserialize, serde::Serialize)]
 pub enum RealtimeMessage {
     /// Timing clock.
     Clock,

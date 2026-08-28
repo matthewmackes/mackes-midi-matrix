@@ -704,6 +704,9 @@ dependencies = [
 [[package]]
 name = "mackes-domain"
 version = "0.1.0"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "mackes-ipc"
@@ -720,6 +723,7 @@ version = "0.1.0"
 dependencies = [
  "mackes-domain",
  "midir",
+ "serde",
 ]
 
 [[package]]

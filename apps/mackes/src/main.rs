@@ -1526,6 +1526,7 @@ fn save_routes(editor: &mackes_tui::RoutingEditor, current_generation: u64) -> S
                     mackes_midi_engine::Curve::Square => "square",
                     mackes_midi_engine::Curve::SquareRoot => "square_root",
                 },
+                "predicates": serde_json::to_value(&draft.filters.predicates).ok()?,
             }))
         })
         .collect::<Vec<_>>();
@@ -1628,7 +1629,12 @@ fn project_routes(editor: &mut mackes_tui::RoutingEditor, payload: &serde_json::
                     Some("square_root") => mackes_midi_engine::Curve::SquareRoot,
                     _ => mackes_midi_engine::Curve::Linear,
                 },
-                filters: mackes_tui::MappingFilterDraft::default(),
+                filters: mackes_tui::MappingFilterDraft {
+                    predicates: route
+                        .get("predicates")
+                        .and_then(|value| serde_json::from_value(value.clone()).ok())
+                        .unwrap_or_default(),
+                },
                 allow_cycle: route
                     .get("allow_cycle")
                     .and_then(serde_json::Value::as_bool)

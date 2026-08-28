@@ -319,6 +319,7 @@ fn command_ack(
                             mackes_midi_engine::Curve::Square => "square",
                             mackes_midi_engine::Curve::SquareRoot => "square_root",
                         },
+                        "predicates": route.predicates,
                     })
                 })
                 .collect::<Vec<_>>();
@@ -578,7 +579,14 @@ impl Daemon {
                     Some("square_root") => mackes_midi_engine::Curve::SquareRoot,
                     Some(_) => return Err("unknown route curve"),
                 },
-                predicates: Vec::new(),
+                predicates: object
+                    .get("predicates")
+                    .map(|value| {
+                        serde_json::from_value(value.clone())
+                            .map_err(|_| "invalid route predicates")
+                    })
+                    .transpose()?
+                    .unwrap_or_default(),
                 allow_cycle: object
                     .get("allow_cycle")
                     .and_then(serde_json::Value::as_bool)
