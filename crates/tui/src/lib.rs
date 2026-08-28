@@ -1042,7 +1042,7 @@ impl RoutingEditor {
     #[must_use]
     pub fn frame_lines(&self, viewport: Viewport) -> Vec<String> {
         let mut lines = vec![
-            "Routing & mappings — uncommitted draft (a add, j/k select, m mode, c channel, d remove, s save)"
+            "Routing & mappings — uncommitted draft (a add, j/k select, m mode, c channel, +/- priority, e enable, d remove, s save)"
                 .into(),
         ];
         lines.extend(self.drafts.iter().enumerate().map(|(index, draft)| {
@@ -1469,6 +1469,40 @@ impl RoutingEditor {
         };
         validate_mapping_batch(&candidate)?;
         self.drafts = candidate;
+        Ok(())
+    }
+
+    /// Toggles the selected mapping without mutating the persisted bank.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when no valid row is selected.
+    pub fn toggle_selected_enabled(&mut self) -> Result<(), String> {
+        let index = self.selected.ok_or("no mapping is selected")?;
+        let Some(draft) = self.drafts.get_mut(index) else {
+            return Err("selected mapping is out of range".into());
+        };
+        draft.enabled = !draft.enabled;
+        Ok(())
+    }
+
+    /// Adjusts the selected mapping priority with saturating bounds.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when no valid row is selected.
+    pub fn adjust_selected_priority(&mut self, delta: i32) -> Result<(), String> {
+        let index = self.selected.ok_or("no mapping is selected")?;
+        let Some(draft) = self.drafts.get_mut(index) else {
+            return Err("selected mapping is out of range".into());
+        };
+        draft.priority = if delta.is_negative() {
+            draft.priority.saturating_sub(
+                u16::try_from(delta.unsigned_abs().min(u32::from(u16::MAX))).unwrap_or(u16::MAX),
+            )
+        } else {
+            draft.priority.saturating_add(u16::try_from(delta).unwrap_or(u16::MAX))
+        };
         Ok(())
     }
     /// Reorders rows using a complete permutation after validation.
@@ -3395,6 +3429,14 @@ mod tests {
         assert_eq!(editor.drafts[0].channel, Some(16));
         editor.cycle_selected_channel().expect("any channel");
         assert_eq!(editor.drafts[0].channel, None);
+        editor.toggle_selected_enabled().expect("disable");
+        assert!(!editor.drafts[0].enabled);
+        editor.adjust_selected_priority(7).expect("raise priority");
+        assert_eq!(editor.drafts[0].priority, 7);
+        editor.adjust_selected_priority(-3).expect("lower priority");
+        assert_eq!(editor.drafts[0].priority, 4);
+        editor.adjust_selected_priority(-i32::from(u16::MAX)).expect("saturate priority");
+        assert_eq!(editor.drafts[0].priority, 0);
     }
 
     #[test]

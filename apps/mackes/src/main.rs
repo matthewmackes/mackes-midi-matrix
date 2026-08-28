@@ -302,6 +302,21 @@ fn run_tui() -> Result<(), String> {
                             "route-channel-edit-rejected".clone_into(&mut dashboard.health);
                         }
                     }
+                    KeyCode::Char('e') if workspace == 5 => {
+                        if routing_editor.toggle_selected_enabled().is_err() {
+                            "route-enable-edit-rejected".clone_into(&mut dashboard.health);
+                        }
+                    }
+                    KeyCode::Char('+') if workspace == 5 => {
+                        if routing_editor.adjust_selected_priority(1).is_err() {
+                            "route-priority-edit-rejected".clone_into(&mut dashboard.health);
+                        }
+                    }
+                    KeyCode::Char('-') if workspace == 5 => {
+                        if routing_editor.adjust_selected_priority(-1).is_err() {
+                            "route-priority-edit-rejected".clone_into(&mut dashboard.health);
+                        }
+                    }
                     KeyCode::Char('j') if workspace == 4 => eventide_workspace.move_control(1),
                     KeyCode::Char('k') if workspace == 4 => eventide_workspace.move_control(-1),
                     KeyCode::Char('+') if workspace == 4 => {
