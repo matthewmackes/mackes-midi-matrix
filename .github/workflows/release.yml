@@ -1,0 +1,32 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - name: Verify release gate
+        run: scripts/release-gate.sh
+      - name: Build tagged archive
+        run: scripts/package-test-release.sh "${GITHUB_REF_NAME#v}"
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          gh release create "$GITHUB_REF_NAME" \
+            "dist/mackes-midi-matrix-${version}-linux-x86_64.tar.gz" \
+            "dist/mackes-midi-matrix-${version}-linux-x86_64.tar.gz.sha256" \
+            --title "MACKES MIDI Matrix ${version}" \
+            --notes-file "docs/releases/${version}.md"
