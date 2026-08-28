@@ -2555,6 +2555,7 @@ Redacted fixture filenames and hashes:
 | 2026-08-28 | W040/W041/W046 | codex | persisted-to-runtime binding conversion → implemented | Added bounded config-to-TUI binding conversion with shared validation, command allowlisting, duplicate rejection, and a 128-binding cap; TUI tests (32) and strict Clippy pass. |
 | 2026-08-28 | W040/W041/W046 | codex | shared UI command dispatch path → implemented | Keyboard scene and panic actions now route through one `UiCommand`-to-IPC dispatcher, establishing the same governed command path required by future mapped-MIDI actions; targeted checks pass. |
 | 2026-08-28 | W010/W040/W041/W046 | codex | daemon-owned persisted binding polling → implemented | Added bounded `Daemon::poll_dashboard_commands` over registered inputs, resolving persisted note-on/CC bindings into only governed Panic/Scenes commands while ignoring invalid, unmapped, and ambiguous triggers; daemon tests (20) and strict Clippy pass. |
+| 2026-08-28 | W010/W040/W041/W046 | codex | daemon-loop binding invocation → implemented | The daemon loads validated persisted dashboard bindings at startup, polls them each bounded loop iteration, records resolved commands in the state journal, and emits bounded structured action diagnostics; targeted checks pass. |
 | 2026-08-28 | W040/W041/W046 | codex | canonical dashboard binding fixture → implemented | Extended the redacted valid configuration fixture and fixture documentation with explicit panic/next-scene bindings; config tests and the full release gate pass. |
 
 ## 6. Proposed changes and decisions queue

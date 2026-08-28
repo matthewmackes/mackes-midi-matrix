@@ -715,6 +715,20 @@ impl Daemon {
         commands
     }
 
+    /// Polls and records mapped dashboard commands for the daemon loop.
+    #[must_use]
+    pub fn process_dashboard_commands(
+        &mut self,
+        bindings: &[mackes_config::DashboardMidiBinding],
+        limit: usize,
+    ) -> Vec<Command> {
+        let commands = self.poll_dashboard_commands(bindings, limit);
+        for command in &commands {
+            self.record_state_event(*command);
+        }
+        commands
+    }
+
     /// Polls owned inputs and dispatches all decoded events through owned outputs.
     #[must_use]
     pub fn pump_registered_inputs(&mut self) -> Vec<(usize, usize)> {

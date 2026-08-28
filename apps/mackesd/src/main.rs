@@ -24,6 +24,7 @@ fn main() {
     let mut config = PathBuf::from("/etc/mackes-midi-matrix/config.json5");
     let mut restore_degraded = false;
     let mut restored_scene = None;
+    let mut dashboard_bindings = Vec::new();
     let mut args = env::args().skip(1);
     while let Some(argument) = args.next() {
         match argument.as_str() {
@@ -78,6 +79,9 @@ fn main() {
         match mackesd::startup_restore(&config) {
             Ok(result) => {
                 restored_scene.clone_from(&result.active_scene);
+                if let Ok(document) = mackes_config::load(&config) {
+                    dashboard_bindings = document.settings.dashboard_midi_bindings;
+                }
                 let detail = format!(
                     "project={:?} scene={:?} scenes={} unsafe_actions_blocked={}",
                     result.active_project,
@@ -142,6 +146,17 @@ fn main() {
         if shutdown.load(Ordering::Relaxed) {
             daemon.request_shutdown();
             break;
+        }
+        let mapped = daemon.process_dashboard_commands(&dashboard_bindings, 128);
+        if !mapped.is_empty() {
+            eprint!(
+                "{}",
+                mackesd::structured_log_line(
+                    "info",
+                    "mapped_dashboard_actions",
+                    &format!("count={}", mapped.len()),
+                )
+            );
         }
         if let Err(error) = daemon.serve_once(policy) {
             eprint!(
