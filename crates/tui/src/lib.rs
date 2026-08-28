@@ -3260,9 +3260,15 @@ pub fn draw_controller_mapping(
         "CONTROL SURFACE  ·  ACTIVE MAPPINGS"
     };
     frame.render_widget(
-        Paragraph::new(lines.join("\n"))
-            .style(Style::default().fg(Color::Gray))
-            .block(Block::default().borders(Borders::ALL).title(surface_title)),
+        Paragraph::new(lines.join("\n")).style(Style::default().fg(Color::Gray)).block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Color::Cyan))
+                .title(Span::styled(
+                    surface_title,
+                    Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+                )),
+        ),
         main[0],
     );
 
@@ -3278,9 +3284,15 @@ pub fn draw_controller_mapping(
     );
     if !compact {
         frame.render_widget(
-            Paragraph::new(inspector)
-                .style(Style::default().fg(Color::White))
-                .block(Block::default().borders(Borders::ALL).title("MAPPING INSPECTOR")),
+            Paragraph::new(inspector).style(Style::default().fg(Color::White)).block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .border_style(Style::default().fg(Color::Yellow))
+                    .title(Span::styled(
+                        "MAPPING INSPECTOR",
+                        Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+                    )),
+            ),
             main[1],
         );
     }
@@ -3302,7 +3314,15 @@ pub fn draw_controller_mapping(
             Span::styled("! PANIC ", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
             Span::styled(" q QUIT", Style::default().fg(Color::White)),
         ]))
-        .block(Block::default().borders(Borders::ALL).title("OPERATOR CONTROLS")),
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Color::DarkGray))
+                .title(Span::styled(
+                    "OPERATOR CONTROLS",
+                    Style::default().fg(Color::LightBlue).add_modifier(Modifier::BOLD),
+                )),
+        ),
         vertical[2],
     );
 }
