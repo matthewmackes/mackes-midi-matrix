@@ -1400,6 +1400,17 @@ impl Daemon {
                             "capabilities": profile.capabilities.iter().map(|capability| &capability.id).collect::<Vec<_>>(),
                             "controls": controls,
                             "query_count": profile.queries.len(),
+                            "queries": profile
+                                .queries
+                                .iter()
+                                .take(64)
+                                .map(|query| serde_json::json!({
+                                    "id": query.id,
+                                    "reply_id": query.reply_id,
+                                    "request_bytes": query.request.len(),
+                                }))
+                                .collect::<Vec<_>>(),
+                            "documented_features": profile.documented_features.iter().take(64).collect::<Vec<_>>(),
                         },
                     });
                     return stream.write_all(format!("{response}\n").as_bytes());
