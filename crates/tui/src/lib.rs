@@ -3186,9 +3186,7 @@ pub fn draw_controller_mapping(
                     .add_modifier(Modifier::BOLD),
             ),
         ]))
-        .block(
-            Block::default().borders(Borders::ALL).title("MACKES  /  NOVATION LAUNCH CONTROL XL"),
-        ),
+        .block(Block::default().borders(Borders::ALL).title("MACKES  /  CONNECTED MIDI RACK")),
         vertical[0],
     );
 
@@ -3205,6 +3203,7 @@ pub fn draw_controller_mapping(
             .split(vertical[1])
     };
     let mut lines = vec![
+        format!("  DEVICE TABS: {}", device_tabs_line(&dashboard.physical_devices)),
         "  KNOBS                                      BUTTONS                         FADERS"
             .into(),
         "  ┌────────┬────────┬────────┬────────┬────────┬────────┬────────┬────────┐".into(),
@@ -3377,6 +3376,21 @@ fn device_inventory_line(devices: &[PhysicalDevice]) -> String {
         })
         .collect::<Vec<_>>()
         .join("  •  ")
+}
+
+fn device_tabs_line(devices: &[PhysicalDevice]) -> String {
+    if devices.is_empty() {
+        return "[ NO CONNECTED DEVICES ]".to_owned();
+    }
+    devices
+        .iter()
+        .take(6)
+        .map(|device| {
+            let state = if device.state.eq_ignore_ascii_case("connected") { "●" } else { "○" };
+            format!("[{state} {}]", device.name)
+        })
+        .collect::<Vec<_>>()
+        .join("  ")
 }
 
 fn mapping_chain_line(drafts: &[MappingDraft]) -> String {
