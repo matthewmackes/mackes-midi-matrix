@@ -19,6 +19,11 @@ fn main() {
     use mackesd::{Daemon, InstanceLock};
     use std::{env, fs, path::PathBuf, sync::atomic::Ordering};
 
+    if std::env::args().any(|argument| argument == "--version" || argument == "version") {
+        println!("mackes-midi-matrixd {}", env!("CARGO_PKG_VERSION"));
+        return;
+    }
+
     let mut socket = PathBuf::from("/run/mackes-midi-matrix/control.sock");
     let mut lock_path = PathBuf::from("/run/mackes-midi-matrix/mackes-midi-matrixd.lock");
     let mut config = PathBuf::from("/etc/mackes-midi-matrix/config.json5");
