@@ -510,6 +510,7 @@ impl TerminalGuard {
 
 /// Compact dashboard state derived from daemon events.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
+#[allow(clippy::struct_excessive_bools)]
 pub struct DashboardState {
     /// Active project/scene label.
     pub active_scene: Option<String>,
@@ -517,6 +518,8 @@ pub struct DashboardState {
     pub health: String,
     /// Current routing generation.
     pub route_generation: u64,
+    /// Whether a daemon-owned route Undo is available.
+    pub route_undo_available: bool,
     /// Whether performance lock is active.
     pub performance_locked: bool,
     /// Panic is always available from the dashboard.
@@ -1959,6 +1962,8 @@ pub enum DashboardEvent {
     ActiveScene(Option<String>),
     /// Route generation changed.
     RouteGeneration(u64),
+    /// Route Undo availability changed.
+    RouteUndoAvailable(bool),
     /// Performance lock changed.
     PerformanceLock(bool),
     /// Activity counters changed.
@@ -2013,6 +2018,11 @@ impl DashboardEvent {
         }
         if let Some(value) = payload.get("route_generation").and_then(serde_json::Value::as_u64) {
             events.push(Self::RouteGeneration(value));
+        }
+        if let Some(value) =
+            payload.get("route_undo_available").and_then(serde_json::Value::as_bool)
+        {
+            events.push(Self::RouteUndoAvailable(value));
         }
         if let (Some(received), Some(sent), Some(dropped)) = (
             payload.get("received").and_then(serde_json::Value::as_u64),
@@ -2675,6 +2685,7 @@ impl DashboardState {
             DashboardEvent::Health(value) => self.health = value,
             DashboardEvent::ActiveScene(value) => self.active_scene = value,
             DashboardEvent::RouteGeneration(value) => self.route_generation = value,
+            DashboardEvent::RouteUndoAvailable(value) => self.route_undo_available = value,
             DashboardEvent::PerformanceLock(value) => self.performance_locked = value,
             DashboardEvent::Activity { received, sent, dropped } => {
                 self.set_activity(received, sent, dropped);
@@ -3225,8 +3236,9 @@ pub fn draw_controller_mapping(
     lines.push("            │  ░░  │  ░░  │  ░░  │  ░░  │  ░░  │  ░░  │  ░░  │  ░░  │  8-channel level bank".into());
     lines.push("  UTILITY:  DEVICE  MUTE  SOLO  RECORD ARM  UP  DOWN  LEFT  RIGHT".into());
     lines.push(format!(
-        "  ACTIVE CHAIN: {}",
-        if editor.drafts.is_empty() { "NO MAPPINGS" } else { "MAPPING BANK" }
+        "  ACTIVE CHAIN: {}   UNDO: {}",
+        if editor.drafts.is_empty() { "NO MAPPINGS" } else { "MAPPING BANK" },
+        if dashboard.route_undo_available { "AVAILABLE" } else { "EMPTY" }
     ));
     lines.push(format!("  ROUTES: {}", mapping_chain_line(&editor.drafts)));
     lines.push(format!("  DEVICES: {}", device_inventory_line(&dashboard.physical_devices)));
@@ -3819,6 +3831,7 @@ mod tests {
             "health": "ready",
             "active_scene": "intro",
             "route_generation": 7,
+            "route_undo_available": true,
             "received": 10,
             "sent": 8,
             "dropped": 2,
@@ -3855,6 +3868,7 @@ mod tests {
         assert_eq!(dashboard.physical_devices[0].name, "Launch Control XL");
         assert_eq!(dashboard.physical_devices[0].inputs, vec!["input-1"]);
         assert_eq!(dashboard.physical_devices[0].outputs, vec!["output-1"]);
+        assert!(dashboard.route_undo_available);
         let activity = dashboard.live_activity.expect("activity");
         assert_eq!(activity.source_endpoint, 11);
         assert_eq!(activity.source_endpoint_id.as_deref(), Some("midir-in-source"));
