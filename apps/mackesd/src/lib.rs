@@ -242,6 +242,8 @@ pub struct Daemon {
     last_activity: Option<serde_json::Value>,
     last_activity_publish: Instant,
     route_undo: Option<serde_json::Value>,
+    safety: mackes_scene_engine::SafetyController,
+    audit: mackes_scene_engine::AuditLog,
     activation_result: Option<String>,
     state_sequence: u64,
     state_events: VecDeque<mackes_ipc::StateEvent>,
@@ -284,6 +286,7 @@ pub fn classify_command(request: &[u8]) -> Option<Command> {
 fn physical_devices_json(endpoints: &[mackes_midi_engine::EndpointInfo]) -> String {
     let devices = mackes_midi_engine::group_physical_devices(endpoints)
         .into_iter()
+        .take(MAX_PHYSICAL_DEVICE_RECORDS)
         .map(|device| {
             serde_json::json!({
                 "id": device.id,
@@ -302,6 +305,8 @@ fn physical_devices_value(endpoints: &[mackes_midi_engine::EndpointInfo]) -> ser
     serde_json::from_str(&physical_devices_json(endpoints))
         .unwrap_or_else(|_| serde_json::json!([]))
 }
+
+const MAX_PHYSICAL_DEVICE_RECORDS: usize = 32;
 
 #[cfg(target_os = "linux")]
 fn routes_path(config_path: &std::path::Path) -> std::path::PathBuf {
@@ -366,6 +371,16 @@ fn midi_activity_json(
         mackes_domain::MidiMessage::SystemCommon(_) => ("system_common", None, None),
         mackes_domain::MidiMessage::Realtime(_) => ("realtime", None, None),
     };
+    let channel = match &event.message {
+        mackes_domain::MidiMessage::ControlChange { channel, .. }
+        | mackes_domain::MidiMessage::NoteOn { channel, .. }
+        | mackes_domain::MidiMessage::NoteOff { channel, .. }
+        | mackes_domain::MidiMessage::ProgramChange { channel, .. }
+        | mackes_domain::MidiMessage::PitchBend { channel, .. }
+        | mackes_domain::MidiMessage::PolyPressure { channel, .. }
+        | mackes_domain::MidiMessage::ChannelPressure { channel, .. } => Some(channel.wire()),
+        _ => None,
+    };
     let endpoint_key =
         stable_endpoint.map_or_else(|| event.endpoint.get().to_string(), str::to_owned);
     let control_id = number.map_or_else(
@@ -378,6 +393,7 @@ fn midi_activity_json(
         "control_id": control_id,
         "timestamp_nanos": event.timestamp.get(),
         "kind": kind,
+        "channel": channel,
         "number": number,
         "value": value,
         "destination_endpoints": routed.iter().map(|item| item.event.endpoint.get()).collect::<Vec<_>>(),
@@ -532,6 +548,8 @@ impl Daemon {
             last_activity: None,
             last_activity_publish: Instant::now(),
             route_undo: None,
+            safety: mackes_scene_engine::SafetyController::default(),
+            audit: mackes_scene_engine::AuditLog::new(128).map_err(io::Error::other)?,
             activation_result: None,
             state_sequence: 0,
             state_events: VecDeque::with_capacity(256),
@@ -1389,6 +1407,8 @@ impl Daemon {
             "generation": self.generation,
             "route_generation": self.route_generation(),
             "route_undo_available": self.route_undo.is_some(),
+            "audit_count": self.audit.newest_first().count(),
+            "audit": self.audit_projection(),
             "active_scene": self.active_scene.as_deref(),
             "received": self.received_events,
             "sent": self.sent_events,
@@ -1412,12 +1432,53 @@ impl Daemon {
             .push_back(mackes_ipc::StateEvent { sequence: self.state_sequence, payload });
     }
 
+    fn authorize_route_mutation(&mut self, action: &str) -> Result<(), &'static str> {
+        let decision = self.safety.authorize_and_record(
+            self.state_sequence,
+            "local-ipc",
+            mackes_scene_engine::AuditSource::LocalCli,
+            mackes_scene_engine::GovernedOperation::ConfigurationEdit,
+            action,
+            "routing",
+            mackes_scene_engine::RiskClass::Normal,
+            mackes_scene_engine::ConfirmationClass::Normal,
+            false,
+            "route mutation requested",
+            false,
+            &mut self.audit,
+        );
+        (decision == mackes_scene_engine::PolicyDecision::Allow)
+            .then_some(())
+            .ok_or("route mutation denied by performance lock")
+    }
+
+    fn audit_projection(&self) -> Vec<serde_json::Value> {
+        self.audit
+            .newest_first()
+            .take(32)
+            .map(|record| {
+                serde_json::json!({
+                    "timestamp": record.timestamp,
+                    "actor": record.actor,
+                    "source": format!("{:?}", record.source),
+                    "action": record.action_id,
+                    "target": record.target_alias,
+                    "risk": format!("{:?}", record.risk),
+                    "allowed": record.allowed,
+                    "result": record.result,
+                })
+            })
+            .collect()
+    }
+
     fn snapshot_response(&self) -> String {
         serde_json::json!({
             "ok": true,
             "generation": self.generation,
             "route_generation": self.route_generation(),
             "route_undo_available": self.route_undo.is_some(),
+            "audit_count": self.audit.newest_first().count(),
+            "audit": self.audit_projection(),
             "active_scene": self.active_scene.as_deref(),
             "received": self.received_events,
             "sent": self.sent_events,
@@ -1572,6 +1633,20 @@ impl Daemon {
             if command == Some(Command::Routes) {
                 if let Ok(value) = serde_json::from_slice::<serde_json::Value>(&request) {
                     if value.get("action").and_then(serde_json::Value::as_str) == Some("undo") {
+                        if let Some(expected) =
+                            value.get("route_generation").and_then(serde_json::Value::as_u64)
+                        {
+                            if self.route_generation() != Some(expected) {
+                                return stream.write_all(
+                                    b"{\"ok\":false,\"error\":\"mapping generation changed concurrently\"}\n",
+                                );
+                            }
+                        }
+                        if let Err(error) = self.authorize_route_mutation("route_undo") {
+                            return stream.write_all(
+                                format!("{{\"ok\":false,\"error\":\"{error}\"}}\n").as_bytes(),
+                            );
+                        }
                         let Some(previous) = self.route_undo.clone() else {
                             return stream.write_all(
                                 b"{\"ok\":false,\"error\":\"route undo history is empty\"}\n",
@@ -1621,6 +1696,11 @@ impl Daemon {
                         );
                     }
                     if let Some(route_values) = value.get("routes") {
+                        if let Err(error) = self.authorize_route_mutation("route_replace") {
+                            return stream.write_all(
+                                format!("{{\"ok\":false,\"error\":\"{error}\"}}\n").as_bytes(),
+                            );
+                        }
                         let generation = value
                             .get("route_generation")
                             .and_then(serde_json::Value::as_u64)
@@ -1683,6 +1763,71 @@ impl Daemon {
             if command == Some(Command::Learn) {
                 let value =
                     serde_json::from_slice::<serde_json::Value>(&request).unwrap_or_default();
+                if value.get("action").and_then(serde_json::Value::as_str) == Some("live_test") {
+                    if value.as_object().is_none_or(|object| {
+                        object.keys().any(|key| {
+                            !matches!(
+                                key.as_str(),
+                                "action"
+                                    | "request_id"
+                                    | "source_endpoint_id"
+                                    | "destination_id"
+                                    | "generation"
+                            )
+                        })
+                    }) {
+                        return stream.write_all(
+                            b"{\"ok\":false,\"error\":\"unknown live-test request field\"}\n",
+                        );
+                    }
+                    let parsed = mackes_ipc::LiveTestRequest {
+                        request_id: value
+                            .get("request_id")
+                            .and_then(serde_json::Value::as_str)
+                            .unwrap_or_default()
+                            .to_owned(),
+                        source_endpoint_id: value
+                            .get("source_endpoint_id")
+                            .and_then(serde_json::Value::as_str)
+                            .unwrap_or_default()
+                            .to_owned(),
+                        destination_id: value
+                            .get("destination_id")
+                            .and_then(serde_json::Value::as_str)
+                            .unwrap_or_default()
+                            .to_owned(),
+                        candidate_kind: value
+                            .get("candidate_kind")
+                            .and_then(serde_json::Value::as_str)
+                            .unwrap_or_default()
+                            .to_owned(),
+                        candidate_number: value
+                            .get("candidate_number")
+                            .and_then(serde_json::Value::as_u64)
+                            .and_then(|value| u8::try_from(value).ok()),
+                        candidate_channel: value
+                            .get("candidate_channel")
+                            .and_then(serde_json::Value::as_u64)
+                            .and_then(|value| u8::try_from(value).ok()),
+                        generation: value
+                            .get("generation")
+                            .and_then(serde_json::Value::as_u64)
+                            .unwrap_or_default(),
+                    };
+                    let response = match parsed.validate() {
+                        Ok(request) => serde_json::json!({
+                            "ok": true,
+                            "generation": self.generation,
+                            "live_test": {
+                                "request_id": request.request_id,
+                                "status": "unavailable",
+                                "reason": "no profile-backed live-test probe is available",
+                            }
+                        }),
+                        Err(error) => serde_json::json!({"ok": false, "error": error}),
+                    };
+                    return stream.write_all(format!("{response}\n").as_bytes());
+                }
                 let endpoint = value
                     .get("endpoint")
                     .and_then(serde_json::Value::as_u64)
@@ -2067,7 +2212,48 @@ impl Daemon {
 
     /// Installs the daemon-owned physical-device inventory for snapshots.
     pub fn set_physical_devices(&mut self, endpoints: &[mackes_midi_engine::EndpointInfo]) {
-        self.physical_devices = physical_devices_value(endpoints);
+        let discovered = physical_devices_value(endpoints);
+        let Some(current) = self.physical_devices.as_array() else {
+            self.physical_devices = discovered;
+            return;
+        };
+        let Some(next) = discovered.as_array() else {
+            return;
+        };
+
+        // Retain the last bounded record for a disconnected device so mappings
+        // keep their stable identity across an ALSA refresh. Reconnected
+        // devices replace the retained record with fresh endpoint state.
+        let mut merged = next.clone();
+        for previous in current {
+            let Some(id) = previous.get("id").and_then(serde_json::Value::as_str) else {
+                continue;
+            };
+            if merged
+                .iter()
+                .any(|device| device.get("id").and_then(serde_json::Value::as_str) == Some(id))
+            {
+                continue;
+            }
+            let mut offline = previous.clone();
+            if let Some(object) = offline.as_object_mut() {
+                object.insert("state".to_owned(), serde_json::Value::String("offline".to_owned()));
+            }
+            merged.push(offline);
+        }
+        merged.sort_by(|left, right| {
+            let left_offline =
+                left.get("state").and_then(serde_json::Value::as_str) == Some("offline");
+            let right_offline =
+                right.get("state").and_then(serde_json::Value::as_str) == Some("offline");
+            left_offline.cmp(&right_offline).then_with(|| {
+                left.get("id")
+                    .and_then(serde_json::Value::as_str)
+                    .cmp(&right.get("id").and_then(serde_json::Value::as_str))
+            })
+        });
+        merged.truncate(MAX_PHYSICAL_DEVICE_RECORDS);
+        self.physical_devices = serde_json::Value::Array(merged);
     }
 
     /// Sets the daemon-owned configuration path for authorized persistence.
@@ -2367,6 +2553,48 @@ mod tests {
 
     #[cfg(target_os = "linux")]
     #[test]
+    fn physical_device_refresh_retains_disconnected_identity() {
+        let path =
+            std::env::temp_dir().join(format!("mackes-device-retain-{}.sock", std::process::id()));
+        let mut daemon = Daemon::bind(&path).expect("daemon");
+        let endpoints = vec![
+            mackes_midi_engine::EndpointInfo {
+                id: "input-1".into(),
+                name: "Launch Control XL Mk1".into(),
+                direction: mackes_midi_engine::EndpointDirection::Input,
+            },
+            mackes_midi_engine::EndpointInfo {
+                id: "output-1".into(),
+                name: "Launch Control XL Mk1".into(),
+                direction: mackes_midi_engine::EndpointDirection::Output,
+            },
+        ];
+        daemon.set_physical_devices(&endpoints);
+        daemon.set_physical_devices(&[]);
+        let snapshot: serde_json::Value =
+            serde_json::from_str(&daemon.snapshot_response()).expect("snapshot");
+        assert_eq!(snapshot["physical_devices"][0]["id"], "launch control xl mk1");
+        assert_eq!(snapshot["physical_devices"][0]["state"], "offline");
+        assert_eq!(snapshot["physical_devices"][0]["inputs"][0], "input-1");
+
+        let saturated = (0..40)
+            .map(|index| mackes_midi_engine::EndpointInfo {
+                id: format!("input-{index}"),
+                name: format!("Synthetic Device {index}"),
+                direction: mackes_midi_engine::EndpointDirection::Input,
+            })
+            .collect::<Vec<_>>();
+        daemon.set_physical_devices(&saturated);
+        let saturated_snapshot: serde_json::Value =
+            serde_json::from_str(&daemon.snapshot_response()).expect("snapshot");
+        let devices = saturated_snapshot["physical_devices"].as_array().expect("devices");
+        assert_eq!(devices.len(), MAX_PHYSICAL_DEVICE_RECORDS);
+        assert!(devices.iter().all(|device| device["state"] == "connected"));
+        let _ = fs::remove_file(path);
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
     fn daemon_state_journal_supports_snapshot_replay_and_gap_detection() {
         let path = std::env::temp_dir().join(format!("mackes-events-{}.sock", std::process::id()));
         let mut daemon = Daemon::bind(&path).expect("daemon");
@@ -2378,6 +2606,8 @@ mod tests {
         assert_eq!(snapshot["received"], 0);
         assert_eq!(snapshot["sent"], 0);
         assert_eq!(snapshot["dropped"], 0);
+        assert_eq!(snapshot["audit_count"], 0);
+        assert!(snapshot["audit"].as_array().is_some_and(Vec::is_empty));
         let replay: serde_json::Value =
             serde_json::from_str(&daemon.subscribe_response(br#"{"after_sequence":0}"#))
                 .expect("replay");
@@ -2738,6 +2968,30 @@ mod tests {
         assert_eq!(daemon.route_generation(), Some(4));
         drop(daemon);
         let _ = fs::remove_file(path);
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn route_mutation_policy_denies_under_performance_lock_and_audits() {
+        let path =
+            std::env::temp_dir().join(format!("mackes-route-policy-{}.sock", std::process::id()));
+        let mut daemon = Daemon::bind(&path).expect("daemon");
+        daemon.safety.set_performance_lock(true);
+
+        assert_eq!(
+            daemon.authorize_route_mutation("route_replace"),
+            Err("route mutation denied by performance lock")
+        );
+        assert_eq!(daemon.audit.newest_first().count(), 1);
+        assert_eq!(
+            daemon.audit.newest_first().next().map(|record| record.action_id.as_str()),
+            Some("route_replace")
+        );
+        let snapshot = serde_json::from_str::<serde_json::Value>(&daemon.snapshot_response())
+            .expect("snapshot");
+        assert_eq!(snapshot["audit_count"], 1);
+        assert_eq!(snapshot["audit"][0]["action"], "route_replace");
+        let _ = std::fs::remove_file(path);
     }
 
     #[cfg(target_os = "linux")]

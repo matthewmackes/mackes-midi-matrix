@@ -2,7 +2,9 @@
 
 use mackes_ipc::{StateEvent, StateSnapshot};
 use mackes_midi_engine::MidiLearnCandidate;
-use mackes_profiles::launch_control_index_label;
+use mackes_profiles::{
+    launch_control_index_label, LaunchControlMessageKind, LaunchControlTemplate,
+};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
@@ -263,6 +265,167 @@ pub enum TokenIntensity {
     Hazard,
 }
 
+/// Shared rack-appliance lamp state. The marker is intentionally textual so
+/// monochrome terminals preserve the same meaning as ANSI terminals.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum RackLamp {
+    /// Device or feature is unavailable.
+    Offline,
+    /// Device or feature is available but inactive.
+    Disabled,
+    /// Device or feature is active.
+    Enabled,
+    /// Operator attention is required.
+    Warning,
+    /// An operation failed or is blocked.
+    Error,
+}
+
+/// Renderer-neutral state for one profile-owned faceplate control.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum FaceplateControlState {
+    /// Device is disconnected or endpoint is offline.
+    Offline,
+    /// Device is present but no authoritative control assignment is known.
+    Unknown,
+    /// Control is known and not currently mapped.
+    Unmapped,
+    /// Control is mapped but has no recent activity.
+    Mapped,
+    /// Control is mapped and most recently active.
+    Live,
+}
+
+/// Returns a stable ASCII marker for a faceplate control state.
+#[must_use]
+pub const fn faceplate_state_marker(state: FaceplateControlState) -> &'static str {
+    match state {
+        FaceplateControlState::Offline => "OFF",
+        FaceplateControlState::Unknown => "UNK",
+        FaceplateControlState::Unmapped => "---",
+        FaceplateControlState::Mapped => "MAP",
+        FaceplateControlState::Live => "LIVE",
+    }
+}
+
+impl RackLamp {
+    /// Returns the stable text marker used by every renderer.
+    #[must_use]
+    pub const fn marker(self) -> &'static str {
+        match self {
+            Self::Offline => "o",
+            Self::Disabled => "-",
+            Self::Enabled => "*",
+            Self::Warning => "!",
+            Self::Error => "x",
+        }
+    }
+
+    /// Returns the ANSI-16 color for this lamp.
+    #[must_use]
+    pub const fn color(self) -> Color {
+        match self {
+            Self::Offline => Color::DarkGray,
+            Self::Disabled | Self::Error => Color::Red,
+            Self::Enabled => Color::Green,
+            Self::Warning => Color::Yellow,
+        }
+    }
+}
+
+/// Bounded value-bar view model shared by rack panels.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct RackValueBar {
+    /// Current normalized value in the inclusive MIDI range.
+    pub value: u8,
+    /// Width available for the bar body.
+    pub width: u16,
+}
+
+impl RackValueBar {
+    /// Creates a bar, clamping its value and width to safe display bounds.
+    #[must_use]
+    pub fn new(value: u8, width: u16) -> Self {
+        Self { value, width: width.min(64) }
+    }
+
+    /// Returns filled and unfilled cell counts without terminal access.
+    #[must_use]
+    pub fn cells(self) -> (u16, u16) {
+        let filled = self.width * u16::from(self.value) / 127;
+        (filled, self.width - filled)
+    }
+}
+
+/// Builds a compact, color-independent lamp line for rack headers and panels.
+#[must_use]
+pub fn rack_lamp_line(label: &str, lamp: RackLamp) -> Line<'static> {
+    Line::from(vec![
+        Span::styled(format!("{} ", lamp.marker()), Style::default().fg(lamp.color())),
+        Span::raw(label.to_owned()),
+    ])
+}
+
+/// Builds a bounded horizontal value bar using ASCII cells only.
+#[must_use]
+pub fn rack_value_bar_line(label: &str, bar: RackValueBar) -> Line<'static> {
+    let (filled, empty) = bar.cells();
+    Line::from(format!(
+        "{label:<12} [{}{}] {value:>3}",
+        "=".repeat(usize::from(filled)),
+        "-".repeat(usize::from(empty)),
+        value = bar.value
+    ))
+}
+
+/// Required rack-shell regions after terminal-size adaptation.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct RackShellLayout {
+    /// Whether secondary panels must collapse.
+    pub compact: bool,
+    /// Height reserved for the status band.
+    pub status_rows: u16,
+    /// Height reserved for the persistent alert band.
+    pub alert_rows: u16,
+    /// Height reserved for the footer legend.
+    pub footer_rows: u16,
+}
+
+impl RackShellLayout {
+    /// Computes a bounded layout while retaining critical operator controls.
+    #[must_use]
+    pub const fn for_terminal(width: u16, height: u16) -> Self {
+        let compact = width < 100 || height < 37;
+        Self { compact, status_rows: 1, alert_rows: 1, footer_rows: 1 }
+    }
+}
+
+/// Renders the invariant rack-shell bands without terminal or daemon access.
+///
+/// The returned frame is bounded to the requested viewport and keeps the
+/// status, alert, and panic controls visible in both layout modes.
+#[must_use]
+pub fn rack_shell_lines(
+    layout: RackShellLayout,
+    health: &str,
+    alert: Option<&str>,
+    panic_available: bool,
+) -> Vec<String> {
+    let width: usize = if layout.compact { 80 } else { 100 };
+    let truncate = |text: &str| text.chars().take(width.saturating_sub(1)).collect::<String>();
+    let mut lines = vec![truncate(&format!(
+        "MACKES RACK | HEALTH {health} | PANIC {}",
+        if panic_available { "READY" } else { "HELD" }
+    ))];
+    lines.push(truncate(&format!("ALERT  {}", alert.unwrap_or("none"))));
+    lines.push(truncate(if layout.compact {
+        "[1] HOME  [2] ROUTING  [3] DIAGNOSTICS"
+    } else {
+        "[1] HOME  [2] ROUTING  [3] SCENES  [4] DIAGNOSTICS  [!] PANIC"
+    }));
+    lines
+}
+
 /// Returns the stable text annotation for an intensity state.
 #[must_use]
 pub const fn intensity_marker(intensity: TokenIntensity) -> &'static str {
@@ -520,6 +683,10 @@ pub struct DashboardState {
     pub route_generation: u64,
     /// Whether a daemon-owned route Undo is available.
     pub route_undo_available: bool,
+    /// Number of retained redacted mutation-audit decisions.
+    pub audit_count: u64,
+    /// Newest safe mutation-audit summary for operator visibility.
+    pub latest_audit: Option<String>,
     /// Whether performance lock is active.
     pub performance_locked: bool,
     /// Panic is always available from the dashboard.
@@ -546,10 +713,16 @@ pub struct DashboardState {
     pub mapping_dirty: bool,
     /// Selected output destination in the flattened visible inventory.
     pub selected_destination: Option<usize>,
+    /// Selected input source in the flattened visible inventory.
+    pub selected_input: Option<usize>,
     /// Selected parameter within the active profile-backed destination.
     pub selected_parameter: Option<usize>,
     /// Currently visible physical MIDI devices and their port identities.
     pub physical_devices: Vec<PhysicalDevice>,
+    /// Optional imported or learned Launch Control assignment map.
+    pub launch_control_template: Option<LaunchControlTemplate>,
+    /// Profile-owned effects state; resync is required after reconnect/scene changes.
+    pub effects_groups: mackes_profiles::EffectsGroupRuntime,
 }
 
 /// Renderer-safe physical MIDI device inventory record.
@@ -580,6 +753,8 @@ pub struct LiveActivity {
     pub timestamp_nanos: u64,
     /// MIDI message family.
     pub kind: String,
+    /// Zero-based MIDI channel when the message family has one.
+    pub channel: Option<u8>,
     /// Optional note/controller/program number.
     pub number: Option<u8>,
     /// Optional MIDI value.
@@ -1390,13 +1565,14 @@ pub fn order_mapping_drafts(drafts: &[MappingDraft]) -> Vec<MappingDraft> {
 pub struct MappingBank {
     generation: u64,
     drafts: Vec<MappingDraft>,
+    history: Vec<Vec<MappingDraft>>,
 }
 
 impl MappingBank {
     /// Creates an empty mapping bank at generation zero.
     #[must_use]
     pub const fn new() -> Self {
-        Self { generation: 0, drafts: Vec::new() }
+        Self { generation: 0, drafts: Vec::new(), history: Vec::new() }
     }
 
     /// Returns the last committed generation and mappings.
@@ -1410,6 +1586,12 @@ impl MappingBank {
         &self.drafts
     }
 
+    /// Returns whether a bounded prior committed mapping snapshot is available.
+    #[must_use]
+    pub fn undo_available(&self) -> bool {
+        !self.history.is_empty()
+    }
+
     /// Atomically validates and commits a complete replacement batch.
     ///
     /// # Errors
@@ -1417,8 +1599,31 @@ impl MappingBank {
     /// Returns an error without changing the bank when validation fails.
     pub fn commit(&mut self, drafts: Vec<MappingDraft>) -> Result<u64, String> {
         validate_mapping_batch(&drafts)?;
+        self.history.push(self.drafts.clone());
+        if self.history.len() > 16 {
+            self.history.remove(0);
+        }
         self.generation = self.generation.saturating_add(1);
         self.drafts = drafts;
+        Ok(self.generation)
+    }
+
+    /// Restores the most recent committed snapshot and advances the generation.
+    ///
+    /// The operation is deterministic and bounded; an empty history is a no-op error.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when no prior committed snapshot is available.
+    pub fn undo(&mut self) -> Result<u64, String> {
+        let previous =
+            self.history.pop().ok_or_else(|| String::from("mapping undo history is empty"))?;
+        self.history.push(self.drafts.clone());
+        if self.history.len() > 16 {
+            self.history.remove(0);
+        }
+        self.generation = self.generation.saturating_add(1);
+        self.drafts = previous;
         Ok(self.generation)
     }
 
@@ -1997,6 +2202,10 @@ pub enum DashboardEvent {
     LiveActivity(LiveActivity),
     /// Replaces the physical-device inventory projection.
     PhysicalDevices(Vec<PhysicalDevice>),
+    /// Updates the retained mutation-audit count.
+    AuditCount(u64),
+    /// Updates the newest safe mutation-audit summary.
+    LatestAudit(String),
 }
 
 impl DashboardEvent {
@@ -2023,6 +2232,25 @@ impl DashboardEvent {
             payload.get("route_undo_available").and_then(serde_json::Value::as_bool)
         {
             events.push(Self::RouteUndoAvailable(value));
+        }
+        if let Some(value) = payload.get("audit_count").and_then(serde_json::Value::as_u64) {
+            events.push(Self::AuditCount(value));
+        }
+        if let Some(latest) = payload
+            .get("audit")
+            .and_then(serde_json::Value::as_array)
+            .and_then(|audit| audit.first())
+        {
+            if let (Some(action), Some(allowed)) = (
+                latest.get("action").and_then(serde_json::Value::as_str),
+                latest.get("allowed").and_then(serde_json::Value::as_bool),
+            ) {
+                events.push(Self::LatestAudit(format!(
+                    "{} {}",
+                    if allowed { "ALLOW" } else { "DENY" },
+                    action
+                )));
+            }
         }
         if let (Some(received), Some(sent), Some(dropped)) = (
             payload.get("received").and_then(serde_json::Value::as_u64),
@@ -2074,6 +2302,11 @@ fn parse_live_activity(value: &serde_json::Value) -> Option<LiveActivity> {
     let source_endpoint_id =
         object.get("source_endpoint_id").and_then(|value| value.as_str().map(str::to_owned));
     let kind = object.get("kind")?.as_str()?.to_owned();
+    let channel = object
+        .get("channel")
+        .filter(|value| !value.is_null())
+        .and_then(serde_json::Value::as_u64)
+        .and_then(|value| u8::try_from(value).ok());
     let control_id = object.get("control_id")?.as_str()?.to_owned();
     let timestamp_nanos = object.get("timestamp_nanos")?.as_u64()?;
     let number = object
@@ -2098,6 +2331,7 @@ fn parse_live_activity(value: &serde_json::Value) -> Option<LiveActivity> {
         control_id,
         timestamp_nanos,
         kind,
+        channel,
         number,
         value,
         destination_endpoints,
@@ -2663,6 +2897,12 @@ impl DashboardState {
         self.device_health = values;
     }
 
+    /// Invalidates effects feedback when the device inventory is refreshed.
+    pub fn refresh_effects_devices(&mut self, values: Vec<PhysicalDevice>) {
+        self.physical_devices = values;
+        self.effects_groups.request_resync();
+    }
+
     /// Adds a notification and retains only the newest 16 entries.
     pub fn notify(&mut self, severity: SemanticToken, message: impl Into<String>) {
         self.notifications.insert(0, Notification { severity, message: message.into() });
@@ -2683,9 +2923,14 @@ impl DashboardState {
     pub fn apply_event(&mut self, event: DashboardEvent) {
         match event {
             DashboardEvent::Health(value) => self.health = value,
-            DashboardEvent::ActiveScene(value) => self.active_scene = value,
+            DashboardEvent::ActiveScene(value) => {
+                self.active_scene = value;
+                self.effects_groups.request_resync();
+            }
             DashboardEvent::RouteGeneration(value) => self.route_generation = value,
             DashboardEvent::RouteUndoAvailable(value) => self.route_undo_available = value,
+            DashboardEvent::AuditCount(value) => self.audit_count = value,
+            DashboardEvent::LatestAudit(value) => self.latest_audit = Some(value),
             DashboardEvent::PerformanceLock(value) => self.performance_locked = value,
             DashboardEvent::Activity { received, sent, dropped } => {
                 self.set_activity(received, sent, dropped);
@@ -2700,7 +2945,7 @@ impl DashboardState {
                 self.live_activity = Some(activity);
                 self.live_activity_age_nanos = 0;
             }
-            DashboardEvent::PhysicalDevices(devices) => self.physical_devices = devices,
+            DashboardEvent::PhysicalDevices(devices) => self.refresh_effects_devices(devices),
         }
     }
 
@@ -2715,6 +2960,16 @@ impl DashboardState {
         self.selected_parameter = None;
     }
 
+    /// Advances the selected physical input source with wraparound.
+    pub fn cycle_input(&mut self) {
+        let count = self.physical_devices.iter().map(|device| device.inputs.len()).sum::<usize>();
+        self.selected_input = if count == 0 {
+            None
+        } else {
+            Some(self.selected_input.map_or(0, |index| (index + 1) % count))
+        };
+    }
+
     /// Advances the selected profile parameter for the selected destination.
     pub fn cycle_parameter(&mut self) {
         let Some(destination) = self.selected_destination else { return };
@@ -2726,15 +2981,8 @@ impl DashboardState {
         else {
             return;
         };
-        let count = if device.name.to_ascii_lowercase().contains("micropitch") {
-            DeviceWorkspace::eventide_micropitch()
-                .groups
-                .iter()
-                .map(|group| group.control_ids.len())
-                .sum()
-        } else {
-            0
-        };
+        let count = destination_profile_for_name(&device.name)
+            .map_or(0, |profile| mackes_profiles::destination_parameters(&profile).len());
         if count > 0 {
             self.selected_parameter =
                 Some(self.selected_parameter.map_or(0, |index| (index + 1) % count));
@@ -2750,15 +2998,10 @@ impl DashboardState {
             .iter()
             .flat_map(|device| device.outputs.iter().map(move |endpoint| (device, endpoint)))
             .nth(destination)?;
-        if !device.name.to_ascii_lowercase().contains("micropitch") {
-            return None;
-        }
-        DeviceWorkspace::eventide_micropitch()
-            .groups
-            .iter()
-            .flat_map(|group| group.control_ids.iter())
-            .nth(self.selected_parameter.unwrap_or(0))
-            .cloned()
+        let profile = destination_profile_for_name(&device.name)?;
+        mackes_profiles::destination_parameters(&profile)
+            .get(self.selected_parameter.unwrap_or(0))
+            .map(|parameter| parameter.id.clone())
     }
 
     /// Returns the selected output as the numeric route endpoint contract.
@@ -2780,6 +3023,18 @@ impl DashboardState {
             .iter()
             .flat_map(|device| device.inputs.iter())
             .next()
+            .and_then(|endpoint| mackes_midi_engine::numeric_endpoint_id(endpoint))
+            .map(mackes_domain::EndpointId::get)
+    }
+
+    /// Returns the selected input as the numeric route endpoint contract.
+    #[must_use]
+    pub fn selected_input_endpoint(&self) -> Option<u64> {
+        let index = self.selected_input?;
+        self.physical_devices
+            .iter()
+            .flat_map(|device| device.inputs.iter())
+            .nth(index)
             .and_then(|endpoint| mackes_midi_engine::numeric_endpoint_id(endpoint))
             .map(mackes_domain::EndpointId::get)
     }
@@ -3016,7 +3271,13 @@ impl LearnWorkspace {
         }
         lines.push(format!(
             "live_test={}",
-            if self.live_test_passed { "passed" } else { "required" }
+            if self.live_test_passed {
+                "passed"
+            } else if self.phase == LearnPhase::Testing {
+                "awaiting daemon/device result (Esc cancels)"
+            } else {
+                "required"
+            }
         ));
         clamp_lines(lines, viewport, usize::from(viewport.width))
     }
@@ -3151,46 +3412,59 @@ pub fn draw_controller_mapping(
     dashboard: &DashboardState,
     editor: &RoutingEditor,
 ) {
+    let launch_control_present = dashboard
+        .physical_devices
+        .iter()
+        .any(|device| device.name.to_ascii_lowercase().contains("launch control"));
     let vertical = Layout::default()
         .direction(Direction::Vertical)
         .constraints([Constraint::Length(3), Constraint::Min(12), Constraint::Length(8)])
         .split(area);
-    let online = dashboard.health == "online";
-    let status_style = Style::default().fg(if online { Color::Green } else { Color::Yellow });
+    let online = health_is_online(&dashboard.health);
+    let status_style = Style::default()
+        .fg(if online { Color::LightGreen } else { Color::LightYellow })
+        .bg(Color::Black);
+    let header_line = Line::from(vec![
+        Span::styled(
+            " MIDI MAPPING ",
+            Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+        ),
+        Span::styled("│ ", Style::default().fg(Color::DarkGray)),
+        Span::styled(
+            format!("SCENE {:<12}", dashboard.active_scene.as_deref().unwrap_or("NONE")),
+            Style::default().fg(Color::White),
+        ),
+        Span::styled("│ ", Style::default().fg(Color::DarkGray)),
+        Span::styled(
+            format!("IN {:>5}  OUT {:>5}", dashboard.received, dashboard.sent),
+            Style::default().fg(Color::LightBlue),
+        ),
+        Span::styled("│ ", Style::default().fg(Color::DarkGray)),
+        Span::styled(
+            if online { "● ONLINE" } else { "● DEGRADED" },
+            status_style.add_modifier(Modifier::BOLD),
+        ),
+        Span::styled("│ ", Style::default().fg(Color::DarkGray)),
+        Span::styled(
+            if dashboard.mapping_dirty { "◆ SAVE REQUIRED" } else { "✓ SAVED" },
+            Style::default()
+                .fg(if dashboard.mapping_dirty { Color::Yellow } else { Color::Green })
+                .add_modifier(Modifier::BOLD),
+        ),
+    ]);
     frame.render_widget(
-        Paragraph::new(Line::from(vec![
-            Span::styled(
-                " MIDI MAPPING ",
-                Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+        Paragraph::new(header_line)
+            .style(Style::default().fg(Color::White).bg(Color::Black))
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .border_style(Style::default().fg(Color::Cyan).bg(Color::Black))
+                    .title("MACKES  /  CONNECTED MIDI RACK  /  PANIC"),
             ),
-            Span::styled("│ ", Style::default().fg(Color::DarkGray)),
-            Span::styled(
-                format!("SCENE {:<12}", dashboard.active_scene.as_deref().unwrap_or("NONE")),
-                Style::default().fg(Color::White),
-            ),
-            Span::styled("│ ", Style::default().fg(Color::DarkGray)),
-            Span::styled(
-                format!("IN {:>5}  OUT {:>5}", dashboard.received, dashboard.sent),
-                Style::default().fg(Color::LightBlue),
-            ),
-            Span::styled("│ ", Style::default().fg(Color::DarkGray)),
-            Span::styled(
-                if online { "● ONLINE" } else { "● DEGRADED" },
-                status_style.add_modifier(Modifier::BOLD),
-            ),
-            Span::styled("│ ", Style::default().fg(Color::DarkGray)),
-            Span::styled(
-                if dashboard.mapping_dirty { "◆ SAVE REQUIRED" } else { "✓ SAVED" },
-                Style::default()
-                    .fg(if dashboard.mapping_dirty { Color::Yellow } else { Color::Green })
-                    .add_modifier(Modifier::BOLD),
-            ),
-        ]))
-        .block(Block::default().borders(Borders::ALL).title("MACKES  /  CONNECTED MIDI RACK")),
         vertical[0],
     );
 
-    let compact = area.width < 108;
+    let compact = RackShellLayout::for_terminal(area.width, area.height).compact;
     let main = if compact {
         Layout::default()
             .direction(Direction::Vertical)
@@ -3204,6 +3478,22 @@ pub fn draw_controller_mapping(
     };
     let mut lines = vec![
         format!("  DEVICE TABS: {}", device_tabs_line(&dashboard.physical_devices)),
+        format!(
+            "  SOURCE: {}",
+            input_inventory_line(&dashboard.physical_devices, dashboard.selected_input)
+        ),
+        format!(
+            "  DESTINATIONS: {}",
+            destination_inventory_line(&dashboard.physical_devices, dashboard.selected_destination)
+        ),
+        format!(
+            "  PARAMETERS: {}",
+            destination_parameter_line(
+                &dashboard.physical_devices,
+                dashboard.selected_destination,
+                dashboard.selected_parameter
+            )
+        ),
         "  KNOBS                                      BUTTONS                         FADERS"
             .into(),
         "  ┌────────┬────────┬────────┬────────┬────────┬────────┬────────┬────────┐".into(),
@@ -3214,7 +3504,13 @@ pub fn draw_controller_mapping(
             (0..8)
                 .map(|column| {
                     let index = row * 8 + column;
-                    control_cell(index, editor)
+                    control_cell(
+                        index,
+                        editor,
+                        launch_control_present,
+                        launch_control_activity_index(dashboard),
+                        faceplate_control_state(index, dashboard, editor),
+                    )
                 })
                 .collect::<Vec<_>>()
                 .join(" │ ")
@@ -3225,40 +3521,66 @@ pub fn draw_controller_mapping(
             "  ├────────┼────────┼────────┼────────┼────────┼────────┼────────┼────────┤".into(),
         );
     }
-    lines.push("  │  CHANNEL BUTTONS:  [T01] [T02] [T03] [T04] [T05] [T06] [T07] [T08] │".into());
-    lines.push("  │                    [B01] [B02] [B03] [B04] [B05] [B06] [B07] [B08] │".into());
+    if launch_control_present {
+        lines.push(
+            "  │  CHANNEL BUTTONS:  [T01] [T02] [T03] [T04] [T05] [T06] [T07] [T08] │".into(),
+        );
+        lines.push(
+            "  │                    [B01] [B02] [B03] [B04] [B05] [B06] [B07] [B08] │".into(),
+        );
+    } else {
+        lines.push(
+            "  │  GENERIC MIDI CONTROLS — PROFILE FACEPLATE UNAVAILABLE                 │".into(),
+        );
+        lines.push(
+            "  │  Select a supported device tab to show its documented control layout.   │".into(),
+        );
+    }
     lines.push("  └──────────────────────────────────────────────────────────────────────────────────────┘".into());
-    lines.push(String::new());
-    lines.push(
-        "  FADERS:   [F01]    [F02]    [F03]    [F04]    [F05]    [F06]    [F07]    [F08]".into(),
-    );
+    lines.push(if launch_control_present {
+        "  FADERS:   [F01]    [F02]    [F03]    [F04]    [F05]    [F06]    [F07]    [F08]".into()
+    } else {
+        "  FADERS:   profile-specific controls unavailable; mappings remain editable".into()
+    });
     lines.push("            │  ░░  │  ░░  │  ░░  │  ░░  │  ░░  │  ░░  │  ░░  │  ░░  │  8-channel level bank".into());
+    let effects = mackes_profiles::launch_control_effects_faceplate();
+    lines.push(format!(
+        "  EFFECTS: {} groups [{}]",
+        effects.groups.len(),
+        effects.groups.iter().map(|group| group.label.clone()).collect::<Vec<_>>().join(" ")
+    ));
+    lines.push("  EFFECTS: FADERS F01–F08  UNUSED C37–C40  LED OFF/UNKNOWN".into());
+    if let Some(index) = launch_control_activity_index(dashboard) {
+        let label = launch_control_index_label(index).unwrap_or_else(|| "unknown".into());
+        let value = dashboard.live_activity.as_ref().and_then(|activity| activity.value);
+        let destination = dashboard
+            .launch_control_template
+            .as_ref()
+            .and_then(|template| template.assignment(index))
+            .and_then(|assignment| assignment.destination.as_deref())
+            .unwrap_or("UNASSIGNED");
+        lines.push(format!(
+            "  LIVE CONTROL: #{index:02} {label}  VALUE {}  DEST {destination}  {}",
+            value.map_or_else(|| "--".into(), |value| value.to_string()),
+            live_activity_age_label(dashboard.live_activity_age_nanos)
+        ));
+    }
     lines.push("  UTILITY:  DEVICE  MUTE  SOLO  RECORD ARM  UP  DOWN  LEFT  RIGHT".into());
     lines.push(format!(
-        "  ACTIVE CHAIN: {}   UNDO: {}",
+        "  ACTIVE CHAIN: {}   UNDO: {}   AUDIT: {}{}",
         if editor.drafts.is_empty() { "NO MAPPINGS" } else { "MAPPING BANK" },
-        if dashboard.route_undo_available { "AVAILABLE" } else { "EMPTY" }
+        if dashboard.route_undo_available { "AVAILABLE" } else { "EMPTY" },
+        dashboard.audit_count,
+        dashboard.latest_audit.as_deref().map_or(String::new(), |value| format!(" ({value})"))
     ));
     lines.push(format!("  ROUTES: {}", mapping_chain_line(&editor.drafts)));
-    lines.push(format!("  DEVICES: {}", device_inventory_line(&dashboard.physical_devices)));
-    lines.push(format!(
-        "  DESTINATIONS: {}",
-        destination_inventory_line(&dashboard.physical_devices, dashboard.selected_destination)
-    ));
-    lines.push(format!(
-        "  PARAMETERS: {}",
-        destination_parameter_line(
-            &dashboard.physical_devices,
-            dashboard.selected_destination,
-            dashboard.selected_parameter,
-        )
-    ));
     if let Some(activity) = &dashboard.live_activity {
         let value = activity.value.map_or_else(|| "--".to_owned(), |value| value.to_string());
         let number = activity.number.map_or_else(|| "--".to_owned(), |number| number.to_string());
         lines.push(format!(
-            "  LIVE: {}  #{}  VALUE {}  AGE {}ms  → {} DESTINATION(S)",
+            "  LIVE: {} [{}]  #{}  VALUE {}  AGE {}ms  → {} DESTINATION(S)",
             activity.kind,
+            live_activity_age_label(dashboard.live_activity_age_nanos),
             number,
             value,
             dashboard.live_activity_age_nanos / 1_000_000,
@@ -3279,21 +3601,25 @@ pub fn draw_controller_mapping(
     } else {
         lines.push("  LIVE: waiting for MIDI activity".into());
     }
-    let surface_title = if editor.drafts.is_empty() {
+    let surface_title = if !launch_control_present {
+        "CONTROL SURFACE  ·  GENERIC MIDI"
+    } else if editor.drafts.is_empty() {
         "CONTROL SURFACE  ·  NO ACTIVE MAPPINGS"
     } else {
         "CONTROL SURFACE  ·  ACTIVE MAPPINGS"
     };
     frame.render_widget(
-        Paragraph::new(lines.join("\n")).style(Style::default().fg(Color::Gray)).block(
-            Block::default()
-                .borders(Borders::ALL)
-                .border_style(Style::default().fg(Color::Cyan))
-                .title(Span::styled(
-                    surface_title,
-                    Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
-                )),
-        ),
+        Paragraph::new(lines.join("\n"))
+            .style(Style::default().fg(Color::Gray).bg(Color::Black))
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .border_style(Style::default().fg(Color::Cyan))
+                    .title(Span::styled(
+                        surface_title,
+                        Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+                    )),
+            ),
         main[0],
     );
 
@@ -3309,20 +3635,24 @@ pub fn draw_controller_mapping(
     );
     if !compact {
         frame.render_widget(
-            Paragraph::new(inspector).style(Style::default().fg(Color::White)).block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .border_style(Style::default().fg(Color::Yellow))
-                    .title(Span::styled(
-                        "MAPPING INSPECTOR",
-                        Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
-                    )),
-            ),
+            Paragraph::new(inspector)
+                .style(Style::default().fg(Color::White).bg(Color::Black))
+                .block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .border_style(Style::default().fg(Color::Yellow))
+                        .title(Span::styled(
+                            "MAPPING INSPECTOR",
+                            Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+                        )),
+                ),
             main[1],
         );
     }
-    frame.render_widget(
-        Paragraph::new(Line::from(vec![
+    let footer_line = if compact {
+        Line::from(" ! PANIC  1 HOME  2 LEARN  5 ROUTING  j/k SELECT  q QUIT")
+    } else {
+        Line::from(vec![
             Span::styled(" 1 HOME ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
             Span::styled(
                 " 2 LEARN ",
@@ -3333,21 +3663,25 @@ pub fn draw_controller_mapping(
                 Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
             ),
             Span::styled(
-                "  j/k SELECT  D DESTINATION  P PARAMETER  a ADD  u UNDO  s SAVE  ",
+                "  j/k SELECT  I INPUT  D DESTINATION  P PARAMETER  a ADD  u UNDO  s SAVE  ",
                 Style::default().fg(Color::White),
             ),
             Span::styled("! PANIC ", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
             Span::styled(" q QUIT", Style::default().fg(Color::White)),
-        ]))
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .border_style(Style::default().fg(Color::DarkGray))
-                .title(Span::styled(
-                    "OPERATOR CONTROLS",
-                    Style::default().fg(Color::LightBlue).add_modifier(Modifier::BOLD),
-                )),
-        ),
+        ])
+    };
+    frame.render_widget(
+        Paragraph::new(footer_line)
+            .style(Style::default().fg(Color::White).bg(Color::Black))
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .border_style(Style::default().fg(Color::DarkGray))
+                    .title(Span::styled(
+                        "OPERATOR CONTROLS",
+                        Style::default().fg(Color::LightBlue).add_modifier(Modifier::BOLD),
+                    )),
+            ),
         vertical[2],
     );
 }
@@ -3356,26 +3690,6 @@ fn value_bar(value: u16) -> String {
     let bounded = value.min(127);
     let filled = usize::from(bounded.saturating_mul(16) / 127);
     format!("[{}{}]", "#".repeat(filled), "-".repeat(16 - filled))
-}
-
-fn device_inventory_line(devices: &[PhysicalDevice]) -> String {
-    if devices.is_empty() {
-        return "NO MIDI DEVICES DETECTED".to_owned();
-    }
-    devices
-        .iter()
-        .take(4)
-        .map(|device| {
-            format!(
-                "{} [{} I/{} O] {}",
-                device.name,
-                device.inputs.len(),
-                device.outputs.len(),
-                device.state.to_ascii_uppercase()
-            )
-        })
-        .collect::<Vec<_>>()
-        .join("  •  ")
 }
 
 fn device_tabs_line(devices: &[PhysicalDevice]) -> String {
@@ -3391,6 +3705,24 @@ fn device_tabs_line(devices: &[PhysicalDevice]) -> String {
         })
         .collect::<Vec<_>>()
         .join("  ")
+}
+
+fn input_inventory_line(devices: &[PhysicalDevice], selected: Option<usize>) -> String {
+    let inputs = devices
+        .iter()
+        .flat_map(|device| {
+            device.inputs.iter().map(move |endpoint| device.name.clone() + " / " + endpoint)
+        })
+        .enumerate()
+        .map(|(index, endpoint)| {
+            format!("{}{}", if selected == Some(index) { ">" } else { " " }, endpoint)
+        })
+        .collect::<Vec<_>>();
+    if inputs.is_empty() {
+        "NO INPUT SOURCES".to_owned()
+    } else {
+        inputs.join("  |  ")
+    }
 }
 
 fn mapping_chain_line(drafts: &[MappingDraft]) -> String {
@@ -3431,6 +3763,18 @@ fn destination_inventory_line(devices: &[PhysicalDevice], selected: Option<usize
     }
 }
 
+fn health_is_online(health: &str) -> bool {
+    matches!(health, "online" | "ready")
+}
+
+const fn live_activity_age_label(age_nanos: u64) -> &'static str {
+    if age_nanos < 1_000_000_000 {
+        "ACTIVE"
+    } else {
+        "STALE"
+    }
+}
+
 fn destination_parameter_line(
     devices: &[PhysicalDevice],
     selected: Option<usize>,
@@ -3444,51 +3788,451 @@ fn destination_parameter_line(
     else {
         return "DESTINATION UNAVAILABLE".to_owned();
     };
-    if device.name.to_ascii_lowercase().contains("micropitch") {
-        let workspace = DeviceWorkspace::eventide_micropitch();
-        let mut parameter_index = 0;
-        return workspace
-            .groups
-            .iter()
-            .map(|group| {
-                let controls = group
-                    .control_ids
-                    .iter()
-                    .map(|control| {
-                        let marker =
-                            if selected_parameter == Some(parameter_index) { ">" } else { "" };
-                        parameter_index += 1;
-                        format!("{marker}{control}")
-                    })
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                format!("{}: {}", group.label, controls)
-            })
-            .collect::<Vec<_>>()
-            .join(" | ");
+    let Some(profile) = destination_profile_for_name(&device.name) else {
+        return "PROFILE PARAMETERS UNVERIFIED".to_owned();
+    };
+    let parameters = mackes_profiles::destination_parameters(&profile);
+    if parameters.is_empty() {
+        return "NO DOCUMENTED PARAMETERS".to_owned();
     }
-    "PROFILE PARAMETERS UNVERIFIED".to_owned()
+    parameters
+        .iter()
+        .enumerate()
+        .take(24)
+        .map(|(index, parameter)| {
+            let marker = if selected_parameter == Some(index) { ">" } else { "" };
+            let support = match parameter.support {
+                mackes_profiles::ParameterSupport::ReadWrite => "RW",
+                mackes_profiles::ParameterSupport::WriteOnly => "WO",
+                mackes_profiles::ParameterSupport::ReadOnly => "RO",
+                mackes_profiles::ParameterSupport::Unknown => "??",
+            };
+            format!(
+                "{marker}{} [{} {}-{} {support}]",
+                parameter.label, parameter.range.0, parameter.range.1, parameter.category
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(" | ")
 }
 
-fn control_cell(index: usize, editor: &RoutingEditor) -> String {
-    let marker = if editor.selected == Some(index) { ">" } else { " " };
+fn destination_profile_for_name(name: &str) -> Option<mackes_profiles::DeviceProfile> {
+    let name = name.to_ascii_lowercase();
+    let id = if name.contains("micropitch") {
+        "eventide.micropitch"
+    } else if name.contains("reflex") || name.contains("lexicon") {
+        "lexicon.reflex"
+    } else if name.contains("m-vave") || name.contains("mvave") || name.contains("ir box") {
+        "m-vave.ir-box"
+    } else if name.contains("arena") {
+        "valeton.arena2000"
+    } else {
+        return None;
+    };
+    mackes_profiles::builtin_profile(id)
+}
+
+fn control_cell(
+    index: usize,
+    editor: &RoutingEditor,
+    launch_control_present: bool,
+    live_index: Option<u8>,
+    state: FaceplateControlState,
+) -> String {
+    let marker = if editor.selected == Some(index) {
+        ">"
+    } else if live_index == u8::try_from(index).ok() {
+        "*"
+    } else {
+        faceplate_state_marker(state).get(..1).unwrap_or("?")
+    };
     let mapped =
         editor.drafts.get(index).map_or("·", |draft| if draft.enabled { "●" } else { "○" });
-    let label = u8::try_from(index).ok().and_then(launch_control_index_label).map_or_else(
-        || format!("C{:02}", index + 1),
-        |label| match index {
-            0..=7 => format!("T{:02}", index + 1),
-            8..=15 => format!("M{:02}", index - 7),
-            16..=23 => format!("B{:02}", index - 15),
-            _ => label,
-        },
-    );
+    let label = if launch_control_present {
+        u8::try_from(index).ok().and_then(launch_control_index_label).map_or_else(
+            || format!("C{:02}", index + 1),
+            |label| match index {
+                0..=7 => format!("T{:02}", index + 1),
+                8..=15 => format!("M{:02}", index - 7),
+                16..=23 => format!("B{:02}", index - 15),
+                _ => label,
+            },
+        )
+    } else {
+        format!("C{:02}", index + 1)
+    };
     format!("{marker}{mapped}{label:<6}")
+}
+
+fn faceplate_control_state(
+    index: usize,
+    dashboard: &DashboardState,
+    editor: &RoutingEditor,
+) -> FaceplateControlState {
+    let index_usize = index;
+    if dashboard.physical_devices.iter().all(|device| device.state != "connected") {
+        return FaceplateControlState::Offline;
+    }
+    let Some(index) = u8::try_from(index).ok() else { return FaceplateControlState::Unknown };
+    if launch_control_index_label(index).is_none() {
+        return FaceplateControlState::Unknown;
+    }
+    if launch_control_activity_index(dashboard) == Some(index) {
+        return FaceplateControlState::Live;
+    }
+    if editor.drafts.get(index_usize).is_some_and(|draft| draft.enabled) {
+        FaceplateControlState::Mapped
+    } else {
+        FaceplateControlState::Unmapped
+    }
+}
+
+fn launch_control_activity_index(dashboard: &DashboardState) -> Option<u8> {
+    let activity = dashboard.live_activity.as_ref()?;
+    let template = dashboard.launch_control_template.as_ref()?;
+    let kind = match activity.kind.as_str() {
+        "control_change" => LaunchControlMessageKind::Cc,
+        "note_on" | "note_off" => LaunchControlMessageKind::Note,
+        _ => return None,
+    };
+    template.resolve_activity_control(activity.channel?, activity.number?, kind)
+}
+
+/// Converts validated persisted assignments into the profile contract.
+#[must_use]
+pub fn launch_control_template_from_config(
+    template: &mackes_config::LaunchControlTemplateConfig,
+) -> Option<LaunchControlTemplate> {
+    let result = LaunchControlTemplate {
+        template: template.template,
+        assignments: template
+            .assignments
+            .iter()
+            .map(|assignment| {
+                Some(mackes_profiles::LaunchControlAssignment {
+                    index: assignment.index,
+                    channel: assignment.channel,
+                    number: assignment.number,
+                    kind: match assignment.kind.as_str() {
+                        "cc" => LaunchControlMessageKind::Cc,
+                        "note" => LaunchControlMessageKind::Note,
+                        _ => return None,
+                    },
+                    destination: assignment.destination.clone(),
+                })
+            })
+            .collect::<Option<Vec<_>>>()?,
+    };
+    (result.validate().is_ok()).then_some(result)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ratatui::{backend::TestBackend, Terminal};
+
+    #[test]
+    fn rack_lamps_have_ansi_safe_markers_and_semantic_colors() {
+        assert_eq!(RackLamp::Offline.marker(), "o");
+        assert_eq!(RackLamp::Enabled.marker(), "*");
+        assert_eq!(RackLamp::Error.color(), Color::Red);
+        assert_ne!(RackLamp::Offline.marker(), RackLamp::Enabled.marker());
+    }
+
+    #[test]
+    fn faceplate_control_states_have_distinct_ascii_markers() {
+        let states = [
+            FaceplateControlState::Offline,
+            FaceplateControlState::Unknown,
+            FaceplateControlState::Unmapped,
+            FaceplateControlState::Mapped,
+            FaceplateControlState::Live,
+        ];
+        let markers: std::collections::HashSet<_> =
+            states.into_iter().map(faceplate_state_marker).collect();
+        assert_eq!(markers.len(), 5);
+        assert_eq!(faceplate_state_marker(FaceplateControlState::Live), "LIVE");
+    }
+
+    #[test]
+    fn rack_value_bar_is_bounded_and_monotonic() {
+        assert_eq!(RackValueBar::new(0, 100).cells(), (0, 64));
+        assert_eq!(RackValueBar::new(127, 8).cells(), (8, 0));
+        assert!(RackValueBar::new(71, 16).cells().0 < RackValueBar::new(72, 16).cells().0);
+    }
+
+    #[test]
+    fn rack_renderers_are_bounded_and_color_independent() {
+        let lamp = rack_lamp_line("ONLINE", RackLamp::Enabled);
+        assert_eq!(lamp.to_string(), "* ONLINE");
+        let bar = rack_value_bar_line("Mix", RackValueBar::new(127, 8));
+        assert_eq!(bar.to_string(), "Mix          [========] 127");
+        assert!(!bar.to_string().contains('\u{1b}'));
+    }
+
+    #[test]
+    fn rack_shell_layout_collapses_only_below_required_viewport() {
+        assert!(!RackShellLayout::for_terminal(100, 37).compact);
+        assert!(RackShellLayout::for_terminal(80, 24).compact);
+        let layout = RackShellLayout::for_terminal(80, 24);
+        assert_eq!((layout.status_rows, layout.alert_rows, layout.footer_rows), (1, 1, 1));
+    }
+
+    #[test]
+    fn rack_shell_keeps_critical_bands_visible_at_required_sizes() {
+        let expanded = rack_shell_lines(
+            RackShellLayout::for_terminal(100, 37),
+            "ready",
+            Some("route saved"),
+            true,
+        );
+        let compact = rack_shell_lines(
+            RackShellLayout::for_terminal(80, 24),
+            "offline",
+            Some("device missing"),
+            false,
+        );
+        assert_eq!(expanded.len(), 3);
+        assert!(expanded[0].contains("PANIC READY"));
+        assert!(expanded[1].contains("route saved"));
+        assert!(expanded[2].contains("[!] PANIC"));
+        assert!(compact[0].contains("PANIC HELD"));
+        assert!(compact.iter().all(|line| line.len() <= 79));
+    }
+
+    #[test]
+    fn rack_semantic_states_and_long_alerts_remain_distinguishable() {
+        let markers: Vec<&str> = [
+            RackLamp::Offline,
+            RackLamp::Disabled,
+            RackLamp::Enabled,
+            RackLamp::Warning,
+            RackLamp::Error,
+        ]
+        .into_iter()
+        .map(RackLamp::marker)
+        .collect();
+        assert_eq!(
+            markers.len(),
+            markers.iter().copied().collect::<std::collections::HashSet<_>>().len()
+        );
+        let long_alert = "warning: ".to_owned() + &"x".repeat(200);
+        let lines = rack_shell_lines(
+            RackShellLayout::for_terminal(100, 37),
+            "ready",
+            Some(&long_alert),
+            true,
+        );
+        assert!(lines[1].len() <= 99);
+        assert!(lines[1].starts_with("ALERT"));
+    }
+
+    #[test]
+    fn rack_shell_golden_frames_are_stable() {
+        assert_eq!(
+            rack_shell_lines(RackShellLayout::for_terminal(100, 37), "ready", Some("none"), true),
+            vec![
+                "MACKES RACK | HEALTH ready | PANIC READY",
+                "ALERT  none",
+                "[1] HOME  [2] ROUTING  [3] SCENES  [4] DIAGNOSTICS  [!] PANIC",
+            ]
+        );
+        assert_eq!(
+            rack_shell_lines(RackShellLayout::for_terminal(80, 24), "offline", None, false),
+            vec![
+                "MACKES RACK | HEALTH offline | PANIC HELD",
+                "ALERT  none",
+                "[1] HOME  [2] ROUTING  [3] DIAGNOSTICS",
+            ]
+        );
+    }
+
+    #[test]
+    fn controller_renderer_draws_required_viewports_without_overflow() {
+        for (width, height) in [(100, 37), (80, 24)] {
+            let backend = TestBackend::new(width, height);
+            let mut terminal = Terminal::new(backend).expect("test backend");
+            let dashboard = DashboardState { health: "ready".into(), ..DashboardState::default() };
+            let editor = RoutingEditor::from_bank(&MappingBank::new());
+            terminal
+                .draw(|frame| draw_controller_mapping(frame, frame.area(), &dashboard, &editor))
+                .expect("draw");
+            let buffer = terminal.backend().buffer();
+            let rendered: String =
+                buffer.content().iter().map(ratatui::buffer::Cell::symbol).collect();
+            assert!(rendered.contains("CONNECTED MIDI RACK"));
+            assert!(rendered.contains("PANIC"));
+        }
+    }
+
+    #[test]
+    fn controller_renderer_preserves_degraded_and_dirty_state() {
+        let backend = TestBackend::new(100, 37);
+        let mut terminal = Terminal::new(backend).expect("test backend");
+        let dashboard = DashboardState {
+            health: "offline".into(),
+            mapping_dirty: true,
+            ..DashboardState::default()
+        };
+        let editor = RoutingEditor::from_bank(&MappingBank::new());
+        terminal
+            .draw(|frame| draw_controller_mapping(frame, frame.area(), &dashboard, &editor))
+            .expect("draw");
+        let rendered: String = terminal
+            .backend()
+            .buffer()
+            .content()
+            .iter()
+            .map(ratatui::buffer::Cell::symbol)
+            .collect();
+        assert!(rendered.contains("DEGRADED"));
+        assert!(rendered.contains("SAVE REQUIRED"));
+    }
+
+    #[test]
+    fn launch_control_renderer_exposes_documented_faceplate_banks() {
+        let backend = TestBackend::new(100, 37);
+        let mut terminal = Terminal::new(backend).expect("test backend");
+        let dashboard = DashboardState {
+            health: "ready".into(),
+            physical_devices: vec![PhysicalDevice {
+                id: "launch-control-xl".into(),
+                name: "Launch Control XL Mk1".into(),
+                inputs: vec!["lc-in".into()],
+                outputs: vec!["lc-out".into()],
+                state: "connected".into(),
+            }],
+            ..DashboardState::default()
+        };
+        let editor = RoutingEditor::from_bank(&MappingBank::new());
+        terminal
+            .draw(|frame| draw_controller_mapping(frame, frame.area(), &dashboard, &editor))
+            .expect("draw");
+        let rendered: String = terminal
+            .backend()
+            .buffer()
+            .content()
+            .iter()
+            .map(ratatui::buffer::Cell::symbol)
+            .collect();
+        for label in ["T01", "M01", "B01", "DEVICE", "MUTE", "SOLO", "RECORD ARM", "UP", "DOWN"] {
+            assert!(rendered.contains(label), "missing faceplate label {label}");
+        }
+        for label in [
+            "EFFECTS: 6 groups",
+            "Gain",
+            "Gate",
+            "Compressor",
+            "Modulation",
+            "Delay",
+            "Reverb",
+            "FADERS F01–F08",
+            "UNUSED C37–C40",
+        ] {
+            assert!(rendered.contains(label), "missing effects faceplate label {label}");
+        }
+    }
+
+    #[test]
+    fn primary_mapping_surface_keeps_multi_device_workflow_visible() {
+        let backend = TestBackend::new(160, 37);
+        let mut terminal = Terminal::new(backend).expect("test backend");
+        let dashboard = DashboardState {
+            health: "ready".into(),
+            physical_devices: vec![
+                PhysicalDevice {
+                    name: "Launch Control XL Mk1".into(),
+                    outputs: vec!["lc".into()],
+                    ..Default::default()
+                },
+                PhysicalDevice {
+                    name: "MicroPitch Pedal".into(),
+                    outputs: vec!["pitch".into()],
+                    ..Default::default()
+                },
+                PhysicalDevice {
+                    name: "Lexicon Reflex".into(),
+                    outputs: vec!["reflex".into()],
+                    ..Default::default()
+                },
+            ],
+            ..DashboardState::default()
+        };
+        let editor = RoutingEditor::from_bank(&MappingBank::new());
+        terminal
+            .draw(|frame| draw_controller_mapping(frame, frame.area(), &dashboard, &editor))
+            .expect("draw");
+        let rendered: String = terminal
+            .backend()
+            .buffer()
+            .content()
+            .iter()
+            .map(ratatui::buffer::Cell::symbol)
+            .collect();
+        for label in [
+            "Launch Control XL Mk1",
+            "MicroPitch Pedal",
+            "Lexicon Reflex",
+            "SOURCE:",
+            "DESTINATIONS:",
+            "PARAMETERS:",
+            "PANIC",
+        ] {
+            assert!(rendered.contains(label), "missing primary workflow element {label}");
+        }
+    }
+
+    #[test]
+    fn launch_control_faceplate_highlights_only_validated_live_assignment() {
+        let dashboard = DashboardState {
+            live_activity: Some(LiveActivity {
+                kind: "control_change".into(),
+                channel: Some(1),
+                number: Some(17),
+                ..LiveActivity::default()
+            }),
+            launch_control_template: Some(LaunchControlTemplate {
+                template: 0,
+                assignments: vec![mackes_profiles::LaunchControlAssignment {
+                    index: 3,
+                    channel: 1,
+                    number: 17,
+                    kind: LaunchControlMessageKind::Cc,
+                    destination: None,
+                }],
+            }),
+            ..DashboardState::default()
+        };
+        assert_eq!(launch_control_activity_index(&dashboard), Some(3));
+        let mut without_template = dashboard;
+        without_template.launch_control_template = None;
+        assert_eq!(launch_control_activity_index(&without_template), None);
+    }
+
+    #[test]
+    fn persisted_launch_control_template_converts_fail_closed() {
+        let template = mackes_config::LaunchControlTemplateConfig {
+            template: 2,
+            assignments: vec![mackes_config::LaunchControlAssignmentConfig {
+                index: 4,
+                channel: 1,
+                number: 21,
+                kind: "cc".into(),
+                destination: Some("mixer:gain".into()),
+            }],
+        };
+        let converted = launch_control_template_from_config(&template).expect("valid template");
+        assert_eq!(converted.assignment(4).map(|assignment| assignment.number), Some(21));
+        let invalid = mackes_config::LaunchControlTemplateConfig {
+            assignments: vec![mackes_config::LaunchControlAssignmentConfig {
+                kind: "unknown".into(),
+                ..template.assignments[0].clone()
+            }],
+            ..template
+        };
+        assert_eq!(launch_control_template_from_config(&invalid), None);
+    }
+
     #[test]
     fn reducer_rejects_gaps_and_accepts_contiguous_events() {
         let mut state = ClientState::default();
@@ -3822,6 +4566,20 @@ mod tests {
     }
 
     #[test]
+    fn live_activity_age_label_decays_after_one_second() {
+        assert_eq!(live_activity_age_label(0), "ACTIVE");
+        assert_eq!(live_activity_age_label(999_999_999), "ACTIVE");
+        assert_eq!(live_activity_age_label(1_000_000_000), "STALE");
+    }
+
+    #[test]
+    fn ready_health_is_rendered_as_online() {
+        assert!(health_is_online("ready"));
+        assert!(health_is_online("online"));
+        assert!(!health_is_online("degraded"));
+    }
+
+    #[test]
     fn dashboard_notifications_are_newest_first_and_bounded() {
         let mut dashboard = DashboardState::initial();
         dashboard.notify(SemanticToken::Warning, "peer reconnecting");
@@ -3846,6 +4604,8 @@ mod tests {
             "active_scene": "intro",
             "route_generation": 7,
             "route_undo_available": true,
+            "audit_count": 3,
+            "audit": [{"action": "route_replace", "allowed": true}],
             "received": 10,
             "sent": 8,
             "dropped": 2,
@@ -3883,6 +4643,8 @@ mod tests {
         assert_eq!(dashboard.physical_devices[0].inputs, vec!["input-1"]);
         assert_eq!(dashboard.physical_devices[0].outputs, vec!["output-1"]);
         assert!(dashboard.route_undo_available);
+        assert_eq!(dashboard.audit_count, 3);
+        assert_eq!(dashboard.latest_audit.as_deref(), Some("ALLOW route_replace"));
         let activity = dashboard.live_activity.expect("activity");
         assert_eq!(activity.source_endpoint, 11);
         assert_eq!(activity.source_endpoint_id.as_deref(), Some("midir-in-source"));
@@ -3926,7 +4688,7 @@ mod tests {
     fn destination_inventory_line_is_bounded_and_explicit() {
         let devices = vec![PhysicalDevice {
             name: "MicroPitch Pedal".into(),
-            inputs: vec!["midir-in-pedal".into()],
+            inputs: vec!["midir-in-pedal".into(), "midir-in-pedal-2".into()],
             outputs: vec!["midir-out-pedal".into()],
             ..PhysicalDevice::default()
         }];
@@ -3941,6 +4703,9 @@ mod tests {
         dashboard.cycle_destination();
         assert_eq!(dashboard.selected_destination, Some(0));
         assert!(dashboard.first_input_endpoint().is_some());
+        dashboard.cycle_input();
+        assert_eq!(dashboard.selected_input, Some(0));
+        assert!(dashboard.selected_input_endpoint().is_some());
         assert!(dashboard.selected_destination_endpoint().is_some());
         assert!(
             destination_parameter_line(&dashboard.physical_devices, Some(0), None).contains("Mix")
@@ -3952,6 +4717,30 @@ mod tests {
             dashboard.selected_parameter
         )
         .contains('>'));
+    }
+
+    #[test]
+    fn destination_browser_filters_unknown_devices_and_cycles_supported_profiles() {
+        let names = ["Reflex", "M-VAVE IR Box", "Arena 2000"];
+        for name in names {
+            let device = PhysicalDevice {
+                name: name.into(),
+                outputs: vec!["out".into()],
+                ..Default::default()
+            };
+            let line = destination_parameter_line(&[device], Some(0), None);
+            assert!(!line.contains("UNVERIFIED"), "{name}: {line}");
+            assert!(!line.is_empty());
+        }
+        let unknown = PhysicalDevice {
+            name: "Unrecognized Processor".into(),
+            outputs: vec!["out".into()],
+            ..Default::default()
+        };
+        assert_eq!(
+            destination_parameter_line(&[unknown], Some(0), None),
+            "PROFILE PARAMETERS UNVERIFIED"
+        );
     }
 
     #[test]
@@ -4037,6 +4826,10 @@ mod tests {
         assert!(learn.set_channel_policy(LearnChannelPolicy::Any).is_ok());
         learn.begin_live_test();
         assert_eq!(learn.phase, LearnPhase::Testing);
+        assert!(learn
+            .frame_lines(Viewport::new(80, 24))
+            .iter()
+            .any(|line| line.contains("awaiting daemon/device result")));
         learn.finish_live_test(false);
         learn.handle_key(LearnKey::Enter);
         assert_eq!(learn.phase, LearnPhase::Destination);
@@ -4154,9 +4947,12 @@ mod tests {
         );
         assert_eq!(bank.generation(), 1);
         assert_eq!(bank.commit_if_generation(1, vec![draft.clone()]), Ok(2));
-        let invalid = MappingDraft { source: String::new(), ..draft };
+        let invalid = MappingDraft { source: String::new(), ..draft.clone() };
         assert!(bank.commit(vec![invalid]).is_err());
         assert_eq!(bank.generation(), 2);
+        assert!(bank.undo_available());
+        assert_eq!(bank.undo(), Ok(3));
+        assert_eq!(bank.drafts(), std::slice::from_ref(&draft));
         let mut editor = RoutingEditor::from_bank(&bank);
         assert!(editor.reorder(&[0]).is_ok());
         editor.selected = Some(0);

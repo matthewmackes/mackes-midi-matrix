@@ -2056,6 +2056,443 @@ pub fn launch_control_index_label(index: u8) -> Option<String> {
     }
 }
 
+/// Physical control category used by renderer-owned Launch Control faceplates.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub enum LaunchControlControlKind {
+    /// Rotary encoder.
+    Knob,
+    /// Channel button.
+    Button,
+    /// Utility/navigation button.
+    Utility,
+}
+
+/// One documented Launch Control XL Mk1 faceplate control.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct LaunchControlFaceplateControl {
+    /// Stable documented zero-based index.
+    pub index: u8,
+    /// Short profile-owned display label.
+    pub label: String,
+    /// Physical category.
+    pub kind: LaunchControlControlKind,
+}
+
+/// Returns every documented Mk1 faceplate control in physical order.
+#[must_use]
+pub fn launch_control_faceplate() -> Vec<LaunchControlFaceplateControl> {
+    (0..48)
+        .filter_map(|index| {
+            let kind = match index {
+                0..=23 => LaunchControlControlKind::Knob,
+                24..=39 => LaunchControlControlKind::Button,
+                40..=47 => LaunchControlControlKind::Utility,
+                _ => return None,
+            };
+            Some(LaunchControlFaceplateControl {
+                index,
+                label: launch_control_index_label(index)?,
+                kind,
+            })
+        })
+        .collect()
+}
+
+/// Renderer-neutral identity contract for a bidirectional controller/HUD.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct BidirectionalHudFaceplate {
+    /// Stable device identity marker shared by source and destination lanes.
+    pub identity_marker: String,
+    /// Profile-owned display label.
+    pub label: String,
+    /// Whether the profile documents feedback capability.
+    pub feedback_capable: bool,
+    /// Whether the wire protocol is verified for production use.
+    pub protocol_verified: bool,
+}
+
+/// Builds a conservative HUD contract without asserting unsupported protocol behavior.
+#[must_use]
+pub fn bidirectional_hud_faceplate(
+    identity_marker: impl Into<String>,
+    label: impl Into<String>,
+    feedback_capable: bool,
+) -> BidirectionalHudFaceplate {
+    BidirectionalHudFaceplate {
+        identity_marker: identity_marker.into(),
+        label: label.into(),
+        feedback_capable,
+        protocol_verified: false,
+    }
+}
+
+/// One fixed effects-control group on the Launch Control XL faceplate.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct EffectsFaceplateGroup {
+    /// Stable group identifier.
+    pub id: String,
+    /// Signal-path row label.
+    pub row: String,
+    /// Exact group label.
+    pub label: String,
+    /// Default provider owning this group.
+    pub owner: String,
+    /// Four parameter-control indices in physical order.
+    pub parameter_indices: Vec<u8>,
+    /// Enable button index.
+    pub enable_index: u8,
+    /// Type/model button index.
+    pub type_index: u8,
+}
+
+/// Static, renderer-neutral effects faceplate contract.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct EffectsFaceplateCatalog {
+    /// Six fixed signal-path groups.
+    pub groups: Vec<EffectsFaceplateGroup>,
+    /// Eight physical fader indices.
+    pub fader_indices: Vec<u8>,
+    /// Controls intentionally unused by this effects surface.
+    pub unused_indices: Vec<u8>,
+}
+
+/// Logical effect-group state used by the pickup-aware LED policy.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub enum EffectGroupState {
+    /// Group is enabled and active.
+    Enabled,
+    /// Group is explicitly bypassed.
+    Disabled,
+    /// Group is unavailable on the connected profile.
+    Unavailable,
+    /// Group is selected for type/model navigation.
+    Selected,
+    /// Group is known but has not yet synchronized.
+    Unknown,
+}
+
+/// Logical LED policy result; wire encoding remains owned by the verified device profile.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub enum EffectGroupLed {
+    /// Green enabled indicator.
+    Green,
+    /// Solid red disabled indicator.
+    SolidRed,
+    /// Blinking red unavailable indicator.
+    BlinkingRed,
+    /// Blue/teal selected type indicator.
+    BlueTeal,
+    /// No trustworthy state to display.
+    Off,
+}
+
+/// Returns the deterministic pickup-aware group LED policy.
+#[must_use]
+pub const fn effect_group_led(state: EffectGroupState, pickup_ready: bool) -> EffectGroupLed {
+    match state {
+        EffectGroupState::Enabled if pickup_ready => EffectGroupLed::Green,
+        EffectGroupState::Enabled | EffectGroupState::Unknown => EffectGroupLed::Off,
+        EffectGroupState::Disabled => EffectGroupLed::SolidRed,
+        EffectGroupState::Unavailable => EffectGroupLed::BlinkingRed,
+        EffectGroupState::Selected => EffectGroupLed::BlueTeal,
+    }
+}
+
+/// Runtime state for the six bounded effects groups and fader bank.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct EffectsGroupRuntime {
+    /// Group state in fixed faceplate order.
+    pub groups: Vec<EffectGroupState>,
+    /// Bounded fader values in physical order.
+    pub faders: Vec<u8>,
+    /// Whether the next state publication must resend all feedback.
+    pub resync_required: bool,
+}
+
+impl EffectsGroupRuntime {
+    /// Creates an offline-safe unknown state for the fixed faceplate.
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            groups: vec![EffectGroupState::Unknown; 6],
+            faders: vec![0; 8],
+            resync_required: true,
+        }
+    }
+
+    /// Updates one group, rejecting indices outside the fixed six-group contract.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the group index is outside the six-group faceplate.
+    pub fn set_group(&mut self, index: usize, state: EffectGroupState) -> Result<(), &'static str> {
+        let Some(group) = self.groups.get_mut(index) else {
+            return Err("effects group index is out of range");
+        };
+        *group = state;
+        Ok(())
+    }
+
+    /// Updates one fader with MIDI-safe clamping.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the fader index is outside the eight-fader bank.
+    pub fn set_fader(&mut self, index: usize, value: u16) -> Result<(), &'static str> {
+        let Some(fader) = self.faders.get_mut(index) else {
+            return Err("effects fader index is out of range");
+        };
+        *fader = value.min(127) as u8;
+        Ok(())
+    }
+
+    /// Invalidates feedback after reconnect or scene activation.
+    pub const fn request_resync(&mut self) {
+        self.resync_required = true;
+    }
+
+    /// Clears the resync marker after a complete feedback publication.
+    pub const fn acknowledge_resync(&mut self) {
+        self.resync_required = false;
+    }
+}
+
+impl Default for EffectsGroupRuntime {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// One documented parameter assignment on the fixed effects faceplate.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct EffectsParameterAssignment {
+    /// Stable profile parameter identifier.
+    pub parameter_id: String,
+    /// Physical control index, when assigned.
+    pub control_index: Option<u8>,
+    /// Display unit.
+    pub unit: String,
+    /// Legal inclusive range copied from profile metadata.
+    pub range: (u16, u16),
+    /// Conservative default value.
+    pub default_value: u16,
+    /// Direction of the physical control.
+    pub direction: String,
+    /// Explicit reason when this parameter cannot be assigned.
+    pub unsupported_reason: Option<String>,
+}
+
+/// Derives bounded fixed-control assignments from profile-owned parameters.
+#[must_use]
+pub fn effects_parameter_assignments(
+    faceplate: &EffectsFaceplateCatalog,
+    profile: &DeviceProfile,
+) -> Vec<EffectsParameterAssignment> {
+    let owned_indices = faceplate
+        .groups
+        .iter()
+        .filter(|group| group.owner == profile.id)
+        .flat_map(|group| group.parameter_indices.iter().copied())
+        .collect::<Vec<_>>();
+    destination_parameters(profile)
+        .into_iter()
+        .take(128)
+        .enumerate()
+        .map(|(index, parameter)| {
+            let control_index = owned_indices.get(index).copied();
+            EffectsParameterAssignment {
+                parameter_id: parameter.id,
+                control_index,
+                unit: "value".into(),
+                range: parameter.range,
+                default_value: parameter.range.0,
+                direction: "clockwise-increases".into(),
+                unsupported_reason: control_index.is_none().then(|| {
+                    "no fixed faceplate control is available for this documented parameter".into()
+                }),
+            }
+        })
+        .collect()
+}
+
+/// One bounded operation in the immutable effects signal path.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct EffectsAutomationOperation {
+    /// Fixed group being changed.
+    pub group_id: String,
+    /// Profile owner responsible for the operation.
+    pub owner: String,
+    /// Operation kind (`enable` or `type`), never a guessed wire message.
+    pub operation: String,
+    /// Whether the owning profile documents the operation.
+    pub supported: bool,
+    /// Actionable reason when unsupported or unverified.
+    pub reason: Option<String>,
+}
+
+/// Plans enabled effect-group changes in the immutable signal-path order.
+#[must_use]
+pub fn plan_effects_automation(
+    faceplate: &EffectsFaceplateCatalog,
+    enabled_groups: &[String],
+    pickup_ready: bool,
+) -> Vec<EffectsAutomationOperation> {
+    const OWNER_ORDER: [&str; 3] = ["valeton.arena2000", "eventide.micropitch", "lexicon.reflex"];
+    let mut operations = Vec::new();
+    for owner in OWNER_ORDER {
+        for group in faceplate.groups.iter().filter(|group| group.owner == owner) {
+            if enabled_groups.iter().any(|id| id == &group.id) {
+                operations.push(EffectsAutomationOperation {
+                    group_id: group.id.clone(),
+                    owner: group.owner.clone(),
+                    operation: "enable".into(),
+                    supported: false,
+                    reason: Some(
+                        if pickup_ready {
+                            "profile-backed write operation is not verified"
+                        } else {
+                            "awaiting pickup before operation can be armed"
+                        }
+                        .into(),
+                    ),
+                });
+            }
+        }
+    }
+    operations
+}
+
+/// Minimal reusable effects configuration generated from selected faceplate groups.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct ReusableEffectsConfiguration {
+    /// Deterministic signal-path name.
+    pub name: String,
+    /// Selected group identifiers in signal-path order.
+    pub groups: Vec<String>,
+    /// Documented parameter assignments included in this configuration.
+    pub assignments: Vec<EffectsParameterAssignment>,
+}
+
+/// Generates a minimal reusable configuration without unrelated groups.
+#[must_use]
+pub fn generate_reusable_effects_configuration(
+    faceplate: &EffectsFaceplateCatalog,
+    profiles: &[DeviceProfile],
+    enabled_groups: &[String],
+) -> ReusableEffectsConfiguration {
+    let groups = faceplate
+        .groups
+        .iter()
+        .filter(|group| enabled_groups.iter().any(|id| id == &group.id))
+        .map(|group| group.id.clone())
+        .collect::<Vec<_>>();
+    let assignments = faceplate
+        .groups
+        .iter()
+        .filter(|group| groups.iter().any(|id| id == &group.id))
+        .flat_map(|group| profiles.iter().filter(move |profile| profile.id == group.owner))
+        .flat_map(|profile| effects_parameter_assignments(faceplate, profile))
+        .filter(|assignment| assignment.control_index.is_some())
+        .collect();
+    let name = if groups.is_empty() {
+        "Effects — empty".into()
+    } else {
+        format!("Effects — {}", groups.join(" → "))
+    };
+    ReusableEffectsConfiguration { name, groups, assignments }
+}
+
+/// One deterministic offline effects demo frame.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct EffectsDemoFrame {
+    /// Frame sequence number.
+    pub sequence: u8,
+    /// Group states in fixed faceplate order.
+    pub groups: Vec<EffectGroupState>,
+    /// Eight bounded fader values.
+    pub faders: Vec<u8>,
+    /// Whether the frame represents a reconnect resynchronization.
+    pub resync: bool,
+}
+
+/// Builds bounded, hardware-free effects demo frames for qualification.
+#[must_use]
+pub fn effects_demo_frames() -> Vec<EffectsDemoFrame> {
+    let mut frames = Vec::with_capacity(4);
+    for sequence in 0..4 {
+        frames.push(EffectsDemoFrame {
+            sequence,
+            groups: match sequence {
+                0 => vec![EffectGroupState::Unknown; 6],
+                1 => vec![EffectGroupState::Enabled; 6],
+                2 => vec![EffectGroupState::Selected; 6],
+                _ => vec![EffectGroupState::Unavailable; 6],
+            },
+            faders: (0..8)
+                .map(|index| sequence.saturating_mul(32).saturating_add(index * 8).min(127))
+                .collect(),
+            resync: sequence == 3,
+        });
+    }
+    frames
+}
+
+impl EffectsFaceplateCatalog {
+    /// Validates the fixed physical-index partition.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the six groups or their physical indices overlap or are incomplete.
+    pub fn validate(&self) -> Result<(), &'static str> {
+        if self.groups.len() != 6 || self.fader_indices != (40..48).collect::<Vec<_>>() {
+            return Err("effects faceplate geometry is incomplete");
+        }
+        let mut seen = std::collections::BTreeSet::new();
+        for group in &self.groups {
+            if group.parameter_indices.len() != 4
+                || group.parameter_indices.iter().any(|index| !seen.insert(*index))
+                || !seen.insert(group.enable_index)
+                || !seen.insert(group.type_index)
+            {
+                return Err("effects faceplate indices conflict");
+            }
+        }
+        if self.unused_indices.iter().any(|index| !seen.insert(*index)) {
+            return Err("effects faceplate unused indices conflict");
+        }
+        Ok(())
+    }
+}
+
+/// Returns the fixed Launch Control XL effects faceplate.
+#[must_use]
+pub fn launch_control_effects_faceplate() -> EffectsFaceplateCatalog {
+    let groups = [
+        ("gain", "Row 1", "Gain", "valeton.arena2000", 24, 25, 0),
+        ("gate", "Row 1", "Gate", "valeton.arena2000", 26, 27, 4),
+        ("compressor", "Row 2", "Compressor", "valeton.arena2000", 28, 29, 8),
+        ("modulation", "Row 2", "Modulation", "eventide.micropitch", 30, 31, 12),
+        ("delay", "Row 3", "Delay", "lexicon.reflex", 32, 33, 16),
+        ("reverb", "Row 3", "Reverb", "lexicon.reflex", 34, 35, 20),
+    ]
+    .into_iter()
+    .map(|(id, row, label, owner, enable_index, type_index, start)| EffectsFaceplateGroup {
+        id: id.into(),
+        row: row.into(),
+        label: label.into(),
+        owner: owner.into(),
+        parameter_indices: (start..start + 4).collect(),
+        enable_index,
+        type_index,
+    })
+    .collect();
+    EffectsFaceplateCatalog {
+        groups,
+        fader_indices: (40..48).collect(),
+        unused_indices: (36..40).collect(),
+    }
+}
+
 /// MIDI message kind assigned to one Launch Control XL template control.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum LaunchControlMessageKind {
@@ -2076,6 +2513,9 @@ pub struct LaunchControlAssignment {
     pub number: u8,
     /// Message kind.
     pub kind: LaunchControlMessageKind,
+    /// Optional user-facing destination summary for the mapped control.
+    #[serde(default)]
+    pub destination: Option<String>,
 }
 
 /// User-template assignments for one Launch Control XL template.
@@ -2103,6 +2543,13 @@ impl LaunchControlTemplate {
             if assignment.index >= 48 || assignment.channel >= 16 {
                 return Err("Launch Control assignment is out of range");
             }
+            if assignment
+                .destination
+                .as_deref()
+                .is_some_and(|destination| destination.trim().is_empty() || destination.len() > 96)
+            {
+                return Err("Launch Control assignment destination is invalid");
+            }
             if !seen.insert(assignment.index) {
                 return Err("Launch Control assignment duplicates a control");
             }
@@ -2122,6 +2569,32 @@ impl LaunchControlTemplate {
         let mut assignments: Vec<_> = self.assignments.iter().collect();
         assignments.sort_by_key(|assignment| assignment.index);
         assignments
+    }
+
+    /// Resolves one observed MIDI control to a physical faceplate index.
+    ///
+    /// Returns `None` when no assignment matches or when multiple assignments
+    /// match, preventing activity from being shown on an invented control.
+    #[must_use]
+    pub fn resolve_activity_control(
+        &self,
+        channel: u8,
+        number: u8,
+        kind: LaunchControlMessageKind,
+    ) -> Option<u8> {
+        if channel > 15 || number > 127 {
+            return None;
+        }
+        let mut result = None;
+        for assignment in self.assignments.iter().filter(|assignment| {
+            assignment.channel == channel && assignment.number == number && assignment.kind == kind
+        }) {
+            if result.is_some() {
+                return None;
+            }
+            result = Some(assignment.index);
+        }
+        result
     }
 }
 
@@ -2388,6 +2861,62 @@ impl LedState {
     }
 }
 
+/// Returns the deterministic Mk1 LED test pattern.
+///
+/// Every documented LED index is addressed once, using the device's full
+/// supported color palette. The caller owns transmission, so this is safe to
+/// use in offline demos and previews.
+#[must_use]
+pub fn launch_control_led_test_pattern(template: u8) -> Option<Vec<Vec<u8>>> {
+    let colors = [LedColor::Red, LedColor::Green, LedColor::Amber, LedColor::Yellow];
+    (template < 16)
+        .then(|| {
+            (0..48)
+                .map(|index| {
+                    let color = colors[usize::from(index) % colors.len()];
+                    encode_launch_control_led(
+                        template,
+                        index,
+                        launch_control_led_value(color, 127, 0),
+                    )
+                })
+                .collect::<Option<Vec<_>>>()
+        })
+        .flatten()
+}
+
+/// Returns four deterministic demo frames covering the supported semantic states.
+///
+/// Frames contain protocol messages only; no hardware I/O or timing occurs
+/// here, making the demo reproducible in the TUI, CLI, and tests.
+#[must_use]
+pub fn launch_control_led_demo_frames(template: u8) -> Option<Vec<Vec<Vec<u8>>>> {
+    let states = [
+        LedState::new(LedColor::Off, 0, false),
+        LedState::new(LedColor::Green, 127, false),
+        LedState::new(LedColor::Amber, 127, false),
+        LedState::new(LedColor::Red, 127, false),
+    ];
+    (template < 16)
+        .then(|| {
+            states
+                .into_iter()
+                .map(|state| {
+                    (0..48)
+                        .map(|index| {
+                            encode_launch_control_led(
+                                template,
+                                index,
+                                launch_control_led_value(state.color, state.intensity, 0),
+                            )
+                        })
+                        .collect::<Option<Vec<_>>>()
+                })
+                .collect::<Option<Vec<_>>>()
+        })
+        .flatten()
+}
+
 /// Coalesces redundant LED updates and tracks desired/sent state.
 #[derive(Clone, Debug, Default)]
 pub struct LedCoalescer {
@@ -2470,6 +2999,68 @@ pub struct ControlDefinition {
     /// Optional profile-specific operation identifier.
     #[serde(default)]
     pub operation: Option<String>,
+}
+
+/// Renderer-neutral support state for a destination parameter.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub enum ParameterSupport {
+    /// The profile documents safe read/write interaction.
+    ReadWrite,
+    /// The parameter may be written but has no documented readback.
+    WriteOnly,
+    /// The parameter can be observed but must not be written.
+    ReadOnly,
+    /// The profile does not establish a synchronized current value.
+    Unknown,
+}
+
+/// Profile-owned destination parameter metadata for destination-first mapping.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct DestinationParameter {
+    /// Stable parameter identifier.
+    pub id: String,
+    /// Exact profile/documentation label.
+    pub label: String,
+    /// Bounded category used by keyboard-only browsing.
+    pub category: String,
+    /// Inclusive legal value range.
+    pub range: (u16, u16),
+    /// Support and feedback state.
+    pub support: ParameterSupport,
+    /// Whether a hazard marker is required before an action.
+    pub hazardous: bool,
+}
+
+/// Derives a bounded destination catalog from documented profile controls.
+#[must_use]
+pub fn destination_parameters(profile: &DeviceProfile) -> Vec<DestinationParameter> {
+    profile
+        .controls
+        .iter()
+        .enumerate()
+        .take(128)
+        .map(|(index, control)| {
+            let category = control
+                .operation
+                .as_deref()
+                .and_then(|operation| operation.split([':', '/']).next())
+                .filter(|value| !value.trim().is_empty())
+                .unwrap_or("General")
+                .to_owned();
+            DestinationParameter {
+                id: control.operation.clone().unwrap_or_else(|| format!("control-{index}")),
+                label: control.label.clone(),
+                category,
+                range: control.range,
+                support: if control.cc.is_some() || control.program.is_some() {
+                    ParameterSupport::ReadWrite
+                } else {
+                    ParameterSupport::Unknown
+                },
+                hazardous: false,
+            }
+        })
+        .collect()
 }
 
 /// A declarative identity probe: masked bytes must match at the same offset.
@@ -3812,6 +4403,17 @@ mod tests {
     }
 
     #[test]
+    fn destination_catalog_derives_exact_labels_categories_and_ranges() {
+        let profile = eventide_micropitch_profile();
+        let parameters = destination_parameters(&profile);
+        assert_eq!(parameters.len(), profile.controls.len());
+        assert_eq!(parameters[0].label, profile.controls[0].label);
+        assert_eq!(parameters[0].range, profile.controls[0].range);
+        assert_eq!(parameters[0].category, "General");
+        assert!(parameters.iter().all(|parameter| !parameter.label.is_empty()));
+    }
+
+    #[test]
     fn profile_renders_validated_control_messages_without_transmitting() {
         let profile = eventide_micropitch_profile();
         assert_eq!(profile.render_control_message("Mix", 1, 64).expect("CC"), vec![0xB0, 20, 64]);
@@ -3896,6 +4498,139 @@ mod tests {
     }
 
     #[test]
+    fn launch_control_faceplate_covers_all_controls_in_order() {
+        let controls = launch_control_faceplate();
+        assert_eq!(controls.len(), 48);
+        assert!(controls.iter().enumerate().all(|(position, control)| {
+            usize::from(control.index) == position && !control.label.is_empty()
+        }));
+        assert!(controls[..24]
+            .iter()
+            .all(|control| control.kind == LaunchControlControlKind::Knob));
+        assert!(controls[24..40]
+            .iter()
+            .all(|control| control.kind == LaunchControlControlKind::Button));
+        assert!(controls[40..]
+            .iter()
+            .all(|control| control.kind == LaunchControlControlKind::Utility));
+    }
+
+    #[test]
+    fn effects_faceplate_has_six_groups_eight_faders_and_no_conflicts() {
+        let faceplate = launch_control_effects_faceplate();
+        assert_eq!(faceplate.groups.len(), 6);
+        assert_eq!(faceplate.fader_indices, (40..48).collect::<Vec<_>>());
+        assert_eq!(faceplate.unused_indices, (36..40).collect::<Vec<_>>());
+        assert_eq!(faceplate.groups[0].label, "Gain");
+        assert_eq!(faceplate.groups[5].label, "Reverb");
+        assert!(faceplate.validate().is_ok());
+    }
+
+    #[test]
+    fn effect_group_led_policy_is_pickup_aware_and_fail_closed() {
+        assert_eq!(effect_group_led(EffectGroupState::Enabled, false), EffectGroupLed::Off);
+        assert_eq!(effect_group_led(EffectGroupState::Enabled, true), EffectGroupLed::Green);
+        assert_eq!(effect_group_led(EffectGroupState::Disabled, false), EffectGroupLed::SolidRed);
+        assert_eq!(
+            effect_group_led(EffectGroupState::Unavailable, true),
+            EffectGroupLed::BlinkingRed
+        );
+        assert_eq!(effect_group_led(EffectGroupState::Selected, false), EffectGroupLed::BlueTeal);
+        assert_eq!(effect_group_led(EffectGroupState::Unknown, true), EffectGroupLed::Off);
+    }
+
+    #[test]
+    fn effects_assignments_preserve_ranges_and_explain_unassigned_parameters() {
+        let faceplate = launch_control_effects_faceplate();
+        let profile = eventide_micropitch_profile();
+        let assignments = effects_parameter_assignments(&faceplate, &profile);
+        assert!(!assignments.is_empty());
+        assert!(assignments.iter().all(|assignment| assignment.range.0 <= assignment.range.1));
+        assert!(assignments.iter().any(|assignment| assignment.control_index.is_some()));
+        assert_eq!(assignments[0].unit, "value");
+    }
+
+    #[test]
+    fn effects_automation_is_ordered_bounded_and_fail_closed() {
+        let faceplate = launch_control_effects_faceplate();
+        let requested = ["reverb", "gain", "modulation"].map(String::from);
+        let plan = plan_effects_automation(&faceplate, &requested, false);
+        assert_eq!(
+            plan.iter().map(|operation| operation.group_id.as_str()).collect::<Vec<_>>(),
+            vec!["gain", "modulation", "reverb"]
+        );
+        assert!(plan.iter().all(|operation| !operation.supported && operation.reason.is_some()));
+        assert!(plan[0].reason.as_deref().is_some_and(|reason| reason.contains("pickup")));
+    }
+
+    #[test]
+    fn reusable_effects_configuration_is_minimal_and_signal_ordered() {
+        let faceplate = launch_control_effects_faceplate();
+        let profiles = builtin_profiles();
+        let config = generate_reusable_effects_configuration(
+            &faceplate,
+            &profiles,
+            &["reverb".into(), "gain".into()],
+        );
+        assert_eq!(config.groups, vec!["gain", "reverb"]);
+        assert_eq!(config.name, "Effects — gain → reverb");
+        assert!(config.assignments.iter().all(|assignment| assignment.control_index.is_some()));
+        assert!(generate_reusable_effects_configuration(&faceplate, &profiles, &[])
+            .assignments
+            .is_empty());
+    }
+
+    #[test]
+    fn effects_demo_frames_cover_states_faders_and_resync_deterministically() {
+        let frames = effects_demo_frames();
+        assert_eq!(frames, effects_demo_frames());
+        assert_eq!(frames.len(), 4);
+        assert!(frames.iter().all(|frame| frame.groups.len() == 6 && frame.faders.len() == 8));
+        assert!(frames.iter().all(|frame| frame.faders.iter().all(|value| *value <= 127)));
+        assert!(frames.last().is_some_and(|frame| frame.resync));
+    }
+
+    #[test]
+    fn effects_group_runtime_bounds_pickup_states_and_resync() {
+        let mut runtime = EffectsGroupRuntime::new();
+        assert!(runtime.resync_required);
+        runtime.set_group(0, EffectGroupState::Enabled).expect("group");
+        runtime.set_fader(0, 200).expect("fader");
+        assert_eq!(runtime.faders[0], 127);
+        runtime.acknowledge_resync();
+        runtime.request_resync();
+        assert!(runtime.resync_required);
+        assert!(runtime.set_group(6, EffectGroupState::Disabled).is_err());
+        assert!(runtime.set_fader(8, 0).is_err());
+    }
+
+    #[test]
+    fn bidirectional_hud_contract_preserves_identity_and_fails_closed() {
+        let hud = bidirectional_hud_faceplate("hud-1", "Controller HUD", true);
+        assert_eq!(hud.identity_marker, "hud-1");
+        assert_eq!(hud.label, "Controller HUD");
+        assert!(hud.feedback_capable);
+        assert!(!hud.protocol_verified);
+    }
+
+    #[test]
+    fn launch_control_activity_resolution_requires_unique_valid_assignment() {
+        let template = LaunchControlTemplate {
+            template: 0,
+            assignments: vec![LaunchControlAssignment {
+                index: 3,
+                channel: 1,
+                number: 17,
+                kind: LaunchControlMessageKind::Cc,
+                destination: None,
+            }],
+        };
+        assert_eq!(template.resolve_activity_control(1, 17, LaunchControlMessageKind::Cc), Some(3));
+        assert_eq!(template.resolve_activity_control(1, 18, LaunchControlMessageKind::Cc), None);
+        assert_eq!(template.resolve_activity_control(16, 17, LaunchControlMessageKind::Cc), None);
+    }
+
+    #[test]
     fn launch_control_mk1_led_protocol_matches_programmers_reference() {
         assert_eq!(launch_control_led_index(0, 0), Some(0));
         assert_eq!(launch_control_led_index(3, 7), Some(31));
@@ -3922,6 +4657,7 @@ mod tests {
                 channel: 0,
                 number: 14,
                 kind: LaunchControlMessageKind::Cc,
+                destination: None,
             }],
         };
         assert!(template.validate().is_ok());
@@ -3978,6 +4714,19 @@ mod tests {
         assert_eq!(coalescer.drain_pending_limited(1).len(), 1);
         assert_eq!(coalescer.drain_pending(), vec![(3, state)]);
         assert!(coalescer.drain_pending().is_empty());
+    }
+
+    #[test]
+    fn led_test_and_demo_modes_are_bounded_and_deterministic() {
+        let test = launch_control_led_test_pattern(0).expect("valid template");
+        assert_eq!(test.len(), 48);
+        assert_eq!(test.first().expect("first LED")[6], 0x78);
+        assert!(launch_control_led_test_pattern(16).is_none());
+        let demo = launch_control_led_demo_frames(0).expect("valid template");
+        assert_eq!(demo.len(), 4);
+        assert_eq!(demo.iter().map(Vec::len).collect::<Vec<_>>(), vec![48; 4]);
+        assert_eq!(demo[0][0][9], 0);
+        assert_eq!(demo[1][0][9], 0x30);
     }
 
     #[allow(clippy::too_many_lines)]

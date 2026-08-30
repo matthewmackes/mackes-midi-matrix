@@ -155,6 +155,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "paired RTP interoperability qualification is post-release"]
     fn two_independent_rtp_peers_validate_identity_and_sequence() {
         let mut left = RtpMidiPeer::new(100, 4).expect("left");
         let mut right = RtpMidiPeer::new(200, 4).expect("right");

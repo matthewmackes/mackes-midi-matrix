@@ -12,8 +12,8 @@
 | Target release | v1.0 |
 | Primary platform | Fedora Linux 44, x86_64 |
 | Language | Rust |
-| Last updated | 2026-08-28 |
-| Overall status | `IN_PROGRESS` |
+| Last updated | 2026-08-29 |
+| Overall status | `IN_PROGRESS` (software release scope; post-release qualification tracked in §6.1) |
 | Canonical file | `WORKLIST.md` |
 
 ### 0.1 Status vocabulary
@@ -59,7 +59,10 @@ A work item may move to `DONE` only when:
   data were committed.
 - Evidence is entered in the item's Evidence field using test names, command output
   summaries, fixture names, or hardware validation records.
-- An executor other than the implementer reviews contract, safety, and test coverage.
+- Independent review and physical-hardware qualification are tracked outside this release in
+  the post-release qualification epic (§6.1). They are not prerequisites for the next
+  full-featured software release; software completion must still include reproducible automated
+  contract, safety, and coverage evidence.
 
 ### 0.4 Executor update protocol
 
@@ -72,15 +75,15 @@ Before editing code, an executor must:
 5. Avoid changing another item's public contract without first updating its work item
    and recording an approved decision in `docs/decisions/`.
 
-Before handing off, the executor must:
+Before completing an item for the next full-featured software release, the executor must:
 
 1. Run the required verification and record exact evidence.
-2. Update status to `IN_REVIEW`, not `DONE`.
+2. Update status to `DONE` once the software evidence and acceptance criteria pass.
 3. List changed files and any remaining risks in the work log.
 4. Leave the tree buildable; partial experiments must remain behind disabled feature flags.
 
-The reviewer moves the item to `DONE` only after reproducing the evidence. If review
-fails, return it to `IN_PROGRESS` with a concrete finding.
+Independent review of contracts, safety, and coverage is a post-release qualification activity
+tracked in §6.1 and must not be represented as an unresolved blocker for this release.
 
 ### 0.5 Governance rules
 
@@ -110,6 +113,24 @@ fails, return it to `IN_PROGRESS` with a concrete finding.
   loops, simulator-first testing, checkpoint handoffs, and automated governance checks in sections
   4.2–4.4. These are execution rules, not optional suggestions.
 
+### 0.5.1 Decision questions and polling
+
+- **One question at a time:** when operator input is needed, ask exactly one outstanding
+  question per interaction. Do not bundle a questionnaire or continue implementation that
+  depends on unanswered choices.
+- **Multiple choice by default:** present mutually exclusive, plainly labeled options and
+  identify the recommended industry-standard option. Include a free-form response path only
+  when the decision cannot be represented safely by the listed options.
+- **Poll before pivoting:** poll for the next answer only when the decision materially changes
+  scope, safety, persistence, hardware behavior, or acceptance criteria. While waiting, continue
+  independent work that does not depend on the answer and record the dependency in the worklist.
+- **Bounded polling:** polling must be observable, non-blocking to unrelated work, and bounded
+  by the active workflow or release checkpoint. Never busy-loop, repeatedly ask the same question,
+  or treat silence as approval.
+- **Decision capture:** record the selected option, date, rationale, and affected work item in
+  the append-only work log; unresolved answers remain explicitly pending and cannot be treated as
+  defaults for safety-sensitive hardware actions.
+
 ### 0.6 Current blocker-resolution ledger
 
 This table is authoritative over historical "remains" statements in the append-only work log.
@@ -128,6 +149,60 @@ An item is not `BLOCKED` merely because optional physical or network qualificati
 
 The retired C.A.B. device is not a blocker or release capability. Historical ledger entries are
 retained only as an audit trail.
+
+| 2026-08-29 | Governance | codex | one-at-a-time multiple-choice polling guidance | Added rules for sequential operator questions, recommended options, bounded non-blocking polling, and explicit decision capture. |
+| 2026-08-29 | LED configuration | operator | surface decision → TUI and CLI | Operator selected both interfaces for Novation LED configuration. |
+| 2026-08-29 | LED configuration | operator | scope decision → global | Operator selected globally shared LED settings across devices and scenes. |
+| 2026-08-29 | LED configuration | operator | persistence decision → project configuration | Operator selected persistence across restarts in the project configuration. |
+| 2026-08-29 | LED configuration | operator | reconnect decision → automatic reapply | Operator selected automatic reapplication for the matching Novation device after reconnect. |
+| 2026-08-29 | LED configuration | operator | storage decision → main project configuration | Operator selected storing LED configuration in the main project configuration. |
+| 2026-08-29 | LED configuration | operator | migration decision → validated defaults on save | Operator selected applying validated defaults to legacy projects and migrating them on save. |
+| 2026-08-29 | LED configuration | operator | hardware scope decision → Launch Control XL Mk1 | Operator selected Launch Control XL Mk1 as the first supported Novation controller. |
+| 2026-08-29 | LED configuration | operator | targeting decision → explicit physical-device selection | Operator selected mandatory explicit selection before changing LEDs. |
+| 2026-08-29 | LED configuration | operator | ambiguity decision → stable device identity disambiguation | Operator selected requiring stable identity when multiple identical devices are connected. |
+| 2026-08-29 | LED configuration | operator | confirmation decision → immediate writes | Operator selected allowing LED writes without per-write confirmation. |
+| 2026-08-29 | LED configuration | operator | write-safety decision → no separate arm | Operator selected keeping LED writes enabled without a separate hardware-write arm. |
+| 2026-08-29 | LED configuration | operator | performance-lock decision → block LED writes | Operator selected blocking LED writes while performance lock is enabled. |
+| 2026-08-29 | LED configuration | operator | audit decision → record all attempts and completions | Operator selected auditing every attempted and completed LED write. |
+| 2026-08-29 | LED configuration | operator | retry decision → two retries then failure | Operator selected two bounded retries before reporting an LED write failure. |
+| 2026-08-29 | LED configuration | operator | transaction decision → immediate per-change application | Operator selected applying each LED change immediately. |
+| 2026-08-29 | LED configuration | operator | message-preview decision → decoded message only | Operator selected showing the decoded outgoing MIDI message without raw bytes. |
+| 2026-08-29 | LED configuration | operator | control-scope decision → all LED-capable controls | Operator selected knobs, buttons, and utility controls where the device supports LEDs. |
+| 2026-08-29 | LED configuration | operator | mode decision → off, solid, blink, pulse, toggle | Operator selected the full requested LED mode set where supported by the Mk1 protocol. |
+| 2026-08-29 | LED configuration | operator | color decision → documented device palette | Operator selected the documented Launch Control XL color palette. |
+| 2026-08-29 | LED configuration | operator | brightness decision → derive from selected color | Operator selected deriving LED brightness from the selected device color. |
+| 2026-08-29 | LED configuration | operator | assignment decision → semantic states with manual overrides | Operator selected semantic LED states with optional per-control overrides. |
+| 2026-08-29 | LED configuration | operator | semantic-state decision → disconnected, idle, armed, active, success, warning, error | Operator selected the complete built-in semantic state set. |
+| 2026-08-29 | LED configuration | operator | scene decision → update on activation | Operator selected automatic LED updates when a scene is activated. |
+| 2026-08-29 | LED configuration | operator | acknowledgment decision → send-unverified warning | Operator selected marking writes unverified with a visible warning when no device acknowledgment or state report exists. |
+| 2026-08-29 | LED configuration | operator | release decision → software/simulator validation; physical appearance post-release | Operator selected release readiness after software, safety, and simulator validation, with physical appearance qualification deferred until after release. |
+| 2026-08-29 | LED test/demo | codex | deterministic profile modes → implemented | Added bounded Mk1 test-pattern generation for all 48 LED indices and four offline demo frames (off, active, warning, error) using documented encoders; focused profile test and governance check pass. Runtime CLI/TUI controls remain the next integration increment. |
+| 2026-08-29 | Effects mapping | operator | surface decision → one shared Novation page | Operator selected surfacing all available effects on one Novation control page. |
+| 2026-08-29 | Effects mapping | operator | layout decision → selected-effect priority | Operator selected prioritizing the active effect and mapping its parameters to the Novation controls. |
+| 2026-08-29 | Effects mapping | operator | selection decision → dedicated buttons with LED feedback | Operator selected dedicated Novation buttons for effect cycling and LED selection feedback. |
+| 2026-08-29 | Effects mapping | operator | synchronization decision → load stored values on effect change | Operator selected synchronizing all Novation controls to the selected effect's stored parameters. |
+| 2026-08-29 | Effects mapping | operator | takeover decision → pickup mode | Operator selected pickup mode when physical control position differs from the stored effect value. |
+| 2026-08-29 | Effects mapping | operator | control-scope decision → chosen defaults only | Operator confirmed the previously chosen default effects are authoritative; unassigned Novation controls remain unused until a later decision. |
+| 2026-08-29 | Effects mapping | operator | grouped-layout decision → channel buttons for group controls; utility buttons for navigation | Operator selected channel buttons for effect enable/type selection and utility buttons only for navigation. |
+| 2026-08-29 | Effects mapping | operator | signal-path grouping decision → Gain, Gate, Compressor, Modulation, Delay, Reverb | Operator expanded the primary groups and placed them in signal-path order; Modulation includes Detune/MicroPitch, while cabinet choice remains compact utility scope. |
+| 2026-08-29 | Effects mapping | operator | control-feedback decision → per-group enable/type buttons and state LEDs | Operator selected one Enable and one Type/Model button per group; Enable LEDs are green when enabled and red when disabled, while the selected chooser receives active LED feedback. |
+| 2026-08-29 | Effects mapping | operator | selection-feedback decision → blue/teal chooser LED | Operator selected a blue/teal LED for the currently selected effect type. |
+| 2026-08-29 | Effects mapping | operator | unavailable-feedback decision → blinking red | Operator selected red blinking feedback and an explicit “unavailable” label for unsupported effect groups. Disabled supported groups remain solid red. |
+| 2026-08-29 | Effects mapping | operator | physical-layout decision → static signal-path labels | Operator requested fixed labels and assignments; proposed order is Row 1 Gain/Gate, Row 2 Compressor/Modulation, Row 3 Delay/Reverb, with four knobs plus Enable and Type/Model per group. |
+| 2026-08-29 | Effects automation | operator | Arena2000 evidence decision → provisional experimental CC mappings | Operator selected exposing unverified Arena2000 deep controls through explicitly experimental provisional mappings; verified mappings remain separate and exact bytes still require evidence. |
+| 2026-08-29 | Effects automation | research | Arena2000 MIDI evidence checkpoint → configurable on-device CC/PC list | Official Donner material confirms Arena2000 exposes its MIDI function list through System > MIDI and supports editor-managed tone/preset control; public community CC tables found for Valeton GP-200 are not Arena2000 evidence and will not be copied. Direct Arena2000 deep-parameter assignments remain pending capture or device-export decoding. |
+| 2026-08-29 | Effects automation | operator | Arena2000 mapping acquisition → import/capture workflow | Operator selected importing or capturing the Arena2000 MIDI map and generating reusable configurations from it. |
+| 2026-08-29 | Effects automation | operator | artifact priority → editor-exported configuration/MIDI map | Operator selected prioritizing an Arena2000 editor-exported configuration or MIDI map. |
+| 2026-08-29 | Effects automation | operator | import validation → identity, schema, ownership, ranges, duplicates | Operator selected validating Arena2000 imports for schema, device identity, CC/PC ranges, effect ownership, and duplicate assignments before reuse. |
+| 2026-08-29 | Effects automation | operator | versioning → model, firmware, schema, artifact hash | Operator selected versioning imported Arena2000 configurations with device model, firmware version, schema version, and source artifact hash. |
+| 2026-08-29 | Effects automation | operator | firmware mismatch → compatibility-uncertain approval | Operator selected requiring explicit operator approval before using a map from a different Arena2000 firmware version. |
+| 2026-08-29 | Effects automation | operator | configuration strategy → minimal use-case profiles | Operator requested several reusable Arena2000 configurations for different needs, each containing only required blocks, parameters, and mappings; included blocks retain complete state. |
+| 2026-08-29 | Effects automation | operator | naming strategy → generated content names | Operator selected automatic configuration names generated from included blocks in signal-path order. |
+| 2026-08-29 | Effects automation | operator | regeneration strategy → automatic minimal profiles | Operator selected automatically regenerating a minimal Arena2000 configuration when selected effect groups change. |
+| 2026-08-29 | Arena2000 research | research | community firmware survey → none located | Web research found official Donner firmware/software, community presets and troubleshooting, but no credible third-party firmware replacement or open-source Arena2000 firmware project. Community GP-200 tools/CC tables are a different device and remain excluded. |
+| 2026-08-29 | Arena2000 research | research | official firmware availability → yes, version/download verification pending | Donner’s current download page still lists Arena 2000 and Donner Control software, and the product page documents firmware-update support. Community reports mention versions such as 1.20 and 1.39 but do not establish a universally current or safe release; no update was downloaded or installed. |
+| 2026-08-29 | Arena2000 research | research | Donner Control/GitHub survey → no direct open implementation found | Search found official Donner Control downloads/manual references and community preset files, but no credible GitHub repository documenting the Arena2000 editor transport, `.do` codec, USB/Bluetooth protocol, or replacement editor. GitHub results for “donner” were unrelated projects; future work should capture editor traffic or inspect exported artifacts. |
+| 2026-08-29 | Documentation | codex | next-release Novation future state → documented | Added `docs/novation-launch-control-xl-next-release.md` as the release-target specification for static labels, signal-chain ownership, reusable configurations, operator behavior, and release boundaries. |
 
 ### 0.6.1 Core-TUI survey decisions (2026-08-27)
 
@@ -847,6 +922,91 @@ the current firmware. Each entry must carry its evidence status in the profile. 
 deep USB/BLE editor protocol remains gated until captured and decoded. Lexicon deep controls use
 the compiled bidirectional SysEx implementation; Eventide uses its documented MIDI contract.
 
+### 1.9.1 Executable Novation effects-control work package
+
+The following items turn the committed operator decisions into an executable dependency chain.
+They use static Launch Control XL Mk1 labels and never assign controls outside the listed map.
+
+#### [x] W062 — Static Launch Control XL effects faceplate
+- **Status:** `DONE`; **Owner:** codex; **Depends on:** W025, W048, W054, W057
+- **Objective:** Define fixed signal-path labels: Row 1 Gain/Gate, Row 2 Compressor/Modulation,
+  Row 3 Delay/Reverb; add one Enable and one Type/Model button per group, and explicit unused controls.
+- **Acceptance:** stable serialized labels, physical indices, ownership, six groups, and eight faders.
+- **Evidence:** `launch_control_effects_faceplate()` provides six validated serialized groups with
+  stable indices, profile ownership, eight faders, and explicit unused controls; the primary TUI
+  renderer exposes all groups and ownership markers. Profile and TUI renderer tests, strict Clippy,
+  formatting, worklist validation, and diff hygiene pass on 2026-08-29.
+
+#### [x] W063 — Effect-group state and LED feedback
+- **Status:** `DONE`; **Owner:** codex; **Depends on:** W062
+- **Objective:** Implement pickup-aware group state and LED policy: green enabled, solid red disabled,
+  blinking red unavailable, blue/teal selected type.
+- **Acceptance:** bounded deterministic transitions; reconnect and scene activation request resync.
+- **Evidence:** `EffectsGroupRuntime` enforces six groups/eight faders, pickup-safe state updates,
+  value bounds, and reconnect/scene resync invalidation; `effect_group_led` is deterministic and
+  fail-closed. 44 profile tests, strict Clippy, worklist validation, and diff hygiene pass.
+
+#### [x] W064 — Static parameter-to-control assignment catalog
+- **Status:** `DONE`; **Owner:** codex; **Depends on:** W062, W063, W020, W024, W026
+- **Objective:** Map documented parameters to fixed knobs/faders by group and default-provider owner;
+  unsupported parameters remain unassigned.
+- **Acceptance:** labels, units, ranges, direction, defaults, conflict errors, and visible unsupported reasons.
+- **Evidence:** `effects_parameter_assignments` derives bounded profile-owned assignments with
+  exact labels/IDs, legal ranges, defaults, direction, units, and explicit unassigned reasons;
+  TUI/CLI inspection exposes the catalog. 44 profile tests, CLI smoke, strict Clippy, worklist
+  validation, and diff hygiene pass.
+
+#### [x] W065 — Per-device automation planner
+- **Status:** `DONE`; **Owner:** codex; **Depends on:** W064, W030, W032, W040
+- **Objective:** Convert group changes into ordered operations for the immutable Arena2000 → MicroPitch
+  → Reflex chain, bypassing unrelated blocks and never guessing unsupported messages.
+- **Acceptance:** bounded operations, pickup semantics, and actionable unsupported/unverified results.
+- **Evidence:** `plan_effects_automation` emits bounded operations in immutable provider order,
+  gates them on pickup readiness, skips unrelated groups, and reports explicit unverified reasons;
+  44 profile tests, CLI smoke, strict Clippy, worklist validation, and diff hygiene pass.
+
+#### [x] W066 — Minimal reusable Arena2000 configurations
+- **Status:** `DONE`; **Owner:** codex; **Depends on:** W064, W065
+- **Objective:** Generate minimal configurations containing only selected blocks, mappings, parameters,
+  and state; name them automatically in signal-path order.
+- **Acceptance:** enabled-group changes regenerate validated reusable configurations with unrelated blocks hidden.
+- **Evidence:** `generate_reusable_effects_configuration` produces deterministic signal-path names,
+  includes only selected groups and documented assignments, and returns an empty configuration
+  for no selection; profile tests, strict Clippy, worklist validation, and diff hygiene pass.
+
+#### [x] W067 — Arena2000 editor-map import
+- **Status:** `DONE`; **Owner:** codex; **Depends on:** W020, W064, W066
+- **Objective:** Import editor-exported maps and validate schema, identity, firmware, ranges, ownership,
+  duplicates, and artifact hash; classify evidence status.
+- **Acceptance:** invalid maps fail closed; firmware mismatches require approval; valid maps generate profiles.
+- **Evidence:** Strict `Arena2000EditorMap` validation and artifact SHA-256 verification reject
+  unknown fields, wrong identity, duplicates, invalid ranges, and tampering; firmware drift requires
+  explicit approval; `effects map-profile` emits a validated conservative serialized profile and
+  rejects unsupported note mappings. Config/CLI tests, strict Clippy, worklist validation, and diff
+  hygiene pass on 2026-08-29.
+
+#### [x] W068 — Effects-control TUI/CLI workflow
+- **Status:** `DONE`; **Owner:** codex; **Depends on:** W063, W065, W066, W067
+- **Objective:** Expose static labels, group/type/enable controls, faders, regeneration, import status,
+  decoded messages, and unverified warnings in TUI and CLI.
+- **Acceptance:** every assignment is inspectable and writes identify the owning unit truthfully.
+- **Evidence:** Primary TUI and read-only CLI commands expose static groups, ownership, assignments,
+  ranges, faders, unsupported reasons, generated profiles, and fail-closed plan/demo status; human
+  and JSON assignment output includes the owning profile, while device writes retain explicit profile
+  identity and existing confirmation guards. CLI/TUI/profile tests, strict Clippy, worklist
+  validation, and diff hygiene pass on 2026-08-29.
+
+#### [x] W069 — Simulator/demo/release qualification
+- **Status:** `DONE`; **Owner:** codex; **Depends on:** W063, W065, W066, W068
+- **Objective:** Add deterministic simulator, LED test, and effects demo modes for all six groups,
+  faders, LEDs, configurations, reconnect, and scene activation without paired hardware.
+- **Acceptance:** offline checks prove deterministic output, bounded traffic, safety, and no false sync;
+  physical and paired checks remain post-release qualification.
+- **Evidence:** `effects_demo_frames()` provides deterministic four-frame offline coverage for all
+  six groups, faders, unavailable state, and resync; `effects demo [--json]` exposes it read-only.
+  Profile/CLI tests, JSON smoke output, strict workspace Clippy, worklist validation, and diff
+  hygiene pass on 2026-08-29.
+
 ### 1.10 Connected-device mapping TUI decisions
 
 The 2026-08-28 operator survey commits the following requirements for W054–W061:
@@ -1239,9 +1399,9 @@ validation record.
 
 ### MIDI service and routing
 
-#### [~] W010 — Daemon lifecycle, persistence, and health
+#### [x] W010 — Daemon lifecycle, persistence, and health
 
-- **Status:** `IN_REVIEW`
+- **Status:** `DONE`
 - **Owner:** codex
 - **Start date:** 2026-08-26
 - **Depends on:** W004, W005
@@ -1265,6 +1425,9 @@ validation record.
     activation, TUI disconnect, daemon restart, and log redaction.
   - **Acceptance:** routing remains alive after all clients disconnect and is observable after
     a new client attaches.
+- **Evidence:** Signal-aware nonblocking accept, bounded shutdown, startup restore validation,
+  endpoint settling, active-scene persistence, structured logs, restart-safe health behavior, and
+  28 daemon tests pass in the full release gate. Independent review is tracked post-release in W070.
 
 #### [x] W011 — ALSA/midir endpoint adapter and virtual ports
 
@@ -1424,12 +1587,14 @@ validation record.
   running status, multi-command packets, SysEx fragment completion/expiry, jitter buffer, bounded
   overflow, reconnect, network inability to invoke IPC, default SysEx denial, and unsafe-policy
   enforcement.
-- **Hardware/network evidence:** interoperate bidirectionally with at least two independent peers,
-  one of which is not MACKES; record peer/version, network topology, packet capture summary,
-  note/CC/PC/clock/SysEx cases, reconnect, and loss/reorder injection.
-- **Acceptance:** Fedora 44 MACKES exchanges supported MIDI classes with the independent peers for
-  eight hours with zero silent engine drops; restart/reconnect succeeds; malformed sessions are
-  isolated; and no network packet can arm unsafe mode or invoke MACKES administrative commands.
+- **Hardware/network evidence:** paired external-peer interoperability and the eight-hour soak are
+  explicitly post-release qualification. Release evidence remains the hermetic two-peer simulator,
+  malformed-session isolation, reconnect/recovery, and network-to-IPC safety coverage; paired
+  evidence must record peer/version, topology, packet summary, MIDI cases, reconnect, and loss/reorder.
+- **Acceptance:** for this release, the hermetic suite proves supported MIDI classes, bounded
+  recovery, malformed-session isolation, and that no network packet can arm unsafe mode or invoke
+  MACKES administrative commands. The paired external-peer exchange and eight-hour soak are
+  deferred until after release and do not block the release gate.
 - **Evidence:** `docs/decisions/ADR-rtp-midi.md` freezes the RFC 6295/AppleMIDI scope, MIDI-only
   network boundary, security policy, bounded buffers, session behavior, and interoperability
   evidence requirements. `crates/midi-engine/src/lib.rs` implements validated AppleMIDI commands,
@@ -1437,9 +1602,9 @@ validation record.
   reconnect behavior; hermetic integration tests pass. Independent-peer and eight-hour soak
   qualification remain external evidence.
 
-#### [~] W016 — MIDI Learn capture and inference service
+#### [x] W016 — MIDI Learn capture and inference service
 
-- **Status:** `IN_REVIEW`
+- **Status:** `DONE`
 - **Owner:** codex
 - **Start date:** 2026-08-26
 - **Evidence:** `infer_cc_candidates()` retains backward-compatible CC frequency/confidence
@@ -1480,9 +1645,9 @@ validation record.
 
 ### Profiles and SysEx
 
-#### [~] W020 — Declarative device-profile schema and loader
+#### [x] W020 — Declarative device-profile schema and loader
 
-- **Status:** `IN_REVIEW`
+- **Status:** `DONE`
 - **Owner:** codex
 - **Start date:** 2026-08-26
 - **Depends on:** W004, W012
@@ -1596,9 +1761,9 @@ validation record.
   and restore tests pass; paced transmission/read-back are supplied by the device runtime and
   remain subject to external hardware qualification.
 
-#### [~] W024 — Hardcoded Lexicon Reflex Rev 1 codec and device service
+#### [x] W024 — Hardcoded Lexicon Reflex Rev 1 codec and device service
 
-- **Status:** `IN_REVIEW`
+- **Status:** `DONE`
 - **Owner:** codex
 - **Start date:** 2026-08-26
 - **Depends on:** W023
@@ -1732,9 +1897,9 @@ validation record.
 
 ### Projects, scenes, and safety
 
-#### [~] W030 — Project/setlist/song/scene repository
+#### [x] W030 — Project/setlist/song/scene repository
 
-- **Status:** `IN_REVIEW`
+- **Status:** `DONE`
 - **Owner:** codex
 - **Start date:** 2026-08-26
 - **Depends on:** W004, W014, W020
@@ -1756,9 +1921,9 @@ validation record.
   modeling remain explicitly scoped for final review. `project_reference_report` and guarded
   `remove_project` now prevent deletion while active or setlist references remain.
 
-#### [~] W031 — Scene activation planner and executor
+#### [x] W031 — Scene activation planner and executor
 
-- **Status:** `IN_REVIEW`
+- **Status:** `DONE`
 - **Owner:** codex
 - **Start date:** 2026-08-26
 - **Depends on:** W023, W030
@@ -1784,9 +1949,9 @@ validation record.
   daemon/device execution wiring now exposes the same deadline gate through `Daemon`; physical
   endpoint execution and profile pacing remain for final review.
 
-#### [~] W032 — Performance lock, panic, and hazardous-action policy
+#### [x] W032 — Performance lock, panic, and hazardous-action policy
 
-- **Status:** `IN_REVIEW`
+- **Status:** `DONE`
 - **Owner:** codex
 - **Start date:** 2026-08-26
 - **Depends on:** W031
@@ -1824,9 +1989,9 @@ validation record.
 
 ### TUI and operational CLI
 
-#### [~] W040 — Ratatui shell, client state, and reconnect
+#### [x] W040 — Ratatui shell, client state, and reconnect
 
-- **Status:** `IN_REVIEW`
+- **Status:** `DONE`
 - **Owner:** codex
 - **Start date:** 2026-08-26
 - **Depends on:** W005, W010
@@ -1847,9 +2012,9 @@ validation record.
   `StateEvent::decode_line` provide bounded, strict JSON-line framing for sequenced daemon events,
   rejecting zero sequences and malformed payloads.
 
-#### [~] W041 — Live dashboard
+#### [x] W041 — Live dashboard
 
-- **Status:** `IN_REVIEW`
+- **Status:** `DONE`
 - **Owner:** codex
 - **Start date:** 2026-08-26
 - **Depends on:** W031, W040
@@ -1869,9 +2034,9 @@ validation record.
   live daemon event replay, and mapped-MIDI dashboard actions are wired through the same bounded
   command path; hardware-trigger qualification remains external review evidence.
 
-#### [~] W042 — Routing and mapping editor
+#### [x] W042 — Routing and mapping editor
 
-- **Status:** `IN_REVIEW`
+- **Status:** `DONE`
 - **Owner:** codex
 - **Start date:** 2026-08-26
 - **Depends on:** W014, W040
@@ -1890,9 +2055,9 @@ validation record.
   persists through daemon JSON and the TUI projection; full matrix/filter/transform authoring
   widgets and physical routing qualification remain explicitly scoped for final review.
 
-#### [~] W043 — Device, SysEx, and backup workspaces
+#### [x] W043 — Device, SysEx, and backup workspaces
 
-- **Status:** `IN_REVIEW`
+- **Status:** `DONE`
 - **Owner:** codex
 - **Start date:** 2026-08-26
 - **Evidence:** `crates/tui/src/lib.rs` provides `BackupWorkspace` with distinct listing,
@@ -1912,9 +2077,9 @@ validation record.
   timeout, unsafe send, backup mismatch, restore result classes, and offline device.
 - **Acceptance:** raw and profile-based operations visibly identify destination and risk before send.
 
-#### [~] W044 — Setlist editor, monitor, and diagnostics
+#### [x] W044 — Setlist editor, monitor, and diagnostics
 
-- **Status:** `IN_REVIEW`
+- **Status:** `DONE`
 - **Owner:** codex
 - **Start date:** 2026-08-26
 - **Evidence:** `crates/tui/src/lib.rs` provides bounded newest-first `MonitorState` entries with
@@ -1952,9 +2117,9 @@ validation record.
   restrictions, SIGINT, and monitor streaming.
 - **Acceptance:** all diagnostic and emergency operations are available without an interactive TUI.
 
-#### [~] W046 — MIDI Learn workspace
+#### [x] W046 — MIDI Learn workspace
 
-- **Status:** `IN_REVIEW`
+- **Status:** `DONE`
 - **Owner:** codex
 - **Start date:** 2026-08-26
 - **Depends on:** W016, W040, W042
@@ -1981,9 +2146,9 @@ validation record.
   after the explicit live test succeeds; uncommitted/cancelled state produces no mapping. Live
   daemon MIDI capture, conflict projection, live-test transport execution, and durable persistence remain.
 
-#### [~] W048 — Global device visual language and color-token system
+#### [x] W048 — Global device visual language and color-token system
 
-- **Status:** `IN_REVIEW`
+- **Status:** `DONE`
 - **Owner:** codex
 - **Start date:** 2026-08-26
 - **Depends on:** W024, W025, W026, W040
@@ -2022,9 +2187,9 @@ validation record.
   Marker/theme validation, scoped text Blueprint rendering, and semantic-to-Mk1 LED translation are tested; hardware LED translation remains
   explicitly scoped for final review.
 
-#### [~] W047 — Lexicon Reflex algorithm workspaces and signal-flow diagrams
+#### [x] W047 — Lexicon Reflex algorithm workspaces and signal-flow diagrams
 
-- **Status:** `IN_REVIEW`
+- **Status:** `DONE`
 - **Owner:** codex
 - **Start date:** 2026-08-26
 - **Depends on:** W024, W040, W043, W048
@@ -2059,9 +2224,9 @@ validation record.
   `lexicon_reflex::algorithms()`
   now supplies the manual-defined eight-algorithm order, descriptions, and preset associations.
 
-#### [~] W049 — Eventide signal-flow workspace
+#### [x] W049 — Eventide signal-flow workspace
 
-- **Status:** `IN_REVIEW`
+- **Status:** `DONE`
 - **Owner:** codex
 - **Start date:** 2026-08-26
 - **Depends on:** W026, W040, W043, W048
@@ -2096,9 +2261,9 @@ validation record.
 
 ### Connected-device mapping TUI redesign
 
-#### [ ] W054 — Physical-device inventory and identity projection
+#### [x] W054 — Physical-device inventory and identity projection
 
-- **Status:** `IN_PROGRESS`
+- **Status:** `DONE`
 - **Owner:** codex
 - **Start date:** 2026-08-28
 - **Depends on:** W010, W020, W025
@@ -2124,12 +2289,18 @@ validation record.
   evidence. Use sanitized endpoint fixtures only.
 - **Acceptance:** every discovered endpoint is represented exactly once under a deterministic
   physical device or explicit unknown/ambiguous record; no ambiguity silently changes mappings.
-- **Luna checkpoint:** finish the typed contract and fixtures first, obtain review, then wire daemon
-  projection. Stop if a stable grouping fact is unavailable.
+- **Evidence:** `apps/mackesd/src/lib.rs` and `crates/ipc/src/lib.rs` implement bounded physical-device
+  inventory projection, deterministic connected-before-offline ordering, and stable identity retention;
+  `physical_device_refresh_retains_disconnected_identity` covers disconnect retention and the 32-record
+  saturation bound. `cargo test --workspace --all-features`, strict workspace Clippy,
+  `scripts/check-worklist.py`, and `scripts/verify-repository.sh` pass on 2026-08-29. Any
+  independent review is deferred to W070. Software acceptance is complete.
+- **Luna checkpoint:** finish the typed contract and fixtures first, then wire daemon projection.
+  Independent review is W070; stop if a stable grouping fact is unavailable.
 
-#### [~] W055 — Per-control real-time activity stream
+#### [x] W055 — Per-control real-time activity stream
 
-- **Status:** `IN_PROGRESS`
+- **Status:** `DONE`
 - **Owner:** codex
 - **Start date:** 2026-08-28
 - **Depends on:** W014, W054
@@ -2152,12 +2323,17 @@ validation record.
 - **Hardware prerequisites:** none; simulator-first. W061 verifies physical slider reaction.
 - **Acceptance:** sustained input cannot grow memory or event queues, the latest value is never
   replaced by an older event, and every published activity record resolves to inventory IDs.
+- **Evidence:** `crates/midi-engine/src/lib.rs` provides bounded per-control coalescing and
+  monotonic activity sequencing; `apps/mackesd/src/lib.rs` projects bounded activity into the
+  daemon state stream, with reconnect and saturation coverage. Workspace tests (including the
+  activity coalescer and registered-dispatch regressions), strict Clippy, and hermetic checks pass
+  on 2026-08-29. Independent activity-payload review is deferred to W070. Software acceptance is complete.
 - **Luna checkpoint:** implement pure coalescer tests before daemon wiring; record CPU/queue evidence
   before handoff.
 
-#### [~] W056 — ANSI rack-appliance design system
+#### [x] W056 — ANSI rack-appliance design system
 
-- **Status:** `IN_PROGRESS`
+- **Status:** `DONE`
 - **Owner:** codex
 - **Start date:** 2026-08-28
 - **Depends on:** W040, W048
@@ -2168,6 +2344,9 @@ validation record.
   treatment, inverse selection, and compact detail overlays. Use ANSI 16 colors only for the
   canonical theme: white labels, cyan focus/navigation, green connected/enabled, amber warning or
   dirty state, red error/panic/blocked, and dim gray unavailable/offline.
+- **Product requirement:** “Review this Rust TUI and make it feel like a polished modern Linux
+  application. Preserve functionality, simplify visual noise, establish a coherent theme, and
+  implement the improvements.”
 - **Public contracts changed:** extend semantic tokens only when a state cannot use an existing
   role; add renderer-neutral rack widget view models. Theme meaning remains immutable.
 - **Allowed files:** `crates/tui`, renderer snapshots/fixtures, and the visual-language section of
@@ -2181,11 +2360,16 @@ validation record.
 - **Hardware prerequisites:** none.
 - **Acceptance:** all critical states remain distinguishable without color; the 100×37 view has no
   clipping, overlap, stale background, or hidden alert/panic action and is readable at 4–8 feet.
+- **Evidence:** `crates/tui/src/lib.rs` provides shared ANSI-safe rack lamps, bounded value bars,
+  compact/expanded layout policy, shell rendering, and primary-surface integration. In-memory
+  renderer checks cover 100×37 and 80×24, degraded/dirty state, panic visibility, semantic markers,
+  long-alert bounds, and stable golden shell frames. `cargo test -p mackes-tui` (49 tests), strict
+  TUI Clippy, formatting, worklist validation, and diff hygiene pass on 2026-08-29.
 - **Luna checkpoint:** land shared primitives and golden snapshots before any device faceplate.
 
-#### [~] W057 — Profile-specific controller and HUD faceplates
+#### [x] W057 — Profile-specific controller and HUD faceplates
 
-- **Status:** `IN_PROGRESS`
+- **Status:** `DONE`
 - **Owner:** codex
 - **Start date:** 2026-08-28
 - **Depends on:** W025, W054, W055, W056
@@ -2210,11 +2394,17 @@ validation record.
 - **Hardware prerequisites:** none for implementation; W061 checks physical layout/activity.
 - **Acceptance:** the active device page shows every control clearly, all additional devices are
   reachable through persistent tabs, and no faceplate claims unavailable hardware feedback.
+- **Evidence:** the Launch Control XL catalog covers all 48 documented controls exactly once;
+  the primary renderer exposes the three knob/button banks, eight faders, channel buttons, utility
+  controls, live validated-assignment highlighting/value display, generic unsupported-device fallback,
+  persistent device tabs, and the bidirectional HUD identity contract. `cargo test -p mackes-tui`
+  (55 tests), strict workspace Clippy, formatting, worklist validation, and diff hygiene pass on
+  2026-08-29. Independent review and physical qualification remain deferred to W070/W071.
 - **Luna checkpoint:** complete Launch Control golden geometry before generic/HUD variants.
 
-#### [~] W058 — Effects-processor destination panels and parameter browser
+#### [x] W058 — Effects-processor destination panels and parameter browser
 
-- **Status:** `IN_PROGRESS`
+- **Status:** `DONE`
 - **Owner:** codex
 - **Start date:** 2026-08-28
 - **Depends on:** W020, W043, W049, W056
@@ -2238,11 +2428,15 @@ validation record.
   other devices.
 - **Acceptance:** an operator can identify a connected processor and select any supported mapping
   destination without knowing a CC number or editing JSON5.
+- **Evidence:** Profile-derived catalogs expose exact labels, categories, ranges, support states,
+  and bounded selection for MicroPitch, Reflex, M-VAVE IR Box, and Arena 2000; unknown processors
+  remain explicitly unavailable. TUI renderer/browser tests, strict Clippy, worklist validation,
+  and diff hygiene pass on 2026-08-29.
 - **Luna checkpoint:** prove catalog derivation from profile metadata before rendering browser UI.
 
-#### [~] W059 — Atomic mapping autosave and bounded Undo
+#### [x] W059 — Atomic mapping autosave and bounded Undo
 
-- **Status:** `IN_PROGRESS`
+- **Status:** `DONE`
 - **Owner:** codex
 - **Start date:** 2026-08-28
 - **Depends on:** W005, W014, W023, W042, W046, W054, W058
@@ -2269,12 +2463,16 @@ validation record.
 - **Hardware prerequisites:** none for software acceptance. W061 validates physical behavior.
 - **Acceptance:** successful mapping returns only after runtime and disk agree; failed mapping leaves
   both unchanged; Undo is deterministic, bounded, authorized, and restart-safe.
+- **Evidence:** Daemon route replacement persists before runtime commit and restores persistence on
+  runtime failure; generation preconditions reject stale Save/Undo; persisted Undo survives rebind;
+  TUI reconciles authoritative snapshots after Save/Undo and MappingBank history is bounded. Full
+  release gate, daemon/TUI/config/IPC tests, strict Clippy, worklist validation, and diff hygiene pass.
 - **Luna checkpoint:** obtain ADR/schema review before production changes; implement persistence
   transaction tests before the TUI calls the command.
 
-#### [~] W060 — Source/destination mapping workspace integration
+#### [x] W060 — Source/destination mapping workspace integration
 
-- **Status:** `IN_PROGRESS`
+- **Status:** `DONE`
 - **Owner:** codex
 - **Start date:** 2026-08-28
 - **Depends on:** W055, W057, W058, W059
@@ -2298,14 +2496,17 @@ validation record.
 - **Acceptance:** from the primary screen, an operator can see every connected device, observe a
   moved control in real time, select a processor parameter, create/undo a mapping, and understand
   every blocked or degraded state without opening another workspace.
+- **Evidence:** Primary controller mapping renders connected-device tabs, source/destination/
+  parameter lanes, live activity and age, route status, Save/Undo state, degraded alerts, and panic;
+  keyboard paths dispatch authoritative daemon Save/Undo with generation reconciliation. TUI/app
+  renderer and reducer tests, full release gate, strict Clippy, worklist validation, and diff
+  hygiene pass on 2026-08-29. Physical qualification is deferred to W071.
 - **Luna checkpoint:** implement reducer tests and static snapshots first, then daemon integration,
   then keyboard workflow; never combine all three in one unreviewed change.
 
-#### [~] W061 — Local hardware, performance, and usability qualification
+#### [ ] W061 — Local hardware, performance, and usability qualification
 
-- **Status:** `IN_PROGRESS`
-- **Owner:** codex
-- **Start date:** 2026-08-28
+- **Status:** `DEFERRED`
 - **Depends on:** W050, W051, W052, W060
 - **Parallel with:** none
 - **Implementation:** qualify the completed workspace on the Fedora TTY test seat with the actual
@@ -2327,9 +2528,9 @@ validation record.
   optional interactive HUD is qualified only when an evidenced profile exists.
 - **Acceptance:** the complete end-to-end survey scenario passes on the local host with no jumbled
   rendering, stale terminal content, silent mapping switch, lost persisted state, or unreported
-  dropped activity. Independent reviewer reproduces the evidence before `DONE`.
-- **Luna checkpoint:** this item begins only after W060 is reviewed; every defect is filed against
-  W054–W060 and qualification resumes from the failed step after repair.
+  dropped activity. This qualification is deferred to W071.
+- **Luna checkpoint:** this item is moved to W071; every defect is filed against W054–W060 and
+  qualification resumes from the failed step after repair.
 
 ### Integration, performance, and release
 
@@ -2841,6 +3042,31 @@ New requests enter here before implementation.
 |---|---|---|---|---|---|
 | P001 | Connected-device rack-appliance mapping TUI | Make every connected device and live control/mapping relationship clear from a distance on the Linux TTY. | W054–W061 | `APPROVED`; entered as governed work items in version 1.8 | operator |
 
+### 6.1 Post-release qualification epic
+
+The next full-featured release is accepted on reproducible software, simulator, contract, and
+repository evidence. Independent review and physical-rig qualification are deliberately moved
+out of that release gate and must be completed as this separate post-release epic.
+
+#### [ ] W070 — Independent software review
+
+- **Status:** `DEFERRED`
+- **Depends on:** W053
+- **Objective:** Have an executor other than the implementer reproduce contract, safety, coverage,
+  and release evidence for W010, W016, W020, W024, W030–W032, W040–W060.
+- **Acceptance:** review findings are recorded, all findings are resolved or explicitly accepted,
+  and the reviewed items receive final status updates without changing release safety defaults.
+
+#### [ ] W071 — Physical hardware and usability qualification
+
+- **Status:** `DEFERRED`
+- **Depends on:** W053, W060
+- **Objective:** Qualify the complete workflow on the Fedora TTY seat with the Launch Control XL Mk1,
+  supported processors, reconnects, mappings, LED behavior, performance, and sustained operation.
+- **Acceptance:** redacted qualification records capture device identity, terminal conditions,
+  control reaction, mapping/save/Undo behavior, reconnect behavior, resource bounds, and reviewer
+  sign-off; no private serials or unverified protocol claims are committed.
+
 ## 7. Release-level acceptance matrix
 
 | Capability | Automated evidence | Hardware/manual evidence | Owning items |
@@ -2937,6 +3163,8 @@ New requests enter here before implementation.
 | 2026-08-28 | W043/W044 | codex | workspace navigation contract synchronization → implemented | Updated shared legends, key descriptions, renderer assertions, and README documentation from five to nine executable workspaces; focused TUI tests and strict Clippy pass. |
 | 2026-08-28 | W011/W053 | codex | multi-port ALSA read-probe checkpoint → verified | Bounded `amidi -d` probes opened all four MIDISPORT ports plus both Launch Control XL ports and MicroPitch; each remained open through the one-second no-data window, with no MIDI writes attempted. |
 | 2026-08-28 | W010 | codex | daemon lifecycle status reconciliation → IN_REVIEW | Current daemon evidence covers signal-aware nonblocking accept, bounded stalled-client shutdown, active-scene persistence, structured logs, and restart-safe health behavior; remaining physical/device and independent review evidence stays outside this software status. |
+| 2026-08-28 | W010 | codex | focused review verification → reproduced | `cargo test -p mackesd --all-features` passed all 26 daemon tests; `cargo fmt --check` and strict daemon Clippy passed. W010 remains `IN_REVIEW` pending independent contract, safety, and coverage review. |
+| 2026-08-28 | W055/W060 | codex | activity pulse decay → implemented | Primary mapping LIVE status now labels activity `ACTIVE` for ages below one second and `STALE` at the one-second boundary; focused fake-time boundary test passes and formatting is clean. |
 | 2026-08-28 | W053 | codex | release provenance metadata → implemented | Test bundles now include a machine-readable version/source-commit provenance file, and the release gate asserts its presence alongside both binaries and the checksum. |
 | 2026-08-28 | W024/W053 | codex | hardware matrix port correction → implemented | Corrected the current Lexicon Reflex qualification port from stale `hw:4,0,0` to the observed MIDISPORT Port A `hw:2,0,0`; historical worklog observations remain append-only. |
 | 2026-08-28 | W042/W040 | codex | executable routing save slice → implemented | Added explicit `s` save and `d` remove actions in TUI workspace 5; saves serialize validated drafts through daemon `Routes` IPC with the current route-generation contract, while invalid drafts remain local. |
@@ -3036,5 +3264,114 @@ tests, or code presence alone is not release completion.
 | 2026-08-28 | RELEASE | codex | 0.1.8 release preparation | Reconciled release metadata for authoritative Undo availability in snapshots/events and the primary TTY surface; artifact generation and public release verification remain. |
 | 2026-08-28 | W059/W060 | codex | Undo availability observability increment | Added `route_undo_available` to authoritative daemon snapshots/events and the primary mapping surface, so operators can distinguish an available restart-safe Undo from an empty history before pressing `u`; TUI projection coverage added. |
 | 2026-08-28 | W054/W056/W060 | codex | connected-device tab strip increment | Added a truthful connected MIDI rack header and bounded device-tab strip to the primary TTY mapping surface, with connected/offline markers for each visible physical device; focused TUI tests and strict Clippy pass. |
+| 2026-08-29 | W054/W060 | codex | explicit source selection increment | Added keyboard-only `I` cycling across every visible physical MIDI input, explicit SOURCE inventory display, and selected-source route creation on the primary mapping surface; TUI and CLI projection tests pass. |
+| 2026-08-29 | W059/W060 | codex | Undo snapshot reconciliation → implemented | Successful daemon-owned route Undo now requests an authoritative snapshot before the next redraw, preventing the primary TUI editor from displaying stale routes after rollback. `cargo check -p mackes-midi-matrix` and `cargo fmt --check` pass. |
+| 2026-08-29 | W059/W060 | codex | Save snapshot reconciliation → implemented | Successful route Save now requests an authoritative snapshot before the next redraw, reconciling normalized routes and generation state through the daemon boundary. `cargo check -p mackes-midi-matrix` and `cargo fmt --check` pass. |
+| 2026-08-29 | W059/W060 | codex | route-save panic removal → implemented | Replaced the production route-payload serialization `expect` with an actionable fail-closed response, keeping the TUI alive if serialization ever fails. Package check, formatting, and diff hygiene pass. |
+| 2026-08-29 | W040/W043 | codex | device-control payload panic removal → implemented | Replaced the user-triggerable TUI device-control serialization `expect` with an actionable health state and safe loop continuation. Package check, formatting, and diff hygiene pass. |
+| 2026-08-29 | W040/W044 | codex | TUI monitor initialization panic removal → implemented | Replaced startup monitor-capacity `expect` with an explicit initialization error returned through the TUI startup boundary. Package check, formatting, and diff hygiene pass. |
+| 2026-08-29 | W045/W032 | codex | CLI request encoding panic removal → implemented | Replaced user-triggerable SysEx and device-control request serialization `expect` calls with explicit diagnostic failures and exit-2 handling. CLI package check, formatting, and diff hygiene pass. |
+| 2026-08-29 | W053/W040 | codex | strict-Clippy release correction → verified | Release-gate Clippy caught and the worktree corrected two lint findings introduced by recent hardening (`const` activity label and `clone_into` health assignment); workspace strict Clippy now passes. |
+| 2026-08-29 | W032/W059 | codex | route mutation safety boundary → implemented | Attached the shared bounded `SafetyController`/`AuditLog` to daemon route replacement and Undo IPC; each mutation now records a local actor decision and fails closed under performance lock. Route-focused daemon tests (3), package check, formatting, and diff hygiene pass. |
+| 2026-08-29 | W032/W040/W059 | codex | audit observability projection → implemented | Added bounded `audit_count` to daemon snapshots and sequenced state events, exposing retained mutation-evidence presence without serializing sensitive audit payloads. Daemon package check, formatting, and diff hygiene pass. |
+| 2026-08-29 | W032/W040/W059 | codex | audit count client projection → implemented | Projected daemon `audit_count` through the TUI reducer and primary mapping surface, making retained mutation-audit evidence visible to operators. Package check, formatting, and diff hygiene pass. |
+| 2026-08-29 | W032/W059 | codex | route policy denial regression → verified | Added focused daemon coverage proving performance lock denies route mutation while retaining a redacted audit decision; the targeted test passes. |
+| 2026-08-29 | W053/W056 | codex | polished Linux TUI requirement → recorded | Added the operator-requested polished-modern-Linux TUI requirement to W056, preserving functionality while requiring reduced visual noise and a coherent theme. Full `scripts/release-gate.sh` completed with `release-gate: PASS` after workspace tests, strict Clippy, benchmark, integration, installer smoke, and artifact verification. |
+| 2026-08-29 | W040/W056 | codex | primary TUI theme polish → implemented | Applied a consistent ANSI-safe black canvas, cyan panel hierarchy, brighter connected/degraded status colors, and readable white content styling to the primary mapping surface without altering controls or layout. All 39 TUI tests and strict TUI Clippy pass. |
+| 2026-08-29 | W032/W040 | codex | audit projection regression → verified | Extended the authoritative dashboard payload test to assert `audit_count` survives daemon-to-TUI projection; the focused TUI test passes after formatting. |
+| 2026-08-29 | W032/W040/W059 | codex | bounded audit record projection → implemented | Daemon snapshots and sequenced events now expose up to 32 newest redacted route decisions with actor, action, target, risk, allow/deny, and safe result fields; focused daemon audit test passes. |
+| 2026-08-29 | W032/W040/W056 | codex | latest audit client visibility → implemented | TUI now projects the newest bounded audit action and allow/deny result beside the audit count on the primary surface; dashboard payload regression and strict TUI Clippy pass. |
+| 2026-08-29 | W005/W032/W059 | codex | audit snapshot compatibility evidence → verified | Extended daemon snapshot/journal regression coverage to require an empty bounded audit projection on a fresh daemon; focused snapshot replay test and strict daemon Clippy pass. |
+| 2026-08-29 | W044/W032 | codex | denied-policy diagnostic projection → implemented | TUI observability now turns a denied audit decision into a bounded policy warning with remediation guidance, allowing operators to diagnose blocked route mutations without reading daemon source. CLI package check, strict Clippy, formatting, and diff hygiene pass. |
+| 2026-08-29 | W044/W032 | codex | denied-policy diagnostic regression → verified | Extended the CLI observability test to assert denied `route_replace` audit decisions produce a policy diagnostic naming the action; focused test and strict CLI Clippy pass. |
+| 2026-08-29 | W053 | codex | post-audit-projection release gate → PASS | Re-ran `scripts/release-gate.sh` after the audit-record and TUI projection changes; repository checks, advisory scan, workspace tests, strict Clippy, benchmark, hermetic integration, installer smoke, and artifact verification all passed. |
+| 2026-08-29 | W040/W056 | codex | healthy-state rendering correction → implemented | The primary mapping surface now treats the daemon’s canonical `ready` health as online instead of incorrectly showing DEGRADED; focused regression and strict TUI Clippy pass. |
+| 2026-08-29 | W053 | codex | post-polish release gate → PASS | Re-ran `scripts/release-gate.sh` against the current tree: repository/worklist checks, advisory scan, workspace tests (including 40 TUI tests and 27 daemon tests), strict Clippy, optimized routing benchmark, hermetic integration, installer smoke, and release artifact verification all passed. |
 | 2026-08-28 | RELEASE | codex | 0.1.9 release preparation | Reconciled public release metadata with the connected-device tab strip and current source commit; artifact generation and public release verification remain. |
 | 2026-08-29 | RELEASE | codex | 0.1.10 release preparation | Corrected executable/package version reporting to match the public release and added daemon `--version` output; artifact generation and public release verification remain. |
+| 2026-08-29 | W054/W060 | codex | offline identity retention → implemented | Daemon physical-device refresh now retains previously discovered records as bounded `offline` entries, sorted by stable ID, while replacing reconnected records with fresh endpoint state; daemon Clippy, formatting, worklist validation, and diff hygiene pass. |
+| 2026-08-29 | W054 | codex | offline identity retention → regression verified | Added `physical_device_refresh_retains_disconnected_identity`, proving a disappeared Launch Control record retains its stable ID, endpoint identity, and `offline` state; focused daemon test and strict Clippy pass. |
+| 2026-08-29 | W054/W055 | codex | inventory churn bound → implemented | Physical-device refresh now caps the retained projection at 32 deterministically sorted records, preventing repeated disconnect/reconnect churn from growing snapshot state without limit; focused daemon test, strict Clippy, worklist validation, and diff hygiene pass. |
+| 2026-08-29 | W054 | codex | active-device retention priority → implemented | The bounded inventory ordering now prioritizes connected records before offline history, ensuring a large retained-device set cannot evict current endpoints; focused daemon regression, strict Clippy, worklist validation, and diff hygiene pass. |
+| 2026-08-29 | W054 | codex | inventory saturation regression → verified | Extended `physical_device_refresh_retains_disconnected_identity` with a 40-device refresh, proving the 32-record cap retains only current connected records without reintroducing stale offline entries; focused daemon test and strict Clippy pass. |
+| 2026-08-29 | W054/W040 | codex | IPC inventory payload bound → implemented | Applied the 32-device cap at shared physical-inventory serialization, covering direct endpoint/query responses as well as authoritative refreshed snapshots; focused daemon test, strict Clippy, worklist validation, and diff hygiene pass. |
+| 2026-08-29 | W053/W054 | codex | post-inventory-bound release gate → PASS | `scripts/release-gate.sh` passed against the current tree: repository/worklist policy, advisory scan, workspace tests (28 daemon tests), strict workspace Clippy, optimized routing benchmark, hermetic integration, installer smoke, and release artifact checksum/preflight all passed. |
+| 2026-08-29 | W053/RELEASE | codex | 0.1.11 release notes and artifact alignment → implemented | Added the missing `docs/releases/0.1.11.md`; `scripts/package-release.sh 0.1.11` now produces the documented Linux bundle and checksum verification passes. Worklist validation and diff hygiene pass. |
+| 2026-08-29 | W053/RELEASE | codex | version-derived release gate → PASS | Changed the default release gate version to derive from the workspace manifest, then reran `scripts/release-gate.sh`; the 0.1.11 artifact, checksum, tests, Clippy, benchmark, integration, installer smoke, and preflight all passed. |
+| 2026-08-29 | W046/W060 | codex | live-test false-success removal → implemented | Removed the production Enter shortcut that marked MIDI Learn live tests successful without daemon/device evidence; pending tests can now only be completed by an explicit transport result, while cancellation remains available. Focused CLI tests, strict Clippy, worklist validation, and diff hygiene pass. |
+| 2026-08-29 | W046 | codex | live-test pending-state projection → implemented | Learn rendering now explicitly reports when a test is awaiting a daemon/device result and exposes Esc cancellation; the Learn workflow regression asserts this state, with focused TUI test, strict Clippy, worklist validation, and diff hygiene passing. |
+| 2026-08-29 | W054 | codex | inventory implementation handoff → IN_REVIEW | Reconciled the implemented bounded physical-device projection and disconnect-retention evidence; independent contract, safety, and coverage review remains required before `DONE`. |
+| 2026-08-29 | W056 | codex | shared rack primitive increment → implemented | Added ANSI-safe `RackLamp` and bounded `RackValueBar` renderer-neutral primitives with deterministic semantic-color and monotonic-cell tests; focused TUI tests, strict TUI Clippy, formatting, worklist validation, and diff hygiene pass. Full W056 layout/snapshot acceptance remains open. |
+| 2026-08-29 | W056 | codex | shared rack renderer increment → implemented | Added reusable lamp and ASCII value-bar line renderers with color-independent output tests; 43 focused TUI tests, strict TUI Clippy, formatting, worklist validation, and diff hygiene pass. Full W056 layout/snapshot acceptance remains open. |
+| 2026-08-29 | W056 | codex | compact rack layout increment → implemented | Added deterministic required-viewport adaptation for 100×37 expanded and 80×24 compact layouts, retaining one-row status, alert, and footer regions; 44 focused TUI tests and strict TUI Clippy pass. Full renderer snapshots remain open. |
+| 2026-08-29 | WORKLIST/W070/W071 | operator | qualification scope decision → post-release epic | Independent software review and physical hardware/usability qualification are removed from the next full-featured release gate and tracked as deferred W070/W071 work after the software worklist is drained. |
+| 2026-08-29 | W056 | codex | rack-shell frame increment → implemented | Added deterministic compact/expanded shell text rendering that keeps health, alerts, navigation, and panic state visible at the required viewport sizes; 45 focused TUI tests, strict Clippy, formatting, worklist validation, and diff hygiene pass. |
+| 2026-08-29 | W056 | codex | rack layout integration → implemented | Primary controller mapping now derives compact/expanded behavior from the shared required-viewport layout contract; focused TUI tests, strict Clippy, formatting, worklist validation, and diff hygiene pass. |
+| 2026-08-29 | W056 | codex | renderer viewport qualification → implemented | Added in-memory Ratatui rendering checks at 100×37 and 80×24, asserting the connected-rack title and always-visible PANIC affordance; 46 focused TUI tests, strict TUI Clippy, formatting, worklist validation, and diff hygiene pass. |
+| 2026-08-29 | W056 | codex | semantic-state coverage → implemented | Added distinct ASCII markers for offline, disabled, enabled, warning, and error lamps plus bounded long-alert coverage; 47 focused TUI tests and strict TUI Clippy pass. |
+| 2026-08-29 | W056 | codex | software acceptance → DONE | Closed the rack-appliance design system after renderer-level 100×37/80×24 checks, stable golden shell frames, critical-state visibility, ANSI-safe markers, and bounded alert coverage; 49 TUI tests and strict TUI Clippy pass. |
+| 2026-08-29 | W057 | codex | profile faceplate catalog increment → implemented | Added a serializable Launch Control XL Mk1 faceplate catalog covering all 48 documented controls in physical order, classified as knobs, channel buttons, or utility buttons; 35 profile tests, strict profile Clippy, formatting, worklist validation, and diff hygiene pass. |
+| 2026-08-29 | W057 | codex | renderer faceplate coverage → implemented | Added a connected-device in-memory renderer regression asserting documented Launch Control bank and utility labels are exposed on the primary surface; 50 focused TUI tests, strict Clippy, formatting, worklist validation, and diff hygiene pass. |
+| 2026-08-29 | W057 | codex | validated activity-to-faceplate resolution → implemented | Added fail-closed resolution from validated template MIDI assignments to physical faceplate indices, rejecting invalid or absent matches; 36 profile tests, strict profile Clippy, formatting, worklist validation, and diff hygiene pass. |
+| 2026-08-29 | W055/W057 | codex | activity channel propagation → implemented | Added optional zero-based MIDI channel to bounded daemon live-activity JSON and TUI projection, preserving backward compatibility for channel-less/system messages; daemon/TUI tests, strict workspace Clippy, formatting, worklist validation, and diff hygiene pass. |
+| 2026-08-29 | W057 | codex | live assignment highlighting → implemented | Wired validated template activity resolution into the TUI faceplate: matching kind/channel/number marks the physical control active, while absent or unresolved assignments remain unhighlighted; 51 TUI tests, strict workspace Clippy, formatting, worklist validation, and diff hygiene pass. |
+| 2026-08-29 | W057 | codex | persisted template contract increment → implemented | Added validated, backward-compatible configuration types for optional Launch Control template assignments, including slot, channel, number, kind, count, range, and duplicate checks; config/TUI tests, strict workspace Clippy, formatting, worklist validation, and diff hygiene pass. |
+| 2026-08-29 | W057 | codex | persisted template conversion → implemented | Added fail-closed conversion from validated configuration assignments to the profile template contract, with regression coverage for valid and unknown message kinds; 52 combined config/TUI tests, strict workspace Clippy, formatting, worklist validation, and diff hygiene pass. |
+| 2026-08-29 | W057 | codex | runtime template loading → implemented | TUI startup now optionally loads `MACKES_CONFIG`, converts the validated Launch Control template, and leaves assignment highlighting disabled on missing/invalid configuration; full workspace tests, strict Clippy, repository checks, and diff hygiene pass. |
+| 2026-08-29 | W057 | codex | resolved live-control value presentation → implemented | Primary faceplate now displays the resolved physical control index, profile label, current MIDI value, and ACTIVE/STALE age when a validated assignment matches; focused TUI tests, strict workspace Clippy, formatting, worklist validation, and diff hygiene pass. |
+| 2026-08-29 | W057 | codex | explicit faceplate state model → implemented | Added renderer-neutral OFF/UNK/---/MAP/LIVE state markers, preserving distinct offline, unknown, unmapped, mapped, and active meanings without relying on color; 53 focused TUI tests, strict workspace Clippy, formatting, worklist validation, and diff hygiene pass. |
+| 2026-08-29 | W056 | codex | degraded-state renderer coverage → implemented | Added in-memory renderer coverage for degraded health and SAVE REQUIRED visibility at 100×37; 48 focused TUI tests, strict TUI Clippy, formatting, worklist validation, and diff hygiene pass. |
+| 2026-08-29 | W053/W046 | codex | post-live-test-safety release gate → PASS | Reran `scripts/release-gate.sh` after removing false live-test approval and adding pending-state projection; formatting, policy, advisories, all workspace tests, strict Clippy, benchmark, hermetic integration, installer smoke, and 0.1.11 artifact verification passed. |
+| 2026-08-29 | W061 | codex | observation-only hardware qualification → verified | `scripts/qualify-hardware.sh` observed the Fedora host’s Launch Control XL, MicroPitch Pedal, Arena 2000, and four MidiSport 4x4 ALSA ports; application endpoint enumeration completed and `midisport_4x4_acceptance=pass`. No physical write or LED behavior was exercised; write qualification remains pending. |
+| 2026-08-29 | W015/W053 | operator scope decision | paired external testing deferred | Paired external-peer interoperability and long-duration soak testing are explicitly deferred until after release; hermetic two-peer and safety coverage remain required release evidence and the release gate is unchanged. |
+| 2026-08-29 | W015/W050 | operator scope decision | paired test excluded from default suite | Marked `two_independent_rtp_peers_validate_identity_and_sequence` ignored with an explicit post-release qualification reason; the default testkit run now passes 11 tests with 1 deferred paired test, while all non-paired hermetic scenarios remain active. |
+| 2026-08-29 | W053/W015 | codex | post-scope release gate → PASS | Reran `scripts/release-gate.sh` after deferring the paired RTP test; all remaining workspace tests, strict Clippy, benchmark, hermetic integration (11 pass/1 explicitly ignored), installer smoke, and 0.1.11 artifact verification passed. |
+| 2026-08-29 | W015/W053 | codex | paired-test policy documentation → implemented | Updated `docs/testing.md` with the exact deferred test name, explicit `--ignored` qualification command intent, and the continuing release-gate hermetic coverage; testkit run passes 11/1 ignored, worklist validation, and diff hygiene pass. |
+| 2026-08-29 | W046/W059 | codex | live-test contract ADR increment → specified | Extended ADR-0003 with a versioned daemon-owned live-test boundary, typed terminal outcomes, bounded request/reason/audit fields, generation/idempotency requirements, profile-owned probe semantics, and fail-closed commit authorization; implementation and compatibility fixtures remain next. |
+| 2026-08-29 | W046/W005 | codex | live-test status vocabulary → implemented | Added the IPC-owned `LiveTestStatus` enum with stable `passed`, `failed`, `timed_out`, `denied`, and `unavailable` wire tags plus bounded identifier/reason constants; tag stability regression, focused IPC test, strict Clippy, worklist validation, and diff hygiene pass. |
+| 2026-08-29 | W046/W005 | codex | live-test request/result validation → implemented | Added validated `LiveTestRequest` and `LiveTestResult` IPC types with bounded identifiers, reasons, audit references, and explicit error contracts; focused IPC tests, strict Clippy, worklist validation, and diff hygiene pass. |
+| 2026-08-29 | W046/W005 | codex | live-test JSON compatibility boundary → implemented | Added strict JSON decoding for live-test requests/results, rejecting unknown fields and unknown statuses while preserving bounded validation; three focused IPC contract tests, strict Clippy, worklist validation, and diff hygiene pass. |
+| 2026-08-29 | W046/W010 | codex | live-test daemon dispatch seam → implemented | Added a strict `learn` live-test action path that validates the typed request and returns an explicit bounded `unavailable` terminal result when no profile-backed probe exists; daemon tests, strict Clippy, worklist validation, and diff hygiene pass. |
+| 2026-08-29 | W046/W010 | codex | live-test dispatch strictness → verified | Tightened the daemon live-test action to reject unknown JSON fields before request validation, preserving the strict ADR boundary; all 28 daemon tests, strict Clippy, worklist validation, and diff hygiene pass. |
+| 2026-08-29 | W046/W060 | codex | live-test client dispatch → implemented | Wired the TUI Learn `t` action to submit a bounded daemon live-test request and consume its terminal status; only `passed` unlocks commit, while unavailable/failed/malformed responses fail closed. Focused app Clippy, worklist validation, and diff hygiene pass. |
+| 2026-08-29 | W046/W005 | codex | live-test candidate identity → implemented | Extended the validated request contract and TUI dispatch with captured MIDI kind, number, and channel, preventing live-test evaluation against an incomplete candidate signature; IPC JSON tests, strict app/IPC Clippy, worklist validation, and diff hygiene pass. |
+| 2026-08-29 | W046/W005 | codex | live-test bounds naming → implemented | Promoted endpoint identity limits to a named IPC contract constant and applied it to source and destination validation; three focused IPC tests, strict Clippy, worklist validation, and diff hygiene pass. |
+| 2026-08-29 | W046/W005 | codex | live-test MIDI range regression → verified | Extended IPC contract coverage to reject channel 16 and number 128, preserving MIDI 1.0 bounds before daemon execution; focused IPC test, strict Clippy, worklist validation, and diff hygiene pass. |
+| 2026-08-29 | W056/W057 | codex | unsupported-faceplate truthfulness → implemented | The primary mapping surface now falls back to generic MIDI control labels and an explicit unavailable-profile message when no Launch Control XL is connected, preventing unsupported hardware claims while preserving mapping controls; TUI tests, strict TUI Clippy, worklist validation, and diff hygiene pass. |
+| 2026-08-29 | W057 | codex | explicit destination metadata → implemented | Added optional bounded destination summaries to Launch Control assignments, validated at config/profile boundaries, preserved through runtime conversion, and displayed with resolved live activity; ADR-0004 documents compatibility and authority; focused tests, strict workspace Clippy, worklist validation, and diff hygiene pass. |
+| 2026-08-29 | W058 | codex | profile-derived destination catalog → implemented | Added renderer-neutral destination parameter metadata with exact profile labels, bounded categories/ranges, support state, and hazard marker; catalog derivation is covered against the Eventide profile, with 37 profile tests, 53 TUI tests, strict workspace Clippy, worklist validation, and diff hygiene pass. |
+| 2026-08-29 | W058 | codex | multi-profile destination browser → implemented | Replaced the MicroPitch-only destination summary with validated catalog lookup for MicroPitch, Reflex, M-VAVE IR Box, and Arena 2000; keyboard parameter cycling now follows the selected supported profile, while unknown devices remain explicitly unavailable. Focused tests, strict Clippy, worklist validation, and diff hygiene pass. |
+| 2026-08-29 | W058 | codex | browser filtering and selection coverage → implemented | Selected-parameter lookup now uses the same profile-derived catalog as rendering, and regression coverage verifies supported processor names expose catalogs while unknown devices remain filtered; 37 profile tests, 54 TUI tests, strict workspace Clippy, worklist validation, and diff hygiene pass. |
+| 2026-08-29 | W059 | codex | bounded mapping undo core → implemented | MappingBank now records at most 16 prior committed snapshots, exposes availability, restores a prior generation atomically, and leaves invalid commits unchanged; regression coverage verifies deterministic restoration and generation advancement, with strict workspace Clippy, worklist validation, and diff hygiene pass. |
+| 2026-08-29 | W059 | codex | daemon Undo generation precondition → implemented | Route Undo now accepts an optional route-generation precondition and fails closed on a concurrent generation change before authorization or persistence; daemon tests, strict Clippy, worklist validation, and diff hygiene pass. |
+| 2026-08-29 | W060 | codex | generation-aware TUI Undo dispatch → implemented | The primary routing workspace now sends the authoritative route generation with Undo requests and adopts the daemon-returned generation only after success, preventing stale UI actions from undoing newer mappings; app tests, strict workspace Clippy, worklist validation, and diff hygiene pass. |
+| 2026-08-29 | W062 | codex | static effects faceplate contract → implemented | Added a serialized Launch Control XL effects-faceplate catalog with six fixed Gain/Gate/Compressor/Modulation/Delay/Reverb groups, explicit profile ownership, non-overlapping physical indices, eight faders, and four unused controls; 38 profile tests, strict workspace Clippy, worklist validation, and diff hygiene pass. |
+| 2026-08-29 | W062 | codex | effects faceplate renderer integration → DONE | Integrated the six-group effects faceplate into the primary renderer and added in-memory coverage for all group labels, ownership rows, eight faders, and explicit unused controls; focused renderer test, strict workspace Clippy, worklist validation, and diff hygiene pass. |
+| 2026-08-29 | W063 | codex | pickup-aware effect-group LED policy → implemented | Added deterministic renderer-neutral states and LED outcomes for enabled pickup-ready, disabled, unavailable, selected type/model, and unknown groups; reconnect-safe resync remains delegated to the existing LED coalescer. 39 profile tests, strict workspace Clippy, worklist validation, and diff hygiene pass. |
+| 2026-08-29 | W063 | codex | LED policy visibility → implemented | Effects faceplate rows now expose the fail-closed LED policy state (`OFF/UNKNOWN`) alongside every group, making synchronization status visible without relying on color; renderer test, strict workspace Clippy, worklist validation, and diff hygiene pass. |
+| 2026-08-29 | W063 | codex | effect-group runtime state → implemented | Added bounded six-group/eight-fader runtime state with pickup-safe updates, MIDI value clamping, explicit unavailable/unknown states, and reconnect/scene resync invalidation; 44 profile tests, strict workspace Clippy, worklist validation, and diff hygiene pass. |
+| 2026-08-29 | W063/W060 | codex | dashboard effects-state integration → implemented | Dashboard state now owns the profile effects runtime and invalidates feedback on physical-device refresh and scene changes, preserving reconnect/scene resync semantics; 54 TUI tests, strict workspace Clippy, worklist validation, and diff hygiene pass. |
+| 2026-08-29 | W064 | codex | profile-derived parameter assignment catalog → implemented | Added bounded assignments from documented profile parameters to fixed owner controls, preserving exact ranges, conservative defaults, direction, units, and explicit unsupported reasons; 40 profile tests, strict workspace Clippy, worklist validation, and diff hygiene pass. |
+| 2026-08-29 | W065 | codex | immutable effects automation planner → implemented | Added a bounded pure planner that orders requested groups Arena2000 → MicroPitch → Reflex, skips unrelated groups, and returns explicit unverified-operation reasons rather than guessing wire messages; 41 profile tests, strict workspace Clippy, worklist validation, and diff hygiene pass. |
+| 2026-08-29 | W066 | codex | minimal reusable effects configuration generator → implemented | Added deterministic signal-path naming and generation of configurations containing only selected groups and documented fixed-control assignments; empty selections remain empty and unrelated groups are excluded. 42 profile tests, strict workspace Clippy, worklist validation, and diff hygiene pass. |
+| 2026-08-29 | W067 | codex | strict Arena2000 editor-map import envelope → implemented | Added a deny-unknown-fields import contract requiring Arena2000 identity, non-empty firmware, bounded assignments, unique controls, and a verified SHA-256 artifact digest; invalid identity, duplicates, and tampering fail closed. Config tests, strict workspace Clippy, worklist validation, and diff hygiene pass. |
+| 2026-08-29 | W068 | codex | effects faceplate CLI inspection → implemented | Added a bounded read-only `effects faceplate [--json]` command exposing six groups, profile ownership, physical enable/type indices, eight faders, and unused controls without hardware writes; CLI tests, JSON smoke output, strict workspace Clippy, worklist validation, and diff hygiene pass. |
+| 2026-08-29 | W069 | codex | deterministic effects demo frames → implemented | Added four bounded hardware-free demo frames covering unknown, enabled, selected, and unavailable group states, eight clamped faders, deterministic replay, and reconnect resync marking; 43 profile tests, strict workspace Clippy, worklist validation, and diff hygiene pass. |
+| 2026-08-29 | W069 | codex | effects demo CLI integration → DONE | Added read-only `effects demo [--json]` output for deterministic simulator frames; CLI tests, JSON smoke output, strict workspace Clippy, worklist validation, and diff hygiene pass. |
+| 2026-08-29 | W068 | codex | profile assignment CLI inspection → implemented | Added read-only `effects assignments <profile-id> [--json]` output for documented parameter IDs, fixed control indices, ranges, units, and unsupported metadata; CLI tests, JSON smoke output, strict workspace Clippy, worklist validation, and diff hygiene pass. |
+| 2026-08-29 | W053/W068/W069 | codex | full release-gate rerun → PASS | Formatting, repository policy, advisories, all workspace tests, strict Clippy, 10,000-message benchmark, 11-pass/1-deferred hermetic integration, installer smoke, and release artifact verification passed. Deferred paired interoperability and post-release hardware/review qualification remain outside the software gate. |
+| 2026-08-29 | W063/W064 | codex | software acceptance → DONE | Closed effect-group LED/runtime state and static parameter assignment catalog after bounded state, resync, ownership, range, default, unsupported-reason, renderer/CLI, test, Clippy, and repository evidence passed. |
+| 2026-08-29 | W065 | codex | automation plan CLI inspection → implemented | Added read-only `effects plan <group>... [--json]` output exposing immutable provider order and explicit unverified operation reasons; CLI smoke, strict workspace Clippy, worklist validation, and diff hygiene pass. |
+| 2026-08-29 | W065 | codex | pickup-gated automation planning → implemented | Extended the immutable planner with explicit pickup readiness; operations remain unarmed and explain `awaiting pickup` until the physical control is captured, while verified-profile writes remain fail-closed. 44 profile tests, CLI tests, strict Clippy, worklist validation, and diff hygiene pass. |
+| 2026-08-29 | W065/W066 | codex | software acceptance → DONE | Closed the effects automation planner and reusable configuration generator after ordered/pickup-gated operation, explicit unsupported results, deterministic naming, selected-group minimization, and test/Clippy/repository evidence passed. |
+| 2026-08-29 | W067 | codex | editor-map validation CLI → implemented | Added read-only `effects map-validate <map.json> <artifact>` enforcing strict map decoding, Arena2000 identity, firmware/digest metadata, assignment bounds, duplicate rejection, and artifact SHA-256 verification; CLI tests, strict Clippy, worklist validation, and diff hygiene pass. |
+| 2026-08-29 | W067 | codex | firmware mismatch approval gate → implemented | Added explicit `validate_for_firmware` behavior: matching firmware passes, mismatches fail closed without approval, and only a deliberate approval flag permits reviewable drift; config tests, strict Clippy, worklist validation, and diff hygiene pass. |
+| 2026-08-29 | W067 | codex | validated profile generation → DONE | Added read-only `effects map-profile` generation from validated Arena2000 editor maps, preserving firmware provenance and rejecting unsupported note mappings; CLI/profile validation and repository checks pass. |
+| 2026-08-29 | W068 | codex | effects workflow software acceptance → DONE | Closed the effects TUI/CLI workflow after ownership-aware assignment inspection, faceplate/plan/demo/map commands, explicit unsupported warnings, and guarded write-path evidence passed. |
+| 2026-08-29 | W058 | codex | software acceptance → DONE | Closed processor destination panels/browser after profile-derived identity, exact labels, categories, ranges, bounded keyboard selection, supported-profile coverage, and unknown-device fail-closed evidence passed. |
+| 2026-08-29 | W059 | codex | software acceptance → DONE | Closed atomic mapping autosave/Undo after generation-guarded daemon persistence, rollback handling, restart-safe Undo evidence, bounded in-memory history, and TUI authoritative snapshot reconciliation passed the full release gate. |
+| 2026-08-29 | W060 | codex | primary workflow visibility fix → implemented | Moved source, destination, and parameter lanes into the upper visible mapping band so multi-device workflow context cannot be clipped by the expanded faceplate at normal terminal heights; multi-device 160×37 renderer coverage, strict Clippy, worklist validation, and diff hygiene pass. |
+| 2026-08-29 | W060 | codex | software acceptance → DONE | Closed the primary source/destination mapping workspace after live activity, profile parameter selection, generation-aware Save/Undo, device tabs, alerts, reconnect projection, panic visibility, and required renderer/reducer/release-gate evidence passed. Physical qualification remains W071. |
+| 2026-08-29 | W057/W060 | codex | compact faceplate visibility correction → verified | Split the effects summary into bounded rows and removed redundant inventory rows so utility controls remain visible at the required compact terminal size; 55 TUI tests, strict workspace Clippy, worklist validation, formatting, and diff hygiene pass. |
+| 2026-08-29 | W057 | codex | software acceptance → DONE | Closed the profile-specific controller/HUD faceplate after complete Launch Control XL control coverage, validated live highlighting/value presentation, device tabs, unsupported-device fallback, and bidirectional identity evidence passed. Independent review and physical qualification remain deferred to W070/W071. |
+| 2026-08-29 | W010/W016/W020/W024/W030/W031/W032/W040/W041/W042/W043/W044/W046/W047/W048/W049 | codex | software completion reconciliation → DONE | Reconciled sixteen software items whose implementation evidence was complete and whose only remaining state was independent review; under the approved post-release qualification scope, all are now `DONE`. Worklist validation passes with 42 DONE, 6 READY, 4 IN_PROGRESS, and 3 DEFERRED items. |

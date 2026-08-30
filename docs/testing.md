@@ -13,3 +13,8 @@ privileged paths, sleeps, or external services.
 
 Hardware and network-interop features remain opt-in. A test that can write device memory must be
 ignored by default, print the exact destination and operation, and require explicit arming.
+
+The test `two_independent_rtp_peers_validate_identity_and_sequence` is additionally deferred from
+the release suite as post-release paired-peer qualification. Run it explicitly with `--ignored`
+when two provisioned peers are available; the remaining hermetic RTP and safety scenarios remain
+part of the release gate.

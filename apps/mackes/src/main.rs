@@ -1,5 +1,48 @@
 //! MACKES operator entry point.
 
+fn generate_effects_profile(map_path: &str, artifact_path: &str) {
+    let map_bytes = std::fs::read(map_path).unwrap_or_else(|error| {
+        eprintln!("cannot read map: {error}");
+        std::process::exit(2);
+    });
+    let artifact = std::fs::read(artifact_path).unwrap_or_else(|error| {
+        eprintln!("cannot read artifact: {error}");
+        std::process::exit(2);
+    });
+    let map: mackes_config::Arena2000EditorMap =
+        serde_json::from_slice(&map_bytes).unwrap_or_else(|error| {
+            eprintln!("invalid Arena2000 map: {error}");
+            std::process::exit(2);
+        });
+    if let Err(error) = map.validate().and_then(|()| map.verify_artifact(&artifact)) {
+        eprintln!("Arena2000 map rejected: {error}");
+        std::process::exit(2);
+    }
+    if map.assignments.iter().any(|assignment| assignment.kind != "cc") {
+        eprintln!(
+            "Arena2000 map rejected: only documented CC assignments can generate this profile"
+        );
+        std::process::exit(2);
+    }
+    let mut profile = mackes_profiles::valeton_arena2000_profile();
+    profile.version = profile.version.saturating_add(1);
+    profile.documented_features.push(format!("Editor map firmware {}", map.firmware));
+    for assignment in map.assignments {
+        profile.controls.push(mackes_profiles::ControlDefinition {
+            label: format!("Editor map control {}", assignment.index),
+            cc: Some(assignment.number),
+            program: None,
+            range: (0, 127),
+            operation: assignment.destination,
+        });
+    }
+    if profile.validate().is_err() {
+        eprintln!("Arena2000 map rejected: generated profile is invalid");
+        std::process::exit(2);
+    }
+    println!("{}", serde_json::to_string_pretty(&profile).expect("profile is serializable"));
+}
+
 #[allow(clippy::too_many_lines)]
 fn run_tui() -> Result<(), String> {
     use crossterm::{
@@ -21,6 +64,15 @@ fn run_tui() -> Result<(), String> {
     let backend = CrosstermBackend::new(output);
     let mut terminal = Terminal::new(backend).map_err(|error| error.to_string())?;
     let mut dashboard = mackes_tui::DashboardState::initial();
+    if let Ok(config_path) = std::env::var("MACKES_CONFIG") {
+        if let Ok(document) = mackes_config::load(std::path::Path::new(&config_path)) {
+            dashboard.launch_control_template = document
+                .settings
+                .launch_control_template
+                .as_ref()
+                .and_then(mackes_tui::launch_control_template_from_config);
+        }
+    }
     let mut client_state = mackes_tui::ClientState::default();
     let mut learn_workspace = mackes_tui::LearnWorkspace::new();
     let reflex_workspace =
@@ -29,7 +81,8 @@ fn run_tui() -> Result<(), String> {
     let mut routing_editor = mackes_tui::RoutingEditor::from_bank(&mackes_tui::MappingBank::new());
     let mut mapping_undo: Vec<Vec<mackes_tui::MappingDraft>> = Vec::new();
     let mut diagnostics = mackes_tui::DiagnosticsState::default();
-    let mut monitor = mackes_tui::MonitorState::new(128).expect("valid monitor capacity");
+    let mut monitor = mackes_tui::MonitorState::new(128)
+        .ok_or_else(|| "cannot initialize monitor: capacity rejected".to_owned())?;
     let backup_workspace = mackes_tui::BackupWorkspace::default();
     let mut setlist_editor = mackes_tui::SetlistEditor::from_snapshot(&[]);
     let mut workspace = 1_u8;
@@ -134,8 +187,10 @@ fn run_tui() -> Result<(), String> {
                                 "destination": destination,
                                 "confirm": true,
                             });
-                            let encoded =
-                                serde_json::to_vec(&payload).expect("device control payload");
+                            let Ok(encoded) = serde_json::to_vec(&payload) else {
+                                "device-control-payload-failed".clone_into(&mut dashboard.health);
+                                continue;
+                            };
                             let response =
                                 daemon_request(mackes_ipc::Command::DeviceControl, &encoded);
                             dashboard.health = if response.contains("\"ok\":true") {
@@ -179,17 +234,30 @@ fn run_tui() -> Result<(), String> {
                         dashboard.health = if response.contains("\"ok\":true") {
                             route_generation = route_generation.saturating_add(1);
                             dashboard.mapping_dirty = false;
+                            needs_snapshot = true;
                             "routes-saved".to_owned()
                         } else {
                             "routes-save-failed".to_owned()
                         };
                     }
                     KeyCode::Char('u') if (workspace == 5 || workspace == 1) => {
+                        let request =
+                            format!(r#"{{"action":"undo","route_generation":{route_generation}}}"#);
                         let response =
-                            daemon_request(mackes_ipc::Command::Routes, br#"{"action":"undo"}"#);
+                            daemon_request(mackes_ipc::Command::Routes, request.as_bytes());
                         dashboard.health = if response.contains("\"ok\":true") {
+                            if let Ok(value) = serde_json::from_str::<serde_json::Value>(&response)
+                            {
+                                if let Some(generation) = value
+                                    .get("route_generation")
+                                    .and_then(serde_json::Value::as_u64)
+                                {
+                                    route_generation = generation;
+                                }
+                            }
                             dashboard.mapping_dirty = false;
                             routing_editor.selected = None;
+                            needs_snapshot = true;
                             "mapping-undo".to_owned()
                         } else if mapping_undo.pop().is_some() {
                             "mapping-undo-local-only".to_owned()
@@ -199,6 +267,9 @@ fn run_tui() -> Result<(), String> {
                     }
                     KeyCode::Char('D') if workspace == 1 => {
                         dashboard.cycle_destination();
+                    }
+                    KeyCode::Char('I') if workspace == 1 => {
+                        dashboard.cycle_input();
                     }
                     KeyCode::Char('P') if workspace == 1 => {
                         dashboard.cycle_parameter();
@@ -279,13 +350,61 @@ fn run_tui() -> Result<(), String> {
                             && learn_workspace.phase == mackes_tui::LearnPhase::Destination =>
                     {
                         learn_workspace.begin_live_test();
+                        if learn_workspace.phase == mackes_tui::LearnPhase::Testing {
+                            let Some(source_endpoint_id) =
+                                learn_workspace.learn_endpoint_id.clone()
+                            else {
+                                learn_workspace.finish_live_test(false);
+                                "learn-live-test-unavailable".clone_into(&mut dashboard.health);
+                                continue;
+                            };
+                            let Some((destination_id, _)) = learn_workspace.destination.clone()
+                            else {
+                                learn_workspace.finish_live_test(false);
+                                "learn-live-test-unavailable".clone_into(&mut dashboard.health);
+                                continue;
+                            };
+                            let Some(candidate) = learn_workspace
+                                .selected
+                                .and_then(|index| learn_workspace.candidates.get(index))
+                            else {
+                                learn_workspace.finish_live_test(false);
+                                "learn-live-test-unavailable".clone_into(&mut dashboard.health);
+                                continue;
+                            };
+                            let payload = serde_json::json!({
+                                "action": "live_test",
+                                "request_id": format!("learn-{}", dashboard.route_generation),
+                                "source_endpoint_id": source_endpoint_id,
+                                "destination_id": destination_id,
+                                "candidate_kind": format!("{:?}", candidate.kind).to_lowercase(),
+                                "candidate_number": candidate.number,
+                                "candidate_channel": candidate.channel,
+                                "generation": dashboard.route_generation,
+                            });
+                            let response = serde_json::to_vec(&payload).ok().map(|payload| {
+                                daemon_request(mackes_ipc::Command::Learn, &payload)
+                            });
+                            let status = response
+                                .as_deref()
+                                .and_then(|response| {
+                                    serde_json::from_str::<serde_json::Value>(response).ok()
+                                })
+                                .and_then(|value| {
+                                    value
+                                        .get("live_test")?
+                                        .get("status")?
+                                        .as_str()
+                                        .map(str::to_owned)
+                                })
+                                .unwrap_or_else(|| "unavailable".to_owned());
+                            learn_workspace.finish_live_test(status == "passed");
+                            dashboard.health = format!("learn-live-test-{status}");
+                        }
                     }
-                    KeyCode::Enter
-                        if workspace == 2
-                            && learn_workspace.phase == mackes_tui::LearnPhase::Testing =>
-                    {
-                        learn_workspace.finish_live_test(true);
-                    }
+                    // A live test may only be completed by an explicit daemon/device result.
+                    // Enter cannot stand in for hardware acknowledgment; Esc cancels the
+                    // pending test until the transport contract is available.
                     KeyCode::Enter
                         if workspace == 2
                             && learn_workspace.phase == mackes_tui::LearnPhase::Destination =>
@@ -311,7 +430,8 @@ fn run_tui() -> Result<(), String> {
                     KeyCode::Char('a') if workspace == 5 || workspace == 1 => {
                         let pair = if workspace == 1 {
                             dashboard
-                                .first_input_endpoint()
+                                .selected_input_endpoint()
+                                .or_else(|| dashboard.first_input_endpoint())
                                 .zip(dashboard.selected_destination_endpoint())
                         } else {
                             endpoint_pair_for_new_route()
@@ -622,6 +742,110 @@ fn print_default_provider(path: &str, capability: &str, json: bool) -> Result<()
     Ok(())
 }
 
+fn print_effects_faceplate(json: bool) {
+    let faceplate = mackes_profiles::launch_control_effects_faceplate();
+    if json {
+        println!("{}", serde_json::to_string(&faceplate).expect("faceplate is serializable"));
+        return;
+    }
+    println!("Effects faceplate: 6 groups; faders F01-F08; unused C37-C40");
+    for group in faceplate.groups {
+        println!(
+            "{} {} [{}] enable #{} type #{}",
+            group.row, group.label, group.owner, group.enable_index, group.type_index
+        );
+    }
+}
+
+fn print_effects_demo(json: bool) {
+    let frames = mackes_profiles::effects_demo_frames();
+    if json {
+        println!("{}", serde_json::to_string(&frames).expect("demo frames are serializable"));
+        return;
+    }
+    for frame in frames {
+        println!(
+            "frame {}: groups={} faders={:?}{}",
+            frame.sequence,
+            frame.groups.len(),
+            frame.faders,
+            if frame.resync { " RESYNC" } else { "" }
+        );
+    }
+}
+
+fn print_effects_assignments(profile_id: &str, json: bool) {
+    let Some(profile) = mackes_profiles::builtin_profile(profile_id) else {
+        eprintln!("unknown profile: {profile_id}");
+        std::process::exit(2);
+    };
+    let assignments = mackes_profiles::effects_parameter_assignments(
+        &mackes_profiles::launch_control_effects_faceplate(),
+        &profile,
+    );
+    if json {
+        println!("{}", serde_json::json!({"profile_id": profile.id, "assignments": assignments}));
+    } else {
+        println!("profile owner: {}", profile.id);
+        for assignment in assignments {
+            println!(
+                "{} => {} range={:?} unit={}",
+                assignment.parameter_id,
+                assignment
+                    .control_index
+                    .map_or_else(|| "UNASSIGNED".into(), |index| format!("C{index:02}")),
+                assignment.range,
+                assignment.unit
+            );
+        }
+    }
+}
+
+fn print_effects_plan(groups: &[String], json: bool) {
+    let plan = mackes_profiles::plan_effects_automation(
+        &mackes_profiles::launch_control_effects_faceplate(),
+        groups,
+        false,
+    );
+    if json {
+        println!("{}", serde_json::to_string(&plan).expect("plan is serializable"));
+    } else {
+        for operation in plan {
+            println!(
+                "{} [{}] {}",
+                operation.group_id,
+                operation.owner,
+                operation.reason.unwrap_or_else(|| "supported".into())
+            );
+        }
+    }
+}
+
+fn validate_effects_map(map_path: &str, artifact_path: &str) {
+    let map_bytes = std::fs::read(map_path).unwrap_or_else(|error| {
+        eprintln!("cannot read map: {error}");
+        std::process::exit(2);
+    });
+    let artifact = std::fs::read(artifact_path).unwrap_or_else(|error| {
+        eprintln!("cannot read artifact: {error}");
+        std::process::exit(2);
+    });
+    let map: mackes_config::Arena2000EditorMap =
+        serde_json::from_slice(&map_bytes).unwrap_or_else(|error| {
+            eprintln!("invalid Arena2000 map: {error}");
+            std::process::exit(2);
+        });
+    if let Err(error) = map.validate().and_then(|()| map.verify_artifact(&artifact)) {
+        eprintln!("Arena2000 map rejected: {error}");
+        std::process::exit(2);
+    }
+    println!(
+        "Arena2000 map valid: firmware={} assignments={}",
+        map.firmware,
+        map.assignments.len()
+    );
+}
+
 #[allow(clippy::too_many_lines)]
 fn main() {
     let arguments: Vec<String> = std::env::args().skip(1).collect();
@@ -646,6 +870,12 @@ fn main() {
                 "mackes-midi-matrix: TUI/CLI\n\nUsage:\n  mackes-midi-matrix tui\n  mackes-midi-matrix validate <path> [--json]\n  mackes-midi-matrix export <config> <directory>\n  mackes-midi-matrix doctor [--json]\n  mackes-midi-matrix status [--json]\n  mackes-midi-matrix panic\n  mackes-midi-matrix endpoints [--json]\n  mackes-midi-matrix default get <config> <capability> [--json]\n  mackes-midi-matrix default set <config> <capability> <profile-id>\n  mackes-midi-matrix mvave preset <1-32> [--dry-run]\n  mackes-midi-matrix mvave ir|eq on|off --confirm-unverified\n  mackes-midi-matrix scenes|devices|routes|monitor [--json]\n  mackes-midi-matrix scene list <config> [--json]\n  mackes-midi-matrix backup list|inspect ...\n  mackes-midi-matrix profile validate [--json]\n  mackes-midi-matrix --version"
             );
             println!("  mackes-midi-matrix learn <endpoint-id> [limit]");
+            println!("  mackes-midi-matrix effects faceplate [--json]");
+            println!("  mackes-midi-matrix effects demo [--json]");
+            println!("  mackes-midi-matrix effects assignments <profile-id> [--json]");
+            println!("  mackes-midi-matrix effects plan <group>... [--json]");
+            println!("  mackes-midi-matrix effects map-validate <map.json> <artifact>");
+            println!("  mackes-midi-matrix effects map-profile <map.json> <artifact>");
             println!("  mackes-midi-matrix sysex <destination-id> <hex-bytes> --confirm");
             println!("  mackes-midi-matrix device-control <profile-id> <control> <channel> <value> <destination-id> --confirm");
             println!("  mackes-midi-matrix device-query <profile-id>");
@@ -659,6 +889,46 @@ fn main() {
             println!("  mackes-midi-matrix scene actions <config> <project> <scene> [--json]");
             println!("  mackes-midi-matrix scene plan <config> <project> <scene> [--json]");
             println!("  mackes-midi-matrix routes apply <routes.json>");
+        }
+        [command, action] if command == "effects" && action == "faceplate" => {
+            print_effects_faceplate(false);
+        }
+        [command, action, flag]
+            if command == "effects" && action == "faceplate" && flag == "--json" =>
+        {
+            print_effects_faceplate(true);
+        }
+        [command, action] if command == "effects" && action == "demo" => {
+            print_effects_demo(false);
+        }
+        [command, action, flag] if command == "effects" && action == "demo" && flag == "--json" => {
+            print_effects_demo(true);
+        }
+        [command, action, profile] if command == "effects" && action == "assignments" => {
+            print_effects_assignments(profile, false);
+        }
+        [command, action, profile, flag]
+            if command == "effects" && action == "assignments" && flag == "--json" =>
+        {
+            print_effects_assignments(profile, true);
+        }
+        [command, action, groups @ ..]
+            if command == "effects"
+                && action == "plan"
+                && groups.last().map(String::as_str) != Some("--json") =>
+        {
+            print_effects_plan(groups, false);
+        }
+        [command, action, groups @ .., flag]
+            if command == "effects" && action == "plan" && flag == "--json" =>
+        {
+            print_effects_plan(groups, true);
+        }
+        [command, action, map, artifact] if command == "effects" && action == "map-validate" => {
+            validate_effects_map(map, artifact);
+        }
+        [command, action, map, artifact] if command == "effects" && action == "map-profile" => {
+            generate_effects_profile(map, artifact);
         }
         [command, action, path, capability] if command == "default" && action == "get" => {
             if let Err(error) = print_default_provider(path, capability, false) {
@@ -1471,6 +1741,20 @@ fn project_observability(
     diagnostics: &mut mackes_tui::DiagnosticsState,
     payload: &serde_json::Value,
 ) {
+    if let Some(latest) =
+        payload.get("audit").and_then(serde_json::Value::as_array).and_then(|audit| audit.first())
+    {
+        if latest.get("allowed").and_then(serde_json::Value::as_bool) == Some(false) {
+            let action =
+                latest.get("action").and_then(serde_json::Value::as_str).unwrap_or("mutation");
+            diagnostics.push(mackes_tui::HealthDiagnostic {
+                subject: "policy".into(),
+                severity: mackes_tui::MonitorSeverity::Warning,
+                reason: format!("{action} was denied"),
+                remediation: "review performance lock and operator authorization state".into(),
+            });
+        }
+    }
     let Some(health) = payload.get("health").and_then(serde_json::Value::as_str) else {
         return;
     };
@@ -1633,11 +1917,17 @@ fn save_routes(editor: &mackes_tui::RoutingEditor, current_generation: u64) -> S
     if routes.len() != editor.drafts.len() {
         return "{\"ok\":false,\"error\":\"routing draft contains invalid endpoint IDs\"}".into();
     }
-    let payload = serde_json::to_vec(&serde_json::json!({
+    let payload = match serde_json::to_vec(&serde_json::json!({
         "routes": routes,
         "route_generation": current_generation.saturating_add(1),
-    }))
-    .expect("route save payload is serializable");
+    })) {
+        Ok(payload) => payload,
+        Err(error) => {
+            return format!(
+                "{{\"ok\":false,\"error\":\"route payload serialization failed: {error}\"}}"
+            )
+        }
+    };
     daemon_request(mackes_ipc::Command::Routes, &payload)
 }
 
@@ -1862,10 +2152,14 @@ fn send_sysex_cli(destination: &str, hex: &str) {
         "bytes": bytes,
         "confirm": true,
     });
-    let response = daemon_request(
-        mackes_ipc::Command::Sysex,
-        &serde_json::to_vec(&payload).expect("SysEx payload is serializable"),
-    );
+    let encoded = match serde_json::to_vec(&payload) {
+        Ok(encoded) => encoded,
+        Err(error) => {
+            eprintln!("mackes-midi-matrix: cannot encode SysEx request: {error}");
+            std::process::exit(2);
+        }
+    };
+    let response = daemon_request(mackes_ipc::Command::Sysex, &encoded);
     println!("{response}");
     if response.contains("\"ok\":false") {
         std::process::exit(2);
@@ -1889,10 +2183,14 @@ fn send_device_control_cli(
         "destination": destination,
         "confirm": true,
     });
-    let response = daemon_request(
-        mackes_ipc::Command::DeviceControl,
-        &serde_json::to_vec(&payload).expect("device control payload is serializable"),
-    );
+    let encoded = match serde_json::to_vec(&payload) {
+        Ok(encoded) => encoded,
+        Err(error) => {
+            eprintln!("mackes-midi-matrix: cannot encode device-control request: {error}");
+            std::process::exit(2);
+        }
+    };
+    let response = daemon_request(mackes_ipc::Command::DeviceControl, &encoded);
     println!("{response}");
     if response.contains("\"ok\":false") {
         std::process::exit(2);
@@ -2073,6 +2371,18 @@ mod tests {
         assert_eq!(monitor.entries.len(), 1);
         assert_eq!(diagnostics.entries.len(), 1);
         assert!(diagnostics.entries[0].line().contains("inspect"));
+        project_observability(
+            &mut monitor,
+            &mut diagnostics,
+            &serde_json::json!({
+                "health": "ready",
+                "audit": [{"action": "route_replace", "allowed": false}]
+            }),
+        );
+        assert!(diagnostics
+            .entries
+            .iter()
+            .any(|entry| { entry.subject == "policy" && entry.reason.contains("route_replace") }));
     }
 
     #[test]

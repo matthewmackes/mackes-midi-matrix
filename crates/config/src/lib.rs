@@ -268,6 +268,115 @@ pub struct Settings {
     /// Explicit MIDI triggers for dashboard commands.
     #[serde(default)]
     pub dashboard_midi_bindings: Vec<DashboardMidiBinding>,
+    /// Optional imported Launch Control XL template assignments.
+    #[serde(default)]
+    pub launch_control_template: Option<LaunchControlTemplateConfig>,
+}
+
+/// Serializable Launch Control XL assignment map used by the faceplate.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct LaunchControlTemplateConfig {
+    /// Template slot (0–15).
+    pub template: u8,
+    /// Bounded physical-to-MIDI assignments.
+    #[serde(default)]
+    pub assignments: Vec<LaunchControlAssignmentConfig>,
+}
+
+/// One serialized Launch Control assignment.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct LaunchControlAssignmentConfig {
+    /// Physical control index (0–47).
+    pub index: u8,
+    /// Zero-based MIDI channel.
+    pub channel: u8,
+    /// MIDI number.
+    pub number: u8,
+    /// `cc` or `note`.
+    pub kind: String,
+    /// Optional bounded destination summary shown by the faceplate.
+    #[serde(default)]
+    pub destination: Option<String>,
+}
+
+/// Strict Arena2000 editor-map import envelope.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct Arena2000EditorMap {
+    /// Stable profile identity required by the importer.
+    pub profile_id: String,
+    /// Firmware identity the map was exported from.
+    pub firmware: String,
+    /// SHA-256 digest of the raw editor artifact.
+    pub artifact_sha256: String,
+    /// Bounded documented control assignments.
+    #[serde(default)]
+    pub assignments: Vec<LaunchControlAssignmentConfig>,
+}
+
+impl Arena2000EditorMap {
+    /// Validates identity, digest, bounds, and duplicate assignments.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when identity, firmware, digest, or assignment bounds are invalid.
+    pub fn validate(&self) -> Result<(), String> {
+        if self.profile_id != "valeton.arena2000"
+            || self.firmware.trim().is_empty()
+            || self.artifact_sha256.len() != 64
+            || !self.artifact_sha256.bytes().all(|byte| byte.is_ascii_hexdigit())
+            || self.assignments.len() > 48
+        {
+            return Err("Arena2000 editor map identity or artifact metadata is invalid".into());
+        }
+        let mut indices = std::collections::BTreeSet::new();
+        for assignment in &self.assignments {
+            if assignment.index >= 48
+                || assignment.channel >= 16
+                || assignment.number > 127
+                || !matches!(assignment.kind.as_str(), "cc" | "note")
+                || !indices.insert(assignment.index)
+            {
+                return Err("Arena2000 editor map assignment is invalid or duplicated".into());
+            }
+        }
+        Ok(())
+    }
+
+    /// Verifies the map's artifact digest before import.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the artifact digest differs from the declared digest.
+    pub fn verify_artifact(&self, artifact: &[u8]) -> Result<(), String> {
+        if BackupManifest::digest(artifact) == self.artifact_sha256 {
+            Ok(())
+        } else {
+            Err("Arena2000 editor artifact hash does not match map".into())
+        }
+    }
+
+    /// Validates this map against an expected firmware, requiring explicit approval for drift.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for an invalid map or an unapproved firmware mismatch.
+    pub fn validate_for_firmware(
+        &self,
+        expected_firmware: &str,
+        approve_mismatch: bool,
+    ) -> Result<(), String> {
+        self.validate()?;
+        if self.firmware != expected_firmware && !approve_mismatch {
+            return Err(format!(
+                "Arena2000 firmware mismatch: map={} expected={} (approval required)",
+                self.firmware, expected_firmware
+            ));
+        }
+        Ok(())
+    }
 }
 
 /// Persisted MIDI trigger kind for a dashboard action.
@@ -1218,6 +1327,25 @@ pub fn validate(document: &ConfigDocument) -> Result<(), String> {
             return Err(format!("duplicate default provider capability '{}'", entry.capability));
         }
     }
+    if let Some(template) = &document.settings.launch_control_template {
+        if template.template >= 16 || template.assignments.len() > 48 {
+            return Err("Launch Control template or assignment count is out of range".into());
+        }
+        let mut indices = std::collections::BTreeSet::new();
+        for assignment in &template.assignments {
+            if assignment.index >= 48
+                || assignment.channel >= 16
+                || assignment.number > 127
+                || !matches!(assignment.kind.as_str(), "cc" | "note")
+                || assignment.destination.as_deref().is_some_and(|destination| {
+                    destination.trim().is_empty() || destination.len() > 96
+                })
+                || !indices.insert(assignment.index)
+            {
+                return Err("Launch Control assignment is invalid or duplicated".into());
+            }
+        }
+    }
     if let Some(alias) = document.settings.learn_input_alias.as_deref() {
         if !document.endpoints.iter().any(|endpoint| endpoint.id == alias) {
             return Err(format!("Learn input references unknown endpoint '{alias}'"));
@@ -1412,6 +1540,7 @@ mod tests {
                 default_providers: Vec::new(),
                 learn_input_alias: None,
                 dashboard_midi_bindings: Vec::new(),
+                launch_control_template: None,
             },
             endpoints: vec![],
             projects: vec![Project {
@@ -1782,6 +1911,25 @@ mod tests {
         assert!(!backup_compatible(&manifest, "other", "serial:A"));
         let mut invalid = manifest;
         invalid.sha256 = "z".repeat(64);
+        assert!(invalid.validate().is_err());
+    }
+
+    #[test]
+    fn arena2000_editor_map_requires_identity_and_artifact_hash() {
+        let artifact = br"editor-export";
+        let map = Arena2000EditorMap {
+            profile_id: "valeton.arena2000".into(),
+            firmware: "1.0".into(),
+            artifact_sha256: BackupManifest::digest(artifact),
+            assignments: vec![],
+        };
+        assert!(map.validate().is_ok());
+        assert!(map.validate_for_firmware("1.0", false).is_ok());
+        assert!(map.validate_for_firmware("2.0", false).is_err());
+        assert!(map.validate_for_firmware("2.0", true).is_ok());
+        assert!(map.verify_artifact(artifact).is_ok());
+        assert!(map.verify_artifact(b"tampered").is_err());
+        let invalid = Arena2000EditorMap { profile_id: "unknown".into(), ..map };
         assert!(invalid.validate().is_err());
     }
 

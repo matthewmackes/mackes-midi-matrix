@@ -22,8 +22,24 @@ policies. Mapping creation remains transactional and is available from the TUI o
 mandatory live test and explicit commit. Existing version-1 documents deserialize with empty
 defaults, so no migration or version increment is required.
 
+### Live-test boundary
+
+The live test is a separate, versioned local-IPC operation owned by the daemon. Its request carries
+the selected source endpoint ID, validated candidate signature, channel policy, destination ID, and
+a bounded request identifier. The daemon returns exactly one terminal result: `passed`, `failed`,
+`timed_out`, `denied`, or `unavailable`, with a bounded operator-safe reason and audit reference.
+Only a `passed` result may unlock the existing explicit commit. The TUI must never infer success from
+keypresses, elapsed time, or an unverified echo. Device profiles own the actual probe/observation
+semantics; unsupported or non-readable destinations return `unavailable` and remain uncommitted.
+Requests are generation-checked and idempotent by request identifier, and all failure paths fail
+closed without mutating persisted mappings.
+
 ## Consequences
 
 Learned mappings survive restart and retain enough evidence for deterministic review. Exact
 duplicates, dangling endpoints, invalid channels, unknown message/mode tags, empty evidence, and
 oversized evidence are rejected before persistence.
+
+The explicit live-test boundary makes hardware acknowledgment an auditable daemon decision while
+keeping the TUI renderer-neutral and preventing a local UI action from manufacturing qualification
+evidence.

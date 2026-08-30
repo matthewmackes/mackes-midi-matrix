@@ -23,6 +23,231 @@ pub const PROTOCOL_MAJOR: u16 = 1;
 pub const PROTOCOL_MINOR: u16 = 0;
 /// Maximum encoded envelope size accepted by default.
 pub const MAX_FRAME_BYTES: usize = 1_048_576;
+/// Maximum live-test request identifier length.
+pub const MAX_LIVE_TEST_REQUEST_ID_BYTES: usize = 64;
+/// Maximum operator-safe live-test reason length.
+pub const MAX_LIVE_TEST_REASON_BYTES: usize = 256;
+/// Maximum stable endpoint identity length in a live-test request.
+pub const MAX_LIVE_TEST_ENDPOINT_ID_BYTES: usize = 128;
+
+/// Terminal status returned by a daemon-owned MIDI Learn live test.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum LiveTestStatus {
+    /// The daemon observed the expected test result.
+    Passed,
+    /// The test completed with a negative result.
+    Failed,
+    /// The bounded test deadline elapsed.
+    TimedOut,
+    /// Safety policy refused the operation.
+    Denied,
+    /// The selected profile cannot perform or verify the test.
+    Unavailable,
+}
+
+impl LiveTestStatus {
+    /// Returns the stable wire label.
+    #[must_use]
+    pub const fn tag(self) -> &'static str {
+        match self {
+            Self::Passed => "passed",
+            Self::Failed => "failed",
+            Self::TimedOut => "timed_out",
+            Self::Denied => "denied",
+            Self::Unavailable => "unavailable",
+        }
+    }
+}
+
+/// Validated daemon-owned MIDI Learn live-test request metadata.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LiveTestRequest {
+    /// Idempotency/correlation identifier.
+    pub request_id: String,
+    /// Stable source endpoint identity.
+    pub source_endpoint_id: String,
+    /// Stable destination identity.
+    pub destination_id: String,
+    /// Captured MIDI message family.
+    pub candidate_kind: String,
+    /// Captured controller/note/program number, when applicable.
+    pub candidate_number: Option<u8>,
+    /// Captured MIDI channel, when applicable.
+    pub candidate_channel: Option<u8>,
+    /// Optimistic routing/configuration generation.
+    pub generation: u64,
+}
+
+impl LiveTestRequest {
+    /// Decodes and validates a strict JSON request payload.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for malformed JSON, missing fields, unknown fields, or invalid bounds.
+    pub fn from_json(bytes: &[u8]) -> Result<Self, &'static str> {
+        let value: serde_json::Value =
+            serde_json::from_slice(bytes).map_err(|_| "invalid live-test request JSON")?;
+        let object = value.as_object().ok_or("live-test request must be an object")?;
+        if object.keys().any(|key| {
+            !matches!(
+                key.as_str(),
+                "request_id"
+                    | "source_endpoint_id"
+                    | "destination_id"
+                    | "candidate_kind"
+                    | "candidate_number"
+                    | "candidate_channel"
+                    | "generation"
+            )
+        }) {
+            return Err("unknown live-test request field");
+        }
+        Self {
+            request_id: object
+                .get("request_id")
+                .and_then(serde_json::Value::as_str)
+                .ok_or("live-test request_id is required")?
+                .to_owned(),
+            source_endpoint_id: object
+                .get("source_endpoint_id")
+                .and_then(serde_json::Value::as_str)
+                .ok_or("live-test source endpoint is required")?
+                .to_owned(),
+            destination_id: object
+                .get("destination_id")
+                .and_then(serde_json::Value::as_str)
+                .ok_or("live-test destination is required")?
+                .to_owned(),
+            candidate_kind: object
+                .get("candidate_kind")
+                .and_then(serde_json::Value::as_str)
+                .ok_or("live-test candidate kind is required")?
+                .to_owned(),
+            candidate_number: object
+                .get("candidate_number")
+                .and_then(serde_json::Value::as_u64)
+                .and_then(|value| u8::try_from(value).ok()),
+            candidate_channel: object
+                .get("candidate_channel")
+                .and_then(serde_json::Value::as_u64)
+                .and_then(|value| u8::try_from(value).ok()),
+            generation: object
+                .get("generation")
+                .and_then(serde_json::Value::as_u64)
+                .ok_or("live-test generation is required")?,
+        }
+        .validate()
+    }
+
+    /// Validates bounded non-empty request identity fields.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when an identity field is empty or exceeds its bound.
+    pub fn validate(self) -> Result<Self, &'static str> {
+        if self.request_id.is_empty() || self.request_id.len() > MAX_LIVE_TEST_REQUEST_ID_BYTES {
+            return Err("live-test request identifier is empty or oversized");
+        }
+        if self.source_endpoint_id.is_empty()
+            || self.source_endpoint_id.len() > MAX_LIVE_TEST_ENDPOINT_ID_BYTES
+        {
+            return Err("live-test source endpoint is empty or oversized");
+        }
+        if self.destination_id.is_empty()
+            || self.destination_id.len() > MAX_LIVE_TEST_ENDPOINT_ID_BYTES
+        {
+            return Err("live-test destination is empty or oversized");
+        }
+        if self.candidate_kind.is_empty() || self.candidate_kind.len() > 32 {
+            return Err("live-test candidate kind is empty or oversized");
+        }
+        if self.candidate_channel.is_some_and(|channel| channel > 15) {
+            return Err("live-test candidate channel is out of range");
+        }
+        if self.candidate_number.is_some_and(|number| number > 127) {
+            return Err("live-test candidate number is out of range");
+        }
+        Ok(self)
+    }
+}
+
+/// Terminal daemon result for a MIDI Learn live test.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LiveTestResult {
+    /// Correlates the result to the request.
+    pub request_id: String,
+    /// Terminal operation status.
+    pub status: LiveTestStatus,
+    /// Bounded operator-safe explanation.
+    pub reason: String,
+    /// Redacted audit reference, when a decision was recorded.
+    pub audit_reference: Option<String>,
+}
+
+impl LiveTestResult {
+    /// Decodes and validates a strict JSON result payload.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for malformed JSON, missing fields, unknown fields, or invalid bounds.
+    pub fn from_json(bytes: &[u8]) -> Result<Self, &'static str> {
+        let value: serde_json::Value =
+            serde_json::from_slice(bytes).map_err(|_| "invalid live-test result JSON")?;
+        let object = value.as_object().ok_or("live-test result must be an object")?;
+        if object.keys().any(|key| {
+            !matches!(key.as_str(), "request_id" | "status" | "reason" | "audit_reference")
+        }) {
+            return Err("unknown live-test result field");
+        }
+        let status = match object
+            .get("status")
+            .and_then(serde_json::Value::as_str)
+            .ok_or("live-test status is required")?
+        {
+            "passed" => LiveTestStatus::Passed,
+            "failed" => LiveTestStatus::Failed,
+            "timed_out" => LiveTestStatus::TimedOut,
+            "denied" => LiveTestStatus::Denied,
+            "unavailable" => LiveTestStatus::Unavailable,
+            _ => return Err("unknown live-test status"),
+        };
+        Self {
+            request_id: object
+                .get("request_id")
+                .and_then(serde_json::Value::as_str)
+                .ok_or("live-test result request_id is required")?
+                .to_owned(),
+            status,
+            reason: object
+                .get("reason")
+                .and_then(serde_json::Value::as_str)
+                .ok_or("live-test result reason is required")?
+                .to_owned(),
+            audit_reference: object
+                .get("audit_reference")
+                .and_then(|value| value.as_str().map(str::to_owned)),
+        }
+        .validate()
+    }
+
+    /// Validates the bounded result metadata.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when an identifier, reason, or audit reference exceeds its bound.
+    pub fn validate(self) -> Result<Self, &'static str> {
+        if self.request_id.is_empty() || self.request_id.len() > MAX_LIVE_TEST_REQUEST_ID_BYTES {
+            return Err("live-test result identifier is empty or oversized");
+        }
+        if self.reason.len() > MAX_LIVE_TEST_REASON_BYTES {
+            return Err("live-test result reason is oversized");
+        }
+        if self.audit_reference.as_ref().is_some_and(|value| value.len() > 128) {
+            return Err("live-test audit reference is oversized");
+        }
+        Ok(self)
+    }
+}
 
 /// Bounded token-bucket limiter for administrative IPC actions.
 #[derive(Debug)]
@@ -722,6 +947,80 @@ impl LineDecoder {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn live_test_status_tags_are_stable_and_terminal() {
+        let statuses = [
+            LiveTestStatus::Passed,
+            LiveTestStatus::Failed,
+            LiveTestStatus::TimedOut,
+            LiveTestStatus::Denied,
+            LiveTestStatus::Unavailable,
+        ];
+        assert_eq!(
+            statuses.map(LiveTestStatus::tag),
+            ["passed", "failed", "timed_out", "denied", "unavailable",]
+        );
+    }
+
+    #[test]
+    fn live_test_contract_rejects_unbounded_metadata() {
+        let request = LiveTestRequest {
+            request_id: "x".repeat(MAX_LIVE_TEST_REQUEST_ID_BYTES + 1),
+            source_endpoint_id: "source".into(),
+            destination_id: "destination".into(),
+            candidate_kind: "control_change".into(),
+            candidate_number: Some(7),
+            candidate_channel: Some(1),
+            generation: 7,
+        };
+        assert_eq!(request.validate(), Err("live-test request identifier is empty or oversized"));
+        let result = LiveTestResult {
+            request_id: "request-1".into(),
+            status: LiveTestStatus::Failed,
+            reason: "x".repeat(MAX_LIVE_TEST_REASON_BYTES + 1),
+            audit_reference: None,
+        };
+        assert_eq!(result.validate(), Err("live-test result reason is oversized"));
+        let invalid_channel = LiveTestRequest {
+            request_id: "request-1".into(),
+            source_endpoint_id: "source".into(),
+            destination_id: "destination".into(),
+            candidate_kind: "control_change".into(),
+            candidate_number: Some(7),
+            candidate_channel: Some(16),
+            generation: 7,
+        };
+        assert_eq!(
+            invalid_channel.clone().validate(),
+            Err("live-test candidate channel is out of range")
+        );
+        let invalid_number = LiveTestRequest {
+            candidate_channel: Some(1),
+            candidate_number: Some(128),
+            ..invalid_channel
+        };
+        assert_eq!(invalid_number.validate(), Err("live-test candidate number is out of range"));
+    }
+
+    #[test]
+    fn live_test_json_contract_round_trips_known_fields() {
+        let request = LiveTestRequest::from_json(
+            br#"{"request_id":"learn-7","source_endpoint_id":"input:1","destination_id":"pedal.mix","candidate_kind":"control_change","candidate_number":7,"candidate_channel":1,"generation":9}"#,
+        )
+        .expect("request");
+        assert_eq!(request.generation, 9);
+        let result = LiveTestResult::from_json(
+            br#"{"request_id":"learn-7","status":"passed","reason":"observed","audit_reference":"audit-7"}"#,
+        )
+        .expect("result");
+        assert_eq!(result.status, LiveTestStatus::Passed);
+        assert_eq!(result.audit_reference.as_deref(), Some("audit-7"));
+        assert_eq!(
+            LiveTestRequest::from_json(br#"{"request_id":"x","unknown":true}"#),
+            Err("unknown live-test request field")
+        );
+    }
 
     #[test]
     fn rate_limiter_rejects_saturation_and_reports_retry() {

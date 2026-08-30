@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-version="${1:-0.1.0}"
+version="${1:-$(awk -F'"' '/^version = / {print $2; exit}' Cargo.toml)}"
+if [[ -z "$version" ]]; then
+  echo "release-gate: unable to determine workspace version" >&2
+  exit 2
+fi
 if [[ $# -gt 1 || ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-test\.[0-9]+)?$ ]]; then
   printf 'usage: %s [VERSION]\n' "$0" >&2
   exit 64
