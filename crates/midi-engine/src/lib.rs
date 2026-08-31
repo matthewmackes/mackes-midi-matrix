@@ -1497,6 +1497,16 @@ impl OutputRegistry {
         self.outputs.iter().map(|output| output.info().id.clone()).collect()
     }
 
+    /// Returns numeric IDs for outputs whose backend name contains `needle`.
+    #[must_use]
+    pub fn endpoint_ids_named(&self, needle: &str) -> Vec<EndpointId> {
+        self.outputs
+            .iter()
+            .filter(|output| output.info().name.contains(needle))
+            .filter_map(|output| numeric_endpoint_id(&output.info().id))
+            .collect()
+    }
+
     /// Routes and dispatches one event through all registered outputs.
     #[must_use]
     pub fn dispatch(&mut self, router: &RouterStore, event: &MidiEvent) -> (usize, usize) {

@@ -3,4 +3,10 @@ set -euo pipefail
 
 # Always use a fresh group context. This also fixes shells that were opened
 # before the installer added the operator to mackes-control.
-exec sg mackes-control -c 'exec /usr/local/bin/mackes-midi-matrix'
+if [[ "$#" -eq 0 ]]; then
+  exec sg mackes-control -c 'exec /usr/local/libexec/mackes-midi-matrix/mackes-midi-matrix-cli'
+fi
+
+command_args=""
+printf -v command_args '%q ' "$@"
+exec sg mackes-control -c "exec /usr/local/libexec/mackes-midi-matrix/mackes-midi-matrix-cli ${command_args}"

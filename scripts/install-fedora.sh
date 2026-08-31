@@ -58,7 +58,8 @@ getent passwd mackes >/dev/null || useradd --system --home-dir "$state_dir" --sh
 if getent group audio >/dev/null; then
   usermod --append --groups audio mackes
 fi
-install -m 0755 "$root_dir/target/release/mackes-midi-matrix" "$bin_dir/mackes-midi-matrix"
+install -m 0755 "$root_dir/target/release/mackes-midi-matrix" "$libexec_dir/mackes-midi-matrix-cli"
+install -m 0755 "$root_dir/scripts/mackes-midi-matrix-local" "$bin_dir/mackes-midi-matrix"
 install -m 0755 "$root_dir/scripts/mackes-midi-matrix-local" "$bin_dir/mackes-midi-matrix-local"
 install -m 0755 "$root_dir/target/release/mackes-midi-matrixd" "$libexec_dir/mackes-midi-matrixd"
 install -m 0644 "$root_dir/packaging/mackes.service" /etc/systemd/system/mackes-midi-matrix.service

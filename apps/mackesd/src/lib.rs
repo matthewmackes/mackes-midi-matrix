@@ -827,6 +827,15 @@ impl Daemon {
         self.register_output(Box::new(output)).map_err(str::to_owned)
     }
 
+    /// Sends one already-validated event to a registered endpoint.
+    pub fn send_event_to_endpoint(
+        &mut self,
+        endpoint: mackes_domain::EndpointId,
+        event: mackes_domain::MidiEvent,
+    ) {
+        let _ = self.outputs.send_to_endpoint(endpoint, event);
+    }
+
     /// Arms experimental parameter mappings for the bounded fifteen-minute window.
     pub fn arm_experimental_mappings(&mut self) {
         let now = u64::try_from(self.safety_clock.elapsed().as_nanos().min(u128::from(u64::MAX)))
@@ -1076,6 +1085,8 @@ impl Daemon {
                         true,
                     )),
                 };
+                self.send_assignment_led_feedback();
+                self.record_state_event(Command::Assignment);
             }
         }
         mackes_ipc::AssignmentResult {
@@ -1105,6 +1116,22 @@ impl Daemon {
             index,
             self.assignment_led_state_at(elapsed_ms),
         )
+    }
+
+    fn send_assignment_led_feedback(&mut self) {
+        let Some(bytes) = self.assignment_led_frame_at(8, 40, 0) else { return };
+        let Ok(message) = mackes_domain::MidiMessage::from_wire(&bytes) else { return };
+        for endpoint in self.outputs.endpoint_ids_named("Launch Control XL") {
+            self.send_event_to_endpoint(
+                endpoint,
+                mackes_domain::MidiEvent {
+                    timestamp: mackes_domain::TimestampNanos::new(0),
+                    sequence: 0,
+                    endpoint,
+                    message: message.clone(),
+                },
+            );
+        }
     }
 
     fn experimental_mapping(mapping: &mackes_config::ControlMapping) -> bool {
@@ -1345,12 +1372,69 @@ impl Daemon {
         let mut sent = 0;
         let mut unmatched = 0;
         for event in events.into_iter().take(limit.min(128)) {
+            if Self::is_launch_control_factory1_device_press(&event) {
+                let _ = self.apply_assignment_request(mackes_ipc::AssignmentRequest {
+                    generation: self.assignment_generation,
+                    action: mackes_ipc::AssignmentAction::Start,
+                    physical_control_id: None,
+                    destination_profile: None,
+                    destination_effect: None,
+                    destination_parameter: None,
+                });
+                processed += 1;
+                continue;
+            }
+            if let Some(action) = Self::launch_control_factory1_navigation(&event) {
+                self.record_navigation_event(action);
+                processed += 1;
+                continue;
+            }
             let (event_sent, event_unmatched) = self.dispatch_registered(&event);
             processed += 1;
             sent += event_sent;
             unmatched += event_unmatched;
         }
         (processed, sent, unmatched)
+    }
+
+    const fn is_launch_control_factory1_device_press(event: &mackes_domain::MidiEvent) -> bool {
+        matches!(
+            event.message,
+            mackes_domain::MidiMessage::NoteOn { channel, note, velocity }
+                if channel.wire() == 8 && note.as_u8() == 105 && velocity.as_u8() > 0
+        )
+    }
+
+    const fn launch_control_factory1_navigation(
+        event: &mackes_domain::MidiEvent,
+    ) -> Option<&'static str> {
+        let mackes_domain::MidiMessage::ControlChange { channel, controller, value } =
+            event.message
+        else {
+            return None;
+        };
+        if channel.wire() != 8 || value.as_u8() == 0 {
+            return None;
+        }
+        match controller.as_u8() {
+            104 => Some("up"),
+            105 => Some("down"),
+            106 => Some("left"),
+            107 => Some("right"),
+            _ => None,
+        }
+    }
+
+    fn record_navigation_event(&mut self, action: &'static str) {
+        self.record_state_event(Command::Monitor);
+        if let Some(event) = self.state_events.back_mut() {
+            if let Ok(mut payload) = serde_json::from_slice::<serde_json::Value>(&event.payload) {
+                payload["ui_navigation"] = serde_json::Value::String(action.to_owned());
+                if let Ok(encoded) = serde_json::to_vec(&payload) {
+                    event.payload = encoded;
+                }
+            }
+        }
     }
 
     /// Polls registered inputs and resolves persisted dashboard bindings.
@@ -1821,6 +1905,7 @@ impl Daemon {
             "last_mapping_activity": self.last_mapping_activity,
             "control_mappings": self.mapping_store.active,
             "activation_result": self.activation_result.as_deref(),
+            "assignment_session": self.assignment_session,
             "catalog": self.catalog,
             "physical_devices": self.physical_devices,
             "health": match self.health {
@@ -1891,6 +1976,7 @@ impl Daemon {
             "dropped": self.dropped_events,
             "last_activity": self.last_activity,
             "activation_result": self.activation_result.as_deref(),
+            "assignment_session": self.assignment_session,
             "last_sequence": self.state_sequence,
             "catalog": self.catalog,
             "physical_devices": self.physical_devices,
@@ -3495,6 +3581,21 @@ mod tests {
             "destination_disconnected"
         );
         let _ = fs::remove_file(socket);
+    }
+
+    #[test]
+    fn factory1_device_press_is_reserved_for_assignment_start() {
+        let event = mackes_domain::MidiEvent {
+            timestamp: mackes_domain::TimestampNanos::new(1),
+            sequence: 1,
+            endpoint: mackes_domain::EndpointId::new(1).expect("endpoint"),
+            message: mackes_domain::MidiMessage::NoteOn {
+                channel: mackes_domain::MidiChannel::new(9).expect("channel"),
+                note: mackes_domain::SevenBit::new(105).expect("note"),
+                velocity: mackes_domain::SevenBit::new(127).expect("velocity"),
+            },
+        };
+        assert!(Daemon::is_launch_control_factory1_device_press(&event));
     }
 
     #[test]

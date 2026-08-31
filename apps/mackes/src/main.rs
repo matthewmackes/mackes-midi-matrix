@@ -65,6 +65,7 @@ fn run_tui() -> Result<(), String> {
                 &mut diagnostics,
                 &mut setlist_editor,
                 &mut learn_workspace,
+                &mut assignment_wizard,
             )
         } else {
             synchronize_events(
@@ -76,11 +77,16 @@ fn run_tui() -> Result<(), String> {
                 &mut diagnostics,
                 &mut setlist_editor,
                 &mut learn_workspace,
+                &mut assignment_wizard,
+                &mut task_shell,
             )
         };
         if let Ok(health) = synchronized {
             dashboard.health = health;
             needs_snapshot = false;
+            if assignment_wizard.session.phase != mackes_ipc::AssignmentPhase::Idle {
+                workspace = 2;
+            }
         } else {
             "offline".clone_into(&mut dashboard.health);
             client_state.begin_reconnect();
@@ -93,10 +99,23 @@ fn run_tui() -> Result<(), String> {
             if assignment_wizard.session.phase == mackes_ipc::AssignmentPhase::Idle {
                 Vec::new()
             } else {
-                mackes_tui::assignment_wizard_lines(
+                let mut lines = mackes_tui::assignment_wizard_lines(
                     &assignment_wizard,
                     mackes_tui::Viewport::new(terminal.size().map_or(80, |size| size.width), 24),
-                )
+                );
+                if !assignment_choices.parameters.is_empty() {
+                    lines.push("DESTINATION / EFFECT / PARAMETER".into());
+                    for (index, choice) in assignment_choices.parameters.iter().enumerate() {
+                        lines.push(format!(
+                            "{} {} / {} / {}",
+                            if index == assignment_choices.selected { ">" } else { " " },
+                            choice.profile_id,
+                            choice.effect_id,
+                            choice.id
+                        ));
+                    }
+                }
+                lines
             };
         terminal
             .draw(|frame| {
@@ -1986,6 +2005,7 @@ fn synchronize_snapshot(
     diagnostics: &mut mackes_tui::DiagnosticsState,
     setlists: &mut mackes_tui::SetlistEditor,
     learn: &mut mackes_tui::LearnWorkspace,
+    assignment_wizard: &mut mackes_tui::AssignmentWizard,
 ) -> Result<String, String> {
     let response = daemon_request(mackes_ipc::Command::Snapshot, b"{}");
     let value: serde_json::Value =
@@ -2012,6 +2032,7 @@ fn synchronize_snapshot(
     project_observability(monitor, diagnostics, &value);
     project_setlists(setlists, &value);
     project_learn_alias(learn, &value);
+    reconcile_assignment_session(assignment_wizard, &value);
     if let Some(generation) = value.get("route_generation").and_then(serde_json::Value::as_u64) {
         *route_generation = generation;
     }
@@ -2401,6 +2422,8 @@ fn synchronize_events(
     diagnostics: &mut mackes_tui::DiagnosticsState,
     setlists: &mut mackes_tui::SetlistEditor,
     learn: &mut mackes_tui::LearnWorkspace,
+    assignment_wizard: &mut mackes_tui::AssignmentWizard,
+    task_shell: &mut mackes_tui::TaskShellState,
 ) -> Result<String, String> {
     let payload = serde_json::to_vec(&serde_json::json!({
         "after_sequence": state.last_sequence,
@@ -2436,6 +2459,21 @@ fn synchronize_events(
         project_observability(monitor, diagnostics, payload);
         project_setlists(setlists, payload);
         project_learn_alias(learn, payload);
+        reconcile_assignment_session(assignment_wizard, payload);
+        if assignment_wizard.session.phase == mackes_ipc::AssignmentPhase::Idle {
+            if let Some(action) = payload.get("ui_navigation").and_then(serde_json::Value::as_str) {
+                let shell_action = match action {
+                    "up" => Some(mackes_tui::ShellAction::Up),
+                    "down" => Some(mackes_tui::ShellAction::Down),
+                    "left" => Some(mackes_tui::ShellAction::Left),
+                    "right" => Some(mackes_tui::ShellAction::Right),
+                    _ => None,
+                };
+                if let Some(shell_action) = shell_action {
+                    task_shell.apply(shell_action);
+                }
+            }
+        }
         if let Some(generation) =
             payload.get("route_generation").and_then(serde_json::Value::as_u64)
         {
@@ -2461,6 +2499,26 @@ fn print_daemon_command(command: mackes_ipc::Command) {
     if unavailable {
         std::process::exit(2);
     }
+}
+
+fn reconcile_assignment_session(
+    wizard: &mut mackes_tui::AssignmentWizard,
+    payload: &serde_json::Value,
+) {
+    let Some(session) = payload.get("assignment_session").and_then(|value| {
+        serde_json::from_value::<mackes_ipc::AssignmentSession>(value.clone()).ok()
+    }) else {
+        return;
+    };
+    wizard.reconcile(mackes_ipc::AssignmentResult {
+        generation: payload
+            .get("generation")
+            .and_then(serde_json::Value::as_u64)
+            .unwrap_or_default(),
+        session,
+        applied: true,
+        reason: None,
+    });
 }
 
 fn send_sysex_cli(destination: &str, hex: &str) {
