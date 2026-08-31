@@ -6,9 +6,11 @@ license.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+mackes-config = { path = "../config" }
 mackes-domain = { path = "../domain" }
 nix.workspace = true
 serde_json.workspace = true
+serde.workspace = true
 
 [lints]
 workspace = true

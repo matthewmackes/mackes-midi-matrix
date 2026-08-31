@@ -12,6 +12,7 @@ mackes-tui = { path = "../tui" }
 mackes-scene-engine = { path = "../scene-engine" }
 mackes-ipc = { path = "../ipc" }
 mackes-profiles = { path = "../profiles" }
+mackes-config = { path = "../config" }
 
 [lints]
 workspace = true

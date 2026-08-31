@@ -46,6 +46,358 @@ pub struct ConfigDocument {
     /// Durable one-source/one-destination mappings created by MIDI Learn.
     #[serde(default)]
     pub learned_mappings: Vec<LearnedMapping>,
+    /// Atomic hardware-first parameter mappings.
+    #[serde(default)]
+    pub control_mappings: Vec<ControlMapping>,
+    /// Resumable but inactive mapping drafts.
+    #[serde(default)]
+    pub control_mapping_drafts: Vec<ControlMappingDraft>,
+}
+
+/// Validated mapping behavior applied between source and destination ranges.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct MappingBehavior {
+    /// Inclusive source value range.
+    #[serde(default = "default_mapping_range")]
+    pub source_range: (u16, u16),
+    /// Inclusive destination value range.
+    #[serde(default = "default_mapping_range")]
+    pub destination_range: (u16, u16),
+    /// Whether the destination range is inverted.
+    #[serde(default)]
+    pub invert: bool,
+    /// Approved curve name.
+    #[serde(default = "default_curve")]
+    pub curve: String,
+}
+
+fn default_curve() -> String {
+    "linear".into()
+}
+
+const fn default_mapping_range() -> (u16, u16) {
+    (0, 127)
+}
+
+/// Durable, complete hardware-first parameter mapping.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ControlMapping {
+    /// Stable mapping identity.
+    pub id: String,
+    /// Controller profile identity.
+    pub controller_profile: String,
+    /// Stable physical source identity.
+    pub physical_control_id: String,
+    /// Exact source endpoint identity.
+    pub source_endpoint: String,
+    /// Exact source MIDI message kind.
+    pub source_kind: String,
+    /// Zero-based source channel.
+    pub source_channel: u8,
+    /// Source MIDI controller/note number.
+    pub source_number: u8,
+    /// Exact destination output endpoint identity.
+    pub destination_endpoint: String,
+    /// Destination profile identity.
+    pub destination_profile: String,
+    /// Destination effect/block identity.
+    pub destination_effect: String,
+    /// Destination parameter identity.
+    pub destination_parameter: String,
+    /// Mapping behavior.
+    pub behavior: MappingBehavior,
+    /// Whether this mapping is active.
+    pub enabled: bool,
+    /// Profile provenance version.
+    pub profile_version: u32,
+}
+
+/// Incomplete mapping wizard state; never executable.
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ControlMappingDraft {
+    /// Stable draft identity.
+    pub id: String,
+    /// Last completed wizard step.
+    pub step: String,
+    /// Optional source identity.
+    #[serde(default)]
+    pub physical_control_id: Option<String>,
+    /// Optional destination identity.
+    #[serde(default)]
+    pub destination: Option<String>,
+}
+
+/// In-memory authoritative mapping state used for transactional persistence.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct ControlMappingStore {
+    /// Current mapping generation.
+    pub generation: u64,
+    /// Active mappings.
+    pub active: Vec<ControlMapping>,
+    /// Inactive resumable drafts.
+    pub drafts: Vec<ControlMappingDraft>,
+    undo: Option<(Vec<ControlMapping>, Vec<ControlMappingDraft>)>,
+}
+
+#[allow(clippy::missing_errors_doc)]
+impl ControlMappingStore {
+    /// Returns whether a successful mutation can currently be undone.
+    #[must_use]
+    pub const fn undo_available(&self) -> bool {
+        self.undo.is_some()
+    }
+
+    /// Returns immutable active mappings and drafts for snapshot projection.
+    #[must_use]
+    pub fn snapshot(&self) -> (&[ControlMapping], &[ControlMappingDraft]) {
+        (&self.active, &self.drafts)
+    }
+
+    /// Loads mapping state from a validated configuration document.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the document fails semantic validation.
+    pub fn from_document(document: &ConfigDocument) -> Result<Self, String> {
+        validate(document)?;
+        Ok(Self {
+            generation: 0,
+            active: document.control_mappings.clone(),
+            drafts: document.control_mapping_drafts.clone(),
+            undo: None,
+        })
+    }
+
+    /// Projects authoritative mapping state into a cloned document.
+    #[must_use]
+    pub fn apply_to_document(&self, document: &ConfigDocument) -> ConfigDocument {
+        let mut result = document.clone();
+        result.control_mappings.clone_from(&self.active);
+        result.control_mapping_drafts.clone_from(&self.drafts);
+        result
+    }
+
+    fn begin_mutation(&mut self, expected_generation: u64) -> Result<(), &'static str> {
+        if self.generation != expected_generation {
+            return Err("mapping generation conflict");
+        }
+        self.undo = Some((self.active.clone(), self.drafts.clone()));
+        Ok(())
+    }
+
+    /// Saves or replaces an inactive draft without activating it.
+    pub fn save_draft(
+        &mut self,
+        expected_generation: u64,
+        draft: ControlMappingDraft,
+    ) -> Result<(), &'static str> {
+        if draft.id.trim().is_empty() || draft.id.len() > 64 || draft.step.trim().is_empty() {
+            return Err("mapping draft is invalid");
+        }
+        if draft.physical_control_id.as_deref().is_some_and(|id| !valid_physical_control_id(id)) {
+            return Err("mapping draft control identity is invalid");
+        }
+        self.begin_mutation(expected_generation)?;
+        if let Some(existing) = self.drafts.iter_mut().find(|existing| existing.id == draft.id) {
+            *existing = draft;
+        } else {
+            self.drafts.push(draft);
+        }
+        self.generation = self.generation.saturating_add(1);
+        Ok(())
+    }
+
+    /// Atomically activates a mapping at the expected generation.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for a stale generation, invalid mapping, or source/destination conflict.
+    pub fn activate(
+        &mut self,
+        expected_generation: u64,
+        mapping: ControlMapping,
+    ) -> Result<(), &'static str> {
+        if self.generation != expected_generation {
+            return Err("mapping generation conflict");
+        }
+        validate_mapping(&mapping)?;
+        if self.active.iter().any(|existing| {
+            existing.physical_control_id == mapping.physical_control_id
+                || (existing.destination_profile == mapping.destination_profile
+                    && existing.destination_effect == mapping.destination_effect
+                    && existing.destination_parameter == mapping.destination_parameter)
+        }) {
+            return Err("mapping source or destination is already occupied");
+        }
+        self.undo = Some((self.active.clone(), self.drafts.clone()));
+        self.active.push(mapping);
+        self.generation = self.generation.saturating_add(1);
+        Ok(())
+    }
+
+    /// Undoes the latest successful mutation at the expected generation.
+    pub fn undo(&mut self, expected_generation: u64) -> Result<(), &'static str> {
+        if self.generation != expected_generation {
+            return Err("mapping generation conflict");
+        }
+        let Some((active, drafts)) = self.undo.take() else {
+            return Err("no mapping change is available to undo");
+        };
+        self.active = active;
+        self.drafts = drafts;
+        self.generation = self.generation.saturating_add(1);
+        Ok(())
+    }
+
+    /// Explicitly replaces a mapping, requiring the target identity to exist.
+    pub fn replace(
+        &mut self,
+        expected_generation: u64,
+        mapping: ControlMapping,
+    ) -> Result<(), &'static str> {
+        validate_mapping(&mapping)?;
+        if !self.active.iter().any(|existing| existing.id == mapping.id) {
+            return Err("mapping to replace was not found");
+        }
+        if self.active.iter().any(|existing| {
+            existing.id != mapping.id
+                && (existing.physical_control_id == mapping.physical_control_id
+                    || (existing.destination_profile == mapping.destination_profile
+                        && existing.destination_effect == mapping.destination_effect
+                        && existing.destination_parameter == mapping.destination_parameter))
+        }) {
+            return Err("replacement source or destination is already occupied");
+        }
+        self.begin_mutation(expected_generation)?;
+        let Some(slot) = self.active.iter_mut().find(|existing| existing.id == mapping.id) else {
+            return Err("mapping to replace was not found");
+        };
+        *slot = mapping;
+        self.generation = self.generation.saturating_add(1);
+        Ok(())
+    }
+
+    /// Replaces a mapping and rolls the store back when runtime application fails.
+    ///
+    /// # Errors
+    ///
+    /// Returns the validation/conflict error, or the runtime error after restoring the prior
+    /// active and draft collections and generation.
+    pub fn replace_with_runtime<F, E>(
+        &mut self,
+        expected_generation: u64,
+        mapping: ControlMapping,
+        mut apply_runtime: F,
+    ) -> Result<(), String>
+    where
+        F: FnMut(&ControlMapping) -> Result<(), E>,
+        E: std::fmt::Display,
+    {
+        let before = self.clone();
+        let runtime_mapping = mapping.clone();
+        self.replace(expected_generation, mapping).map_err(str::to_owned)?;
+        if let Err(error) = apply_runtime(&runtime_mapping) {
+            *self = before;
+            return Err(format!("runtime replacement failed: {error}"));
+        }
+        Ok(())
+    }
+
+    /// Updates behavior without changing mapping identity.
+    pub fn update_behavior(
+        &mut self,
+        expected_generation: u64,
+        id: &str,
+        behavior: MappingBehavior,
+    ) -> Result<(), &'static str> {
+        behavior.validate()?;
+        if !self.active.iter().any(|mapping| mapping.id == id) {
+            return Err("mapping to update was not found");
+        }
+        self.begin_mutation(expected_generation)?;
+        let Some(mapping) = self.active.iter_mut().find(|mapping| mapping.id == id) else {
+            return Err("mapping to update was not found");
+        };
+        mapping.behavior = behavior;
+        self.generation = self.generation.saturating_add(1);
+        Ok(())
+    }
+
+    /// Enables or disables an existing mapping.
+    pub fn set_enabled(
+        &mut self,
+        expected_generation: u64,
+        id: &str,
+        enabled: bool,
+    ) -> Result<(), &'static str> {
+        if !self.active.iter().any(|mapping| mapping.id == id) {
+            return Err("mapping to update was not found");
+        }
+        self.begin_mutation(expected_generation)?;
+        let Some(mapping) = self.active.iter_mut().find(|mapping| mapping.id == id) else {
+            return Err("mapping to update was not found");
+        };
+        mapping.enabled = enabled;
+        self.generation = self.generation.saturating_add(1);
+        Ok(())
+    }
+
+    /// Deletes an existing mapping.
+    pub fn delete(&mut self, expected_generation: u64, id: &str) -> Result<(), &'static str> {
+        if !self.active.iter().any(|mapping| mapping.id == id) {
+            return Err("mapping to delete was not found");
+        }
+        self.begin_mutation(expected_generation)?;
+        let before = self.active.len();
+        self.active.retain(|mapping| mapping.id != id);
+        if self.active.len() == before {
+            return Err("mapping to delete was not found");
+        }
+        self.generation = self.generation.saturating_add(1);
+        Ok(())
+    }
+}
+
+fn validate_mapping(mapping: &ControlMapping) -> Result<(), &'static str> {
+    if mapping.id.trim().is_empty()
+        || mapping.id.len() > 64
+        || mapping.controller_profile.trim().is_empty()
+        || !valid_physical_control_id(&mapping.physical_control_id)
+        || mapping.source_endpoint.trim().is_empty()
+        || mapping.source_kind.trim().is_empty()
+        || mapping.source_channel > 15
+        || mapping.source_number > 127
+        || mapping.destination_endpoint.trim().is_empty()
+        || mapping.destination_profile.trim().is_empty()
+        || mapping.destination_effect.trim().is_empty()
+        || mapping.destination_parameter.trim().is_empty()
+        || mapping.profile_version == 0
+    {
+        return Err("control mapping is incomplete or invalid");
+    }
+    mapping.behavior.validate()
+}
+
+impl MappingBehavior {
+    /// Validates approved curve and bounded behavior fields.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the curve is not in the approved set.
+    pub fn validate(&self) -> Result<(), &'static str> {
+        if !matches!(self.curve.as_str(), "linear" | "square" | "square_root")
+            || self.source_range.0 >= self.source_range.1
+            || self.destination_range.0 > self.destination_range.1
+            || self.source_range.1 > 16_383
+            || self.destination_range.1 > 16_383
+        {
+            return Err("mapping curve is unsupported");
+        }
+        Ok(())
+    }
 }
 
 /// Verification state for a device backup artifact.
@@ -290,6 +642,9 @@ pub struct LaunchControlTemplateConfig {
 pub struct LaunchControlAssignmentConfig {
     /// Physical control index (0–47).
     pub index: u8,
+    /// Stable profile-owned identity; absent only for legacy released data.
+    #[serde(default)]
+    pub physical_control_id: Option<String>,
     /// Zero-based MIDI channel.
     pub channel: u8,
     /// MIDI number.
@@ -299,12 +654,36 @@ pub struct LaunchControlAssignmentConfig {
     /// Optional bounded destination summary shown by the faceplate.
     #[serde(default)]
     pub destination: Option<String>,
+    /// Legacy ambiguity marker; such records are inert until recaptured.
+    #[serde(default)]
+    pub needs_review: bool,
 }
 
-/// Strict Arena2000 editor-map import envelope.
+impl LaunchControlAssignmentConfig {
+    /// Migrates a released numeric assignment without guessing ambiguous faders.
+    #[must_use]
+    pub fn migrated_physical_control_id(&self) -> Option<String> {
+        self.physical_control_id.clone().or_else(|| match self.index {
+            0..=7 => Some(format!("knob-r1-c{}", self.index + 1)),
+            8..=15 => Some(format!("knob-r2-c{}", self.index - 7)),
+            16..=23 => Some(format!("knob-r3-c{}", self.index - 15)),
+            24..=31 => Some(format!("button-r1-c{}", self.index - 23)),
+            32..=39 => Some(format!("button-r2-c{}", self.index - 31)),
+            _ => None,
+        })
+    }
+
+    /// Returns whether this legacy entry must be reviewed before activation.
+    #[must_use]
+    pub const fn requires_review(&self) -> bool {
+        self.needs_review || self.physical_control_id.is_none() && self.index >= 40
+    }
+}
+
+/*
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
-pub struct Arena2000EditorMap {
+pub struct RetiredEditorMap {
     /// Stable profile identity required by the importer.
     pub profile_id: String,
     /// Firmware identity the map was exported from.
@@ -316,20 +695,20 @@ pub struct Arena2000EditorMap {
     pub assignments: Vec<LaunchControlAssignmentConfig>,
 }
 
-impl Arena2000EditorMap {
+impl RetiredEditorMap {
     /// Validates identity, digest, bounds, and duplicate assignments.
     ///
     /// # Errors
     ///
     /// Returns an error when identity, firmware, digest, or assignment bounds are invalid.
     pub fn validate(&self) -> Result<(), String> {
-        if self.profile_id != "valeton.arena2000"
+        if self.profile_id != "retired.device"
             || self.firmware.trim().is_empty()
             || self.artifact_sha256.len() != 64
             || !self.artifact_sha256.bytes().all(|byte| byte.is_ascii_hexdigit())
             || self.assignments.len() > 48
         {
-            return Err("Arena2000 editor map identity or artifact metadata is invalid".into());
+            return Err("retired editor map identity or artifact metadata is invalid".into());
         }
         let mut indices = std::collections::BTreeSet::new();
         for assignment in &self.assignments {
@@ -339,7 +718,7 @@ impl Arena2000EditorMap {
                 || !matches!(assignment.kind.as_str(), "cc" | "note")
                 || !indices.insert(assignment.index)
             {
-                return Err("Arena2000 editor map assignment is invalid or duplicated".into());
+                return Err("retired editor map assignment is invalid or duplicated".into());
             }
         }
         Ok(())
@@ -354,7 +733,7 @@ impl Arena2000EditorMap {
         if BackupManifest::digest(artifact) == self.artifact_sha256 {
             Ok(())
         } else {
-            Err("Arena2000 editor artifact hash does not match map".into())
+            Err("retired editor artifact hash does not match map".into())
         }
     }
 
@@ -371,7 +750,7 @@ impl Arena2000EditorMap {
         self.validate()?;
         if self.firmware != expected_firmware && !approve_mismatch {
             return Err(format!(
-                "Arena2000 firmware mismatch: map={} expected={} (approval required)",
+                "retired device firmware mismatch: map={} expected={} (approval required)",
                 self.firmware, expected_firmware
             ));
         }
@@ -379,6 +758,7 @@ impl Arena2000EditorMap {
     }
 }
 
+*/
 /// Persisted MIDI trigger kind for a dashboard action.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
@@ -1337,6 +1717,10 @@ pub fn validate(document: &ConfigDocument) -> Result<(), String> {
                 || assignment.channel >= 16
                 || assignment.number > 127
                 || !matches!(assignment.kind.as_str(), "cc" | "note")
+                || assignment
+                    .physical_control_id
+                    .as_deref()
+                    .is_some_and(|id| !valid_physical_control_id(id))
                 || assignment.destination.as_deref().is_some_and(|destination| {
                     destination.trim().is_empty() || destination.len() > 96
                 })
@@ -1363,7 +1747,58 @@ pub fn validate(document: &ConfigDocument) -> Result<(), String> {
     for mapping in &document.learned_mappings {
         validate_learned_mapping(mapping, &document.endpoints)?;
     }
+    let mut mapping_ids = std::collections::BTreeSet::new();
+    for mapping in &document.control_mappings {
+        if mapping.id.trim().is_empty()
+            || mapping.id.len() > 64
+            || !mapping_ids.insert(mapping.id.as_str())
+            || !valid_physical_control_id(&mapping.physical_control_id)
+            || mapping.controller_profile.trim().is_empty()
+            || mapping.source_endpoint.trim().is_empty()
+            || mapping.source_kind.trim().is_empty()
+            || mapping.source_channel > 15
+            || mapping.source_number > 127
+            || mapping.destination_endpoint.trim().is_empty()
+            || mapping.destination_profile.trim().is_empty()
+            || mapping.destination_effect.trim().is_empty()
+            || mapping.destination_parameter.trim().is_empty()
+            || mapping.profile_version == 0
+        {
+            return Err("control mapping identity or provenance is invalid or duplicated".into());
+        }
+        mapping.behavior.validate()?;
+    }
+    for draft in &document.control_mapping_drafts {
+        if draft.id.trim().is_empty()
+            || draft.id.len() > 64
+            || !mapping_ids.insert(draft.id.as_str())
+            || draft.step.trim().is_empty()
+            || draft.physical_control_id.as_deref().is_some_and(|id| !valid_physical_control_id(id))
+        {
+            return Err("control mapping draft identity or step is invalid or duplicated".into());
+        }
+    }
     Ok(())
+}
+
+fn valid_physical_control_id(id: &str) -> bool {
+    let valid_grid = |prefix: &str, rows: u8| {
+        id.strip_prefix(prefix)
+            .and_then(|tail| {
+                let (row, column) = tail.split_once("-c")?;
+                Some((row.parse::<u8>().ok()?, column.parse::<u8>().ok()?))
+            })
+            .is_some_and(|(row, column)| (1..=rows).contains(&row) && (1..=8).contains(&column))
+    };
+    let valid_numbered = |prefix: &str| {
+        id.strip_prefix(prefix)
+            .and_then(|n| n.parse::<u8>().ok())
+            .is_some_and(|n| (1..=8).contains(&n))
+    };
+    valid_grid("knob-r", 3)
+        || valid_grid("button-r", 2)
+        || valid_numbered("fader-")
+        || valid_numbered("utility-")
 }
 
 fn validate_learned_mapping(
@@ -1471,6 +1906,20 @@ pub fn save(
     fs::rename(&temp, path).map_err(|source| ConfigError::Replace { path: path.to_owned(), source })
 }
 
+/// Persists an authoritative mapping store through the validated atomic config writer.
+///
+/// # Errors
+///
+/// Returns the underlying load or atomic-save error; the in-memory store is never changed.
+pub fn save_control_mapping_store(
+    path: &Path,
+    store: &ControlMappingStore,
+    backup_count: usize,
+) -> Result<(), ConfigError> {
+    let document = load(path)?;
+    save(path, &store.apply_to_document(&document), backup_count)
+}
+
 /// Exports a validated configuration into a portable directory without machine-specific paths.
 ///
 /// # Errors
@@ -1555,6 +2004,8 @@ mod tests {
             profiles: vec![],
             setlists: vec![],
             learned_mappings: vec![],
+            control_mappings: vec![],
+            control_mapping_drafts: vec![],
         }
     }
 
@@ -1638,9 +2089,9 @@ mod tests {
         let selected = set_default_provider(&value, " ReVerb ", "lexicon.reflex").expect("set");
         assert_eq!(default_provider(&selected, "REVERB"), Some("lexicon.reflex"));
         let replaced =
-            set_default_provider(&selected, "reverb", "valeton.arena2000").expect("replace");
+            set_default_provider(&selected, "reverb", "eventide.micropitch").expect("replace");
         assert_eq!(replaced.settings.default_providers.len(), 1);
-        assert_eq!(default_provider(&replaced, "reverb"), Some("valeton.arena2000"));
+        assert_eq!(default_provider(&replaced, "reverb"), Some("eventide.micropitch"));
         assert!(set_default_provider(&value, " ", "profile").is_err());
         assert!(set_default_provider(&value, "delay", " ").is_err());
         assert!(value.settings.default_providers.is_empty());
@@ -1665,7 +2116,7 @@ mod tests {
             channel_policy: LearnedChannelPolicy::Any,
             number: Some(7),
             raw: vec![0xB0, 7, 127],
-            destination: "arena.delay.mix".into(),
+            destination: "processor.delay.mix".into(),
             mode: "cc".into(),
             enabled: true,
             priority: 0,
@@ -1914,11 +2365,11 @@ mod tests {
         assert!(invalid.validate().is_err());
     }
 
-    #[test]
-    fn arena2000_editor_map_requires_identity_and_artifact_hash() {
+    /* #[test]
+    fn retired_editor_map_requires_identity_and_artifact_hash() {
         let artifact = br"editor-export";
-        let map = Arena2000EditorMap {
-            profile_id: "valeton.arena2000".into(),
+        let map = RetiredEditorMap {
+            profile_id: "retired.device".into(),
             firmware: "1.0".into(),
             artifact_sha256: BackupManifest::digest(artifact),
             assignments: vec![],
@@ -1929,9 +2380,9 @@ mod tests {
         assert!(map.validate_for_firmware("2.0", true).is_ok());
         assert!(map.verify_artifact(artifact).is_ok());
         assert!(map.verify_artifact(b"tampered").is_err());
-        let invalid = Arena2000EditorMap { profile_id: "unknown".into(), ..map };
+        let invalid = RetiredEditorMap { profile_id: "unknown".into(), ..map };
         assert!(invalid.validate().is_err());
-    }
+    } */
 
     #[test]
     fn backup_storage_writes_payload_and_manifest_sidecar() {
@@ -2027,5 +2478,234 @@ mod tests {
         let _ = fs::remove_file(&backup);
         let _ = fs::remove_file(backup.with_extension("manifest.json"));
         let _ = fs::remove_file(&target);
+    }
+
+    #[test]
+    fn launch_control_legacy_assignments_migrate_without_guessing_faders() {
+        let knob = LaunchControlAssignmentConfig {
+            index: 4,
+            physical_control_id: None,
+            channel: 0,
+            number: 20,
+            kind: "cc".into(),
+            destination: None,
+            needs_review: false,
+        };
+        assert_eq!(knob.migrated_physical_control_id().as_deref(), Some("knob-r1-c5"));
+        assert!(!knob.requires_review());
+        let ambiguous = LaunchControlAssignmentConfig { index: 40, ..knob };
+        assert_eq!(ambiguous.migrated_physical_control_id(), None);
+        assert!(ambiguous.requires_review());
+    }
+
+    #[test]
+    fn control_mapping_store_is_generation_guarded_and_undoable() {
+        let mapping = ControlMapping {
+            id: "map-1".into(),
+            controller_profile: "novation.launch-control-xl.mk2".into(),
+            physical_control_id: "knob-r1-c1".into(),
+            source_endpoint: "input".into(),
+            source_kind: "cc".into(),
+            source_channel: 0,
+            source_number: 21,
+            destination_endpoint: "2".into(),
+            destination_profile: "eventide.micropitch".into(),
+            destination_effect: "modulation".into(),
+            destination_parameter: "Mix".into(),
+            behavior: MappingBehavior {
+                source_range: (0, 127),
+                destination_range: (0, 127),
+                invert: false,
+                curve: "linear".into(),
+            },
+            enabled: true,
+            profile_version: 1,
+        };
+        let mut store = ControlMappingStore::default();
+        assert!(store.activate(1, mapping.clone()).is_err());
+        assert!(store.activate(0, mapping).is_ok());
+        assert_eq!(store.generation, 1);
+        assert!(store.undo_available());
+        assert_eq!(store.snapshot().0.len(), 1);
+        assert!(store.undo(0).is_err());
+        assert!(store.undo(1).is_ok());
+        assert!(store.active.is_empty());
+        assert!(!store.undo_available());
+    }
+
+    #[test]
+    fn control_mapping_store_supports_drafts_and_all_atomic_mutations() {
+        let mapping = ControlMapping {
+            id: "map-1".into(),
+            controller_profile: "novation.launch-control-xl.mk2".into(),
+            physical_control_id: "knob-r1-c1".into(),
+            source_endpoint: "input".into(),
+            source_kind: "cc".into(),
+            source_channel: 0,
+            source_number: 21,
+            destination_endpoint: "2".into(),
+            destination_profile: "eventide.micropitch".into(),
+            destination_effect: "modulation".into(),
+            destination_parameter: "Mix".into(),
+            behavior: MappingBehavior {
+                source_range: (0, 127),
+                destination_range: (0, 127),
+                invert: false,
+                curve: "linear".into(),
+            },
+            enabled: true,
+            profile_version: 1,
+        };
+        let mut store = ControlMappingStore::default();
+        let draft = ControlMappingDraft {
+            id: "draft-1".into(),
+            step: "source".into(),
+            physical_control_id: Some("knob-r1-c1".into()),
+            destination: None,
+        };
+        assert!(store.save_draft(0, draft.clone()).is_ok());
+        assert_eq!(store.generation, 1);
+        assert!(store
+            .save_draft(1, ControlMappingDraft { step: "destination".into(), ..draft })
+            .is_ok());
+        assert!(store.activate(2, mapping.clone()).is_ok());
+        assert!(store
+            .update_behavior(
+                3,
+                "map-1",
+                MappingBehavior {
+                    source_range: (0, 127),
+                    destination_range: (0, 127),
+                    invert: true,
+                    curve: "square".into()
+                }
+            )
+            .is_ok());
+        assert!(store.set_enabled(4, "map-1", false).is_ok());
+        assert!(store
+            .replace(5, ControlMapping { destination_parameter: "Depth".into(), ..mapping })
+            .is_ok());
+        assert!(store.delete(6, "map-1").is_ok());
+        let before = store.clone();
+        assert!(store.delete(7, "missing").is_err());
+        assert_eq!(store, before);
+    }
+
+    #[test]
+    fn control_mapping_store_round_trips_through_config_document() {
+        let document = document();
+        let store = ControlMappingStore::from_document(&document).expect("valid document");
+        assert_eq!(store.apply_to_document(&document), document);
+    }
+
+    #[test]
+    fn control_mapping_store_persists_atomically_and_reloads() {
+        let path =
+            std::env::temp_dir().join(format!("mackes-mapping-{}.json5", std::process::id()));
+        let document = document();
+        save(&path, &document, 0).expect("initial config");
+        let mut store = ControlMappingStore::from_document(&document).expect("valid document");
+        let mapping = ControlMapping {
+            id: "persisted".into(),
+            controller_profile: "controller".into(),
+            physical_control_id: "knob-r1-c1".into(),
+            source_endpoint: "input-1".into(),
+            source_kind: "cc".into(),
+            source_channel: 0,
+            source_number: 1,
+            destination_endpoint: "output-1".into(),
+            destination_profile: "eventide.micropitch".into(),
+            destination_effect: "modulation".into(),
+            destination_parameter: "control-0".into(),
+            behavior: MappingBehavior {
+                source_range: (0, 127),
+                destination_range: (0, 127),
+                invert: false,
+                curve: "linear".into(),
+            },
+            enabled: true,
+            profile_version: 1,
+        };
+        store.activate(0, mapping).expect("activate");
+        save_control_mapping_store(&path, &store, 0).expect("persist mapping");
+        let loaded = ControlMappingStore::from_document(&load(&path).expect("reload"))
+            .expect("loaded store");
+        assert_eq!(loaded.active, store.active);
+        let before = store.clone();
+        let missing = path.with_extension("missing.json5");
+        assert!(save_control_mapping_store(&missing, &store, 0).is_err());
+        assert_eq!(store, before);
+        let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn replacing_mapping_rejects_control_or_destination_collisions() {
+        let first = ControlMapping {
+            id: "first".into(),
+            controller_profile: "controller".into(),
+            physical_control_id: "knob-r1-c1".into(),
+            source_endpoint: "input".into(),
+            source_kind: "cc".into(),
+            source_channel: 0,
+            source_number: 1,
+            destination_endpoint: "2".into(),
+            destination_profile: "device".into(),
+            destination_effect: "effect".into(),
+            destination_parameter: "one".into(),
+            behavior: MappingBehavior {
+                source_range: (0, 127),
+                destination_range: (0, 127),
+                invert: false,
+                curve: "linear".into(),
+            },
+            enabled: true,
+            profile_version: 1,
+        };
+        let second = ControlMapping {
+            id: "second".into(),
+            physical_control_id: "knob-r1-c2".into(),
+            destination_parameter: "two".into(),
+            ..first.clone()
+        };
+        let mut store = ControlMappingStore {
+            active: vec![first.clone(), second],
+            ..ControlMappingStore::default()
+        };
+        let collision = ControlMapping { destination_parameter: "two".into(), ..first };
+        assert!(store.replace(0, collision).is_err());
+        assert_eq!(store.active[0].destination_parameter, "one");
+    }
+
+    #[test]
+    fn runtime_replacement_failure_restores_store_atomically() {
+        let mapping = ControlMapping {
+            id: "runtime".into(),
+            controller_profile: "controller".into(),
+            physical_control_id: "knob-r1-c1".into(),
+            source_endpoint: "input".into(),
+            source_kind: "cc".into(),
+            source_channel: 0,
+            source_number: 1,
+            destination_endpoint: "output".into(),
+            destination_profile: "profile".into(),
+            destination_effect: "effect".into(),
+            destination_parameter: "one".into(),
+            behavior: MappingBehavior {
+                source_range: (0, 127),
+                destination_range: (0, 127),
+                invert: false,
+                curve: "linear".into(),
+            },
+            enabled: true,
+            profile_version: 1,
+        };
+        let mut store = ControlMappingStore::default();
+        store.activate(0, mapping.clone()).expect("activate");
+        let before = store.clone();
+        let replacement = ControlMapping { destination_parameter: "two".into(), ..mapping };
+        assert!(store
+            .replace_with_runtime(1, replacement, |_| Err("adapter unavailable"))
+            .is_err());
+        assert_eq!(store, before);
     }
 }

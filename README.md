@@ -65,16 +65,14 @@ cargo run --package mackes-midi-matrix
 cargo run --package mackesd
 ```
 
-Launch the interactive terminal UI with `mackes-midi-matrix` (or `mackes-midi-matrix tui`). While it is running,
-number keys select the available workspaces: `1` Dashboard, `2` MIDI Learn, `3` Reflex,
-`4` Eventide, `5` Routing, `6` Diagnostics, `7` Monitor, `8` Backups, and `9` Setlists.
-The Routing workspace supports transactional add/remove/edit/save operations: `m` cycles
-message class, `c` cycles channel scope, `e` enables or disables a route, `y` toggles bounded
-cycle authorization, and `+`/`-` adjusts execution priority. Route rows also display the
-effective curve and cycle policy before saving.
-From the dashboard, `n`/`p` navigate scenes, `!` issues
-the governed panic command, and `q` exits. The UI restores the terminal state on normal
-and error exits.
+Launch the interactive terminal UI with `mackes-midi-matrix` (or `mackes-midi-matrix tui`).
+The primary shell has five task sections: Live, Map Controls, Scenes, Devices, and System.
+Use the arrow keys (or `h`/`j`/`k`/`l`) to move, `Enter` to select, `Esc` to go back, and `?`
+for contextual help. Map Controls exposes controller assignments in musical language and
+supports immediate enable/disable (`e`), curve (`c`), inversion (`i`), explicit replacement
+(`r` twice), deletion (`x`), and bounded Undo (`u`). The previous numbered workspaces remain
+available only as a compatibility path while legacy capabilities are being rehomed under System.
+The UI restores the terminal state on normal and error exits.
 
 Scenes can also be selected exactly from the CLI with `mackes-midi-matrix scene select <scene-id>`;
 the daemon validates the active catalog and persists the selection.
@@ -154,6 +152,11 @@ hardware/network soaks remain explicit post-release qualification activities.
 Hardware writes, bulk dumps, and dense MIDI traffic are potentially destructive. Such tests are opt-in, display their exact destination and operation, and require explicit confirmation. Do not guess vendor SysEx bytes, checksums, LED messages, or reply semantics: changes must be supported by cited documentation, redacted fixtures, or physical validation.
 
 Read `WORKLIST.md`, relevant ADRs, and [`CONTRIBUTING.md`](CONTRIBUTING.md) before contributing. Security concerns belong in [`SECURITY.md`](SECURITY.md). The project is licensed under the MIT License (`LICENSE`).
+
+The five-section navigation migration is tracked in [`docs/task-capability-parity.md`](docs/task-capability-parity.md);
+legacy capabilities remain available until their parity row is proven.
+The first-time operator walkthrough and rollback notes are in
+[`docs/release-notes-0.1.11.md`](docs/release-notes-0.1.11.md).
 
 ## Goals
 

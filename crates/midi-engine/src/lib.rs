@@ -1472,6 +1472,25 @@ impl OutputRegistry {
         Ok(())
     }
 
+    /// Sends an already-constructed event to exactly one numeric endpoint.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the endpoint is not registered.
+    pub fn send_to_endpoint(
+        &mut self,
+        endpoint: EndpointId,
+        event: MidiEvent,
+    ) -> Result<(), String> {
+        let output = self
+            .outputs
+            .iter_mut()
+            .find(|output| numeric_endpoint_id(&output.info().id) == Some(endpoint))
+            .ok_or_else(|| "destination output is not registered".to_owned())?;
+        output.send(event);
+        Ok(())
+    }
+
     /// Returns registered output IDs in stable registration order.
     #[must_use]
     pub fn output_ids(&self) -> Vec<String> {
@@ -2598,6 +2617,83 @@ pub enum Curve {
     Square,
     /// Square-root emphasis toward the high end.
     SquareRoot,
+}
+
+/// Exact-match parameter mapping evaluated independently of ordinary routes.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ParameterMapping {
+    /// Input endpoint identity.
+    pub source_endpoint: EndpointId,
+    /// Output endpoint identity.
+    pub destination_endpoint: EndpointId,
+    /// Required MIDI message family.
+    pub class: MessageClass,
+    /// Required MIDI number (controller, note, or program).
+    pub number: u8,
+    /// Optional zero-based channel restriction.
+    pub channel: Option<u8>,
+    /// Inclusive source value range.
+    pub source_range: (u16, u16),
+    /// Inclusive destination value range.
+    pub destination_range: (u16, u16),
+    /// Reverse the destination direction.
+    pub invert: bool,
+    /// Value curve.
+    pub curve: Curve,
+}
+
+impl ParameterMapping {
+    /// Evaluates one event, returning `None` for every non-exact source match.
+    #[must_use]
+    pub fn evaluate(&self, event: &mackes_domain::MidiEvent) -> Option<mackes_domain::MidiEvent> {
+        self.evaluate_with_value(event).map(|(event, _)| event)
+    }
+
+    /// Evaluates one event and retains the full transformed destination value.
+    #[must_use]
+    pub fn evaluate_with_value(
+        &self,
+        event: &mackes_domain::MidiEvent,
+    ) -> Option<(mackes_domain::MidiEvent, u16)> {
+        if event.endpoint != self.source_endpoint
+            || MessageClass::of(&event.message) != self.class
+            || message_number(&event.message) != Some(self.number)
+            || self.channel.is_some_and(|channel| {
+                event_channel(&event.message).is_none_or(|actual| actual.one_based() != channel + 1)
+            })
+        {
+            return None;
+        }
+        let output = if let Some(value) = message_value(&event.message) {
+            let shaped = apply_curve(u8::try_from(value).ok()?, self.curve);
+            scale_value(u16::from(shaped), self.source_range, self.destination_range, self.invert)
+                .ok()?
+        } else {
+            self.destination_range.0
+        };
+        let value = mackes_domain::SevenBit::new(output.min(127))?;
+        let message = match &event.message {
+            mackes_domain::MidiMessage::ControlChange { channel, controller, .. } => {
+                mackes_domain::MidiMessage::ControlChange {
+                    channel: *channel,
+                    controller: *controller,
+                    value,
+                }
+            }
+            mackes_domain::MidiMessage::ProgramChange { channel, .. } => {
+                mackes_domain::MidiMessage::ProgramChange { channel: *channel, program: value }
+            }
+            _ => return None,
+        };
+        Some((
+            mackes_domain::MidiEvent {
+                endpoint: self.destination_endpoint,
+                message,
+                ..event.clone()
+            },
+            output,
+        ))
+    }
 }
 
 /// Applies a curve to a normalized 0..=127 MIDI value.
@@ -4054,6 +4150,88 @@ mod tests {
             assert_eq!(apply_curve(127, curve), 127);
         }
         assert!(apply_curve(64, Curve::Square) < 64);
+    }
+
+    #[test]
+    fn parameter_mapping_requires_exact_source_and_scales_cc_values() {
+        let source = EndpointId::new(1).expect("source");
+        let destination = EndpointId::new(2).expect("destination");
+        let mapping = ParameterMapping {
+            source_endpoint: source,
+            destination_endpoint: destination,
+            class: MessageClass::ControlChange,
+            number: 21,
+            channel: Some(0),
+            source_range: (0, 127),
+            destination_range: (10, 100),
+            invert: false,
+            curve: Curve::Linear,
+        };
+        let event = MidiEvent {
+            timestamp: TimestampNanos::new(1),
+            sequence: 2,
+            endpoint: source,
+            message: MidiMessage::ControlChange {
+                channel: MidiChannel::new(1).expect("channel"),
+                controller: SevenBit::new(21).expect("controller"),
+                value: SevenBit::new(64).expect("value"),
+            },
+        };
+        let mapped = mapping.evaluate(&event).expect("exact match");
+        assert_eq!(mapped.endpoint, destination);
+        assert!(
+            matches!(mapped.message, MidiMessage::ControlChange { value, .. } if value.get() == 55)
+        );
+        assert!(mapping.evaluate(&MidiEvent { endpoint: source, ..event.clone() }).is_some());
+        assert!(mapping.evaluate(&MidiEvent { endpoint: destination, ..event.clone() }).is_none());
+        let wrong_channel = MidiEvent {
+            message: MidiMessage::ControlChange {
+                channel: MidiChannel::new(2).expect("channel"),
+                controller: SevenBit::new(21).expect("controller"),
+                value: SevenBit::new(64).expect("value"),
+            },
+            ..event
+        };
+        assert!(mapping.evaluate(&wrong_channel).is_none());
+        let wide = ParameterMapping { destination_range: (100, 1000), ..mapping };
+        assert_eq!(wide.evaluate_with_value(&event).expect("wide value").1, 553);
+    }
+
+    #[test]
+    fn parameter_mapping_handles_exact_program_change_buttons() {
+        let mapping = ParameterMapping {
+            source_endpoint: EndpointId::new(1).expect("source"),
+            destination_endpoint: EndpointId::new(2).expect("destination"),
+            class: MessageClass::ProgramChange,
+            number: 7,
+            channel: Some(0),
+            source_range: (0, 127),
+            destination_range: (1, 1),
+            invert: false,
+            curve: Curve::Linear,
+        };
+        let event = MidiEvent {
+            timestamp: TimestampNanos::new(1),
+            sequence: 1,
+            endpoint: EndpointId::new(1).expect("source"),
+            message: MidiMessage::ProgramChange {
+                channel: MidiChannel::new(1).expect("channel"),
+                program: SevenBit::new(7).expect("program"),
+            },
+        };
+        let mapped = mapping.evaluate(&event).expect("button match");
+        assert_eq!(mapped.endpoint, EndpointId::new(2).expect("destination"));
+        assert!(
+            matches!(mapped.message, MidiMessage::ProgramChange { program, .. } if program.get() == 1)
+        );
+        let near_miss = MidiEvent {
+            message: MidiMessage::ProgramChange {
+                channel: MidiChannel::new(1).expect("channel"),
+                program: SevenBit::new(8).expect("program"),
+            },
+            ..event
+        };
+        assert!(mapping.evaluate(&near_miss).is_none());
     }
 
     #[test]

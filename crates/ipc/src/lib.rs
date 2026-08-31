@@ -1,5 +1,8 @@
 //! Versioned local daemon/client framing boundary.
 
+use mackes_config::{ControlMapping, ControlMappingDraft, MappingBehavior};
+use serde::{Deserialize, Serialize};
+
 use std::{
     io::{self, Read, Write},
     time::{Duration, Instant},
@@ -335,6 +338,10 @@ pub enum Command {
     Panic,
     /// Arm or disarm temporary unsafe mode.
     UnsafeMode,
+    /// Inspect or mutate durable hardware-first mappings.
+    Mappings,
+    /// Drive the daemon-owned controller assignment session.
+    Assignment,
     /// Request bounded daemon shutdown.
     Shutdown,
 }
@@ -361,6 +368,8 @@ impl Command {
             Self::Health => "health",
             Self::Panic => "panic",
             Self::UnsafeMode => "unsafe_mode",
+            Self::Mappings => "mappings",
+            Self::Assignment => "assignment",
             Self::Shutdown => "shutdown",
         }
     }
@@ -445,6 +454,424 @@ pub struct Envelope {
     pub command: Command,
     /// UTF-8 JSON payload bytes, without a newline.
     pub payload: Vec<u8>,
+}
+
+/// Typed mapping operation carried by the Mappings command.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub enum MappingOperation {
+    /// Read active mappings and drafts.
+    Snapshot,
+    /// Start or update an inactive draft.
+    Draft,
+    /// Activate a complete mapping.
+    Activate,
+    /// Explicitly replace an existing mapping.
+    Replace,
+    /// Update behavior.
+    Behavior,
+    /// Enable or disable a mapping.
+    Enabled,
+    /// Delete a mapping.
+    Delete,
+    /// Undo the latest mutation.
+    Undo,
+}
+
+/// Generation-checked mapping IPC request.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct MappingRequest {
+    /// Requested operation.
+    pub operation: MappingOperation,
+    /// Authoritative generation expected by the client.
+    pub generation: u64,
+    /// Typed mapping operation payload.
+    #[serde(default)]
+    pub payload: Option<MappingPayload>,
+}
+
+/// Typed payloads for mapping mutations; no opaque JSON crosses the IPC boundary.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", deny_unknown_fields)]
+pub enum MappingPayload {
+    /// Complete mapping for activation or replacement.
+    Mapping {
+        /// Complete mapping record.
+        mapping: ControlMapping,
+    },
+    /// Inactive resumable wizard draft.
+    Draft {
+        /// Inactive draft record.
+        draft: ControlMappingDraft,
+    },
+    /// Behavior update for an active mapping.
+    Behavior {
+        /// Active mapping identifier.
+        mapping_id: String,
+        /// New validated behavior.
+        behavior: MappingBehavior,
+    },
+    /// Enable/disable update for an active mapping.
+    Enabled {
+        /// Active mapping identifier.
+        mapping_id: String,
+        /// Desired enabled state.
+        enabled: bool,
+    },
+    /// Delete an active mapping.
+    Delete {
+        /// Active mapping identifier.
+        mapping_id: String,
+    },
+}
+
+/// Stable result for a mapping mutation or snapshot request.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct MappingResult {
+    /// Generation after the operation, unchanged on failure.
+    pub generation: u64,
+    /// Whether an Undo operation is currently available.
+    pub undo_available: bool,
+    /// Active mapping projection, when returned by the operation.
+    #[serde(default)]
+    pub active: Option<Vec<ControlMapping>>,
+    /// Inactive draft projection, when returned by the operation.
+    #[serde(default)]
+    pub draft: Option<Vec<ControlMappingDraft>>,
+    /// Stable terminal outcome.
+    pub outcome: MappingOutcome,
+}
+
+/// Stable mapping operation outcome vocabulary.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub enum MappingOutcome {
+    /// Operation succeeded and state is authoritative.
+    Applied,
+    /// Request generation was stale; no mutation occurred.
+    GenerationConflict,
+    /// Mapping conflicts with an occupied source or destination.
+    Conflict,
+    /// Persistence failed before runtime commit.
+    PersistenceFailed,
+    /// Mapping or draft was incomplete/invalid.
+    Invalid,
+    /// Nothing was available to undo.
+    NothingToUndo,
+}
+
+/// Authoritative controller-assignment workflow phase.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub enum AssignmentPhase {
+    /// No assignment is active.
+    Idle,
+    /// Waiting for one eligible physical control.
+    AwaitControl,
+    /// Choosing a connected compatible device.
+    ChooseDevice,
+    /// Choosing an effect block.
+    ChooseEffect,
+    /// Choosing a destination parameter.
+    ChooseParameter,
+    /// Confirming an occupied destination replacement.
+    ConfirmReplace,
+    /// Persisting and applying the complete mapping.
+    Committing,
+    /// Mapping committed successfully.
+    Succeeded,
+    /// Mapping failed and may be retried.
+    Failed,
+    /// Connection interruption requires explicit resume/discard.
+    Interrupted,
+}
+
+/// Typed assignment-session action shared by hardware and keyboard input.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub enum AssignmentAction {
+    /// Begin from the prior TUI location.
+    Start,
+    /// Accept a unique physical control.
+    ControlCaptured,
+    /// Move selection upward.
+    Up,
+    /// Move selection downward.
+    Down,
+    /// Enter the selected level.
+    Enter,
+    /// Return one level.
+    Back,
+    /// Confirm replacement.
+    ConfirmReplace,
+    /// Commit a complete destination payload atomically.
+    Commit,
+    /// Cancel the session.
+    Cancel,
+    /// Retry a failed commit.
+    Retry,
+    /// Resume an interrupted draft.
+    Resume,
+    /// Mark the active session interrupted by disconnect/reconnect.
+    Interrupt,
+    /// Mark a commit successful.
+    Succeed,
+    /// Mark a commit failed.
+    Fail,
+    /// Discard an interrupted draft.
+    Discard,
+}
+
+/// Generation-checked command for the daemon-owned assignment session.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct AssignmentRequest {
+    /// Expected assignment-session generation.
+    pub generation: u64,
+    /// Typed session action.
+    pub action: AssignmentAction,
+    /// Optional physical-control identity captured by the controller.
+    #[serde(default)]
+    pub physical_control_id: Option<String>,
+    /// Selected profile/device identity once the chooser reaches a destination.
+    #[serde(default)]
+    pub destination_profile: Option<String>,
+    /// Selected effect-block identity, when applicable.
+    #[serde(default)]
+    pub destination_effect: Option<String>,
+    /// Selected parameter identity for a commit request.
+    #[serde(default)]
+    pub destination_parameter: Option<String>,
+}
+
+/// Stable assignment-session mutation result.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct AssignmentResult {
+    /// Authoritative generation after processing.
+    pub generation: u64,
+    /// Current session projection.
+    pub session: AssignmentSession,
+    /// Whether the action was applied.
+    pub applied: bool,
+    /// Bounded reason for rejection or failure.
+    #[serde(default)]
+    pub reason: Option<String>,
+}
+
+/// Bounded authoritative assignment-session state.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct AssignmentSession {
+    /// Current workflow phase.
+    pub phase: AssignmentPhase,
+    /// Screen to return to after completion/cancel.
+    pub prior_screen: String,
+    /// Current candidate index.
+    pub index: u16,
+    /// Candidate count.
+    pub total: u16,
+    /// Whether the current session has a resumable draft.
+    pub has_draft: bool,
+    /// Phase to restore when an interrupted draft is explicitly resumed.
+    #[serde(default)]
+    pub interrupted_phase: Option<AssignmentPhase>,
+}
+
+/// Device-button gesture classification used by the assignment session.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub enum DeviceGesture {
+    /// Short press commits or advances the current workflow.
+    ShortPress,
+    /// Hold cancels the active workflow.
+    HoldCancel,
+}
+
+/// Classifies a measured Device-button duration without wall-clock behavior.
+#[must_use]
+pub const fn classify_device_gesture(duration_ms: u64) -> DeviceGesture {
+    if duration_ms >= 750 {
+        DeviceGesture::HoldCancel
+    } else {
+        DeviceGesture::ShortPress
+    }
+}
+
+/// Result of collecting physical-control candidates during the uniqueness window.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub enum CandidateCapture {
+    /// No eligible control was observed.
+    None,
+    /// One unique control was observed.
+    Unique,
+    /// More than one distinct control was observed.
+    Ambiguous,
+}
+
+/// Maximum elapsed capture window for physical-control disambiguation.
+pub const ASSIGNMENT_CANDIDATE_WINDOW_MS: u64 = 250;
+
+/// Classifies bounded candidate input after de-duplicating repeated controls.
+#[must_use]
+pub fn classify_candidates(control_ids: &[&str]) -> CandidateCapture {
+    let mut unique: Vec<&str> = Vec::new();
+    for id in control_ids.iter().copied().filter(|id| !id.is_empty()) {
+        if !unique.contains(&id) {
+            unique.push(id);
+            if unique.len() > 1 {
+                return CandidateCapture::Ambiguous;
+            }
+        }
+    }
+    match unique.len() {
+        0 => CandidateCapture::None,
+        _ => CandidateCapture::Unique,
+    }
+}
+
+impl AssignmentSession {
+    /// Creates an idle session with bounded empty context.
+    #[must_use]
+    pub fn new(prior_screen: impl Into<String>) -> Self {
+        Self {
+            phase: AssignmentPhase::Idle,
+            prior_screen: prior_screen.into(),
+            index: 0,
+            total: 0,
+            has_draft: false,
+            interrupted_phase: None,
+        }
+    }
+
+    /// Sets the bounded candidate count and clamps the current position.
+    pub fn set_total(&mut self, total: u16) {
+        self.total = total;
+        self.index = self.index.min(total.saturating_sub(1));
+    }
+
+    /// Applies one typed action and returns whether the phase changed.
+    pub fn apply(&mut self, action: AssignmentAction) -> bool {
+        let before = (self.phase, self.index);
+        self.phase = match (self.phase, action) {
+            (AssignmentPhase::Idle, AssignmentAction::Start) => AssignmentPhase::AwaitControl,
+            (AssignmentPhase::AwaitControl, AssignmentAction::ControlCaptured)
+            | (AssignmentPhase::ChooseEffect, AssignmentAction::Back) => {
+                AssignmentPhase::ChooseDevice
+            }
+            (AssignmentPhase::ChooseDevice, AssignmentAction::Enter)
+            | (AssignmentPhase::ChooseParameter, AssignmentAction::Back) => {
+                AssignmentPhase::ChooseEffect
+            }
+            (AssignmentPhase::ChooseDevice, AssignmentAction::Back) => {
+                AssignmentPhase::AwaitControl
+            }
+            (AssignmentPhase::ChooseEffect, AssignmentAction::Enter)
+            | (AssignmentPhase::Interrupted, AssignmentAction::Resume) => {
+                self.interrupted_phase.take().unwrap_or(AssignmentPhase::ChooseParameter)
+            }
+            (AssignmentPhase::ChooseParameter, AssignmentAction::Commit)
+            | (AssignmentPhase::ConfirmReplace, AssignmentAction::ConfirmReplace) => {
+                AssignmentPhase::Committing
+            }
+            (AssignmentPhase::Failed, AssignmentAction::Retry) => AssignmentPhase::Committing,
+            (AssignmentPhase::Committing, AssignmentAction::Succeed) => AssignmentPhase::Succeeded,
+            (AssignmentPhase::Committing, AssignmentAction::Fail) => AssignmentPhase::Failed,
+            (AssignmentPhase::Interrupted, AssignmentAction::Discard) => {
+                self.interrupted_phase = None;
+                self.has_draft = false;
+                AssignmentPhase::Idle
+            }
+            (phase, AssignmentAction::Up) if self.index > 0 => {
+                self.index -= 1;
+                phase
+            }
+            (phase, AssignmentAction::Down) if self.total > 0 && self.index + 1 < self.total => {
+                self.index += 1;
+                phase
+            }
+            (phase, AssignmentAction::Cancel) if phase != AssignmentPhase::Idle => {
+                AssignmentPhase::Idle
+            }
+            (phase, AssignmentAction::Interrupt) if phase != AssignmentPhase::Idle => {
+                self.interrupted_phase = Some(phase);
+                self.has_draft = true;
+                AssignmentPhase::Interrupted
+            }
+            (phase, _) => phase,
+        };
+        before != (self.phase, self.index)
+    }
+}
+
+impl AssignmentRequest {
+    /// Returns whether this request carries a complete destination commit payload.
+    #[must_use]
+    pub const fn has_complete_destination(&self) -> bool {
+        self.physical_control_id.is_some()
+            && self.destination_profile.is_some()
+            && self.destination_effect.is_some()
+            && self.destination_parameter.is_some()
+    }
+
+    /// Validates bounded assignment input before daemon dispatch.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for missing/oversized captured identities.
+    pub fn validate(self) -> Result<Self, &'static str> {
+        if self
+            .physical_control_id
+            .as_ref()
+            .is_some_and(|id| id.is_empty() || id.len() > 64 || id != id.trim())
+        {
+            return Err("assignment physical-control identity is invalid");
+        }
+        for (value, label) in [
+            (&self.destination_profile, "profile"),
+            (&self.destination_effect, "effect"),
+            (&self.destination_parameter, "parameter"),
+        ] {
+            if value.as_ref().is_some_and(|id| id.is_empty() || id.len() > 96 || id != id.trim()) {
+                return Err(match label {
+                    "profile" => "assignment destination profile is invalid",
+                    "effect" => "assignment destination effect is invalid",
+                    _ => "assignment destination parameter is invalid",
+                });
+            }
+        }
+        let destination_fields = [
+            self.destination_profile.is_some(),
+            self.destination_effect.is_some(),
+            self.destination_parameter.is_some(),
+        ];
+        if destination_fields.iter().filter(|present| **present).count() != 0
+            && destination_fields.iter().any(|present| !present)
+        {
+            return Err("assignment destination payload is incomplete");
+        }
+        if matches!(self.action, AssignmentAction::ControlCaptured)
+            && self.physical_control_id.is_none()
+        {
+            return Err("control capture requires a physical-control identity");
+        }
+        Ok(self)
+    }
+}
+
+impl MappingRequest {
+    /// Validates bounded request payloads.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when a mutation lacks its payload or exceeds frame bounds.
+    pub fn validate(self) -> Result<Self, &'static str> {
+        let needs_payload =
+            !matches!(self.operation, MappingOperation::Snapshot | MappingOperation::Undo);
+        if needs_payload && self.payload.is_none() {
+            return Err("mapping operation requires a payload");
+        }
+        if serde_json::to_vec(&self.payload).map_or(true, |payload| payload.len() > 16 * 1024) {
+            return Err("mapping payload is oversized");
+        }
+        Ok(self)
+    }
 }
 
 /// Sequenced daemon event retained after a snapshot.
@@ -1178,5 +1605,148 @@ mod tests {
         assert_eq!(response, b"{\"ok\":true}");
         assert_eq!(attempts, 1);
         worker.join().expect("worker");
+    }
+
+    #[test]
+    fn mapping_contract_round_trips_and_rejects_missing_mutation_payload() {
+        let request = MappingRequest {
+            operation: MappingOperation::Activate,
+            generation: 7,
+            payload: Some(MappingPayload::Delete { mapping_id: "map-1".into() }),
+        };
+        let encoded = serde_json::to_vec(&request).expect("encode");
+        let decoded: MappingRequest = serde_json::from_slice(&encoded).expect("decode");
+        assert_eq!(decoded.validate().expect("valid"), request);
+        assert!(MappingRequest {
+            operation: MappingOperation::Activate,
+            generation: 7,
+            payload: None
+        }
+        .validate()
+        .is_err());
+        let result = MappingResult {
+            generation: 8,
+            undo_available: true,
+            active: None,
+            draft: None,
+            outcome: MappingOutcome::Applied,
+        };
+        assert_eq!(
+            serde_json::from_slice::<MappingResult>(
+                &serde_json::to_vec(&result).expect("result encode")
+            )
+            .expect("result decode"),
+            result
+        );
+    }
+
+    #[test]
+    fn assignment_session_has_one_bounded_hardware_keyboard_path() {
+        let mut session = AssignmentSession::new("live");
+        assert_eq!(session.phase, AssignmentPhase::Idle);
+        session.set_total(3);
+        assert!(session.apply(AssignmentAction::Down));
+        assert!(session.apply(AssignmentAction::Down));
+        assert_eq!(session.index, 2);
+        assert!(!session.apply(AssignmentAction::Down));
+        assert!(session.apply(AssignmentAction::Up));
+        assert_eq!(session.index, 1);
+        assert!(session.apply(AssignmentAction::Start));
+        assert!(session.apply(AssignmentAction::ControlCaptured));
+        assert!(session.apply(AssignmentAction::Enter));
+        assert_eq!(session.phase, AssignmentPhase::ChooseEffect);
+        assert!(session.apply(AssignmentAction::Back));
+        assert_eq!(session.phase, AssignmentPhase::ChooseDevice);
+        assert!(session.apply(AssignmentAction::Enter));
+        assert!(session.apply(AssignmentAction::Enter));
+        assert_eq!(session.phase, AssignmentPhase::ChooseParameter);
+        assert!(session.apply(AssignmentAction::Back));
+        assert_eq!(session.phase, AssignmentPhase::ChooseEffect);
+        assert!(session.apply(AssignmentAction::Enter));
+        assert!(session.apply(AssignmentAction::Commit));
+        assert_eq!(session.phase, AssignmentPhase::Committing);
+        assert!(session.apply(AssignmentAction::Cancel));
+        assert_eq!(session.phase, AssignmentPhase::Idle);
+        assert_eq!(session.phase, AssignmentPhase::Idle);
+    }
+
+    #[test]
+    fn device_gesture_uses_exact_750_millisecond_hold_boundary() {
+        assert_eq!(classify_device_gesture(749), DeviceGesture::ShortPress);
+        assert_eq!(classify_device_gesture(750), DeviceGesture::HoldCancel);
+        assert_eq!(classify_device_gesture(2_000), DeviceGesture::HoldCancel);
+    }
+
+    #[test]
+    fn candidate_capture_deduplicates_repeats_and_fails_closed_on_two_controls() {
+        assert_eq!(ASSIGNMENT_CANDIDATE_WINDOW_MS, 250);
+        assert_eq!(classify_candidates(&[]), CandidateCapture::None);
+        assert_eq!(classify_candidates(&["knob-r1-c1", "knob-r1-c1"]), CandidateCapture::Unique);
+        assert_eq!(
+            classify_candidates(&["knob-r1-c1", "button-r1-c1"]),
+            CandidateCapture::Ambiguous
+        );
+    }
+
+    #[test]
+    fn assignment_session_exposes_terminal_and_interruption_recovery() {
+        let mut session = AssignmentSession::new("live");
+        session.apply(AssignmentAction::Start);
+        assert!(session.apply(AssignmentAction::Interrupt));
+        assert_eq!(session.phase, AssignmentPhase::Interrupted);
+        assert!(session.has_draft);
+        assert!(session.apply(AssignmentAction::Resume));
+        assert_eq!(session.phase, AssignmentPhase::AwaitControl);
+        assert!(session.apply(AssignmentAction::Interrupt));
+        assert!(session.apply(AssignmentAction::Discard));
+        assert_eq!(session.phase, AssignmentPhase::Idle);
+        assert!(!session.has_draft);
+        session.apply(AssignmentAction::Start);
+        session.apply(AssignmentAction::ControlCaptured);
+        session.apply(AssignmentAction::Enter);
+        session.apply(AssignmentAction::Enter);
+        assert_eq!(session.phase, AssignmentPhase::ChooseParameter);
+        assert!(session.apply(AssignmentAction::Interrupt));
+        assert!(session.apply(AssignmentAction::Resume));
+        assert_eq!(session.phase, AssignmentPhase::ChooseParameter);
+        assert!(session.apply(AssignmentAction::Commit));
+        assert!(session.apply(AssignmentAction::Succeed));
+        assert_eq!(session.phase, AssignmentPhase::Succeeded);
+        assert!(session.apply(AssignmentAction::Cancel));
+        assert_eq!(session.phase, AssignmentPhase::Idle);
+    }
+
+    #[test]
+    fn assignment_request_is_typed_bounded_and_round_trips() {
+        let request = AssignmentRequest {
+            generation: 4,
+            action: AssignmentAction::ControlCaptured,
+            physical_control_id: Some("knob-r1-c1".into()),
+            destination_profile: None,
+            destination_effect: None,
+            destination_parameter: None,
+        };
+        let decoded: AssignmentRequest =
+            serde_json::from_slice(&serde_json::to_vec(&request).expect("encode")).expect("decode");
+        assert_eq!(decoded.validate().expect("valid"), request);
+        assert!(AssignmentRequest { physical_control_id: None, ..request.clone() }
+            .validate()
+            .is_err());
+        assert!(AssignmentRequest {
+            destination_parameter: Some(" bad ".into()),
+            action: AssignmentAction::Enter,
+            physical_control_id: None,
+            ..request.clone()
+        }
+        .validate()
+        .is_err());
+        assert!(AssignmentRequest {
+            destination_parameter: Some("reflex.mix".into()),
+            action: AssignmentAction::Enter,
+            physical_control_id: None,
+            ..request
+        }
+        .validate()
+        .is_err());
     }
 }

@@ -849,23 +849,26 @@ mod tests {
 
     #[test]
     fn activation_alias_resolution_rejects_missing_and_ambiguous_endpoints() {
-        let available = [("arena", 1), ("lexicon", 2)];
-        assert_eq!(resolve_unique_alias("arena", &available), Ok(1));
+        let available = [("processor", 1), ("lexicon", 2)];
+        assert_eq!(resolve_unique_alias("processor", &available), Ok(1));
         assert_eq!(
             resolve_unique_alias("offline", &available),
             Err("activation alias is offline or missing")
         );
         assert_eq!(resolve_unique_alias("", &available), Err("activation alias must not be empty"));
         assert_eq!(
-            resolve_unique_alias("arena", &[("arena", 1), ("arena", 3)]),
+            resolve_unique_alias("processor", &[("processor", 1), ("processor", 3)]),
             Err("activation alias is ambiguous")
         );
         let plan =
             ActivationPlan::compile(vec![action("a", false, None), action("b", false, Some("a"))])
                 .expect("plan");
-        assert_eq!(plan.resolve_action_targets(&["arena", "lexicon"], &available), Ok(vec![1, 2]));
         assert_eq!(
-            plan.resolve_action_targets(&["arena"], &available),
+            plan.resolve_action_targets(&["processor", "lexicon"], &available),
+            Ok(vec![1, 2])
+        );
+        assert_eq!(
+            plan.resolve_action_targets(&["processor"], &available),
             Err("activation target count does not match action count")
         );
     }

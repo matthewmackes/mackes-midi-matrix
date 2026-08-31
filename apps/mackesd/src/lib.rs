@@ -227,6 +227,13 @@ pub struct Daemon {
     catalog: serde_json::Value,
     physical_devices: serde_json::Value,
     config_path: Option<std::path::PathBuf>,
+    mapping_store: mackes_config::ControlMappingStore,
+    assignment_generation: u64,
+    assignment_session: mackes_ipc::AssignmentSession,
+    assignment_leds: mackes_profiles::LedFeedbackScheduler,
+    assignment_previous_store: Option<mackes_config::ControlMappingStore>,
+    assignment_pending_mapping: Option<mackes_config::ControlMapping>,
+    assignment_control_id: Option<String>,
     router: mackes_midi_engine::RouterStore,
     rtp_peer: mackes_midi_engine::RtpMidiPeer,
     outputs: mackes_midi_engine::OutputRegistry,
@@ -240,6 +247,7 @@ pub struct Daemon {
     dropped_events: u64,
     activity: mackes_midi_engine::ActivityCoalescer,
     last_activity: Option<serde_json::Value>,
+    last_mapping_activity: Option<serde_json::Value>,
     last_activity_publish: Instant,
     route_undo: Option<serde_json::Value>,
     safety: mackes_scene_engine::SafetyController,
@@ -247,6 +255,7 @@ pub struct Daemon {
     activation_result: Option<String>,
     state_sequence: u64,
     state_events: VecDeque<mackes_ipc::StateEvent>,
+    safety_clock: Instant,
 }
 
 /// Classifies a bounded JSON command tag without deserializing untrusted payloads.
@@ -271,6 +280,8 @@ pub fn classify_command(request: &[u8]) -> Option<Command> {
         (Command::Health, b"health"),
         (Command::Panic, b"panic"),
         (Command::UnsafeMode, b"unsafe_mode"),
+        (Command::Mappings, b"mappings"),
+        (Command::Assignment, b"assignment"),
         (Command::Shutdown, b"shutdown"),
     ];
     COMMANDS.iter().find_map(|(command, tag)| {
@@ -403,6 +414,7 @@ fn midi_activity_json(
 
 /// Produces a stable acknowledgment for a recognized command.
 #[cfg(target_os = "linux")]
+#[allow(clippy::too_many_lines)]
 fn command_ack(
     command: Command,
     health: Health,
@@ -506,6 +518,12 @@ fn command_ack(
         Command::UnsafeMode => {
             format!("{{\"ok\":true,\"generation\":{generation},\"unsafe_mode\":\"disarmed\"}}\n")
         }
+        Command::Mappings => {
+            format!("{{\"ok\":true,\"generation\":{generation},\"mappings\":[],\"drafts\":[],\"undo_available\":false}}\n")
+        }
+        Command::Assignment => {
+            format!("{{\"ok\":true,\"generation\":{generation},\"phase\":\"Idle\"}}\n")
+        }
         other @ Command::Shutdown => format!(
             "{{\"ok\":true,\"generation\":{generation},\"accepted\":true,\"command\":\"{}\"}}\n",
             other.tag()
@@ -531,6 +549,15 @@ impl Daemon {
             catalog: serde_json::json!({"projects": [], "setlists": []}),
             physical_devices: serde_json::json!([]),
             config_path: None,
+            mapping_store: mackes_config::ControlMappingStore::default(),
+            assignment_generation: 0,
+            assignment_session: mackes_ipc::AssignmentSession::new("live"),
+            assignment_leds: mackes_profiles::LedFeedbackScheduler::new(
+                mackes_profiles::LedState::new(mackes_profiles::LedColor::Off, 0, false),
+            ),
+            assignment_previous_store: None,
+            assignment_pending_mapping: None,
+            assignment_control_id: None,
             router: mackes_midi_engine::RouterStore::new(Vec::new(), 0, 8)
                 .map_err(io::Error::other)?,
             rtp_peer: mackes_midi_engine::RtpMidiPeer::new(0, 32).map_err(io::Error::other)?,
@@ -546,6 +573,7 @@ impl Daemon {
             activity: mackes_midi_engine::ActivityCoalescer::new(128)
                 .ok_or_else(|| io::Error::other("activity capacity must be positive"))?,
             last_activity: None,
+            last_mapping_activity: None,
             last_activity_publish: Instant::now(),
             route_undo: None,
             safety: mackes_scene_engine::SafetyController::default(),
@@ -553,6 +581,7 @@ impl Daemon {
             activation_result: None,
             state_sequence: 0,
             state_events: VecDeque::with_capacity(256),
+            safety_clock: Instant::now(),
         })
     }
 
@@ -798,13 +827,387 @@ impl Daemon {
         self.register_output(Box::new(output)).map_err(str::to_owned)
     }
 
+    /// Arms experimental parameter mappings for the bounded fifteen-minute window.
+    pub fn arm_experimental_mappings(&mut self) {
+        let now = u64::try_from(self.safety_clock.elapsed().as_nanos().min(u128::from(u64::MAX)))
+            .unwrap_or(u64::MAX);
+        self.safety.arm_unsafe(now.saturating_add(15 * 60 * 1_000_000_000));
+    }
+
+    /// Applies one generation-checked assignment action in the daemon-owned session.
+    ///
+    /// # Panics
+    ///
+    /// Internal invariant checks panic only if a previously validated request loses
+    /// required fields during this method.
+    #[allow(clippy::too_many_lines)]
+    #[must_use]
+    pub fn apply_assignment_request(
+        &mut self,
+        request: mackes_ipc::AssignmentRequest,
+    ) -> mackes_ipc::AssignmentResult {
+        let mut applied = false;
+        let mut reason = None;
+        if request.generation != self.assignment_generation {
+            reason = Some("assignment generation conflict".into());
+        } else if let Err(error) = request.clone().validate() {
+            reason = Some(error.into());
+        } else if request.physical_control_id.as_deref().is_some_and(|control| {
+            mackes_profiles::PhysicalControlId::new(control).is_err()
+                || mackes_profiles::launch_control_physical_catalog()
+                    .iter()
+                    .find(|item| item.id.as_str() == control)
+                    .is_none_or(|item| item.role == mackes_profiles::PhysicalControlRole::Utility)
+        }) {
+            reason = Some("assignment control is reserved or unknown".into());
+        } else if request.action == mackes_ipc::AssignmentAction::Commit
+            && !request.has_complete_destination()
+        {
+            reason = Some("assignment commit requires a complete destination".into());
+        } else {
+            if request.action == mackes_ipc::AssignmentAction::ConfirmReplace {
+                let previous_store = self.mapping_store.clone();
+                if let Some(mapping) = self.assignment_pending_mapping.take() {
+                    if let Some(existing) = self.mapping_store.active.iter().find(|existing| {
+                        existing.physical_control_id == mapping.physical_control_id
+                            || (existing.destination_profile == mapping.destination_profile
+                                && existing.destination_effect == mapping.destination_effect
+                                && existing.destination_parameter == mapping.destination_parameter)
+                    }) {
+                        let mut replacement = mapping;
+                        replacement.id.clone_from(&existing.id);
+                        if let Err(error) =
+                            self.mapping_store.replace(self.mapping_store.generation, replacement)
+                        {
+                            reason = Some(format!("assignment replacement failed: {error}"));
+                        } else if let Some(path) = self.config_path.as_deref() {
+                            if mackes_config::save_control_mapping_store(
+                                path,
+                                &self.mapping_store,
+                                1,
+                            )
+                            .is_err()
+                            {
+                                self.mapping_store = previous_store;
+                                reason = Some("assignment persistence failed".into());
+                            } else {
+                                self.assignment_previous_store = Some(previous_store);
+                            }
+                        } else {
+                            self.assignment_previous_store = Some(previous_store);
+                        }
+                    } else {
+                        reason = Some("assignment replacement target disappeared".into());
+                    }
+                } else {
+                    reason = Some("assignment replacement confirmation expired".into());
+                }
+            }
+            if request.action == mackes_ipc::AssignmentAction::Commit {
+                let previous_store = self.mapping_store.clone();
+                let control_id = request.physical_control_id.as_deref().expect("validated control");
+                let control = mackes_profiles::launch_control_physical_catalog()
+                    .into_iter()
+                    .find(|item| item.id.as_str() == control_id);
+                if let Some(control) = control {
+                    let mapping = mackes_config::ControlMapping {
+                        id: format!("assignment-{control_id}"),
+                        controller_profile: "launch-control-xl-mk2".into(),
+                        physical_control_id: control_id.into(),
+                        source_endpoint: "controller".into(),
+                        source_kind: "cc".into(),
+                        source_channel: 0,
+                        source_number: control.source_address.unwrap_or_default(),
+                        destination_endpoint: "processor".into(),
+                        destination_profile: request
+                            .destination_profile
+                            .clone()
+                            .expect("validated profile"),
+                        destination_effect: request
+                            .destination_effect
+                            .clone()
+                            .expect("validated effect"),
+                        destination_parameter: request
+                            .destination_parameter
+                            .clone()
+                            .expect("validated parameter"),
+                        behavior: mackes_config::MappingBehavior {
+                            source_range: (0, 127),
+                            destination_range: (0, 127),
+                            invert: false,
+                            curve: "linear".into(),
+                        },
+                        enabled: true,
+                        profile_version: 1,
+                    };
+                    let is_replace = request.action == mackes_ipc::AssignmentAction::ConfirmReplace;
+                    let mapping_for_rollback = mapping.clone();
+                    let mut mapping = mapping;
+                    if is_replace {
+                        if let Some(existing) = self.mapping_store.active.iter().find(|existing| {
+                            existing.physical_control_id == mapping.physical_control_id
+                                || (existing.destination_profile == mapping.destination_profile
+                                    && existing.destination_effect == mapping.destination_effect
+                                    && existing.destination_parameter
+                                        == mapping.destination_parameter)
+                        }) {
+                            mapping.id.clone_from(&existing.id);
+                        }
+                    }
+                    let mutation = if is_replace {
+                        self.mapping_store.replace(self.mapping_store.generation, mapping)
+                    } else {
+                        self.mapping_store.activate(self.mapping_store.generation, mapping)
+                    };
+                    if let Err(error) = mutation {
+                        if !is_replace && error.contains("occupied") {
+                            self.assignment_pending_mapping = Some(mapping_for_rollback);
+                            self.assignment_session.phase =
+                                mackes_ipc::AssignmentPhase::ConfirmReplace;
+                            self.assignment_generation =
+                                self.assignment_generation.saturating_add(1);
+                            return mackes_ipc::AssignmentResult {
+                                generation: self.assignment_generation,
+                                session: self.assignment_session.clone(),
+                                applied: true,
+                                reason: Some("existing mapping found; confirm replacement".into()),
+                            };
+                        }
+                        reason = Some(format!("assignment activation failed: {error}"));
+                    } else if let Some(path) = self.config_path.as_deref() {
+                        if mackes_config::save_control_mapping_store(path, &self.mapping_store, 1)
+                            .is_err()
+                        {
+                            self.mapping_store = previous_store;
+                            reason = Some("assignment persistence failed".into());
+                        } else {
+                            self.assignment_previous_store = Some(previous_store);
+                        }
+                    } else {
+                        self.assignment_previous_store = Some(previous_store);
+                    }
+                }
+            }
+            if reason.is_some() {
+                return mackes_ipc::AssignmentResult {
+                    generation: self.assignment_generation,
+                    session: self.assignment_session.clone(),
+                    applied: false,
+                    reason,
+                };
+            }
+            if let Some(control) = request.physical_control_id {
+                self.assignment_control_id = Some(control.clone());
+                self.assignment_session.has_draft =
+                    self.assignment_session.has_draft || !control.is_empty();
+            }
+            applied = self.assignment_session.apply(request.action);
+            if applied {
+                if request.action == mackes_ipc::AssignmentAction::Interrupt {
+                    if let (Some(path), Some(control)) =
+                        (self.config_path.as_deref(), self.assignment_control_id.as_deref())
+                    {
+                        let draft = mackes_config::ControlMappingDraft {
+                            id: "assignment-interrupted".into(),
+                            step: format!(
+                                "{:?}",
+                                self.assignment_session
+                                    .interrupted_phase
+                                    .unwrap_or(mackes_ipc::AssignmentPhase::AwaitControl)
+                            ),
+                            physical_control_id: Some(control.into()),
+                            destination: None,
+                        };
+                        let _ = self
+                            .mapping_store
+                            .save_draft(self.mapping_store.generation, draft)
+                            .and_then(|()| {
+                                mackes_config::save_control_mapping_store(
+                                    path,
+                                    &self.mapping_store,
+                                    1,
+                                )
+                                .map_err(|_| "assignment draft persistence failed")
+                            });
+                    }
+                }
+                if matches!(
+                    request.action,
+                    mackes_ipc::AssignmentAction::Fail | mackes_ipc::AssignmentAction::Cancel
+                ) {
+                    self.assignment_pending_mapping = None;
+                    if let Some(previous) = self.assignment_previous_store.take() {
+                        self.mapping_store = previous;
+                        if let Some(path) = self.config_path.as_deref() {
+                            if let Err(error) = mackes_config::save_control_mapping_store(
+                                path,
+                                &self.mapping_store,
+                                1,
+                            ) {
+                                reason = Some(format!(
+                                    "assignment rollback persistence failed: {error}"
+                                ));
+                            }
+                        }
+                    }
+                } else if request.action == mackes_ipc::AssignmentAction::Succeed {
+                    self.assignment_pending_mapping = None;
+                    self.assignment_previous_store = None;
+                }
+                self.assignment_generation = self.assignment_generation.saturating_add(1);
+                let phase = self.assignment_session.phase;
+                self.assignment_leds.assignment = match phase {
+                    mackes_ipc::AssignmentPhase::Idle => {
+                        self.assignment_leds.result = None;
+                        None
+                    }
+                    mackes_ipc::AssignmentPhase::Interrupted => Some(
+                        mackes_profiles::LedState::new(mackes_profiles::LedColor::Red, 127, true),
+                    ),
+                    mackes_ipc::AssignmentPhase::Succeeded
+                    | mackes_ipc::AssignmentPhase::Failed => {
+                        self.assignment_leds.result =
+                            Some((phase == mackes_ipc::AssignmentPhase::Succeeded, 0));
+                        None
+                    }
+                    _ => Some(mackes_profiles::LedState::new(
+                        mackes_profiles::LedColor::Green,
+                        127,
+                        true,
+                    )),
+                };
+            }
+        }
+        mackes_ipc::AssignmentResult {
+            generation: self.assignment_generation,
+            session: self.assignment_session.clone(),
+            applied,
+            reason,
+        }
+    }
+
+    /// Returns the authoritative assignment LED state at a fake-clock instant.
+    #[must_use]
+    pub const fn assignment_led_state_at(&self, elapsed_ms: u64) -> mackes_profiles::LedState {
+        self.assignment_leds.state_at(elapsed_ms)
+    }
+
+    /// Returns the validated Mk1 `SysEx` frame for the current assignment LED state.
+    #[must_use]
+    pub fn assignment_led_frame_at(
+        &self,
+        template: u8,
+        index: u8,
+        elapsed_ms: u64,
+    ) -> Option<Vec<u8>> {
+        mackes_profiles::encode_launch_control_feedback(
+            template,
+            index,
+            self.assignment_led_state_at(elapsed_ms),
+        )
+    }
+
+    fn experimental_mapping(mapping: &mackes_config::ControlMapping) -> bool {
+        mackes_profiles::builtin_profile(&mapping.destination_profile).is_some_and(|profile| {
+            mackes_profiles::destination_parameters(&profile)
+                .into_iter()
+                .find(|parameter| parameter.id == mapping.destination_parameter)
+                .and_then(|parameter| parameter.evidence)
+                == Some(mackes_profiles::EvidenceLevel::Experimental)
+        })
+    }
+
     /// Dispatches one event through the daemon-owned output registry.
     #[must_use]
+    #[allow(clippy::too_many_lines)]
     pub fn dispatch_registered(&mut self, event: &mackes_domain::MidiEvent) -> (usize, usize) {
         let _ = self.activity.push(event);
         let stable_endpoint = self.inputs.stable_id_for_endpoint(event.endpoint);
         let routed = self.route_event(event);
-        let (sent, unmatched) = self.outputs.dispatch(&self.router, event);
+        let mut sent = 0;
+        let mut unmatched = 0;
+        for mapping in self.mapping_store.active.iter().filter(|mapping| mapping.enabled).cloned() {
+            let now =
+                u64::try_from(self.safety_clock.elapsed().as_nanos().min(u128::from(u64::MAX)))
+                    .unwrap_or(u64::MAX);
+            if Self::experimental_mapping(&mapping) && !self.safety.unsafe_armed(now) {
+                self.last_mapping_activity = Some(serde_json::json!({
+                    "mapping_id": mapping.id,
+                    "destination": mapping.destination_parameter,
+                    "outcome": "blocked",
+                    "reason": "experimental_mapping_disarmed"
+                }));
+                continue;
+            }
+            let Some(source_endpoint) =
+                mackes_midi_engine::numeric_endpoint_id(&mapping.source_endpoint)
+            else {
+                continue;
+            };
+            let Some(destination_endpoint) =
+                mackes_midi_engine::numeric_endpoint_id(&mapping.destination_endpoint)
+            else {
+                continue;
+            };
+            let class = match mapping.source_kind.as_str() {
+                "cc" => mackes_midi_engine::MessageClass::ControlChange,
+                "pc" => mackes_midi_engine::MessageClass::ProgramChange,
+                _ => continue,
+            };
+            let parameter = mackes_midi_engine::ParameterMapping {
+                source_endpoint,
+                destination_endpoint,
+                class,
+                number: mapping.source_number,
+                channel: Some(mapping.source_channel),
+                source_range: mapping.behavior.source_range,
+                destination_range: mapping.behavior.destination_range,
+                invert: mapping.behavior.invert,
+                curve: match mapping.behavior.curve.as_str() {
+                    "square" => mackes_midi_engine::Curve::Square,
+                    "square_root" => mackes_midi_engine::Curve::SquareRoot,
+                    _ => mackes_midi_engine::Curve::Linear,
+                },
+            };
+            if let Some((mut mapped, value)) = parameter.evaluate_with_value(event) {
+                let Some(profile) = mackes_profiles::builtin_profile(&mapping.destination_profile)
+                else {
+                    continue;
+                };
+                let Ok(bytes) = profile.render_parameter_message(
+                    &mapping.destination_parameter,
+                    mapping.source_channel.saturating_add(1),
+                    value,
+                ) else {
+                    continue;
+                };
+                let Ok(message) = mackes_domain::MidiMessage::from_wire(&bytes) else {
+                    continue;
+                };
+                mapped.message = message;
+                if self.outputs.send_to_endpoint(destination_endpoint, mapped).is_ok() {
+                    sent += 1;
+                    self.last_mapping_activity = Some(serde_json::json!({
+                        "mapping_id": mapping.id,
+                        "destination": mapping.destination_parameter,
+                        "outcome": "sent",
+                        "source_value": value
+                    }));
+                } else {
+                    unmatched += 1;
+                    self.last_mapping_activity = Some(serde_json::json!({
+                        "mapping_id": mapping.id,
+                        "destination": mapping.destination_parameter,
+                        "outcome": "blocked",
+                        "reason": "destination_disconnected",
+                        "source_value": value
+                    }));
+                }
+            }
+        }
+        let (route_sent, route_unmatched) = self.outputs.dispatch(&self.router, event);
+        sent += route_sent;
+        unmatched += route_unmatched;
         self.received_events = self.received_events.saturating_add(1);
         self.sent_events = self.sent_events.saturating_add(sent as u64);
         self.dropped_events = self.dropped_events.saturating_add(unmatched as u64);
@@ -1405,6 +1808,7 @@ impl Daemon {
         let payload = serde_json::to_vec(&serde_json::json!({
             "command": command.tag(),
             "generation": self.generation,
+            "mapping_undo_available": self.mapping_store.undo_available(),
             "route_generation": self.route_generation(),
             "route_undo_available": self.route_undo.is_some(),
             "audit_count": self.audit.newest_first().count(),
@@ -1414,6 +1818,8 @@ impl Daemon {
             "sent": self.sent_events,
             "dropped": self.dropped_events,
             "last_activity": self.last_activity,
+            "last_mapping_activity": self.last_mapping_activity,
+            "control_mappings": self.mapping_store.active,
             "activation_result": self.activation_result.as_deref(),
             "catalog": self.catalog,
             "physical_devices": self.physical_devices,
@@ -1886,6 +2292,23 @@ impl Daemon {
                     self.navigate_scene(next);
                 }
             }
+            if command == Some(Command::UnsafeMode) {
+                let value =
+                    serde_json::from_slice::<serde_json::Value>(&request).unwrap_or_default();
+                if value.get("confirm").and_then(serde_json::Value::as_bool) != Some(true) {
+                    return stream.write_all(
+                        b"{\"ok\":false,\"error\":\"unsafe mode requires confirmation\"}\n",
+                    );
+                }
+                self.arm_experimental_mappings();
+                return stream.write_all(
+                    format!(
+                        "{{\"ok\":true,\"generation\":{},\"unsafe_mode\":\"armed\",\"window_seconds\":900}}\n",
+                        self.generation
+                    )
+                    .as_bytes(),
+                );
+            }
             if command == Some(Command::DeviceQuery) {
                 let value =
                     serde_json::from_slice::<serde_json::Value>(&request).unwrap_or_default();
@@ -2147,6 +2570,160 @@ impl Daemon {
                 Some(Command::Snapshot) => self.snapshot_response(),
                 Some(Command::Subscribe) => self.subscribe_response(&request),
                 Some(Command::Scenes) => self.scenes_response(),
+                Some(Command::Assignment) => {
+                    let parsed = serde_json::from_slice::<serde_json::Value>(&request)
+                        .ok()
+                        .and_then(|mut value| {
+                            value.as_object_mut()?.remove("command");
+                            Some(value)
+                        })
+                        .and_then(|value| {
+                            serde_json::from_value::<mackes_ipc::AssignmentRequest>(value).ok()
+                        })
+                        .and_then(|request| request.validate().ok());
+                    let result = match parsed {
+                        None => mackes_ipc::AssignmentResult {
+                            generation: self.assignment_generation,
+                            session: self.assignment_session.clone(),
+                            applied: false,
+                            reason: Some("invalid assignment request".into()),
+                        },
+                        Some(request) => self.apply_assignment_request(request),
+                    };
+                    serde_json::to_string(&result).map_or_else(
+                        |_| {
+                            "{\"ok\":false,\"error\":\"assignment result encoding failed\"}\n"
+                                .to_owned()
+                        },
+                        |body| format!("{body}\n"),
+                    )
+                }
+                Some(Command::Mappings) => {
+                    let parsed = serde_json::from_slice::<serde_json::Value>(&request)
+                        .ok()
+                        .and_then(|mut value| {
+                            value.as_object_mut()?.remove("command");
+                            Some(value)
+                        })
+                        .and_then(|value| {
+                            serde_json::from_value::<mackes_ipc::MappingRequest>(value).ok()
+                        })
+                        .and_then(|mapping| mapping.validate().ok());
+                    let mut outcome = mackes_ipc::MappingOutcome::Invalid;
+                    if let Some(mapping) = parsed {
+                        if matches!(mapping.operation, mackes_ipc::MappingOperation::Snapshot) {
+                            outcome = mackes_ipc::MappingOutcome::Applied;
+                        } else {
+                            let mut candidate = self.mapping_store.clone();
+                            let mutation = match (mapping.operation, mapping.payload) {
+                                (
+                                    mackes_ipc::MappingOperation::Draft,
+                                    Some(mackes_ipc::MappingPayload::Draft { draft }),
+                                ) => candidate
+                                    .save_draft(mapping.generation, draft)
+                                    .map_err(str::to_owned),
+                                (
+                                    mackes_ipc::MappingOperation::Activate,
+                                    Some(mackes_ipc::MappingPayload::Mapping { mapping: record }),
+                                ) => candidate
+                                    .activate(mapping.generation, record)
+                                    .map_err(str::to_owned),
+                                (
+                                    mackes_ipc::MappingOperation::Replace,
+                                    Some(mackes_ipc::MappingPayload::Mapping { mapping: record }),
+                                ) => candidate.replace_with_runtime(
+                                    mapping.generation,
+                                    record,
+                                    |replacement| {
+                                        if mackes_profiles::builtin_profile(
+                                            &replacement.destination_profile,
+                                        )
+                                        .is_none()
+                                        {
+                                            return Err("destination profile is unavailable");
+                                        }
+                                        if mackes_midi_engine::numeric_endpoint_id(
+                                            &replacement.destination_endpoint,
+                                        )
+                                        .is_none()
+                                        {
+                                            return Err("destination endpoint is invalid");
+                                        }
+                                        Ok(())
+                                    },
+                                ),
+                                (
+                                    mackes_ipc::MappingOperation::Behavior,
+                                    Some(mackes_ipc::MappingPayload::Behavior {
+                                        mapping_id,
+                                        behavior,
+                                    }),
+                                ) => candidate
+                                    .update_behavior(mapping.generation, &mapping_id, behavior)
+                                    .map_err(str::to_owned),
+                                (
+                                    mackes_ipc::MappingOperation::Enabled,
+                                    Some(mackes_ipc::MappingPayload::Enabled {
+                                        mapping_id,
+                                        enabled,
+                                    }),
+                                ) => candidate
+                                    .set_enabled(mapping.generation, &mapping_id, enabled)
+                                    .map_err(str::to_owned),
+                                (
+                                    mackes_ipc::MappingOperation::Delete,
+                                    Some(mackes_ipc::MappingPayload::Delete { mapping_id }),
+                                ) => candidate
+                                    .delete(mapping.generation, &mapping_id)
+                                    .map_err(str::to_owned),
+                                (mackes_ipc::MappingOperation::Undo, None) => {
+                                    candidate.undo(mapping.generation).map_err(str::to_owned)
+                                }
+                                _ => Err("mapping operation payload is invalid".to_owned()),
+                            };
+                            outcome = match mutation {
+                                Ok(()) => {
+                                    let persisted =
+                                        self.config_path.as_deref().is_some_and(|path| {
+                                            mackes_config::save_control_mapping_store(
+                                                path, &candidate, 1,
+                                            )
+                                            .is_ok()
+                                        });
+                                    if persisted {
+                                        self.mapping_store = candidate;
+                                        mackes_ipc::MappingOutcome::Applied
+                                    } else {
+                                        mackes_ipc::MappingOutcome::PersistenceFailed
+                                    }
+                                }
+                                Err(error) if error.contains("generation") => {
+                                    mackes_ipc::MappingOutcome::GenerationConflict
+                                }
+                                Err(error) if error.contains("occupied") => {
+                                    mackes_ipc::MappingOutcome::Conflict
+                                }
+                                Err(_) => mackes_ipc::MappingOutcome::Invalid,
+                            };
+                        }
+                    }
+                    let generation = self.mapping_store.generation;
+                    let (active, drafts) = self.mapping_store.snapshot();
+                    serde_json::to_string(&mackes_ipc::MappingResult {
+                        generation,
+                        undo_available: self.mapping_store.undo_available(),
+                        active: Some(active.to_vec()),
+                        draft: Some(drafts.to_vec()),
+                        outcome,
+                    })
+                    .map_or_else(
+                        |_| {
+                            "{\"ok\":false,\"error\":\"mapping result encoding failed\"}\n"
+                                .to_owned()
+                        },
+                        |body| format!("{body}\n"),
+                    )
+                }
                 Some(command) => {
                     let endpoints = if command == Command::Endpoints {
                         self.discover_endpoints().unwrap_or_default()
@@ -2259,6 +2836,12 @@ impl Daemon {
     /// Sets the daemon-owned configuration path for authorized persistence.
     pub fn set_config_path(&mut self, path: impl Into<std::path::PathBuf>) {
         let path = path.into();
+        if let Ok(document) = mackes_config::load(&path) {
+            if let Ok(store) = mackes_config::ControlMappingStore::from_document(&document) {
+                self.mapping_store = store;
+                self.assignment_session.has_draft = !self.mapping_store.drafts.is_empty();
+            }
+        }
         if let Ok(bytes) = std::fs::read(routes_undo_path(&path)) {
             self.route_undo = serde_json::from_slice(&bytes).ok();
         }
@@ -2433,6 +3016,488 @@ mod tests {
     }
 
     #[test]
+    fn experimental_mapping_safety_is_bounded_and_restart_clears_it() {
+        let socket = std::env::temp_dir().join(format!("mackes-safety-{}", std::process::id()));
+        let mut daemon = Daemon::bind(&socket).expect("daemon");
+        daemon.arm_experimental_mappings();
+        let now = daemon.safety_clock.elapsed().as_nanos().try_into().unwrap_or(u64::MAX);
+        assert!(daemon.safety.unsafe_armed(now));
+        daemon.safety.arm_unsafe(0);
+        assert!(!daemon.safety.unsafe_armed(1));
+        drop(daemon);
+        let restarted_socket = socket.with_extension("restart");
+        let mut restarted = Daemon::bind(&restarted_socket).expect("restarted daemon");
+        assert!(!restarted.safety.unsafe_armed(1));
+    }
+
+    #[test]
+    fn daemon_owns_generation_checked_assignment_session() {
+        let socket =
+            std::env::temp_dir().join(format!("mackes-session-{}.sock", std::process::id()));
+        let mut daemon = Daemon::bind(&socket).expect("daemon");
+        let started = daemon.apply_assignment_request(mackes_ipc::AssignmentRequest {
+            generation: 0,
+            action: mackes_ipc::AssignmentAction::Start,
+            physical_control_id: None,
+            destination_profile: None,
+            destination_effect: None,
+            destination_parameter: None,
+        });
+        assert!(started.applied);
+        assert_eq!(started.session.phase, mackes_ipc::AssignmentPhase::AwaitControl);
+        assert_eq!(daemon.assignment_led_state_at(0).color, mackes_profiles::LedColor::Green);
+        let stale = daemon.apply_assignment_request(mackes_ipc::AssignmentRequest {
+            generation: 0,
+            action: mackes_ipc::AssignmentAction::Cancel,
+            physical_control_id: None,
+            destination_profile: None,
+            destination_effect: None,
+            destination_parameter: None,
+        });
+        assert!(!stale.applied);
+        assert_eq!(stale.reason.as_deref(), Some("assignment generation conflict"));
+        let reserved = daemon.apply_assignment_request(mackes_ipc::AssignmentRequest {
+            generation: 1,
+            action: mackes_ipc::AssignmentAction::ControlCaptured,
+            physical_control_id: Some("utility-1".into()),
+            destination_profile: None,
+            destination_effect: None,
+            destination_parameter: None,
+        });
+        assert!(!reserved.applied);
+        assert_eq!(reserved.reason.as_deref(), Some("assignment control is reserved or unknown"));
+        let unknown = daemon.apply_assignment_request(mackes_ipc::AssignmentRequest {
+            generation: 1,
+            action: mackes_ipc::AssignmentAction::ControlCaptured,
+            physical_control_id: Some("syntactically-valid-but-unknown".into()),
+            destination_profile: None,
+            destination_effect: None,
+            destination_parameter: None,
+        });
+        assert!(!unknown.applied);
+        assert_eq!(unknown.reason.as_deref(), Some("assignment control is reserved or unknown"));
+        let _ = fs::remove_file(socket);
+    }
+
+    #[test]
+    fn daemon_assignment_result_uses_scheduler_overlay_then_restores_base() {
+        let socket =
+            std::env::temp_dir().join(format!("mackes-led-session-{}.sock", std::process::id()));
+        let mut daemon = Daemon::bind(&socket).expect("daemon");
+        let start = daemon.apply_assignment_request(mackes_ipc::AssignmentRequest {
+            generation: 0,
+            action: mackes_ipc::AssignmentAction::Start,
+            physical_control_id: None,
+            destination_profile: None,
+            destination_effect: None,
+            destination_parameter: None,
+        });
+        assert!(start.applied);
+        let capture = daemon.apply_assignment_request(mackes_ipc::AssignmentRequest {
+            generation: 1,
+            action: mackes_ipc::AssignmentAction::ControlCaptured,
+            physical_control_id: Some("knob-r1-c1".into()),
+            destination_profile: None,
+            destination_effect: None,
+            destination_parameter: None,
+        });
+        assert!(capture.applied, "{capture:?}");
+        assert!(capture.applied);
+        assert_eq!(daemon.assignment_led_state_at(0).color, mackes_profiles::LedColor::Green);
+        let mut generation = capture.generation;
+        for action in [
+            mackes_ipc::AssignmentAction::Enter,
+            mackes_ipc::AssignmentAction::Enter,
+            mackes_ipc::AssignmentAction::Commit,
+            mackes_ipc::AssignmentAction::Succeed,
+        ] {
+            let result = daemon.apply_assignment_request(mackes_ipc::AssignmentRequest {
+                generation,
+                action,
+                physical_control_id: (action == mackes_ipc::AssignmentAction::Commit)
+                    .then_some("knob-r1-c1".into()),
+                destination_profile: (action == mackes_ipc::AssignmentAction::Commit)
+                    .then_some("lexicon.reflex".into()),
+                destination_effect: (action == mackes_ipc::AssignmentAction::Commit)
+                    .then_some("algorithm-1".into()),
+                destination_parameter: (action == mackes_ipc::AssignmentAction::Commit)
+                    .then_some("reflex.parameter-1".into()),
+            });
+            assert!(result.applied, "assignment action should apply: {action:?}");
+            generation = result.generation;
+        }
+        assert_eq!(daemon.assignment_led_state_at(0).color, mackes_profiles::LedColor::Green);
+        assert_eq!(daemon.mapping_store.active.len(), 1);
+        assert_eq!(daemon.mapping_store.active[0].destination_parameter, "reflex.parameter-1");
+        assert_eq!(daemon.assignment_led_state_at(1_600).color, mackes_profiles::LedColor::Off);
+        assert_eq!(
+            daemon.assignment_led_frame_at(0, 24, 1_600).expect("base frame"),
+            vec![0xf0, 0x00, 0x20, 0x29, 0x02, 0x11, 0x78, 0x00, 0x18, 0x00, 0xf7]
+        );
+        assert!(daemon.assignment_led_frame_at(16, 24, 0).is_none());
+        let _ = fs::remove_file(socket);
+    }
+
+    #[test]
+    fn daemon_rejects_incomplete_assignment_commit_without_state_change() {
+        let socket = std::env::temp_dir()
+            .join(format!("mackes-incomplete-commit-{}.sock", std::process::id()));
+        let mut daemon = Daemon::bind(&socket).expect("daemon");
+        let start = daemon.apply_assignment_request(mackes_ipc::AssignmentRequest {
+            generation: 0,
+            action: mackes_ipc::AssignmentAction::Start,
+            physical_control_id: None,
+            destination_profile: None,
+            destination_effect: None,
+            destination_parameter: None,
+        });
+        let capture = daemon.apply_assignment_request(mackes_ipc::AssignmentRequest {
+            generation: start.generation,
+            action: mackes_ipc::AssignmentAction::ControlCaptured,
+            physical_control_id: Some("knob-r1-c1".into()),
+            destination_profile: None,
+            destination_effect: None,
+            destination_parameter: None,
+        });
+        let device = daemon.apply_assignment_request(mackes_ipc::AssignmentRequest {
+            generation: capture.generation,
+            action: mackes_ipc::AssignmentAction::Enter,
+            physical_control_id: None,
+            destination_profile: None,
+            destination_effect: None,
+            destination_parameter: None,
+        });
+        assert!(device.applied, "{device:?}");
+        let effect = daemon.apply_assignment_request(mackes_ipc::AssignmentRequest {
+            generation: device.generation,
+            action: mackes_ipc::AssignmentAction::Enter,
+            physical_control_id: None,
+            destination_profile: None,
+            destination_effect: None,
+            destination_parameter: None,
+        });
+        assert!(effect.applied, "{effect:?}");
+        let result = daemon.apply_assignment_request(mackes_ipc::AssignmentRequest {
+            generation: effect.generation,
+            action: mackes_ipc::AssignmentAction::Commit,
+            physical_control_id: Some("knob-r1-c1".into()),
+            destination_profile: None,
+            destination_effect: None,
+            destination_parameter: None,
+        });
+        assert!(!result.applied);
+        assert_eq!(
+            result.reason.as_deref(),
+            Some("assignment commit requires a complete destination")
+        );
+        assert_eq!(result.session.phase, mackes_ipc::AssignmentPhase::ChooseParameter);
+        let _ = fs::remove_file(socket);
+    }
+
+    #[test]
+    fn occupied_assignment_enters_confirm_replace_and_replaces_atomically() {
+        let socket = std::env::temp_dir()
+            .join(format!("mackes-assignment-replace-{}.sock", std::process::id()));
+        let mut daemon = Daemon::bind(&socket).expect("daemon");
+        daemon.mapping_store.active.push(mackes_config::ControlMapping {
+            id: "existing-map".into(),
+            controller_profile: "launch-control-xl-mk2".into(),
+            physical_control_id: "knob-r1-c1".into(),
+            source_endpoint: "controller".into(),
+            source_kind: "cc".into(),
+            source_channel: 0,
+            source_number: 21,
+            destination_endpoint: "processor".into(),
+            destination_profile: "lexicon.reflex".into(),
+            destination_effect: "algorithm-1".into(),
+            destination_parameter: "reflex.parameter-1".into(),
+            behavior: mackes_config::MappingBehavior {
+                source_range: (0, 127),
+                destination_range: (0, 127),
+                invert: false,
+                curve: "linear".into(),
+            },
+            enabled: true,
+            profile_version: 1,
+        });
+        let start = daemon.apply_assignment_request(mackes_ipc::AssignmentRequest {
+            generation: 0,
+            action: mackes_ipc::AssignmentAction::Start,
+            physical_control_id: None,
+            destination_profile: None,
+            destination_effect: None,
+            destination_parameter: None,
+        });
+        let capture = daemon.apply_assignment_request(mackes_ipc::AssignmentRequest {
+            generation: start.generation,
+            action: mackes_ipc::AssignmentAction::ControlCaptured,
+            physical_control_id: Some("knob-r1-c1".into()),
+            destination_profile: None,
+            destination_effect: None,
+            destination_parameter: None,
+        });
+        let device = daemon.apply_assignment_request(mackes_ipc::AssignmentRequest {
+            generation: capture.generation,
+            action: mackes_ipc::AssignmentAction::Enter,
+            physical_control_id: None,
+            destination_profile: None,
+            destination_effect: None,
+            destination_parameter: None,
+        });
+        let effect = daemon.apply_assignment_request(mackes_ipc::AssignmentRequest {
+            generation: device.generation,
+            action: mackes_ipc::AssignmentAction::Enter,
+            physical_control_id: None,
+            destination_profile: None,
+            destination_effect: None,
+            destination_parameter: None,
+        });
+        let conflict = daemon.apply_assignment_request(mackes_ipc::AssignmentRequest {
+            generation: effect.generation,
+            action: mackes_ipc::AssignmentAction::Commit,
+            physical_control_id: Some("knob-r1-c1".into()),
+            destination_profile: Some("eventide.micropitch".into()),
+            destination_effect: Some("modulation".into()),
+            destination_parameter: Some("control-4".into()),
+        });
+        assert!(conflict.applied, "{conflict:?}");
+        assert_eq!(conflict.session.phase, mackes_ipc::AssignmentPhase::ConfirmReplace);
+        assert_eq!(daemon.mapping_store.active.len(), 1);
+        let confirmed = daemon.apply_assignment_request(mackes_ipc::AssignmentRequest {
+            generation: conflict.generation,
+            action: mackes_ipc::AssignmentAction::ConfirmReplace,
+            physical_control_id: Some("knob-r1-c1".into()),
+            destination_profile: Some("eventide.micropitch".into()),
+            destination_effect: Some("modulation".into()),
+            destination_parameter: Some("control-4".into()),
+        });
+        assert!(confirmed.applied, "{confirmed:?}");
+        assert_eq!(confirmed.session.phase, mackes_ipc::AssignmentPhase::Committing);
+        assert_eq!(daemon.mapping_store.active.len(), 1);
+        assert_eq!(daemon.mapping_store.active[0].id, "existing-map");
+        assert_eq!(daemon.mapping_store.active[0].destination_parameter, "control-4");
+        let _ = fs::remove_file(socket);
+    }
+
+    #[test]
+    fn complete_assignment_commit_persists_to_config() {
+        let socket = std::env::temp_dir()
+            .join(format!("mackes-assignment-persist-{}.sock", std::process::id()));
+        let config = std::env::temp_dir()
+            .join(format!("mackes-assignment-persist-{}.json5", std::process::id()));
+        fs::copy("../../fixtures/config-valid.json5", &config).expect("fixture copy");
+        let mut daemon = Daemon::bind(&socket).expect("daemon");
+        daemon.set_config_path(&config);
+        let start = daemon.apply_assignment_request(mackes_ipc::AssignmentRequest {
+            generation: 0,
+            action: mackes_ipc::AssignmentAction::Start,
+            physical_control_id: None,
+            destination_profile: None,
+            destination_effect: None,
+            destination_parameter: None,
+        });
+        let capture = daemon.apply_assignment_request(mackes_ipc::AssignmentRequest {
+            generation: start.generation,
+            action: mackes_ipc::AssignmentAction::ControlCaptured,
+            physical_control_id: Some("knob-r1-c1".into()),
+            destination_profile: None,
+            destination_effect: None,
+            destination_parameter: None,
+        });
+        let device = daemon.apply_assignment_request(mackes_ipc::AssignmentRequest {
+            generation: capture.generation,
+            action: mackes_ipc::AssignmentAction::Enter,
+            physical_control_id: None,
+            destination_profile: None,
+            destination_effect: None,
+            destination_parameter: None,
+        });
+        let chooser = daemon.apply_assignment_request(mackes_ipc::AssignmentRequest {
+            generation: device.generation,
+            action: mackes_ipc::AssignmentAction::Enter,
+            physical_control_id: None,
+            destination_profile: None,
+            destination_effect: None,
+            destination_parameter: None,
+        });
+        let result = daemon.apply_assignment_request(mackes_ipc::AssignmentRequest {
+            generation: chooser.generation,
+            action: mackes_ipc::AssignmentAction::Commit,
+            physical_control_id: Some("knob-r1-c1".into()),
+            destination_profile: Some("lexicon.reflex".into()),
+            destination_effect: Some("algorithm-1".into()),
+            destination_parameter: Some("reflex.parameter-1".into()),
+        });
+        assert!(result.applied, "{result:?}");
+        let loaded = mackes_config::load(&config).expect("reloaded config");
+        assert_eq!(loaded.control_mappings.len(), 1);
+        assert_eq!(loaded.control_mappings[0].physical_control_id, "knob-r1-c1");
+        let _ = fs::remove_file(socket);
+        let _ = fs::remove_file(config);
+    }
+
+    #[test]
+    fn failed_assignment_restores_previous_mapping_store() {
+        let socket = std::env::temp_dir()
+            .join(format!("mackes-assignment-rollback-{}.sock", std::process::id()));
+        let config = std::env::temp_dir()
+            .join(format!("mackes-assignment-rollback-{}.json5", std::process::id()));
+        fs::copy("../../fixtures/config-valid.json5", &config).expect("fixture copy");
+        let mut daemon = Daemon::bind(&socket).expect("daemon");
+        daemon.set_config_path(&config);
+        let original = daemon.mapping_store.clone();
+        let start = daemon.apply_assignment_request(mackes_ipc::AssignmentRequest {
+            generation: 0,
+            action: mackes_ipc::AssignmentAction::Start,
+            physical_control_id: None,
+            destination_profile: None,
+            destination_effect: None,
+            destination_parameter: None,
+        });
+        let capture = daemon.apply_assignment_request(mackes_ipc::AssignmentRequest {
+            generation: start.generation,
+            action: mackes_ipc::AssignmentAction::ControlCaptured,
+            physical_control_id: Some("knob-r1-c1".into()),
+            destination_profile: None,
+            destination_effect: None,
+            destination_parameter: None,
+        });
+        let device = daemon.apply_assignment_request(mackes_ipc::AssignmentRequest {
+            generation: capture.generation,
+            action: mackes_ipc::AssignmentAction::Enter,
+            physical_control_id: None,
+            destination_profile: None,
+            destination_effect: None,
+            destination_parameter: None,
+        });
+        let chooser = daemon.apply_assignment_request(mackes_ipc::AssignmentRequest {
+            generation: device.generation,
+            action: mackes_ipc::AssignmentAction::Enter,
+            physical_control_id: None,
+            destination_profile: None,
+            destination_effect: None,
+            destination_parameter: None,
+        });
+        let commit = daemon.apply_assignment_request(mackes_ipc::AssignmentRequest {
+            generation: chooser.generation,
+            action: mackes_ipc::AssignmentAction::Commit,
+            physical_control_id: Some("knob-r1-c1".into()),
+            destination_profile: Some("lexicon.reflex".into()),
+            destination_effect: Some("algorithm-1".into()),
+            destination_parameter: Some("reflex.parameter-1".into()),
+        });
+        assert!(commit.applied, "{commit:?}");
+        assert_ne!(daemon.mapping_store, original);
+        let failed = daemon.apply_assignment_request(mackes_ipc::AssignmentRequest {
+            generation: commit.generation,
+            action: mackes_ipc::AssignmentAction::Fail,
+            physical_control_id: None,
+            destination_profile: None,
+            destination_effect: None,
+            destination_parameter: None,
+        });
+        assert!(failed.applied, "{failed:?}");
+        assert_eq!(daemon.mapping_store, original);
+        let reloaded = mackes_config::load(&config).expect("reloaded config");
+        assert_eq!(reloaded.control_mappings.len(), original.active.len());
+        assert_eq!(failed.session.phase, mackes_ipc::AssignmentPhase::Failed);
+        let _ = fs::remove_file(socket);
+        let _ = fs::remove_file(config);
+    }
+
+    #[test]
+    fn interrupted_assignment_draft_survives_daemon_rebind() {
+        let socket = std::env::temp_dir()
+            .join(format!("mackes-assignment-resume-{}.sock", std::process::id()));
+        let config = std::env::temp_dir()
+            .join(format!("mackes-assignment-resume-{}.json5", std::process::id()));
+        fs::copy("../../fixtures/config-valid.json5", &config).expect("fixture copy");
+        let mut daemon = Daemon::bind(&socket).expect("daemon");
+        daemon.set_config_path(&config);
+        let start = daemon.apply_assignment_request(mackes_ipc::AssignmentRequest {
+            generation: 0,
+            action: mackes_ipc::AssignmentAction::Start,
+            physical_control_id: None,
+            destination_profile: None,
+            destination_effect: None,
+            destination_parameter: None,
+        });
+        let capture = daemon.apply_assignment_request(mackes_ipc::AssignmentRequest {
+            generation: start.generation,
+            action: mackes_ipc::AssignmentAction::ControlCaptured,
+            physical_control_id: Some("knob-r1-c1".into()),
+            destination_profile: None,
+            destination_effect: None,
+            destination_parameter: None,
+        });
+        let interrupted = daemon.apply_assignment_request(mackes_ipc::AssignmentRequest {
+            generation: capture.generation,
+            action: mackes_ipc::AssignmentAction::Interrupt,
+            physical_control_id: None,
+            destination_profile: None,
+            destination_effect: None,
+            destination_parameter: None,
+        });
+        assert!(interrupted.applied, "{interrupted:?}");
+        assert_eq!(interrupted.session.phase, mackes_ipc::AssignmentPhase::Interrupted);
+        drop(daemon);
+        let mut rebound = Daemon::bind(&socket).expect("rebound daemon");
+        rebound.set_config_path(&config);
+        assert!(rebound.assignment_session.has_draft);
+        assert_eq!(rebound.mapping_store.drafts.len(), 1);
+        assert_eq!(
+            rebound.mapping_store.drafts[0].physical_control_id.as_deref(),
+            Some("knob-r1-c1")
+        );
+        let _ = fs::remove_file(socket);
+        let _ = fs::remove_file(config);
+    }
+
+    #[test]
+    fn mapping_activity_reports_disconnected_destination_without_fallback() {
+        let socket =
+            std::env::temp_dir().join(format!("mackes-activity-{}.sock", std::process::id()));
+        let mut daemon = Daemon::bind(&socket).expect("daemon");
+        daemon.mapping_store.active.push(mackes_config::ControlMapping {
+            id: "activity-map".into(),
+            controller_profile: "controller".into(),
+            physical_control_id: "knob-r1-c1".into(),
+            source_endpoint: "1".into(),
+            source_kind: "cc".into(),
+            source_channel: 0,
+            source_number: 21,
+            destination_endpoint: "2".into(),
+            destination_profile: "eventide.micropitch".into(),
+            destination_effect: "modulation".into(),
+            destination_parameter: "control-4".into(),
+            behavior: mackes_config::MappingBehavior {
+                source_range: (0, 127),
+                destination_range: (0, 127),
+                invert: false,
+                curve: "linear".into(),
+            },
+            enabled: true,
+            profile_version: 1,
+        });
+        let event = mackes_domain::MidiEvent {
+            timestamp: mackes_domain::TimestampNanos::new(1),
+            sequence: 1,
+            endpoint: mackes_midi_engine::numeric_endpoint_id("1").expect("source"),
+            message: mackes_domain::MidiMessage::ControlChange {
+                channel: mackes_domain::MidiChannel::new(1).expect("channel"),
+                controller: mackes_domain::SevenBit::new(21).expect("controller"),
+                value: mackes_domain::SevenBit::new(64).expect("value"),
+            },
+        };
+        assert_eq!(daemon.dispatch_registered(&event), (0, 1));
+        assert_eq!(
+            daemon.last_mapping_activity.as_ref().expect("activity")["reason"],
+            "destination_disconnected"
+        );
+        let _ = fs::remove_file(socket);
+    }
+
+    #[test]
     fn required_endpoint_readiness_is_complete_and_fail_closed() {
         let endpoints = vec![
             mackes_midi_engine::EndpointInfo {
@@ -2525,6 +3590,54 @@ mod tests {
 
     #[cfg(target_os = "linux")]
     #[test]
+    fn mapping_ipc_draft_persists_through_typed_request() {
+        use std::io::{Read, Write};
+        use std::os::unix::net::UnixStream;
+        let socket =
+            std::env::temp_dir().join(format!("mackes-mapping-ipc-{}.sock", std::process::id()));
+        let config =
+            std::env::temp_dir().join(format!("mackes-mapping-ipc-{}.json5", std::process::id()));
+        fs::copy("../../fixtures/config-valid.json5", &config).expect("fixture copy");
+        let mut daemon = Daemon::bind(&socket).expect("daemon");
+        daemon.set_config_path(&config);
+        let client_socket = socket.clone();
+        let worker = std::thread::spawn(move || {
+            let mut client = UnixStream::connect(client_socket).expect("connect");
+            client.write_all(br#"{"command":"mappings","operation":"Draft","generation":0,"payload":{"kind":"Draft","draft":{"id":"draft-ipc","step":"source","physical_control_id":"knob-r1-c1"}}}
+"#).expect("write draft");
+            let mut response = String::new();
+            client.read_to_string(&mut response).expect("read response");
+            response
+        });
+        daemon.serve_once(AccessPolicy { control_gid: 0, daemon_uid: 0 }).expect("serve draft");
+        let response = worker.join().expect("client worker");
+        let result: serde_json::Value = serde_json::from_str(response.trim()).expect("result json");
+        assert_eq!(result["outcome"], "Applied");
+        assert_eq!(result["generation"], 1);
+        assert_eq!(mackes_config::load(&config).expect("reload").control_mapping_drafts.len(), 1);
+        let client_socket = socket.clone();
+        let stale = std::thread::spawn(move || {
+            let mut client = UnixStream::connect(client_socket).expect("connect stale");
+            client.write_all(br#"{"command":"mappings","operation":"Draft","generation":0,"payload":{"kind":"Draft","draft":{"id":"draft-stale","step":"source"}}}
+"#).expect("write stale");
+            let mut response = String::new();
+            client.read_to_string(&mut response).expect("read stale");
+            response
+        });
+        daemon.serve_once(AccessPolicy { control_gid: 0, daemon_uid: 0 }).expect("serve stale");
+        let stale_result: serde_json::Value =
+            serde_json::from_str(stale.join().expect("stale worker").trim()).expect("stale json");
+        assert_eq!(stale_result["outcome"], "GenerationConflict");
+        assert_eq!(
+            mackes_config::load(&config).expect("reload stale").control_mapping_drafts.len(),
+            1
+        );
+        let _ = fs::remove_file(socket);
+        let _ = fs::remove_file(config);
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
     fn active_scene_persistence_round_trips_through_config() {
         let source = std::path::Path::new("../../fixtures/config-valid.json5");
         let path =
@@ -2560,12 +3673,12 @@ mod tests {
         let endpoints = vec![
             mackes_midi_engine::EndpointInfo {
                 id: "input-1".into(),
-                name: "Launch Control XL Mk1".into(),
+                name: "Launch Control XL Mk2".into(),
                 direction: mackes_midi_engine::EndpointDirection::Input,
             },
             mackes_midi_engine::EndpointInfo {
                 id: "output-1".into(),
-                name: "Launch Control XL Mk1".into(),
+                name: "Launch Control XL Mk2".into(),
                 direction: mackes_midi_engine::EndpointDirection::Output,
             },
         ];
@@ -2573,7 +3686,7 @@ mod tests {
         daemon.set_physical_devices(&[]);
         let snapshot: serde_json::Value =
             serde_json::from_str(&daemon.snapshot_response()).expect("snapshot");
-        assert_eq!(snapshot["physical_devices"][0]["id"], "launch control xl mk1");
+        assert_eq!(snapshot["physical_devices"][0]["id"], "launch control xl mk2");
         assert_eq!(snapshot["physical_devices"][0]["state"], "offline");
         assert_eq!(snapshot["physical_devices"][0]["inputs"][0], "input-1");
 

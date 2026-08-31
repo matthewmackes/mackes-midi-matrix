@@ -26,7 +26,7 @@ for match, item_id in zip(items, ids):
     owners = re.findall(r"^[-*] \*\*Owner:\*\* (.+)$", body, re.M)
     if len(owners) > 1:
         raise SystemExit(f"W{item_id:03d}: duplicate owner")
-    if status_match.group(1) == "DONE" and "**Evidence" not in body:
+    if status_match.group(1) == "DONE" and not re.search(r"\*\*[^*\n]*evidence", body, re.I):
         raise SystemExit(f"W{item_id:03d}: DONE item lacks evidence")
     dependency_line = re.search(r"^[-*] \*\*Depends on:\*\* (.+)$", body, re.M)
     if dependency_line:

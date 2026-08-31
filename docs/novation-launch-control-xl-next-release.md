@@ -1,11 +1,11 @@
-# Novation Launch Control XL Mk1 — next-release future state
+# Novation Launch Control XL Mk2 — next-release future state
 
 This document defines the operator-facing behavior targeted for the next release. It is a
 release specification, not a claim about features already available in the current build.
 
 ## Fixed physical layout
 
-MACKES will use a static, permanently labeled Launch Control XL Mk1 layout. Controls will not be
+MACKES will use a static, permanently labeled Launch Control XL Mk2 layout. Controls will not be
 dynamically reassigned between effects.
 
 ### Knob rows
@@ -51,20 +51,19 @@ They will not be assigned to effect parameters in this release.
 
 The fixed processing topology is:
 
-`Donner Arena2000 → Eventide MicroPitch → Lexicon Reflex → master output`
+`Eventide MicroPitch → Lexicon Reflex → master output`
 
 The controller will route each parameter to the device that owns it:
 
-- Arena2000: gain, gate, compressor, cabinet, amp, and Arena-owned effect blocks.
 - MicroPitch: detune, micro-pitch, pitch shift, digital delay, and feedback-pitch effects.
 - Reflex: documented reverb, modulation, and delay algorithms.
 
-Changing an effect group will update only that group’s owning device. Unrelated Arena2000 blocks
+Changing an effect group will update only that group’s owning device. Unrelated blocks
 will be bypassed and hidden in generated configurations.
 
 ## Reusable configurations
 
-MACKES will generate minimal Arena2000 configurations from the enabled groups. A configuration
+MACKES will generate minimal effect configurations from the enabled groups. A configuration
 will contain only the required blocks, types, parameters, values, and MIDI assignments.
 
 Names will be generated in signal-path order, for example:
@@ -87,7 +86,6 @@ source-artifact hash before reuse.
 - Scene activation and reconnect will resynchronize desired LED and parameter state.
 - Every hardware write will be audited and retried at most twice.
 - Devices without acknowledgment or read-back will be reported as `sent-unverified`.
-- Arena2000 mappings without authoritative evidence will be marked `experimental`.
 - No control will be silently redirected to another device.
 
 ## Release boundary

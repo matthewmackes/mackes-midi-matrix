@@ -1,0 +1,39 @@
+{
+  "template_name": "MACKES User 1",
+  "template_version": "1.0.0",
+  "target_model": "Novation Launch Control XL",
+  "target_generation": "Mk2",
+  "artifact_status": "official-components-review-required",
+  "installation": "Create/import this layout in Novation Components and send it to User 1; MACKES does not write template-definition SysEx.",
+  "assignable_inventory": {
+    "knobs": {
+      "count": 24,
+      "physical_id_pattern": "knob-r{row}-c{column}",
+      "rows": 3,
+      "columns": 8,
+      "midi_kind": "cc",
+      "cc_numbers": [21, 22, 23, 24, 25, 26, 27, 28, 41, 42, 43, 44, 45, 46, 47, 48, 61, 62, 63, 64, 65, 66, 67, 68]
+    },
+    "channel_buttons": {
+      "count": 16,
+      "physical_id_pattern": "button-r{row}-c{column}",
+      "rows": 2,
+      "columns": 8,
+      "midi_kind": "cc",
+      "cc_numbers": [69, 70, 71, 72, 73, 74, 75, 76, 85, 86, 87, 88, 89, 90, 91, 92]
+    },
+    "faders": {
+      "count": 8,
+      "physical_id_pattern": "fader-{column}",
+      "columns": 8,
+      "midi_kind": "cc",
+      "cc_numbers": [77, 78, 79, 80, 81, 82, 83, 84]
+    }
+  },
+  "reserved_controls": ["utility-1", "utility-2", "utility-3", "utility-4", "utility-5", "utility-6", "utility-7", "utility-8"],
+  "reserved_labels": ["Device", "Mute", "Solo", "Record Arm", "Up", "Down", "Left", "Right"],
+  "uniqueness_rule": "(physical_control_id, midi_kind, channel, number) is unique among assignable controls",
+  "expected_user_slot": 1,
+  "sha256": null,
+  "sha256_note": "Filled only after the reviewed distributable Components artifact is legally available; null is intentional and must fail readiness verification."
+}

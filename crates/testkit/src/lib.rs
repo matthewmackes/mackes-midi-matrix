@@ -31,6 +31,7 @@ pub const INTEGRATION_SCENARIOS: &[&str] = &[
     "reflex-diagram-metadata",
     "startup-restore-unsafe-policy",
     "performance-lock-and-panic",
+    "controller-mapping-lifecycle",
 ];
 
 /// Ordered fault plan; consuming a fault advances deterministically.
@@ -81,13 +82,108 @@ mod tests {
 
     #[test]
     fn integration_inventory_is_complete_and_unique() {
-        assert_eq!(INTEGRATION_SCENARIOS.len(), 13);
+        assert_eq!(INTEGRATION_SCENARIOS.len(), 14);
         assert!(INTEGRATION_SCENARIOS.iter().all(|name| {
             !name.is_empty() && name.bytes().all(|byte| byte.is_ascii_lowercase() || byte == b'-')
         }));
         for (index, name) in INTEGRATION_SCENARIOS.iter().enumerate() {
             assert!(!INTEGRATION_SCENARIOS[..index].contains(name));
         }
+    }
+
+    #[test]
+    fn controller_mapping_lifecycle_is_atomic_and_undoable() {
+        let mapping = mackes_config::ControlMapping {
+            id: "map-lifecycle".into(),
+            controller_profile: "launch-control-xl-mk2".into(),
+            physical_control_id: "knob-r1-c1".into(),
+            source_endpoint: "controller".into(),
+            source_kind: "cc".into(),
+            source_channel: 0,
+            source_number: 21,
+            destination_endpoint: "processor".into(),
+            destination_profile: "lexicon.reflex".into(),
+            destination_effect: "algorithm-1".into(),
+            destination_parameter: "reflex.parameter-1".into(),
+            behavior: mackes_config::MappingBehavior {
+                source_range: (0, 127),
+                destination_range: (0, 127),
+                invert: false,
+                curve: "linear".into(),
+            },
+            enabled: true,
+            profile_version: 1,
+        };
+        let mut store = mackes_config::ControlMappingStore::default();
+        store.activate(0, mapping.clone()).expect("activate");
+        store.set_enabled(1, &mapping.id, false).expect("disable");
+        store
+            .update_behavior(
+                2,
+                &mapping.id,
+                mackes_config::MappingBehavior {
+                    invert: true,
+                    curve: "square".into(),
+                    ..mapping.behavior.clone()
+                },
+            )
+            .expect("behavior");
+        assert_eq!(store.active[0].behavior.curve, "square");
+        store.undo(3).expect("undo behavior");
+        assert!(!store.active[0].enabled);
+        assert!(!store.undo_available());
+    }
+
+    #[test]
+    fn controller_assignment_flow_is_typed_bounded_and_atomic() {
+        let mut session = mackes_ipc::AssignmentSession::new("Map Controls");
+        assert!(session.apply(mackes_ipc::AssignmentAction::Start));
+        assert!(session.apply(mackes_ipc::AssignmentAction::ControlCaptured));
+        session.set_total(2);
+        assert!(session.apply(mackes_ipc::AssignmentAction::Down));
+        assert!(!session.apply(mackes_ipc::AssignmentAction::Down));
+        assert!(session.apply(mackes_ipc::AssignmentAction::Enter));
+        assert!(session.apply(mackes_ipc::AssignmentAction::Enter));
+        assert_eq!(session.phase, mackes_ipc::AssignmentPhase::ChooseParameter);
+        let incomplete = mackes_ipc::AssignmentRequest {
+            generation: 0,
+            action: mackes_ipc::AssignmentAction::Commit,
+            physical_control_id: Some("knob-r1-c1".into()),
+            destination_profile: None,
+            destination_effect: None,
+            destination_parameter: None,
+        };
+        assert!(!incomplete.has_complete_destination());
+        assert!(incomplete.validate().is_ok());
+        assert!(session.apply(mackes_ipc::AssignmentAction::Commit));
+        assert_eq!(session.phase, mackes_ipc::AssignmentPhase::Committing);
+        assert!(session.apply(mackes_ipc::AssignmentAction::Succeed));
+        assert_eq!(session.phase, mackes_ipc::AssignmentPhase::Succeeded);
+
+        let mut recovery = mackes_ipc::AssignmentSession::new("devices");
+        assert!(recovery.apply(mackes_ipc::AssignmentAction::Start));
+        assert!(recovery.apply(mackes_ipc::AssignmentAction::ControlCaptured));
+        assert!(recovery.apply(mackes_ipc::AssignmentAction::Enter));
+        assert!(recovery.apply(mackes_ipc::AssignmentAction::Enter));
+        assert_eq!(recovery.phase, mackes_ipc::AssignmentPhase::ChooseParameter);
+        assert!(recovery.apply(mackes_ipc::AssignmentAction::Interrupt));
+        assert_eq!(recovery.phase, mackes_ipc::AssignmentPhase::Interrupted);
+        assert!(recovery.apply(mackes_ipc::AssignmentAction::Resume));
+        assert_eq!(recovery.phase, mackes_ipc::AssignmentPhase::ChooseParameter);
+        assert!(recovery.apply(mackes_ipc::AssignmentAction::Commit));
+        assert!(recovery.apply(mackes_ipc::AssignmentAction::Fail));
+        assert_eq!(recovery.phase, mackes_ipc::AssignmentPhase::Failed);
+        assert!(recovery.apply(mackes_ipc::AssignmentAction::Retry));
+        assert_eq!(recovery.phase, mackes_ipc::AssignmentPhase::Committing);
+        assert!(recovery.apply(mackes_ipc::AssignmentAction::Cancel));
+        assert_eq!(recovery.phase, mackes_ipc::AssignmentPhase::Idle);
+
+        let mut discard = mackes_ipc::AssignmentSession::new("scenes");
+        discard.apply(mackes_ipc::AssignmentAction::Start);
+        discard.apply(mackes_ipc::AssignmentAction::Interrupt);
+        assert!(discard.apply(mackes_ipc::AssignmentAction::Discard));
+        assert!(!discard.has_draft);
+        assert_eq!(discard.phase, mackes_ipc::AssignmentPhase::Idle);
     }
 
     #[test]

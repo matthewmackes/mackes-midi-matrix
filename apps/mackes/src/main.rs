@@ -1,48 +1,5 @@
 //! MACKES operator entry point.
 
-fn generate_effects_profile(map_path: &str, artifact_path: &str) {
-    let map_bytes = std::fs::read(map_path).unwrap_or_else(|error| {
-        eprintln!("cannot read map: {error}");
-        std::process::exit(2);
-    });
-    let artifact = std::fs::read(artifact_path).unwrap_or_else(|error| {
-        eprintln!("cannot read artifact: {error}");
-        std::process::exit(2);
-    });
-    let map: mackes_config::Arena2000EditorMap =
-        serde_json::from_slice(&map_bytes).unwrap_or_else(|error| {
-            eprintln!("invalid Arena2000 map: {error}");
-            std::process::exit(2);
-        });
-    if let Err(error) = map.validate().and_then(|()| map.verify_artifact(&artifact)) {
-        eprintln!("Arena2000 map rejected: {error}");
-        std::process::exit(2);
-    }
-    if map.assignments.iter().any(|assignment| assignment.kind != "cc") {
-        eprintln!(
-            "Arena2000 map rejected: only documented CC assignments can generate this profile"
-        );
-        std::process::exit(2);
-    }
-    let mut profile = mackes_profiles::valeton_arena2000_profile();
-    profile.version = profile.version.saturating_add(1);
-    profile.documented_features.push(format!("Editor map firmware {}", map.firmware));
-    for assignment in map.assignments {
-        profile.controls.push(mackes_profiles::ControlDefinition {
-            label: format!("Editor map control {}", assignment.index),
-            cc: Some(assignment.number),
-            program: None,
-            range: (0, 127),
-            operation: assignment.destination,
-        });
-    }
-    if profile.validate().is_err() {
-        eprintln!("Arena2000 map rejected: generated profile is invalid");
-        std::process::exit(2);
-    }
-    println!("{}", serde_json::to_string_pretty(&profile).expect("profile is serializable"));
-}
-
 #[allow(clippy::too_many_lines)]
 fn run_tui() -> Result<(), String> {
     use crossterm::{
@@ -85,6 +42,14 @@ fn run_tui() -> Result<(), String> {
         .ok_or_else(|| "cannot initialize monitor: capacity rejected".to_owned())?;
     let backup_workspace = mackes_tui::BackupWorkspace::default();
     let mut setlist_editor = mackes_tui::SetlistEditor::from_snapshot(&[]);
+    let mut task_shell = mackes_tui::TaskShellState::initial(5).map_err(str::to_owned)?;
+    let mut mapping_replace_pending: Option<String> = None;
+    let mut assignment_wizard = mackes_tui::AssignmentWizard::new();
+    let mut assignment_choices = mackes_tui::AssignmentChoiceBrowser::from_profiles(
+        &["lexicon.reflex", "eventide.micropitch"],
+        Some("lexicon.reflex"),
+        mackes_profiles::SourceRole::Continuous,
+    );
     let mut workspace = 1_u8;
     let mut needs_snapshot = true;
     let mut route_generation = 0_u64;
@@ -124,27 +89,165 @@ fn run_tui() -> Result<(), String> {
         if workspace == 2 && learn_workspace.phase == mackes_tui::LearnPhase::Capturing {
             poll_learn_capture(&mut learn_workspace);
         }
+        dashboard.assignment_feedback =
+            if assignment_wizard.session.phase == mackes_ipc::AssignmentPhase::Idle {
+                Vec::new()
+            } else {
+                mackes_tui::assignment_wizard_lines(
+                    &assignment_wizard,
+                    mackes_tui::Viewport::new(terminal.size().map_or(80, |size| size.width), 24),
+                )
+            };
         terminal
-            .draw(|frame| match workspace {
-                2 => mackes_tui::draw_learn(frame, frame.area(), &learn_workspace),
-                3 => mackes_tui::draw_reflex(frame, frame.area(), &reflex_workspace),
-                4 => mackes_tui::draw_device(frame, frame.area(), &eventide_workspace),
-                5 => mackes_tui::draw_routing(frame, frame.area(), &routing_editor),
-                6 => mackes_tui::draw_diagnostics(frame, frame.area(), &diagnostics),
-                7 => mackes_tui::draw_monitor(frame, frame.area(), &monitor),
-                8 => mackes_tui::draw_backups(frame, frame.area(), &backup_workspace),
-                9 => mackes_tui::draw_setlists(frame, frame.area(), &setlist_editor),
-                1 => mackes_tui::draw_controller_mapping(
+            .draw(|frame| {
+                let content = match workspace {
+                    2 => Some(
+                        learn_workspace
+                            .frame_lines(mackes_tui::Viewport::new(
+                                frame.area().width,
+                                frame.area().height,
+                            ))
+                            .join("\n"),
+                    ),
+                    3 => Some(
+                        reflex_workspace
+                            .frame_lines(mackes_tui::Viewport::new(
+                                frame.area().width,
+                                frame.area().height,
+                            ))
+                            .join("\n"),
+                    ),
+                    4 => Some(
+                        eventide_workspace
+                            .frame_lines(mackes_tui::Viewport::new(
+                                frame.area().width,
+                                frame.area().height,
+                            ))
+                            .join("\n"),
+                    ),
+                    5 => Some(
+                        routing_editor
+                            .frame_lines(mackes_tui::Viewport::new(
+                                frame.area().width,
+                                frame.area().height,
+                            ))
+                            .join("\n"),
+                    ),
+                    6 => Some(
+                        diagnostics
+                            .frame_lines(mackes_tui::Viewport::new(
+                                frame.area().width,
+                                frame.area().height,
+                            ))
+                            .join("\n"),
+                    ),
+                    7 => Some(
+                        monitor
+                            .frame_lines(mackes_tui::Viewport::new(
+                                frame.area().width,
+                                frame.area().height,
+                            ))
+                            .join("\n"),
+                    ),
+                    8 => Some(
+                        backup_workspace
+                            .frame_lines(mackes_tui::Viewport::new(
+                                frame.area().width,
+                                frame.area().height,
+                            ))
+                            .join("\n"),
+                    ),
+                    9 => Some(
+                        setlist_editor
+                            .frame_lines(mackes_tui::Viewport::new(
+                                frame.area().width,
+                                frame.area().height,
+                            ))
+                            .join("\n"),
+                    ),
+                    _ => None,
+                };
+                mackes_tui::draw_task_shell_with_content(
                     frame,
                     frame.area(),
+                    &task_shell,
                     &dashboard,
-                    &routing_editor,
-                ),
-                _ => mackes_tui::draw_dashboard(frame, frame.area(), &dashboard),
+                    content.as_deref(),
+                );
             })
             .map_err(|error| error.to_string())?;
         if event::poll(std::time::Duration::from_millis(250)).map_err(|error| error.to_string())? {
             if let Event::Key(key) = event::read().map_err(|error| error.to_string())? {
+                let shell_key = match key.code {
+                    KeyCode::Up => Some(mackes_tui::ShellKey::Up),
+                    KeyCode::Down => Some(mackes_tui::ShellKey::Down),
+                    KeyCode::Left => Some(mackes_tui::ShellKey::Left),
+                    KeyCode::Right => Some(mackes_tui::ShellKey::Right),
+                    KeyCode::Enter => Some(mackes_tui::ShellKey::Enter),
+                    KeyCode::Esc => Some(mackes_tui::ShellKey::Esc),
+                    KeyCode::Char('?') => Some(mackes_tui::ShellKey::Help),
+                    _ => None,
+                };
+                if let Some(shell_key) = shell_key {
+                    if let Some(action) = mackes_tui::shell_action_for_key(shell_key) {
+                        if assignment_wizard.session.phase != mackes_ipc::AssignmentPhase::Idle {
+                            let assignment_action = match action {
+                                mackes_tui::ShellAction::Up => {
+                                    Some(mackes_ipc::AssignmentAction::Up)
+                                }
+                                mackes_tui::ShellAction::Down => {
+                                    Some(mackes_ipc::AssignmentAction::Down)
+                                }
+                                mackes_tui::ShellAction::Enter | mackes_tui::ShellAction::Right => {
+                                    Some(mackes_ipc::AssignmentAction::Enter)
+                                }
+                                mackes_tui::ShellAction::Left => {
+                                    Some(mackes_ipc::AssignmentAction::Back)
+                                }
+                                mackes_tui::ShellAction::Back => {
+                                    Some(mackes_ipc::AssignmentAction::Cancel)
+                                }
+                                mackes_tui::ShellAction::Help => None,
+                            };
+                            if let Some(assignment_action) = assignment_action {
+                                match assignment_action {
+                                    mackes_ipc::AssignmentAction::Up => {
+                                        assignment_choices.move_selection(false);
+                                    }
+                                    mackes_ipc::AssignmentAction::Down => {
+                                        assignment_choices.move_selection(true);
+                                    }
+                                    _ => {}
+                                }
+                                let request = assignment_wizard.request(assignment_action, None);
+                                if let Ok(payload) = serde_json::to_vec(&request) {
+                                    let response =
+                                        daemon_request(mackes_ipc::Command::Assignment, &payload);
+                                    if let Ok(result) =
+                                        serde_json::from_str::<mackes_ipc::AssignmentResult>(
+                                            &response,
+                                        )
+                                    {
+                                        assignment_wizard.reconcile(result);
+                                    }
+                                }
+                            }
+                            continue;
+                        }
+                        task_shell.apply(action);
+                        if matches!(action, mackes_tui::ShellAction::Back) && workspace == 1 {
+                            mapping_replace_pending = None;
+                        }
+                        workspace = match task_shell.focus.section {
+                            mackes_tui::AppSection::Live => 1,
+                            mackes_tui::AppSection::MapControls => 5,
+                            mackes_tui::AppSection::Scenes => 9,
+                            mackes_tui::AppSection::Devices => 4,
+                            mackes_tui::AppSection::System => 6,
+                        };
+                    }
+                    continue;
+                }
                 match key.code {
                     KeyCode::Char('q') if workspace == 4 => {
                         let response = daemon_request(
@@ -228,6 +331,163 @@ fn run_tui() -> Result<(), String> {
                         } else {
                             "panic-failed".to_owned()
                         };
+                    }
+                    KeyCode::Char('d') if workspace != 5 && workspace != 9 => {
+                        let request = if assignment_wizard.session.phase
+                            == mackes_ipc::AssignmentPhase::Idle
+                        {
+                            assignment_choices.selected = 0;
+                            assignment_wizard.start(task_shell.focus.section)
+                        } else if assignment_wizard.session.phase
+                            == mackes_ipc::AssignmentPhase::ChooseParameter
+                        {
+                            assignment_wizard
+                                .selected_destination_request(&assignment_choices)
+                                .unwrap_or_else(|| {
+                                    assignment_wizard
+                                        .request(mackes_ipc::AssignmentAction::Enter, None)
+                                })
+                        } else {
+                            assignment_wizard.request(mackes_ipc::AssignmentAction::Enter, None)
+                        };
+                        if let Ok(payload) = serde_json::to_vec(&request) {
+                            let response =
+                                daemon_request(mackes_ipc::Command::Assignment, &payload);
+                            if let Ok(result) =
+                                serde_json::from_str::<mackes_ipc::AssignmentResult>(&response)
+                            {
+                                assignment_wizard.reconcile(result);
+                                dashboard.health = if assignment_wizard.session.phase
+                                    == mackes_ipc::AssignmentPhase::AwaitControl
+                                {
+                                    "assignment-await-control"
+                                } else {
+                                    "assignment-progressed"
+                                }
+                                .into();
+                            } else {
+                                dashboard.health = "assignment-start-failed".into();
+                            }
+                        }
+                    }
+                    KeyCode::Char('e') if workspace == 1 => {
+                        if let Some(index) = dashboard.mapping_browser.selected {
+                            if let Some(row) = dashboard.mapping_browser.rows.get(index) {
+                                let enabled =
+                                    row.status != mackes_tui::MappingBrowserStatus::Enabled;
+                                let response = mapping_store_request(
+                                    dashboard.mapping_generation,
+                                    "Enabled",
+                                    serde_json::json!({"kind":"Enabled","mapping_id":row.id,"enabled":enabled}),
+                                );
+                                dashboard.health = mapping_result_health(&response);
+                                needs_snapshot = true;
+                            }
+                        }
+                    }
+                    KeyCode::Char('r') if workspace == 1 => {
+                        if let Some(index) = dashboard.mapping_browser.selected {
+                            if let Some(row) = dashboard.mapping_browser.rows.get(index) {
+                                if mapping_replace_pending.as_deref() == Some(row.id.as_str()) {
+                                    let response = mapping_store_request(
+                                        dashboard.mapping_generation,
+                                        "Replace",
+                                        serde_json::json!({
+                                            "kind": "Mapping",
+                                            "mapping": row.mapping,
+                                        }),
+                                    );
+                                    dashboard.health = mapping_result_health(&response);
+                                    mapping_replace_pending = None;
+                                    needs_snapshot = true;
+                                } else {
+                                    mapping_replace_pending = Some(row.id.clone());
+                                    dashboard.health =
+                                        "mapping-replace-confirm-r-again-esc-cancel".into();
+                                }
+                            }
+                        }
+                    }
+                    KeyCode::Char('x') if workspace == 1 => {
+                        if let Some(index) = dashboard.mapping_browser.selected {
+                            if let Some(row) = dashboard.mapping_browser.rows.get(index) {
+                                let response = mapping_store_request(
+                                    dashboard.mapping_generation,
+                                    "Delete",
+                                    serde_json::json!({"kind":"Delete","mapping_id":row.id}),
+                                );
+                                dashboard.health = mapping_result_health(&response);
+                                needs_snapshot = true;
+                            }
+                        }
+                    }
+                    KeyCode::Char('u') if workspace == 1 => {
+                        let response = mapping_store_request(
+                            dashboard.mapping_generation,
+                            "Undo",
+                            serde_json::Value::Null,
+                        );
+                        dashboard.health = mapping_result_health(&response);
+                        needs_snapshot = true;
+                    }
+                    KeyCode::Char('c') if workspace == 1 => {
+                        if let Some(index) = dashboard.mapping_browser.selected {
+                            if let Some(row) = dashboard.mapping_browser.rows.get(index) {
+                                let mut behavior = row.mapping.behavior.clone();
+                                behavior.curve = match behavior.curve.as_str() {
+                                    "linear" => "square",
+                                    "square" => "square_root",
+                                    _ => "linear",
+                                }
+                                .into();
+                                let response = mapping_store_request(
+                                    dashboard.mapping_generation,
+                                    "Behavior",
+                                    serde_json::json!({
+                                        "kind": "Behavior",
+                                        "mapping_id": row.id,
+                                        "behavior": behavior,
+                                    }),
+                                );
+                                dashboard.health = mapping_result_health(&response);
+                                needs_snapshot = true;
+                            }
+                        }
+                    }
+                    KeyCode::Char('i') if workspace == 1 => {
+                        if let Some(index) = dashboard.mapping_browser.selected {
+                            if let Some(row) = dashboard.mapping_browser.rows.get(index) {
+                                let mut behavior = row.mapping.behavior.clone();
+                                behavior.invert = !behavior.invert;
+                                let response = mapping_store_request(
+                                    dashboard.mapping_generation,
+                                    "Behavior",
+                                    serde_json::json!({"kind":"Behavior","mapping_id":row.id,"behavior":behavior}),
+                                );
+                                dashboard.health = mapping_result_health(&response);
+                                needs_snapshot = true;
+                            }
+                        }
+                    }
+                    KeyCode::Char('[' | ']') if workspace == 1 => {
+                        if let Some(index) = dashboard.mapping_browser.selected {
+                            if let Some(row) = dashboard.mapping_browser.rows.get(index) {
+                                let mut behavior = row.mapping.behavior.clone();
+                                let upper = behavior.destination_range.1;
+                                behavior.destination_range.1 = if key.code == KeyCode::Char('[') {
+                                    upper.saturating_sub(1).max(behavior.destination_range.0)
+                                } else {
+                                    upper.saturating_add(1).min(16_383)
+                                };
+                                let response = mapping_store_request(
+                                    dashboard.mapping_generation,
+                                    "Behavior",
+                                    serde_json::json!({"kind":"Behavior","mapping_id":row.id,"behavior":behavior}),
+                                );
+                                dashboard.health = mapping_result_health(&response);
+                                needs_snapshot = true;
+                            }
+                        }
                     }
                     KeyCode::Char('s') if workspace == 5 || workspace == 1 => {
                         let response = save_routes(&routing_editor, route_generation);
@@ -533,7 +793,22 @@ fn run_tui() -> Result<(), String> {
                     KeyCode::Char('-') if workspace == 4 => {
                         eventide_workspace.adjust_control_value(-1);
                     }
-                    KeyCode::Char('j') if (workspace == 5 || workspace == 1) => {
+                    KeyCode::Char('j') if workspace == 1 => {
+                        if !dashboard.mapping_browser.rows.is_empty() {
+                            let next = dashboard.mapping_browser.selected.map_or(0, |index| {
+                                (index + 1).min(dashboard.mapping_browser.rows.len() - 1)
+                            });
+                            dashboard.mapping_browser.selected = Some(next);
+                        }
+                    }
+                    KeyCode::Char('k') if workspace == 1 => {
+                        if !dashboard.mapping_browser.rows.is_empty() {
+                            dashboard.mapping_browser.selected = Some(
+                                dashboard.mapping_browser.selected.unwrap_or(0).saturating_sub(1),
+                            );
+                        }
+                    }
+                    KeyCode::Char('j') if workspace == 5 => {
                         if !routing_editor.drafts.is_empty() {
                             let next = routing_editor.selected.map_or(0, |index| {
                                 (index + 1).min(routing_editor.drafts.len() - 1)
@@ -541,10 +816,7 @@ fn run_tui() -> Result<(), String> {
                             routing_editor.selected = Some(next);
                         }
                     }
-                    KeyCode::Char('k')
-                        if (workspace == 5 || workspace == 1)
-                            && !routing_editor.drafts.is_empty() =>
-                    {
+                    KeyCode::Char('k') if workspace == 5 && !routing_editor.drafts.is_empty() => {
                         let next = routing_editor.selected.unwrap_or(0).saturating_sub(1);
                         routing_editor.selected = Some(next);
                     }
@@ -670,6 +942,41 @@ fn mvave_ir_box_preset(preset: u8, dry_run: bool) -> Result<String, String> {
     };
     output.send_checked(&event)?;
     Ok(format!("preset {preset} sent to {}", endpoint.name))
+}
+
+fn reflex_pcm70_preset(
+    preset_id: &str,
+    destination: Option<&str>,
+    dry_run: bool,
+) -> Result<String, String> {
+    let preset = mackes_profiles::lexicon_reflex::pcm70_translations()
+        .iter()
+        .find(|preset| preset.id.eq_ignore_ascii_case(preset_id))
+        .ok_or_else(|| format!("unknown PCM70 preset translation: {preset_id}"))?;
+    let bytes = mackes_profiles::lexicon_reflex::encode_pcm70_translation(preset.id, 0)
+        .map_err(str::to_owned)?;
+    let hex = bytes.iter().map(|byte| format!("{byte:02X}")).collect::<Vec<_>>().join(" ");
+    if dry_run {
+        return Ok(format!("{} [{}] — {}\n{hex}", preset.name, preset.source_program, preset.note));
+    }
+    let destination = destination.ok_or("Reflex destination is required")?;
+    let payload = serde_json::json!({
+        "profile_id": "lexicon.reflex",
+        "control": preset.name,
+        "channel": 1,
+        "value": 1,
+        "destination": destination,
+        "confirm": true,
+    });
+    let response = daemon_request(
+        mackes_ipc::Command::DeviceControl,
+        &serde_json::to_vec(&payload).map_err(|error| error.to_string())?,
+    );
+    if response.contains("\"ok\":true") {
+        Ok(format!("{} sent to {destination}: {response}", preset.name))
+    } else {
+        Err(format!("Reflex preset send failed: {response}"))
+    }
 }
 
 fn mvave_ir_box_module(module: &str, enabled: bool) -> Result<String, String> {
@@ -821,33 +1128,10 @@ fn print_effects_plan(groups: &[String], json: bool) {
     }
 }
 
-fn validate_effects_map(map_path: &str, artifact_path: &str) {
-    let map_bytes = std::fs::read(map_path).unwrap_or_else(|error| {
-        eprintln!("cannot read map: {error}");
-        std::process::exit(2);
-    });
-    let artifact = std::fs::read(artifact_path).unwrap_or_else(|error| {
-        eprintln!("cannot read artifact: {error}");
-        std::process::exit(2);
-    });
-    let map: mackes_config::Arena2000EditorMap =
-        serde_json::from_slice(&map_bytes).unwrap_or_else(|error| {
-            eprintln!("invalid Arena2000 map: {error}");
-            std::process::exit(2);
-        });
-    if let Err(error) = map.validate().and_then(|()| map.verify_artifact(&artifact)) {
-        eprintln!("Arena2000 map rejected: {error}");
-        std::process::exit(2);
-    }
-    println!(
-        "Arena2000 map valid: firmware={} assignments={}",
-        map.firmware,
-        map.assignments.len()
-    );
-}
-
 #[allow(clippy::too_many_lines)]
 fn main() {
+    use owo_colors::OwoColorize;
+
     let arguments: Vec<String> = std::env::args().skip(1).collect();
     match arguments.as_slice() {
         [] => {
@@ -867,15 +1151,13 @@ fn main() {
         }
         [command] if command == "--help" || command == "help" => {
             println!(
-                "mackes-midi-matrix: TUI/CLI\n\nUsage:\n  mackes-midi-matrix tui\n  mackes-midi-matrix validate <path> [--json]\n  mackes-midi-matrix export <config> <directory>\n  mackes-midi-matrix doctor [--json]\n  mackes-midi-matrix status [--json]\n  mackes-midi-matrix panic\n  mackes-midi-matrix endpoints [--json]\n  mackes-midi-matrix default get <config> <capability> [--json]\n  mackes-midi-matrix default set <config> <capability> <profile-id>\n  mackes-midi-matrix mvave preset <1-32> [--dry-run]\n  mackes-midi-matrix mvave ir|eq on|off --confirm-unverified\n  mackes-midi-matrix scenes|devices|routes|monitor [--json]\n  mackes-midi-matrix scene list <config> [--json]\n  mackes-midi-matrix backup list|inspect ...\n  mackes-midi-matrix profile validate [--json]\n  mackes-midi-matrix --version"
+                "mackes-midi-matrix: TUI/CLI\n\nUsage:\n  mackes-midi-matrix tui\n  mackes-midi-matrix validate <path> [--json]\n  mackes-midi-matrix export <config> <directory>\n  mackes-midi-matrix doctor [--json]\n  mackes-midi-matrix status [--json]\n  mackes-midi-matrix panic\n  mackes-midi-matrix endpoints [--json]\n  mackes-midi-matrix default get <config> <capability> [--json]\n  mackes-midi-matrix default set <config> <capability> <profile-id>\n  mackes-midi-matrix reflex preset <id> --dry-run\n  mackes-midi-matrix reflex preset <id> <destination-id> --confirm\n  mackes-midi-matrix mvave preset <1-32> [--dry-run]\n  mackes-midi-matrix mvave ir|eq on|off --confirm-unverified\n  mackes-midi-matrix scenes|devices|routes|monitor [--json]\n  mackes-midi-matrix scene list <config> [--json]\n  mackes-midi-matrix backup list|inspect ...\n  mackes-midi-matrix profile validate [--json]\n  mackes-midi-matrix --version"
             );
             println!("  mackes-midi-matrix learn <endpoint-id> [limit]");
             println!("  mackes-midi-matrix effects faceplate [--json]");
             println!("  mackes-midi-matrix effects demo [--json]");
             println!("  mackes-midi-matrix effects assignments <profile-id> [--json]");
             println!("  mackes-midi-matrix effects plan <group>... [--json]");
-            println!("  mackes-midi-matrix effects map-validate <map.json> <artifact>");
-            println!("  mackes-midi-matrix effects map-profile <map.json> <artifact>");
             println!("  mackes-midi-matrix sysex <destination-id> <hex-bytes> --confirm");
             println!("  mackes-midi-matrix device-control <profile-id> <control> <channel> <value> <destination-id> --confirm");
             println!("  mackes-midi-matrix device-query <profile-id>");
@@ -924,12 +1206,6 @@ fn main() {
         {
             print_effects_plan(groups, true);
         }
-        [command, action, map, artifact] if command == "effects" && action == "map-validate" => {
-            validate_effects_map(map, artifact);
-        }
-        [command, action, map, artifact] if command == "effects" && action == "map-profile" => {
-            generate_effects_profile(map, artifact);
-        }
         [command, action, path, capability] if command == "default" && action == "get" => {
             if let Err(error) = print_default_provider(path, capability, false) {
                 eprintln!("default provider failed: {error}");
@@ -956,6 +1232,28 @@ fn main() {
         [device, action, value] if device == "mvave" && action == "preset" => {
             let preset = value.parse::<u8>().unwrap_or(0);
             match mvave_ir_box_preset(preset, false) {
+                Ok(result) => println!("{result}"),
+                Err(error) => {
+                    eprintln!("mackes-midi-matrix: {error}");
+                    std::process::exit(2);
+                }
+            }
+        }
+        [device, action, preset, flag]
+            if device == "reflex" && action == "preset" && flag == "--dry-run" =>
+        {
+            match reflex_pcm70_preset(preset, None, true) {
+                Ok(result) => println!("{result}"),
+                Err(error) => {
+                    eprintln!("mackes-midi-matrix: {error}");
+                    std::process::exit(2);
+                }
+            }
+        }
+        [device, action, preset, destination, flag]
+            if device == "reflex" && action == "preset" && flag == "--confirm" =>
+        {
+            match reflex_pcm70_preset(preset, Some(destination), false) {
                 Ok(result) => println!("{result}"),
                 Err(error) => {
                     eprintln!("mackes-midi-matrix: {error}");
@@ -1385,8 +1683,20 @@ fn main() {
             }
         }
         _ => {
-            eprintln!("mackes-midi-matrix: invalid arguments\n\nUsage:\n  mackes-midi-matrix validate <path> [--json]\n  mackes-midi-matrix export <config> <directory>\n  mackes-midi-matrix doctor [--json]\n  mackes-midi-matrix status [--json]\n  mackes-midi-matrix panic\n  mackes-midi-matrix endpoints [--json]\n  mackes-midi-matrix profile validate [--json]\n  mackes-midi-matrix --help");
-            eprintln!("  mackes-midi-matrix learn <endpoint-id> [limit]");
+            eprintln!(
+                "{}\n\n{}\n  {} validate <path> [--json]\n  {} export <config> <directory>\n  {} doctor [--json]\n  {} status [--json]\n  {} panic\n  {} endpoints [--json]\n  {} profile validate [--json]\n  {} --help\n  {} learn <endpoint-id> [limit]",
+                "mackes-midi-matrix: invalid arguments".red().bold(),
+                "Usage:".bright_cyan().bold(),
+                "mackes-midi-matrix".bright_white().bold(),
+                "mackes-midi-matrix".bright_white().bold(),
+                "mackes-midi-matrix".bright_white().bold(),
+                "mackes-midi-matrix".bright_white().bold(),
+                "mackes-midi-matrix".bright_white().bold(),
+                "mackes-midi-matrix".bright_white().bold(),
+                "mackes-midi-matrix".bright_white().bold(),
+                "mackes-midi-matrix".bright_white().bold(),
+                "mackes-midi-matrix".bright_white().bold()
+            );
             std::process::exit(64);
         }
     }
@@ -1650,6 +1960,20 @@ fn daemon_request(command: mackes_ipc::Command, payload: &[u8]) -> String {
         .ok()
         .and_then(|bytes| String::from_utf8(bytes).ok())
         .unwrap_or_else(|| "{\"ok\":false,\"error\":\"runtime IPC is not connected\"}".into())
+}
+
+#[allow(clippy::needless_pass_by_value)]
+fn mapping_store_request(generation: u64, operation: &str, payload: serde_json::Value) -> String {
+    let request = serde_json::json!({
+        "operation": operation,
+        "generation": generation,
+        "payload": payload,
+    });
+    daemon_request(mackes_ipc::Command::Mappings, &serde_json::to_vec(&request).unwrap_or_default())
+}
+
+fn mapping_result_health(response: &str) -> String {
+    format!("mapping: {}", mackes_tui::mapping_response_notice(response))
 }
 
 #[allow(clippy::too_many_arguments)]

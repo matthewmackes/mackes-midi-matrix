@@ -54,6 +54,212 @@ pub enum UiCommand {
     OpenWorkspace(u8),
 }
 
+/// Musician-facing application sections in navigation order.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum AppSection {
+    /// Performance and live status.
+    Live,
+    /// Controller assignment workflow.
+    MapControls,
+    /// Scene and setlist management.
+    Scenes,
+    /// Connected devices and profiles.
+    Devices,
+    /// Diagnostics, monitor, and backups.
+    System,
+}
+
+impl AppSection {
+    /// Returns the stable display label.
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Live => "Live",
+            Self::MapControls => "Map Controls",
+            Self::Scenes => "Scenes",
+            Self::Devices => "Devices",
+            Self::System => "System",
+        }
+    }
+    /// Returns the concise operator-facing purpose of the section.
+    #[must_use]
+    pub const fn purpose(self) -> &'static str {
+        match self {
+            Self::Live => "Perform and monitor the active scene",
+            Self::MapControls => "Assign physical controls to parameters",
+            Self::Scenes => "Recall scenes and organize setlists",
+            Self::Devices => "Inspect connected devices and profiles",
+            Self::System => "Review diagnostics, monitor, and backups",
+        }
+    }
+    /// Returns sections in persistent rail order.
+    #[must_use]
+    pub const fn all() -> [Self; 5] {
+        [Self::Live, Self::MapControls, Self::Scenes, Self::Devices, Self::System]
+    }
+}
+
+/// One reducer-owned focus location, distinct from live activity.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct FocusPath {
+    /// Current application section.
+    pub section: AppSection,
+    /// Stable target within that section.
+    pub target: String,
+}
+
+impl FocusPath {
+    /// Creates a bounded focus path.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the target is empty or exceeds 64 characters.
+    pub fn new(section: AppSection, target: impl Into<String>) -> Result<Self, &'static str> {
+        let target = target.into();
+        if target.trim().is_empty() || target.len() > 64 {
+            return Err("focus target must be 1-64 characters");
+        }
+        Ok(Self { section, target })
+    }
+    /// Returns the exact breadcrumb for the focused target.
+    #[must_use]
+    pub fn breadcrumb(&self) -> String {
+        format!("{} / {}", self.section.label(), self.target)
+    }
+}
+
+/// Primary keyboard actions for the task shell.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ShellAction {
+    /// Move focus to the previous item.
+    Up,
+    /// Move focus to the next item.
+    Down,
+    /// Move to the previous task section.
+    Left,
+    /// Move to the next task section.
+    Right,
+    /// Activate the focused item.
+    Enter,
+    /// Return to the parent task.
+    Back,
+    /// Toggle contextual help.
+    Help,
+}
+
+/// Terminal-independent key input used by the executable adapter.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ShellKey {
+    /// Up arrow.
+    Up,
+    /// Down arrow.
+    Down,
+    /// Left arrow.
+    Left,
+    /// Right arrow.
+    Right,
+    /// Enter key.
+    Enter,
+    /// Escape key.
+    Esc,
+    /// Help key.
+    Help,
+    /// Other character input.
+    Char(char),
+}
+
+/// Resolves primary shell keys and compatibility aliases.
+#[must_use]
+pub const fn shell_action_for_key(key: ShellKey) -> Option<ShellAction> {
+    match key {
+        ShellKey::Up => Some(ShellAction::Up),
+        ShellKey::Down => Some(ShellAction::Down),
+        ShellKey::Left => Some(ShellAction::Left),
+        ShellKey::Right => Some(ShellAction::Right),
+        ShellKey::Enter => Some(ShellAction::Enter),
+        ShellKey::Esc => Some(ShellAction::Back),
+        ShellKey::Help => Some(ShellAction::Help),
+        ShellKey::Char(_) => None,
+    }
+}
+
+/// Resolves Vim-style movement aliases to the same shell actions.
+#[must_use]
+pub const fn shell_action_for_char(key: char) -> Option<ShellAction> {
+    match key {
+        'k' => Some(ShellAction::Up),
+        'j' => Some(ShellAction::Down),
+        'h' => Some(ShellAction::Left),
+        'l' => Some(ShellAction::Right),
+        _ => None,
+    }
+}
+
+/// Reducer-owned task-shell navigation state.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TaskShellState {
+    /// Current section and target.
+    pub focus: FocusPath,
+    /// Number of focusable targets in the current section.
+    pub target_count: usize,
+    /// Zero-based focused target position.
+    pub target_index: usize,
+    /// Whether contextual help is visible.
+    pub help_visible: bool,
+}
+
+impl TaskShellState {
+    /// Creates a shell at the Live landing task.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when no focusable target exists.
+    pub fn initial(target_count: usize) -> Result<Self, &'static str> {
+        if target_count == 0 {
+            return Err("task shell requires a focus target");
+        }
+        Ok(Self {
+            focus: FocusPath::new(AppSection::Live, "Target 1")?,
+            target_count,
+            target_index: 0,
+            help_visible: false,
+        })
+    }
+
+    /// Applies one primary navigation action with bounded focus movement.
+    pub fn apply(&mut self, action: ShellAction) {
+        match action {
+            ShellAction::Up => {
+                self.target_index = self.target_index.saturating_sub(1);
+                self.refresh_target_label();
+            }
+            ShellAction::Down => {
+                self.target_index = (self.target_index + 1).min(self.target_count - 1);
+                self.refresh_target_label();
+            }
+            ShellAction::Left | ShellAction::Right => {
+                let sections = AppSection::all();
+                let current =
+                    sections.iter().position(|section| *section == self.focus.section).unwrap_or(0);
+                let next = if matches!(action, ShellAction::Left) {
+                    current.saturating_sub(1)
+                } else {
+                    (current + 1).min(sections.len() - 1)
+                };
+                self.focus.section = sections[next];
+                self.target_index = 0;
+                self.refresh_target_label();
+            }
+            ShellAction::Enter | ShellAction::Back => self.help_visible = false,
+            ShellAction::Help => self.help_visible = !self.help_visible,
+        }
+    }
+
+    fn refresh_target_label(&mut self) {
+        self.focus.target = format!("Target {}", self.target_index + 1);
+    }
+}
+
 /// Maps TUI commands to the governed daemon command boundary.
 #[must_use]
 pub const fn ipc_command_for(command: UiCommand) -> Option<mackes_ipc::Command> {
@@ -681,6 +887,14 @@ pub struct DashboardState {
     pub health: String,
     /// Current routing generation.
     pub route_generation: u64,
+    /// Generation of the authoritative hardware-first mapping store.
+    pub mapping_generation: u64,
+    /// Whether the daemon retains one bounded mapping Undo record.
+    pub mapping_undo_available: bool,
+    /// Latest daemon-owned mapping source/result activity payload.
+    pub mapping_activity: Option<serde_json::Value>,
+    /// Bounded assignment feedback lines supplied by the authoritative wizard projection.
+    pub assignment_feedback: Vec<String>,
     /// Whether a daemon-owned route Undo is available.
     pub route_undo_available: bool,
     /// Number of retained redacted mutation-audit decisions.
@@ -723,6 +937,8 @@ pub struct DashboardState {
     pub launch_control_template: Option<LaunchControlTemplate>,
     /// Profile-owned effects state; resync is required after reconnect/scene changes.
     pub effects_groups: mackes_profiles::EffectsGroupRuntime,
+    /// Authoritative active mapping browser projection.
+    pub mapping_browser: MappingBrowser,
 }
 
 /// Renderer-safe physical MIDI device inventory record.
@@ -850,6 +1066,579 @@ pub struct MappingDraft {
     pub filters: MappingFilterDraft,
     /// Explicitly authorizes this route to participate in a bounded cycle.
     pub allow_cycle: bool,
+}
+
+/// Visibility state for one authoritative mapping-browser row.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum MappingBrowserStatus {
+    /// Mapping is enabled and its destination profile is available.
+    Enabled,
+    /// Mapping is retained but does not currently execute.
+    Disabled,
+    /// Destination profile/endpoint is not currently available.
+    Offline,
+    /// Mapping requires the bounded unsafe-arm window before execution.
+    Experimental,
+}
+
+impl MappingBrowserStatus {
+    /// Returns the bounded status marker shown beside a browser row.
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Enabled => "ON",
+            Self::Disabled => "OFF",
+            Self::Offline => "OFFLINE",
+            Self::Experimental => "EXPERIMENTAL",
+        }
+    }
+}
+
+/// Renderer-neutral row shown by the mapping browser.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct MappingBrowserRow {
+    /// Full authoritative record used for explicit replacement.
+    pub mapping: mackes_config::ControlMapping,
+    /// Durable mapping identity.
+    pub id: String,
+    /// Stable physical control identity and musician-facing label.
+    pub physical_control_id: String,
+    /// Musician-facing label for the physical control.
+    pub physical_label: String,
+    /// Musical destination path.
+    pub destination_path: String,
+    /// Current source value, when observed.
+    pub current_source_value: Option<u16>,
+    /// Most recent destination value, when observed.
+    pub last_destination_result: Option<u16>,
+    /// Current authoritative status.
+    pub status: MappingBrowserStatus,
+}
+
+/// Bounded browser projection and selection state. It never mutates daemon state.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct MappingBrowser {
+    /// Stable, display-ready rows.
+    pub rows: Vec<MappingBrowserRow>,
+    /// Selected browser row, independent from the LIVE activity marker.
+    pub selected: Option<usize>,
+    /// First visible row for compact pagination.
+    pub offset: usize,
+}
+
+/// Profile-safe button behavior shown in Advanced; the persisted contract remains unchanged.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum MappingButtonMode {
+    /// Send the mapped value only while the source is held.
+    Momentary,
+    /// Toggle between the mapped range endpoints on each press.
+    Toggle,
+    /// Use the destination profile's declared behavior.
+    ProfileDefault,
+}
+
+/// Transactional Advanced inspector for one mapping.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AdvancedMappingEditor {
+    /// Mapping being inspected.
+    pub mapping_id: String,
+    /// Current editable behavior, copied from the authoritative row.
+    pub behavior: mackes_config::MappingBehavior,
+    /// Profile-safe button mode visible to the operator.
+    pub button_mode: MappingButtonMode,
+    /// Inline validation error, if the last edit was rejected.
+    pub error: Option<String>,
+}
+
+impl AdvancedMappingEditor {
+    /// Creates an editor using the mapping and destination profile's legal range/defaults.
+    #[must_use]
+    pub fn from_mapping(mapping: &mackes_config::ControlMapping) -> Self {
+        let mut behavior = mapping.behavior.clone();
+        if let Some(profile) = mackes_profiles::builtin_profile(&mapping.destination_profile) {
+            if let Some(parameter) = mackes_profiles::compatible_parameters(
+                &profile,
+                mackes_profiles::SourceRole::Continuous,
+                true,
+            )
+            .into_iter()
+            .find(|item| item.parameter.id == mapping.destination_parameter)
+            {
+                behavior.destination_range = parameter.parameter.range;
+            }
+        }
+        Self {
+            mapping_id: mapping.id.clone(),
+            behavior,
+            button_mode: MappingButtonMode::ProfileDefault,
+            error: None,
+        }
+    }
+
+    /// Applies an edit locally; the caller submits the resulting behavior through IPC.
+    ///
+    /// # Errors
+    ///
+    /// Returns the profile-independent validation error without changing the editor.
+    pub fn set_behavior(&mut self, behavior: mackes_config::MappingBehavior) -> Result<(), String> {
+        if let Err(error) = behavior.validate() {
+            self.error = Some(error.to_owned());
+            return Err(error.to_owned());
+        }
+        self.behavior = behavior;
+        self.error = None;
+        Ok(())
+    }
+
+    /// Edits the inclusive source range and validates it atomically.
+    ///
+    /// # Errors
+    /// Returns an error when the range is invalid.
+    pub fn set_source_range(&mut self, range: (u16, u16)) -> Result<(), String> {
+        let mut behavior = self.behavior.clone();
+        behavior.source_range = range;
+        self.set_behavior(behavior)
+    }
+
+    /// Edits the inclusive destination range and validates it atomically.
+    ///
+    /// # Errors
+    /// Returns an error when the range is invalid.
+    pub fn set_destination_range(&mut self, range: (u16, u16)) -> Result<(), String> {
+        let mut behavior = self.behavior.clone();
+        behavior.destination_range = range;
+        self.set_behavior(behavior)
+    }
+
+    /// Changes direction without mutating any other behavior field.
+    ///
+    /// # Errors
+    /// Returns an error when the resulting behavior is invalid.
+    pub fn set_invert(&mut self, invert: bool) -> Result<(), String> {
+        let mut behavior = self.behavior.clone();
+        behavior.invert = invert;
+        self.set_behavior(behavior)
+    }
+
+    /// Selects one of the approved profile-independent curves.
+    ///
+    /// # Errors
+    /// Returns an error when the curve is not approved or the resulting behavior is invalid.
+    pub fn set_curve(&mut self, curve: &str) -> Result<(), String> {
+        if !matches!(curve, "linear" | "square" | "square_root") {
+            let error = "curve must be linear, square, or square_root".to_owned();
+            self.error = Some(error.clone());
+            return Err(error);
+        }
+        let mut behavior = self.behavior.clone();
+        behavior.curve = curve.into();
+        self.set_behavior(behavior)
+    }
+}
+
+impl MappingBrowser {
+    /// Builds a deterministic projection from authoritative mappings and optional activity.
+    #[must_use]
+    pub fn from_authoritative(
+        mappings: &[mackes_config::ControlMapping],
+        activity: Option<&serde_json::Value>,
+    ) -> Self {
+        let mut mappings = mappings.to_vec();
+        mappings.sort_by_key(|mapping| {
+            mackes_profiles::launch_control_physical_catalog()
+                .iter()
+                .position(|control| control.id.as_str() == mapping.physical_control_id)
+                .unwrap_or(usize::MAX)
+        });
+        let rows = mappings
+            .into_iter()
+            .map(|mapping| {
+                let (current_source_value, last_destination_result) = activity
+                    .filter(|value| {
+                        value.get("mapping_id").and_then(serde_json::Value::as_str)
+                            == Some(mapping.id.as_str())
+                    })
+                    .map_or((None, None), |value| {
+                        (
+                            value
+                                .get("source_value")
+                                .and_then(serde_json::Value::as_u64)
+                                .and_then(|v| u16::try_from(v).ok()),
+                            value
+                                .get("destination_value")
+                                .and_then(serde_json::Value::as_u64)
+                                .and_then(|v| u16::try_from(v).ok()),
+                        )
+                    });
+                let status = if !mapping.enabled {
+                    MappingBrowserStatus::Disabled
+                } else if mackes_profiles::builtin_profile(&mapping.destination_profile).is_none() {
+                    MappingBrowserStatus::Offline
+                } else if mackes_profiles::builtin_profile(&mapping.destination_profile)
+                    .is_some_and(|profile| {
+                        mackes_profiles::compatible_parameters(
+                            &profile,
+                            mackes_profiles::SourceRole::Continuous,
+                            true,
+                        )
+                        .iter()
+                        .any(|parameter| {
+                            parameter.parameter.id == mapping.destination_parameter
+                                && parameter.parameter.evidence
+                                    == Some(mackes_profiles::EvidenceLevel::Experimental)
+                        })
+                    })
+                {
+                    MappingBrowserStatus::Experimental
+                } else {
+                    MappingBrowserStatus::Enabled
+                };
+                let physical_label = mackes_profiles::launch_control_physical_catalog()
+                    .iter()
+                    .find(|control| control.id.as_str() == mapping.physical_control_id)
+                    .map_or_else(
+                        || mapping.physical_control_id.clone(),
+                        |control| control.label.clone(),
+                    );
+                MappingBrowserRow {
+                    mapping: mapping.clone(),
+                    id: mapping.id.clone(),
+                    physical_control_id: mapping.physical_control_id.clone(),
+                    physical_label,
+                    destination_path: format!(
+                        "{} › {} › {}",
+                        mapping.destination_profile,
+                        mapping.destination_effect,
+                        mapping.destination_parameter
+                    ),
+                    current_source_value,
+                    last_destination_result,
+                    status,
+                }
+            })
+            .collect();
+        Self { rows, selected: None, offset: 0 }
+    }
+
+    /// Selects a bounded row and returns its physical control for HUD focus sync.
+    pub fn select(&mut self, index: usize) -> Option<&str> {
+        let row = self.rows.get(index)?;
+        self.selected = Some(index);
+        row.physical_control_id.as_str().into()
+    }
+
+    /// Returns a compact page without wrapping or exposing hidden rows.
+    #[must_use]
+    pub fn page(&self, capacity: usize) -> &[MappingBrowserRow] {
+        let end = self.offset.saturating_add(capacity).min(self.rows.len());
+        self.rows.get(self.offset.min(self.rows.len())..end).unwrap_or(&[])
+    }
+}
+
+/// Produces bounded browser lines for wide, standard, and compact layouts.
+#[must_use]
+pub fn mapping_browser_lines(browser: &MappingBrowser, viewport: Viewport) -> Vec<String> {
+    let width = usize::from(viewport.width);
+    let capacity = if viewport.width >= 120 {
+        8
+    } else if viewport.width >= 80 {
+        5
+    } else {
+        3
+    };
+    let mut lines = vec![format!("MAPPINGS  {} total", browser.rows.len())];
+    lines.extend(browser.page(capacity).iter().enumerate().map(|(offset, row)| {
+        let index = browser.offset + offset;
+        let marker = if browser.selected == Some(index) { ">" } else { " " };
+        let source =
+            row.current_source_value.map_or_else(|| "—".to_owned(), |value| value.to_string());
+        let result =
+            row.last_destination_result.map_or_else(|| "—".to_owned(), |value| value.to_string());
+        format!(
+            "{marker} {} | {} | {} | src={} dst={}",
+            row.physical_label,
+            row.destination_path,
+            row.status.label(),
+            source,
+            result
+        )
+    }));
+    lines.into_iter().map(|line| line.chars().take(width).collect()).collect()
+}
+
+/// Converts an authoritative mapping outcome into a concise inline recovery instruction.
+#[must_use]
+pub const fn mapping_outcome_recovery(outcome: mackes_ipc::MappingOutcome) -> &'static str {
+    match outcome {
+        mackes_ipc::MappingOutcome::Applied => "Applied",
+        mackes_ipc::MappingOutcome::GenerationConflict => {
+            "State changed; refresh mappings and retry"
+        }
+        mackes_ipc::MappingOutcome::Conflict => {
+            "Occupied source/destination; choose Replace or Cancel"
+        }
+        mackes_ipc::MappingOutcome::PersistenceFailed => "Not saved; check config path and retry",
+        mackes_ipc::MappingOutcome::Invalid => "Invalid mapping; correct the affected field",
+        mackes_ipc::MappingOutcome::NothingToUndo => "Nothing to undo",
+    }
+}
+
+/// Parses only the bounded typed outcome field for inline display.
+#[must_use]
+pub fn mapping_response_notice(response: &str) -> String {
+    serde_json::from_str::<mackes_ipc::MappingResult>(response).map_or_else(
+        |_| "Mapping request failed; retry".to_owned(),
+        |result| mapping_outcome_recovery(result.outcome).to_owned(),
+    )
+}
+
+/// TUI projection for the daemon-owned assignment session.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AssignmentWizard {
+    /// Last authoritative session projection.
+    pub session: mackes_ipc::AssignmentSession,
+    /// Section to restore after cancellation or completion.
+    pub prior_section: AppSection,
+    /// Candidate identities captured during the bounded uniqueness window.
+    pub candidates: Vec<String>,
+    /// Client generation used for the next typed request.
+    pub generation: u64,
+}
+
+impl AssignmentWizard {
+    /// Creates an idle wizard returning to Live.
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            session: mackes_ipc::AssignmentSession::new("Live"),
+            prior_section: AppSection::Live,
+            candidates: Vec::new(),
+            generation: 0,
+        }
+    }
+
+    /// Enters capture from any task section and remembers the prior location.
+    pub fn start(&mut self, section: AppSection) -> mackes_ipc::AssignmentRequest {
+        self.prior_section = section;
+        self.candidates.clear();
+        self.request(mackes_ipc::AssignmentAction::Start, None)
+    }
+
+    /// Captures one stable physical ID; repeated IDs are debounced locally.
+    pub fn capture(&mut self, physical_control_id: &str) -> Option<mackes_ipc::AssignmentRequest> {
+        let control = mackes_profiles::launch_control_physical_catalog()
+            .into_iter()
+            .find(|control| control.id.as_str() == physical_control_id)?;
+        if control.role == mackes_profiles::PhysicalControlRole::Utility {
+            return None;
+        }
+        if self.candidates.iter().any(|candidate| candidate == physical_control_id) {
+            return None;
+        }
+        self.candidates.push(physical_control_id.to_owned());
+        Some(self.request(
+            mackes_ipc::AssignmentAction::ControlCaptured,
+            Some(physical_control_id.to_owned()),
+        ))
+    }
+
+    /// Classifies a bounded simultaneous capture without guessing physical identity from MIDI.
+    #[must_use]
+    pub fn classify_capture(control_ids: &[&str]) -> mackes_ipc::CandidateCapture {
+        mackes_ipc::classify_candidates(control_ids)
+    }
+
+    /// Builds a generation-checked typed action request for keyboard/controller parity.
+    #[must_use]
+    pub const fn request(
+        &self,
+        action: mackes_ipc::AssignmentAction,
+        physical_control_id: Option<String>,
+    ) -> mackes_ipc::AssignmentRequest {
+        mackes_ipc::AssignmentRequest {
+            generation: self.generation,
+            action,
+            physical_control_id,
+            destination_profile: None,
+            destination_effect: None,
+            destination_parameter: None,
+        }
+    }
+
+    /// Builds the typed commit request for one profile-owned parameter choice.
+    #[must_use]
+    pub fn destination_request(
+        &self,
+        choice: &AssignmentParameterChoice,
+    ) -> mackes_ipc::AssignmentRequest {
+        mackes_ipc::AssignmentRequest {
+            generation: self.generation,
+            action: mackes_ipc::AssignmentAction::Commit,
+            physical_control_id: self.candidates.first().cloned(),
+            destination_profile: Some(choice.profile_id.clone()),
+            destination_effect: Some(choice.effect_id.clone()),
+            destination_parameter: Some(choice.id.clone()),
+        }
+    }
+
+    /// Builds a commit request from the browser's current bounded parameter selection.
+    #[must_use]
+    pub fn selected_destination_request(
+        &self,
+        choices: &AssignmentChoiceBrowser,
+    ) -> Option<mackes_ipc::AssignmentRequest> {
+        choices.parameters.get(choices.selected).map(|choice| self.destination_request(choice))
+    }
+
+    /// Applies an authoritative result without creating local optimistic success.
+    pub fn reconcile(&mut self, result: mackes_ipc::AssignmentResult) {
+        self.generation = result.generation;
+        self.session = result.session;
+        if matches!(self.session.phase, mackes_ipc::AssignmentPhase::Idle) {
+            self.candidates.clear();
+        }
+    }
+}
+
+impl Default for AssignmentWizard {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Produces deterministic assignment feedback lines for the terminal renderer.
+#[must_use]
+pub fn assignment_wizard_lines(wizard: &AssignmentWizard, viewport: Viewport) -> Vec<String> {
+    let phase = match wizard.session.phase {
+        mackes_ipc::AssignmentPhase::Idle => "READY",
+        mackes_ipc::AssignmentPhase::AwaitControl => "MOVE ONLY ONE CONTROL",
+        mackes_ipc::AssignmentPhase::ChooseDevice => "CHOOSE DEVICE",
+        mackes_ipc::AssignmentPhase::ChooseEffect => "CHOOSE EFFECT",
+        mackes_ipc::AssignmentPhase::ChooseParameter => "CHOOSE PARAMETER",
+        mackes_ipc::AssignmentPhase::ConfirmReplace => "REPLACE EXISTING MAPPING?",
+        mackes_ipc::AssignmentPhase::Committing => "ASSIGNING",
+        mackes_ipc::AssignmentPhase::Succeeded => "ASSIGNED",
+        mackes_ipc::AssignmentPhase::Failed => "ASSIGNMENT FAILED — RETRY",
+        mackes_ipc::AssignmentPhase::Interrupted => "INTERRUPTED — RESUME OR DISCARD",
+    };
+    let mut lines = vec![
+        format!("ASSIGNMENT / {}", wizard.prior_section.label()),
+        phase.to_owned(),
+        format!(
+            "Position: {} OF {}",
+            wizard.session.index.saturating_add(1),
+            wizard.session.total.max(1)
+        ),
+        format!("Candidates: {}", wizard.candidates.len()),
+    ];
+    if wizard.candidates.len() > 1 {
+        lines.push("MOVE ONLY ONE CONTROL".into());
+    }
+    let width = usize::from(viewport.width);
+    lines.into_iter().map(|line| line.chars().take(width).collect()).collect()
+}
+
+/// One profile-backed destination choice with an explicit support reason.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AssignmentParameterChoice {
+    /// Stable destination profile identity.
+    pub profile_id: String,
+    /// Stable profile parameter identity.
+    pub id: String,
+    /// Exact profile-owned label.
+    pub label: String,
+    /// Stable effect-block identity and label.
+    pub effect_id: String,
+    /// Exact effect-block label.
+    pub effect_label: String,
+    /// Compatibility reason shown to the operator.
+    pub reason: mackes_profiles::SupportReason,
+}
+
+/// Deterministic device/effect/parameter chooser derived only from profile metadata.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct AssignmentChoiceBrowser {
+    /// Connected profile IDs in catalog order.
+    pub devices: Vec<String>,
+    /// Effect blocks for the selected profile in signal order.
+    pub effects: Vec<(String, String)>,
+    /// Role-filtered parameter choices in profile order.
+    pub parameters: Vec<AssignmentParameterChoice>,
+    /// Current bounded index at the active chooser level.
+    pub selected: usize,
+}
+
+impl AssignmentChoiceBrowser {
+    /// Creates a chooser from connected profiles and one captured physical role.
+    #[must_use]
+    pub fn from_profiles(
+        connected_profile_ids: &[&str],
+        selected_profile: Option<&str>,
+        role: mackes_profiles::SourceRole,
+    ) -> Self {
+        let devices = connected_profile_ids
+            .iter()
+            .copied()
+            .filter(|id| mackes_profiles::builtin_profile(id).is_some())
+            .map(str::to_owned)
+            .collect::<Vec<_>>();
+        let Some(profile_id) = selected_profile.filter(|id| devices.iter().any(|item| item == id))
+        else {
+            return Self { devices, ..Self::default() };
+        };
+        let Some(profile) = mackes_profiles::builtin_profile(profile_id) else {
+            return Self { devices, ..Self::default() };
+        };
+        let blocks = mackes_profiles::effect_blocks(&profile);
+        let effects =
+            blocks.iter().map(|block| (block.id.clone(), block.label.clone())).collect::<Vec<_>>();
+        let parameters = mackes_profiles::compatible_parameters(&profile, role, true)
+            .into_iter()
+            .filter(|item| {
+                matches!(
+                    item.reason,
+                    mackes_profiles::SupportReason::Compatible
+                        | mackes_profiles::SupportReason::Experimental
+                )
+            })
+            .map(|item| {
+                let (effect_id, effect_label) = blocks
+                    .iter()
+                    .find(|block| {
+                        block.parameters.iter().any(|parameter| parameter.id == item.parameter.id)
+                    })
+                    .map_or_else(
+                        || ("general".to_owned(), "General".to_owned()),
+                        |block| (block.id.clone(), block.label.clone()),
+                    );
+                AssignmentParameterChoice {
+                    profile_id: profile.id.clone(),
+                    effect_id,
+                    effect_label,
+                    id: item.parameter.id,
+                    label: item.parameter.label,
+                    reason: item.reason,
+                }
+            })
+            .collect();
+        Self { devices, effects, parameters, selected: 0 }
+    }
+
+    /// Moves selection without wrapping and reports whether it changed.
+    pub fn move_selection(&mut self, down: bool) -> bool {
+        let count = self.parameters.len().max(self.effects.len()).max(self.devices.len());
+        if count == 0 {
+            return false;
+        }
+        let next = if down {
+            self.selected.saturating_add(1).min(count - 1)
+        } else {
+            self.selected.saturating_sub(1)
+        };
+        let changed = next != self.selected;
+        self.selected = next;
+        changed
+    }
 }
 
 /// Transactional fine-grained filter draft for a mapping editor.
@@ -2202,6 +2991,17 @@ pub enum DashboardEvent {
     LiveActivity(LiveActivity),
     /// Replaces the physical-device inventory projection.
     PhysicalDevices(Vec<PhysicalDevice>),
+    /// Replaces the authoritative active mapping projection.
+    ControlMappings(Vec<mackes_config::ControlMapping>),
+    /// Updates the authoritative mapping-store generation and Undo availability.
+    MappingStore {
+        /// Mapping-store generation.
+        generation: u64,
+        /// Whether one bounded Undo record is available.
+        undo_available: bool,
+    },
+    /// Updates the latest mapping source/result activity.
+    MappingActivity(serde_json::Value),
     /// Updates the retained mutation-audit count.
     AuditCount(u64),
     /// Updates the newest safe mutation-audit summary.
@@ -2227,6 +3027,15 @@ impl DashboardEvent {
         }
         if let Some(value) = payload.get("route_generation").and_then(serde_json::Value::as_u64) {
             events.push(Self::RouteGeneration(value));
+        }
+        if let Some(generation) = payload.get("generation").and_then(serde_json::Value::as_u64) {
+            events.push(Self::MappingStore {
+                generation,
+                undo_available: payload
+                    .get("mapping_undo_available")
+                    .and_then(serde_json::Value::as_bool)
+                    .unwrap_or(false),
+            });
         }
         if let Some(value) =
             payload.get("route_undo_available").and_then(serde_json::Value::as_bool)
@@ -2267,6 +3076,14 @@ impl DashboardEvent {
         }
         if let Some(devices) = payload.get("physical_devices").and_then(parse_physical_devices) {
             events.push(Self::PhysicalDevices(devices));
+        }
+        if let Some(mappings) = payload.get("control_mappings").and_then(|value| {
+            serde_json::from_value::<Vec<mackes_config::ControlMapping>>(value.clone()).ok()
+        }) {
+            events.push(Self::ControlMappings(mappings));
+        }
+        if let Some(activity) = payload.get("last_mapping_activity") {
+            events.push(Self::MappingActivity(activity.clone()));
         }
         events
     }
@@ -2928,6 +3745,21 @@ impl DashboardState {
                 self.effects_groups.request_resync();
             }
             DashboardEvent::RouteGeneration(value) => self.route_generation = value,
+            DashboardEvent::MappingStore { generation, undo_available } => {
+                self.mapping_generation = generation;
+                self.mapping_undo_available = undo_available;
+            }
+            DashboardEvent::MappingActivity(activity) => {
+                self.mapping_activity = Some(activity.clone());
+                let mappings = self
+                    .mapping_browser
+                    .rows
+                    .iter()
+                    .map(|row| row.mapping.clone())
+                    .collect::<Vec<_>>();
+                self.mapping_browser =
+                    MappingBrowser::from_authoritative(&mappings, Some(&activity));
+            }
             DashboardEvent::RouteUndoAvailable(value) => self.route_undo_available = value,
             DashboardEvent::AuditCount(value) => self.audit_count = value,
             DashboardEvent::LatestAudit(value) => self.latest_audit = Some(value),
@@ -2946,6 +3778,10 @@ impl DashboardState {
                 self.live_activity_age_nanos = 0;
             }
             DashboardEvent::PhysicalDevices(devices) => self.refresh_effects_devices(devices),
+            DashboardEvent::ControlMappings(mappings) => {
+                self.mapping_browser =
+                    MappingBrowser::from_authoritative(&mappings, self.mapping_activity.as_ref());
+            }
         }
     }
 
@@ -3108,6 +3944,153 @@ pub fn draw_dashboard(frame: &mut Frame<'_>, area: Rect, dashboard: &DashboardSt
         .block(Block::default().title("mackes-midi-matrix").borders(Borders::ALL))
         .style(Style::default());
     frame.render_widget(widget, area);
+}
+
+/// Renders the task-oriented shell chrome around a focused workspace.
+pub fn draw_task_shell(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    shell: &TaskShellState,
+    dashboard: &DashboardState,
+) {
+    draw_task_shell_with_content(frame, area, shell, dashboard, None);
+}
+
+/// Renders the task shell with the focused section's capability view embedded.
+pub fn draw_task_shell_with_content(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    shell: &TaskShellState,
+    dashboard: &DashboardState,
+    content: Option<&str>,
+) {
+    let vertical = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Length(2), Constraint::Min(3), Constraint::Length(1)])
+        .split(area);
+    let header = Paragraph::new(format!(
+        "LIVE  health={}  scene={}  save=ready",
+        dashboard.health,
+        dashboard.active_scene.as_deref().unwrap_or("none")
+    ))
+    .block(Block::default().borders(Borders::BOTTOM));
+    frame.render_widget(header, vertical[0]);
+    let rail_width = if area.width >= 80 { 16 } else { 10 };
+    let body = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Length(rail_width), Constraint::Min(1)])
+        .split(vertical[1]);
+    let rail = AppSection::all()
+        .iter()
+        .map(|section| {
+            let marker = if *section == shell.focus.section { "▶" } else { " " };
+            format!("{marker} {}", section.label())
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    frame.render_widget(
+        Paragraph::new(rail).block(Block::default().borders(Borders::RIGHT)),
+        body[0],
+    );
+    let mut main_lines = format!(
+        "{}\n{}\n\nFocused: {}\nPosition: {} OF {}\n\n{}",
+        shell.focus.breadcrumb(),
+        section_landing(
+            shell.focus.section,
+            match shell.focus.section {
+                AppSection::MapControls => !dashboard.mapping_browser.rows.is_empty(),
+                AppSection::Devices => !dashboard.physical_devices.is_empty(),
+                _ => dashboard.active_scene.is_some(),
+            },
+        ),
+        shell.focus.target,
+        shell.target_index + 1,
+        shell.target_count,
+        dashboard.health
+    );
+    if shell.focus.section == AppSection::MapControls {
+        main_lines.push_str("\n\n");
+        main_lines.push_str(
+            &mapping_browser_lines(
+                &dashboard.mapping_browser,
+                Viewport::new(body[1].width, body[1].height),
+            )
+            .join("\n"),
+        );
+    }
+    if !dashboard.assignment_feedback.is_empty() {
+        main_lines.push_str("\n\n");
+        main_lines.push_str(&dashboard.assignment_feedback.join("\n"));
+    }
+    if let Some(content) = content.filter(|content| !content.is_empty()) {
+        main_lines.push_str("\n\n");
+        main_lines.push_str(content);
+    }
+    let template_status =
+        launch_control_template_readiness(dashboard.launch_control_template.as_ref());
+    if template_status != "MACKES TEMPLATE READY" {
+        main_lines.push_str("\n\n");
+        main_lines.push_str(template_status);
+    }
+    let main = Paragraph::new(main_lines)
+        .block(Block::default().borders(Borders::ALL).title(shell.focus.section.label()));
+    frame.render_widget(main, body[1]);
+    frame.render_widget(
+        Paragraph::new("↑↓ focus  ←→ section  Enter select  Esc back  ? help  ! panic  q quit"),
+        vertical[2],
+    );
+    if shell.help_visible {
+        let width = 58.min(area.width);
+        let height = 9.min(area.height);
+        let popup = Rect {
+            x: area.x + area.width.saturating_sub(width) / 2,
+            y: area.y + area.height.saturating_sub(height) / 2,
+            width,
+            height,
+        };
+        frame.render_widget(
+            Paragraph::new(format!(
+                "HELP — {}\n{}\n↑↓ move focus   ←→ change task\nEnter select   Esc back\n! panic      q quit\n? close help",
+                shell.focus.section.label(),
+                section_help(shell.focus.section)
+            ))
+                .block(Block::default().borders(Borders::ALL).title("Keyboard")),
+            popup,
+        );
+    }
+}
+
+const fn section_help(section: AppSection) -> &'static str {
+    match section {
+        AppSection::Live => "Perform the active scene; activity and health are read-only here.",
+        AppSection::MapControls => {
+            "Assign or inspect controls; Learn, browser, Advanced, enable, replace, delete, Undo."
+        }
+        AppSection::Scenes => {
+            "Recall or organize projects, scenes, songs, and setlists; results stay inline."
+        }
+        AppSection::Devices => {
+            "Inspect Reflex and MicroPitch profiles; unavailable devices remain visible with recovery."
+        }
+        AppSection::System => {
+            "Review diagnostics, monitor, backups, configuration, and Advanced → Legacy tools."
+        }
+    }
+}
+
+/// Returns the bounded landing or empty-state copy for a task section.
+#[must_use]
+pub const fn section_landing(section: AppSection, has_content: bool) -> &'static str {
+    if has_content {
+        return section.purpose();
+    }
+    match section {
+        AppSection::Live => "No active scene — select a scene to begin performance.",
+        AppSection::MapControls => "No mappings yet — press Device on a controller to assign one.",
+        AppSection::Scenes => "No scenes loaded — create or import a scene to continue.",
+        AppSection::Devices => "No devices connected — connect a device and refresh.",
+        AppSection::System => "No diagnostics available — the daemon will report status here.",
+    }
 }
 
 impl Viewport {
@@ -3824,8 +4807,6 @@ fn destination_profile_for_name(name: &str) -> Option<mackes_profiles::DevicePro
         "lexicon.reflex"
     } else if name.contains("m-vave") || name.contains("mvave") || name.contains("ir box") {
         "m-vave.ir-box"
-    } else if name.contains("arena") {
-        "valeton.arena2000"
     } else {
         return None;
     };
@@ -3924,6 +4905,28 @@ pub fn launch_control_template_from_config(
             .collect::<Option<Vec<_>>>()?,
     };
     (result.validate().is_ok()).then_some(result)
+}
+
+/// Returns the operator-facing readiness state for the documented User 1 layout.
+///
+/// The decision is deliberately fail-closed: an absent, invalid, non-User-1, or
+/// incomplete template cannot be treated as ready for deterministic capture.
+#[must_use]
+pub fn launch_control_template_readiness(template: Option<&LaunchControlTemplate>) -> &'static str {
+    let Some(template) = template else {
+        return "MACKES TEMPLATE REQUIRED";
+    };
+    if template.validate().is_err() || template.template != 0 {
+        return "MACKES TEMPLATE MISMATCH";
+    }
+    let assignable = mackes_profiles::launch_control_physical_catalog()
+        .iter()
+        .filter(|control| control.role != mackes_profiles::PhysicalControlRole::Utility)
+        .count();
+    if template.assignments.len() != assignable {
+        return "MACKES TEMPLATE REQUIRED";
+    }
+    "MACKES TEMPLATE READY"
 }
 
 #[cfg(test)]
@@ -4066,6 +5069,69 @@ mod tests {
     }
 
     #[test]
+    fn task_shell_renderer_keeps_rail_focus_and_footer_visible() {
+        let backend = TestBackend::new(80, 24);
+        let mut terminal = Terminal::new(backend).expect("test backend");
+        let mut shell = TaskShellState::initial(3).expect("shell");
+        shell.apply(ShellAction::Help);
+        terminal
+            .draw(|frame| draw_task_shell(frame, frame.area(), &shell, &DashboardState::default()))
+            .expect("draw");
+        let rendered: String = terminal
+            .backend()
+            .buffer()
+            .content()
+            .iter()
+            .map(ratatui::buffer::Cell::symbol)
+            .collect();
+        assert!(rendered.contains("▶ Live"));
+        assert!(rendered.contains("Map Controls"));
+        assert!(rendered.contains("Esc back"));
+        assert!(rendered.contains("HELP"));
+        assert!(!rendered.to_ascii_lowercase().contains("workspace"));
+        assert!(!rendered.contains("1-9"));
+    }
+
+    #[test]
+    fn task_shell_renderer_shows_assignment_feedback_at_compact_width() {
+        let backend = TestBackend::new(80, 24);
+        let mut terminal = Terminal::new(backend).expect("test backend");
+        let shell = TaskShellState::initial(3).expect("shell");
+        let dashboard = DashboardState {
+            assignment_feedback: vec![
+                "ASSIGNMENT  MOVE ONLY ONE CONTROL".into(),
+                "CHOOSE DEVICE  1/2".into(),
+            ],
+            ..DashboardState::default()
+        };
+        terminal
+            .draw(|frame| draw_task_shell(frame, frame.area(), &shell, &dashboard))
+            .expect("draw");
+        let buffer = terminal.backend().buffer();
+        let rendered: String = buffer.content().iter().map(ratatui::buffer::Cell::symbol).collect();
+        assert!(rendered.contains("MOVE ONLY ONE CONTROL"));
+        assert!(rendered.contains("CHOOSE DEVICE"));
+    }
+
+    #[test]
+    fn task_shell_renderer_surfaces_missing_controller_template() {
+        let backend = TestBackend::new(80, 24);
+        let mut terminal = Terminal::new(backend).expect("test backend");
+        let shell = TaskShellState::initial(3).expect("shell");
+        terminal
+            .draw(|frame| draw_task_shell(frame, frame.area(), &shell, &DashboardState::default()))
+            .expect("draw");
+        let rendered: String = terminal
+            .backend()
+            .buffer()
+            .content()
+            .iter()
+            .map(ratatui::buffer::Cell::symbol)
+            .collect();
+        assert!(rendered.contains("MACKES TEMPLATE REQUIRED"));
+    }
+
+    #[test]
     fn controller_renderer_preserves_degraded_and_dirty_state() {
         let backend = TestBackend::new(100, 37);
         let mut terminal = Terminal::new(backend).expect("test backend");
@@ -4097,7 +5163,7 @@ mod tests {
             health: "ready".into(),
             physical_devices: vec![PhysicalDevice {
                 id: "launch-control-xl".into(),
-                name: "Launch Control XL Mk1".into(),
+                name: "Launch Control XL Mk2".into(),
                 inputs: vec!["lc-in".into()],
                 outputs: vec!["lc-out".into()],
                 state: "connected".into(),
@@ -4141,7 +5207,7 @@ mod tests {
             health: "ready".into(),
             physical_devices: vec![
                 PhysicalDevice {
-                    name: "Launch Control XL Mk1".into(),
+                    name: "Launch Control XL Mk2".into(),
                     outputs: vec!["lc".into()],
                     ..Default::default()
                 },
@@ -4170,7 +5236,7 @@ mod tests {
             .map(ratatui::buffer::Cell::symbol)
             .collect();
         for label in [
-            "Launch Control XL Mk1",
+            "Launch Control XL Mk2",
             "MicroPitch Pedal",
             "Lexicon Reflex",
             "SOURCE:",
@@ -4219,6 +5285,8 @@ mod tests {
                 number: 21,
                 kind: "cc".into(),
                 destination: Some("mixer:gain".into()),
+                physical_control_id: None,
+                needs_review: false,
             }],
         };
         let converted = launch_control_template_from_config(&template).expect("valid template");
@@ -4231,6 +5299,21 @@ mod tests {
             ..template
         };
         assert_eq!(launch_control_template_from_config(&invalid), None);
+    }
+
+    #[test]
+    fn launch_control_template_readiness_fails_closed_for_missing_and_incomplete_layouts() {
+        assert_eq!(launch_control_template_readiness(None), "MACKES TEMPLATE REQUIRED");
+        let incomplete = LaunchControlTemplate { template: 0, assignments: Vec::new() };
+        assert_eq!(
+            launch_control_template_readiness(Some(&incomplete)),
+            "MACKES TEMPLATE REQUIRED"
+        );
+        let wrong_slot = LaunchControlTemplate { template: 1, assignments: Vec::new() };
+        assert_eq!(
+            launch_control_template_readiness(Some(&wrong_slot)),
+            "MACKES TEMPLATE MISMATCH"
+        );
     }
 
     #[test]
@@ -4307,6 +5390,44 @@ mod tests {
         assert_eq!(keymap.description('!'), Some("Panic"));
         assert_eq!(keymap.description('x'), None);
         assert_eq!(keymap.command_for('x'), None);
+    }
+
+    #[test]
+    fn task_shell_has_five_stable_sections_and_exact_breadcrumbs() {
+        assert_eq!(
+            AppSection::all().map(AppSection::label),
+            ["Live", "Map Controls", "Scenes", "Devices", "System"]
+        );
+        assert_eq!(AppSection::MapControls.purpose(), "Assign physical controls to parameters");
+        let focus = FocusPath::new(AppSection::MapControls, "Source control").expect("focus");
+        assert_eq!(focus.breadcrumb(), "Map Controls / Source control");
+        assert!(FocusPath::new(AppSection::Live, "").is_err());
+    }
+
+    #[test]
+    fn task_shell_navigation_is_bounded_and_resets_target_on_section_change() {
+        let mut shell = TaskShellState::initial(2).expect("shell");
+        shell.apply(ShellAction::Down);
+        shell.apply(ShellAction::Down);
+        assert_eq!(shell.target_index, 1);
+        assert_eq!(shell.focus.target, "Target 2");
+        shell.apply(ShellAction::Right);
+        assert_eq!(shell.focus.section, AppSection::MapControls);
+        assert_eq!(shell.target_index, 0);
+        shell.apply(ShellAction::Left);
+        shell.apply(ShellAction::Up);
+        assert_eq!(shell.focus.section, AppSection::Live);
+        assert_eq!(shell.target_index, 0);
+    }
+
+    #[test]
+    fn task_shell_primary_keys_and_vim_aliases_share_actions() {
+        assert_eq!(shell_action_for_key(ShellKey::Up), Some(ShellAction::Up));
+        assert_eq!(shell_action_for_key(ShellKey::Enter), Some(ShellAction::Enter));
+        assert_eq!(shell_action_for_key(ShellKey::Esc), Some(ShellAction::Back));
+        assert_eq!(shell_action_for_char('h'), Some(ShellAction::Left));
+        assert_eq!(shell_action_for_char('l'), Some(ShellAction::Right));
+        assert_eq!(shell_action_for_key(ShellKey::Help), Some(ShellAction::Help));
     }
 
     #[test]
@@ -4531,7 +5652,8 @@ mod tests {
         dashboard.apply_event(DashboardEvent::PerformanceLock(true));
         dashboard.apply_event(DashboardEvent::ActivationProgress { completed: 2, total: 3 });
         dashboard.apply_event(DashboardEvent::ActivationResult("partial: 1 failed".into()));
-        dashboard.apply_event(DashboardEvent::DeviceHealth(vec![("arena".into(), "ready".into())]));
+        dashboard
+            .apply_event(DashboardEvent::DeviceHealth(vec![("processor".into(), "ready".into())]));
         dashboard.apply_event(DashboardEvent::Notification {
             severity: SemanticToken::Warning,
             message: "endpoint degraded".into(),
@@ -4541,8 +5663,8 @@ mod tests {
         assert!(dashboard.performance_locked);
         assert_eq!(dashboard.activation_progress, (2, 3));
         assert_eq!(dashboard.activation_result.as_deref(), Some("partial: 1 failed"));
-        assert_eq!(dashboard.device_health, vec![("arena".into(), "ready".into())]);
-        assert!(dashboard.frame_lines().iter().any(|line| line == "device=arena health=ready"));
+        assert_eq!(dashboard.device_health, vec![("processor".into(), "ready".into())]);
+        assert!(dashboard.frame_lines().iter().any(|line| line == "device=processor health=ready"));
         assert!(dashboard.frame_lines().iter().any(|line| line == "[WARN] endpoint degraded"));
         dashboard.set_device_health(
             (0..33).map(|index| (format!("d{index}"), "ready".into())).collect(),
@@ -4721,7 +5843,7 @@ mod tests {
 
     #[test]
     fn destination_browser_filters_unknown_devices_and_cycles_supported_profiles() {
-        let names = ["Reflex", "M-VAVE IR Box", "Arena 2000"];
+        let names = ["Reflex", "M-VAVE IR Box"];
         for name in names {
             let device = PhysicalDevice {
                 name: name.into(),
@@ -5254,5 +6376,303 @@ mod tests {
         }
         assert_eq!(ReflexWorkspace::from_compiled_algorithm(0), Err("unknown Reflex algorithm"));
         assert_eq!(ReflexWorkspace::compiled_parameter_views(0), Err("unknown Reflex algorithm"));
+    }
+
+    #[test]
+    fn mapping_browser_is_stable_musical_and_compact() {
+        let mapping = mackes_config::ControlMapping {
+            id: "map-1".into(),
+            controller_profile: "launch-control-xl-mk2".into(),
+            physical_control_id: "knob-r1-c1".into(),
+            source_endpoint: "controller".into(),
+            source_kind: "cc".into(),
+            source_channel: 0,
+            source_number: 21,
+            destination_endpoint: "processor".into(),
+            destination_profile: "lexicon.reflex".into(),
+            destination_effect: "algorithm-1".into(),
+            destination_parameter: "reflex.parameter-1".into(),
+            behavior: mackes_config::MappingBehavior {
+                source_range: (0, 127),
+                destination_range: (0, 127),
+                invert: false,
+                curve: "linear".into(),
+            },
+            enabled: true,
+            profile_version: 1,
+        };
+        let activity = serde_json::json!({
+            "mapping_id": "map-1", "source_value": 64, "destination_value": 32
+        });
+        let disabled = mackes_config::ControlMapping {
+            id: "map-disabled".into(),
+            physical_control_id: "knob-r1-c2".into(),
+            enabled: false,
+            ..mapping.clone()
+        };
+        let offline = mackes_config::ControlMapping {
+            id: "map-offline".into(),
+            physical_control_id: "knob-r1-c3".into(),
+            destination_profile: "unknown.profile".into(),
+            ..mapping.clone()
+        };
+        let mut browser =
+            MappingBrowser::from_authoritative(&[mapping, disabled, offline], Some(&activity));
+        assert_eq!(browser.rows[0].physical_label, "Top knob 1");
+        assert_eq!(
+            browser.rows[0].destination_path,
+            "lexicon.reflex › algorithm-1 › reflex.parameter-1"
+        );
+        assert_eq!(browser.rows[0].status, MappingBrowserStatus::Enabled);
+        assert_eq!(browser.rows[0].current_source_value, Some(64));
+        assert_eq!(browser.rows[0].last_destination_result, Some(32));
+        assert_eq!(browser.rows[1].status, MappingBrowserStatus::Disabled);
+        assert_eq!(browser.rows[2].status, MappingBrowserStatus::Offline);
+        assert_eq!(browser.select(0), Some("knob-r1-c1"));
+        assert_eq!(browser.page(1).len(), 1);
+        assert_eq!(browser.page(0).len(), 0);
+        let lines = mapping_browser_lines(&browser, Viewport::new(80, 8));
+        assert!(lines.iter().all(|line| line.chars().count() <= 80));
+        assert!(lines[1].contains("Top knob 1") && lines[1].contains("lexicon.reflex"));
+        assert!(lines.iter().any(|line| line.contains("| OFF |")));
+        assert!(lines.iter().any(|line| line.contains("OFFLINE")));
+        assert_eq!(mapping_browser_lines(&browser, Viewport::new(79, 8)).len(), 4);
+    }
+
+    #[test]
+    fn advanced_mapping_editor_exposes_profile_range_and_rejects_partial_edits() {
+        let mapping = mackes_config::ControlMapping {
+            id: "map-advanced".into(),
+            controller_profile: "launch-control-xl-mk2".into(),
+            physical_control_id: "knob-r1-c1".into(),
+            source_endpoint: "controller".into(),
+            source_kind: "cc".into(),
+            source_channel: 0,
+            source_number: 21,
+            destination_endpoint: "processor".into(),
+            destination_profile: "lexicon.reflex".into(),
+            destination_effect: "algorithm-1".into(),
+            destination_parameter: "reflex.parameter-1".into(),
+            behavior: mackes_config::MappingBehavior {
+                source_range: (0, 127),
+                destination_range: (0, 127),
+                invert: false,
+                curve: "linear".into(),
+            },
+            enabled: true,
+            profile_version: 1,
+        };
+        let mut editor = AdvancedMappingEditor::from_mapping(&mapping);
+        assert_eq!(editor.button_mode, MappingButtonMode::ProfileDefault);
+        assert_eq!(editor.behavior.destination_range, (0, 127));
+        editor.set_source_range((8, 96)).expect("source range");
+        editor.set_destination_range((12, 100)).expect("destination range");
+        editor.set_invert(true).expect("invert");
+        editor.set_curve("square").expect("curve");
+        assert_eq!(editor.behavior.source_range, (8, 96));
+        assert_eq!(editor.behavior.destination_range, (12, 100));
+        assert!(editor.behavior.invert);
+        assert_eq!(editor.behavior.curve, "square");
+        let before = editor.behavior.clone();
+        assert!(editor
+            .set_behavior(mackes_config::MappingBehavior {
+                source_range: (127, 0),
+                ..before.clone()
+            })
+            .is_err());
+        assert_eq!(editor.behavior, before);
+        assert!(editor.error.is_some());
+    }
+
+    #[test]
+    fn mapping_outcomes_keep_recovery_action_inline_and_typed() {
+        let result = mackes_ipc::MappingResult {
+            generation: 4,
+            undo_available: true,
+            active: None,
+            draft: None,
+            outcome: mackes_ipc::MappingOutcome::Conflict,
+        };
+        let response = serde_json::to_string(&result).expect("mapping result");
+        assert_eq!(
+            mapping_response_notice(&response),
+            "Occupied source/destination; choose Replace or Cancel"
+        );
+        assert_eq!(mapping_response_notice("{}"), "Mapping request failed; retry");
+    }
+
+    #[test]
+    fn task_sections_have_explicit_empty_and_populated_landings() {
+        for section in AppSection::all() {
+            assert!(!section_landing(section, false).is_empty());
+            assert_eq!(section_landing(section, true), section.purpose());
+        }
+        assert!(section_landing(AppSection::MapControls, false).contains("Device"));
+    }
+
+    #[test]
+    fn every_task_section_has_actionable_contextual_help() {
+        for section in AppSection::all() {
+            let help = section_help(section);
+            assert!(!help.is_empty());
+            assert!(help.split_whitespace().count() >= 5);
+        }
+        assert!(section_help(AppSection::MapControls).contains("Advanced"));
+        assert!(section_help(AppSection::Scenes).contains("setlists"));
+        assert!(section_help(AppSection::Devices).contains("Reflex"));
+        assert!(section_help(AppSection::System).contains("Legacy"));
+    }
+
+    #[test]
+    fn assignment_wizard_preserves_prior_section_and_debounces_capture() {
+        let mut wizard = AssignmentWizard::new();
+        let start = wizard.start(AppSection::Devices);
+        assert_eq!(start.action, mackes_ipc::AssignmentAction::Start);
+        assert_eq!(wizard.prior_section, AppSection::Devices);
+        let capture = wizard.capture("knob-r1-c1").expect("first capture");
+        assert_eq!(capture.physical_control_id.as_deref(), Some("knob-r1-c1"));
+        assert!(wizard.capture("knob-r1-c1").is_none());
+        assert!(wizard.capture("utility-1").is_none());
+        assert!(wizard.capture("unknown-control").is_none());
+        assert_eq!(AssignmentWizard::classify_capture(&[]), mackes_ipc::CandidateCapture::None);
+        assert_eq!(
+            AssignmentWizard::classify_capture(&["knob-r1-c1", "knob-r1-c1"]),
+            mackes_ipc::CandidateCapture::Unique
+        );
+        assert_eq!(
+            AssignmentWizard::classify_capture(&["knob-r1-c1", "fader-1"]),
+            mackes_ipc::CandidateCapture::Ambiguous
+        );
+        wizard.reconcile(mackes_ipc::AssignmentResult {
+            generation: 1,
+            session: mackes_ipc::AssignmentSession {
+                phase: mackes_ipc::AssignmentPhase::ChooseDevice,
+                prior_screen: "Devices".into(),
+                index: 0,
+                total: 2,
+                has_draft: true,
+                interrupted_phase: None,
+            },
+            applied: true,
+            reason: None,
+        });
+        assert_eq!(wizard.generation, 1);
+        assert_eq!(wizard.session.phase, mackes_ipc::AssignmentPhase::ChooseDevice);
+        let lines = assignment_wizard_lines(&wizard, Viewport::new(32, 8));
+        assert!(lines.iter().all(|line| line.chars().count() <= 32));
+        assert!(lines.iter().any(|line| line.contains("CHOOSE DEVICE")));
+        assert!(lines.iter().any(|line| line.contains("Position: 1 OF 2")));
+    }
+
+    #[test]
+    fn assignment_wizard_entry_is_available_from_every_task_section() {
+        for section in AppSection::all() {
+            let mut wizard = AssignmentWizard::new();
+            let request = wizard.start(section);
+            assert_eq!(request.action, mackes_ipc::AssignmentAction::Start);
+            assert_eq!(wizard.prior_section, section);
+            assert_eq!(wizard.session.prior_screen, "Live");
+            wizard.reconcile(mackes_ipc::AssignmentResult {
+                generation: 1,
+                session: mackes_ipc::AssignmentSession {
+                    phase: mackes_ipc::AssignmentPhase::Idle,
+                    prior_screen: section.label().into(),
+                    index: 0,
+                    total: 0,
+                    has_draft: false,
+                    interrupted_phase: None,
+                },
+                applied: true,
+                reason: None,
+            });
+            assert_eq!(wizard.prior_section, section);
+            assert_eq!(wizard.session.phase, mackes_ipc::AssignmentPhase::Idle);
+        }
+    }
+
+    #[test]
+    fn assignment_wizard_builds_typed_destination_commit_payload() {
+        let mut wizard = AssignmentWizard::new();
+        wizard.start(AppSection::MapControls);
+        wizard.capture("fader-1").expect("capture");
+        wizard.generation = 9;
+        let choice = AssignmentParameterChoice {
+            profile_id: "lexicon.reflex".into(),
+            id: "reflex.mix".into(),
+            label: "Mix".into(),
+            effect_id: "algorithm-1".into(),
+            effect_label: "Algorithm 1".into(),
+            reason: mackes_profiles::SupportReason::Compatible,
+        };
+        let request = wizard.destination_request(&choice);
+        assert_eq!(request.generation, 9);
+        assert_eq!(request.action, mackes_ipc::AssignmentAction::Commit);
+        assert_eq!(request.physical_control_id.as_deref(), Some("fader-1"));
+        assert_eq!(request.destination_profile.as_deref(), Some("lexicon.reflex"));
+        assert_eq!(request.destination_effect.as_deref(), Some("algorithm-1"));
+        assert_eq!(request.destination_parameter.as_deref(), Some("reflex.mix"));
+        assert!(request.has_complete_destination());
+        assert!(request.validate().is_ok());
+    }
+
+    #[test]
+    fn assignment_frames_are_bounded_at_release_viewports() {
+        let phases = [
+            (mackes_ipc::AssignmentPhase::AwaitControl, "MOVE ONLY ONE CONTROL"),
+            (mackes_ipc::AssignmentPhase::ChooseDevice, "CHOOSE DEVICE"),
+            (mackes_ipc::AssignmentPhase::ChooseEffect, "CHOOSE EFFECT"),
+            (mackes_ipc::AssignmentPhase::ChooseParameter, "CHOOSE PARAMETER"),
+            (mackes_ipc::AssignmentPhase::ConfirmReplace, "REPLACE EXISTING MAPPING?"),
+            (mackes_ipc::AssignmentPhase::Committing, "ASSIGNING"),
+            (mackes_ipc::AssignmentPhase::Succeeded, "ASSIGNED"),
+            (mackes_ipc::AssignmentPhase::Failed, "ASSIGNMENT FAILED"),
+            (mackes_ipc::AssignmentPhase::Interrupted, "INTERRUPTED"),
+        ];
+        for (phase, marker) in phases {
+            let wizard = AssignmentWizard {
+                session: mackes_ipc::AssignmentSession {
+                    phase,
+                    prior_screen: "Devices".into(),
+                    index: 0,
+                    total: 1,
+                    has_draft: phase == mackes_ipc::AssignmentPhase::Interrupted,
+                    interrupted_phase: None,
+                },
+                prior_section: AppSection::Devices,
+                candidates: vec!["knob-r1-c1".into()],
+                generation: 4,
+            };
+            for (width, height) in [(160, 37), (100, 37), (80, 24)] {
+                let lines = assignment_wizard_lines(&wizard, Viewport::new(width, height));
+                assert!(lines.iter().all(|line| line.chars().count() <= usize::from(width)));
+                assert!(lines.len() <= usize::from(height));
+                assert!(lines.iter().any(|line| line.contains(marker)));
+            }
+        }
+    }
+
+    #[test]
+    fn assignment_choices_are_profile_owned_filtered_and_bounded() {
+        let mut choices = AssignmentChoiceBrowser::from_profiles(
+            &["lexicon.reflex", "unknown-device", "eventide.micropitch"],
+            Some("lexicon.reflex"),
+            mackes_profiles::SourceRole::Continuous,
+        );
+        assert_eq!(choices.devices, vec!["lexicon.reflex", "eventide.micropitch"]);
+        assert!(!choices.effects.is_empty());
+        assert!(choices.parameters.iter().all(|choice| {
+            matches!(
+                choice.reason,
+                mackes_profiles::SupportReason::Compatible
+                    | mackes_profiles::SupportReason::Experimental
+            )
+        }));
+        assert!(choices
+            .parameters
+            .iter()
+            .all(|choice| { choices.effects.iter().any(|(id, _)| id == &choice.effect_id) }));
+        choices.selected = usize::MAX;
+        assert!(choices.move_selection(true));
+        assert!(!choices.move_selection(true));
     }
 }

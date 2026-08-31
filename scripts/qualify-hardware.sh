@@ -19,21 +19,6 @@ printf '\n[alsa-cards]\n'
 cat /proc/asound/cards 2>/dev/null || printf 'ALSA cards unavailable\n'
 printf '\n[alsa-midi-nodes]\n'
 find /dev/snd -maxdepth 1 -type c -name 'midi*' -printf '%f\n' 2>/dev/null | sort || true
-printf '\n[hidraw-nodes]\n'
-hidraw_found=0
-for hidraw in /dev/hidraw*; do
-  [[ -e "$hidraw" ]] || continue
-  hidraw_found=1
-  printf '%s' "$hidraw"
-  if command -v udevadm >/dev/null 2>&1; then
-    hidraw_model="$(udevadm info -q property -n "$hidraw" 2>/dev/null | awk -F= '/^ID_MODEL=/{print $2; exit}')"
-    hidraw_vid="$(udevadm info -q property -n "$hidraw" 2>/dev/null | awk -F= '/^ID_VENDOR_ID=/{print $2; exit}')"
-    hidraw_pid="$(udevadm info -q property -n "$hidraw" 2>/dev/null | awk -F= '/^ID_MODEL_ID=/{print $2; exit}')"
-    printf ' vendor=%s product=%s model=%s' "${hidraw_vid:-unknown}" "${hidraw_pid:-unknown}" "${hidraw_model:-unknown}"
-  fi
-  printf '\n'
-done
-(( hidraw_found == 1 )) || printf 'none\n'
 printf '\n[application-endpoints]\n'
 cargo run -q -p mackes-midi-matrix -- endpoints --json
 printf '\n[alsa-diagnostics]\n'

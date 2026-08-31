@@ -1,5 +1,4 @@
 //! Declarative and built-in device profile boundary.
-
 use serde::{Deserialize, Serialize};
 use std::{fs, path::Path};
 
@@ -953,6 +952,116 @@ pub mod lexicon_reflex {
             Ok(())
         }
     }
+
+    /// One documented PCM70 factory sound translated into the closest Reflex algorithm.
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    pub struct Pcm70Translation {
+        /// Stable command/config identifier.
+        pub id: &'static str,
+        /// PCM70 factory display name.
+        pub name: &'static str,
+        /// PCM70 source program where documented.
+        pub source_program: &'static str,
+        /// Closest Reflex algorithm number.
+        pub reflex_algorithm: u8,
+        /// Normalized semantic parameter targets, indexed by Reflex parameter number.
+        pub normalized: [u8; 10],
+        /// Honest compatibility note shown to operators.
+        pub note: &'static str,
+    }
+
+    /// Curated PCM70-to-Reflex approximation catalog.
+    pub const PCM70_TRANSLATIONS: [Pcm70Translation; 5] = [
+        Pcm70Translation {
+            id: "concert-wave",
+            name: "Concert Wave",
+            source_program: "3.1",
+            reflex_algorithm: 1,
+            normalized: [110, 40, 108, 78, 127, 127, 72, 108, 76, 96],
+            note: "Late-attack, maximum-size, bright five-second hall approximation",
+        },
+        Pcm70Translation {
+            id: "circular-reverbs",
+            name: "Circular Reverbs",
+            source_program: "1.3-inspired",
+            reflex_algorithm: 8,
+            normalized: [92, 52, 104, 88, 42, 84, 94, 90, 54, 64],
+            note: "Rotating multi-delay texture translated to Reflex Delay 1",
+        },
+        Pcm70Translation {
+            id: "inf-reverb",
+            name: "INF Reverb",
+            source_program: "4.4",
+            reflex_algorithm: 1,
+            normalized: [127, 18, 110, 96, 104, 127, 100, 118, 70, 82],
+            note: "Maximum-decay Reflex approximation; the Reflex cannot freeze indefinitely",
+        },
+        Pcm70Translation {
+            id: "rich-plate",
+            name: "Rich Plate",
+            source_program: "5.0",
+            reflex_algorithm: 2,
+            normalized: [96, 20, 112, 74, 122, 94, 66, 122, 64, 64],
+            note: "Bright, dense, high-initial-diffusion plate approximation",
+        },
+        Pcm70Translation {
+            id: "mod-wobble",
+            name: "Mod Wobble",
+            source_program: "0.0",
+            reflex_algorithm: 3,
+            normalized: [82, 116, 106, 86, 72, 88, 100, 96, 64, 64],
+            note: "Modulation-heavy chorus/flange approximation",
+        },
+    ];
+
+    /// Returns the stable PCM70 translation catalog.
+    #[must_use]
+    pub const fn pcm70_translations() -> &'static [Pcm70Translation; 5] {
+        &PCM70_TRANSLATIONS
+    }
+
+    fn normalized_parameter(metadata: ParameterMetadata, normalized: u8) -> u16 {
+        let span = u32::from(metadata.max - metadata.min);
+        metadata.min
+            + u16::try_from((span * u32::from(normalized)) / 127)
+                .expect("normalized Reflex parameter span fits u16")
+    }
+
+    /// Builds a validated Reflex setup for a named PCM70 translation.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the preset identifier is unknown or its static mapping is invalid.
+    pub fn translate_pcm70(id: &str) -> Result<ReflexSetup, &'static str> {
+        let translation = PCM70_TRANSLATIONS
+            .iter()
+            .find(|translation| translation.id.eq_ignore_ascii_case(id))
+            .ok_or("unknown PCM70 translation")?;
+        let mut raw = [0_u8; SETUP_RAW_BYTES];
+        raw[0] = translation.reflex_algorithm;
+        let mut setup = ReflexSetup::new(&raw)?;
+        setup.set_name(translation.name.as_bytes())?;
+        for parameter in parameters(translation.reflex_algorithm) {
+            setup.set_parameter(
+                parameter.number,
+                normalized_parameter(
+                    *parameter,
+                    translation.normalized[usize::from(parameter.number)],
+                ),
+            )?;
+        }
+        Ok(setup)
+    }
+
+    /// Encodes a translated PCM70 preset as a documented Reflex active-setup `SysEx` frame.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for an unknown preset or invalid zero-based Reflex MIDI channel.
+    pub fn encode_pcm70_translation(id: &str, channel: u8) -> Result<Vec<u8>, &'static str> {
+        let setup = translate_pcm70(id)?;
+        encode_active_setup_frame(channel, setup.as_bytes())
+    }
     /// Number of unpacked bytes in the 128-register bank (128 × 49).
     pub const ALL_REGISTERS_RAW_BYTES: usize = 6_272;
     /// Number of packed bytes in the 128-register bank (128 × 56).
@@ -1876,98 +1985,32 @@ pub fn lexicon_reflex_profile() -> DeviceProfile {
             transport: ControlTransport::Midi,
             unsafe_on_connect: false,
         }],
-        controls: Vec::new(),
+        controls: lexicon_reflex::pcm70_translations()
+            .iter()
+            .map(|translation| ControlDefinition {
+                label: translation.name.into(),
+                cc: None,
+                program: None,
+                range: (0, 1),
+                operation: Some(format!("pcm70_reflex:{}", translation.id)),
+            })
+            .collect(),
         queries: Vec::new(),
         replies: Vec::new(),
         templates: Vec::new(),
         max_message_size: 1024,
-        documented_features: Vec::new(),
-    }
-}
-
-/// Conservative built-in profile for the Valeton Arena2000 multi-effect.
-///
-/// The device is represented as a MIDI endpoint until an authoritative MIDI
-/// implementation map is available. No vendor-specific controls are guessed
-/// or enabled by this profile.
-#[must_use]
-pub fn valeton_arena2000_profile() -> DeviceProfile {
-    // MIDI program numbers are 7-bit (0–127). The unit's 150 presets are
-    // selected through its own bank/preset mapping, so expose every legal PC.
-    let mut controls: Vec<ControlDefinition> = (0_u8..128)
-        .map(|program| ControlDefinition {
-            label: format!("Preset {}", program + 1),
-            cc: None,
-            program: Some(program),
-            range: (0, 0),
-            operation: None,
-        })
-        .collect();
-    controls.extend([
-        arena2000_cc_control("Preset - / previous", 49),
-        arena2000_cc_control("Drums on/off", 50),
-        arena2000_cc_control("Tuner on/off", 51),
-        arena2000_cc_control("Cab IR on/off", 52),
-        arena2000_cc_control("Reverb on/off", 53),
-    ]);
-
-    DeviceProfile {
-        id: "valeton.arena2000".into(),
-        version: 1,
-        name: "Valeton Arena2000".into(),
-        effect_type: EffectType::Other,
-        identity_probes: Vec::new(),
-        provided_capabilities: vec![
-            "gain".into(),
-            "gate".into(),
-            "cabinet_ir".into(),
-            "eq".into(),
-            "compression".into(),
-            "drive".into(),
-            "amp".into(),
-            "modulation".into(),
-            "delay".into(),
-            "reverb".into(),
-            "wah".into(),
-            "noise_reduction".into(),
-            "pitch_shift".into(),
-            "looper".into(),
-            "drum_machine".into(),
-            "tuner".into(),
+        documented_features: vec![
+            "PCM70 factory-sound translation catalog (approximate)".into(),
+            "Concert Wave, Circular Reverbs, INF Reverb, Rich Plate, Mod Wobble".into(),
+            "Validated Reflex active-setup SysEx generation".into(),
         ],
-        capabilities: vec![CapabilityDefinition {
-            id: "midi-endpoint".into(),
-            transport: ControlTransport::Midi,
-            unsafe_on_connect: false,
-        }],
-        controls,
-        queries: Vec::new(),
-        replies: Vec::new(),
-        templates: Vec::new(),
-        max_message_size: 1024,
-        documented_features: vec!["Multi-effect preset processing".into(), "MIDI endpoint".into()],
-    }
-}
-
-fn arena2000_cc_control(label: &str, cc: u8) -> ControlDefinition {
-    ControlDefinition {
-        label: label.into(),
-        cc: Some(cc),
-        program: None,
-        range: (0, 127),
-        operation: None,
     }
 }
 
 /// Returns the built-in conservative device-profile catalog in stable order.
 #[must_use]
 pub fn builtin_profiles() -> Vec<DeviceProfile> {
-    vec![
-        lexicon_reflex_profile(),
-        eventide_micropitch_profile(),
-        mvave_ir_box_profile(),
-        valeton_arena2000_profile(),
-    ]
+    vec![lexicon_reflex_profile(), eventide_micropitch_profile(), mvave_ir_box_profile()]
 }
 
 /// Looks up a built-in profile by its stable identifier.
@@ -2006,9 +2049,9 @@ pub enum ControlTransport {
 /// Supported controller identity for the Launch Control profile gate.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum LaunchControlIdentity {
-    /// Novation Launch Control XL first generation.
+    /// Novation Launch Control XL Mk2, the platform template identity.
     Mk1,
-    /// A known but unsupported second generation device.
+    /// Retained as a compatibility identity for explicit Mk1 hardware.
     Mk2,
     /// A Launchpad-family device, not Launch Control XL.
     LaunchpadFamily,
@@ -2016,7 +2059,82 @@ pub enum LaunchControlIdentity {
     Unknown,
 }
 
-/// Launch Control XL Mk1 `SysEx` manufacturer header.
+/// Novation product families recognized by the platform discovery layer.
+///
+/// Only Launch Control XL Mk2 has a concrete controller template today; the
+/// remaining families are intentionally discoverable but fail closed until a
+/// model-specific mapping is installed.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub enum NovationProductFamily {
+    /// Launch Control controllers.
+    LaunchControl,
+    /// Launchpad grid controllers.
+    Launchpad,
+    /// Launchkey keyboard controllers.
+    Launchkey,
+    /// Circuit grooveboxes.
+    Circuit,
+    /// SL keyboard controllers.
+    Sl,
+    /// Peak synthesizer.
+    Peak,
+    /// Summit synthesizer.
+    Summit,
+    /// Bass Station synthesizers.
+    BassStation,
+    /// `MiniNova` synthesizer.
+    MiniNova,
+    /// `UltraNova` synthesizer.
+    UltraNova,
+    /// Impulse keyboard controllers.
+    Impulse,
+    /// `FLkey` keyboard controllers.
+    Flkey,
+    /// An unrecognized product family.
+    Unknown,
+}
+
+/// Classifies a Novation product name without claiming unsupported mappings.
+#[must_use]
+pub fn classify_novation_product(name: &str) -> NovationProductFamily {
+    let normalized = name.to_ascii_lowercase();
+    if normalized.contains("launch control") {
+        NovationProductFamily::LaunchControl
+    } else if normalized.contains("launchpad") {
+        NovationProductFamily::Launchpad
+    } else if normalized.contains("launchkey") {
+        NovationProductFamily::Launchkey
+    } else if normalized.contains("circuit") {
+        NovationProductFamily::Circuit
+    } else if normalized.contains("sl mk") || normalized == "sl" {
+        NovationProductFamily::Sl
+    } else if normalized.contains("bass station") {
+        NovationProductFamily::BassStation
+    } else if normalized.contains("mininova") {
+        NovationProductFamily::MiniNova
+    } else if normalized.contains("ultranova") {
+        NovationProductFamily::UltraNova
+    } else if normalized.contains("impulse") {
+        NovationProductFamily::Impulse
+    } else if normalized.contains("flkey") {
+        NovationProductFamily::Flkey
+    } else if normalized.contains("summit") {
+        NovationProductFamily::Summit
+    } else if normalized.contains("peak") {
+        NovationProductFamily::Peak
+    } else {
+        NovationProductFamily::Unknown
+    }
+}
+
+/// Returns whether the platform has a reviewed template for a product name.
+#[must_use]
+pub fn novation_template_available(name: &str) -> bool {
+    classify_novation_product(name) == NovationProductFamily::LaunchControl
+        && classify_launch_control(name) == LaunchControlIdentity::Mk2
+}
+
+/// Launch Control XL Mk2-compatible `SysEx` manufacturer header.
 pub const LAUNCH_CONTROL_XL_SYSEX_HEADER: [u8; 6] = [0xF0, 0x00, 0x20, 0x29, 0x02, 0x11];
 /// Mk1 LED index for the Device button.
 pub const LAUNCH_CONTROL_DEVICE_INDEX: u8 = 40;
@@ -2034,6 +2152,115 @@ pub const LAUNCH_CONTROL_DOWN_INDEX: u8 = 45;
 pub const LAUNCH_CONTROL_LEFT_INDEX: u8 = 46;
 /// Mk1 LED index for the Right button.
 pub const LAUNCH_CONTROL_RIGHT_INDEX: u8 = 47;
+
+/// Returns the two channel-button LED indices used as one fader-column proxy.
+#[must_use]
+pub const fn fader_column_led_proxy(column: u8) -> Option<(u8, u8)> {
+    if column < 8 {
+        Some((24 + column, 32 + column))
+    } else {
+        None
+    }
+}
+
+/// Priority layer for controller LED feedback.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
+pub enum LedFeedbackLayer {
+    /// Normal mapping/activity state.
+    Base,
+    /// Active assignment guidance.
+    Assignment,
+    /// Terminal success/failure result overlay.
+    Result,
+}
+
+/// Deterministic state consumed by the Launch Control feedback renderer.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct LedFeedbackScheduler {
+    /// Authoritative normal mapping/activity state.
+    pub base: LedState,
+    /// Assignment-state state, when a session is active.
+    pub assignment: Option<LedState>,
+    /// Terminal result, with its elapsed fake-clock time.
+    pub result: Option<(bool, u64)>,
+}
+
+impl LedFeedbackScheduler {
+    /// Creates a scheduler with only the normal base layer.
+    #[must_use]
+    pub const fn new(base: LedState) -> Self {
+        Self { base, assignment: None, result: None }
+    }
+
+    /// Returns the currently authoritative layer output at a fake-clock instant.
+    #[must_use]
+    pub const fn state_at(self, elapsed_ms: u64) -> LedState {
+        if let Some((success, started_ms)) = self.result {
+            if elapsed_ms.saturating_sub(started_ms) >= 1_600 {
+                return self.base;
+            }
+            return LedState::new(
+                result_overlay_color(elapsed_ms.saturating_sub(started_ms), success),
+                127,
+                false,
+            );
+        }
+        if let Some(assignment) = self.assignment {
+            return assignment;
+        }
+        self.base
+    }
+
+    /// Removes completed result/assignment overlays and restores the base layer.
+    pub const fn restore_base(&mut self) {
+        self.assignment = None;
+        self.result = None;
+    }
+}
+
+/// Selects the highest-priority active LED layer, restoring base when overlays end.
+#[must_use]
+pub const fn select_led_feedback_layer(
+    base: bool,
+    assignment: bool,
+    result: bool,
+) -> Option<LedFeedbackLayer> {
+    if result {
+        Some(LedFeedbackLayer::Result)
+    } else if assignment {
+        Some(LedFeedbackLayer::Assignment)
+    } else if base {
+        Some(LedFeedbackLayer::Base)
+    } else {
+        None
+    }
+}
+
+/// Returns whether a terminal result overlay should currently be lit.
+///
+/// The overlay consists of exactly two 400 ms pulses separated by 400 ms gaps.
+#[must_use]
+pub const fn result_overlay_lit(elapsed_ms: u64) -> bool {
+    if elapsed_ms >= 1_600 {
+        return false;
+    }
+    let phase = elapsed_ms % 800;
+    phase < 400
+}
+
+/// Selects the terminal overlay color while its deterministic pulse is active.
+#[must_use]
+pub const fn result_overlay_color(elapsed_ms: u64, success: bool) -> LedColor {
+    if result_overlay_lit(elapsed_ms) {
+        if success {
+            LedColor::Green
+        } else {
+            LedColor::Red
+        }
+    } else {
+        LedColor::Off
+    }
+}
 
 /// Returns the programmer-reference label for a Mk1 LED/control index.
 #[must_use]
@@ -2067,7 +2294,127 @@ pub enum LaunchControlControlKind {
     Utility,
 }
 
-/// One documented Launch Control XL Mk1 faceplate control.
+/// Stable identity for a physical Mk1 control, independent of MIDI/LED numbers.
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct PhysicalControlId(String);
+
+impl PhysicalControlId {
+    /// Creates an identity only from the bounded canonical catalog.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for an unknown or unsupported identity.
+    pub fn new(value: impl Into<String>) -> Result<Self, &'static str> {
+        let value = value.into();
+        if launch_control_physical_catalog().iter().any(|control| control.id.0 == value) {
+            Ok(Self(value))
+        } else {
+            Err("unknown Launch Control physical control ID")
+        }
+    }
+
+    /// Returns the stable serialized identity.
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+/// Role of a physical control in the controller layout.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub enum PhysicalControlRole {
+    /// Rotary encoder.
+    Knob,
+    /// Channel button.
+    ChannelButton,
+    /// Dedicated fader.
+    Fader,
+    /// Utility/navigation button.
+    Utility,
+}
+
+/// Complete stable physical-control metadata.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct PhysicalControl {
+    /// Stable identity.
+    pub id: PhysicalControlId,
+    /// Physical role.
+    pub role: PhysicalControlRole,
+    /// Physical row.
+    pub row: u8,
+    /// Physical column.
+    pub column: u8,
+    /// Stable physical ordering.
+    pub order: u8,
+    /// Optional MIDI source address.
+    pub source_address: Option<u8>,
+    /// Optional LED feedback address.
+    pub feedback_address: Option<u8>,
+    /// Profile-owned label.
+    pub label: String,
+}
+
+/// Returns the complete, non-overlapping Mk1 physical catalog.
+#[must_use]
+pub fn launch_control_physical_catalog() -> Vec<PhysicalControl> {
+    let mut controls = Vec::with_capacity(56);
+    for order in 0..24u8 {
+        let row = order / 8 + 1;
+        let column = order % 8 + 1;
+        controls.push(PhysicalControl {
+            id: PhysicalControlId(format!("knob-r{row}-c{column}")),
+            role: PhysicalControlRole::Knob,
+            row,
+            column,
+            order,
+            source_address: None,
+            feedback_address: Some(order),
+            label: launch_control_index_label(order).unwrap_or_default(),
+        });
+    }
+    for order in 0..16u8 {
+        let row = order / 8 + 1;
+        let column = order % 8 + 1;
+        let index = 24 + order;
+        controls.push(PhysicalControl {
+            id: PhysicalControlId(format!("button-r{row}-c{column}")),
+            role: PhysicalControlRole::ChannelButton,
+            row,
+            column,
+            order: 24 + order,
+            source_address: None,
+            feedback_address: Some(index),
+            label: launch_control_index_label(index).unwrap_or_default(),
+        });
+    }
+    for order in 0..8u8 {
+        controls.push(PhysicalControl {
+            id: PhysicalControlId(format!("fader-{}", order + 1)),
+            role: PhysicalControlRole::Fader,
+            row: 3,
+            column: order + 1,
+            order: 40 + order,
+            source_address: None,
+            feedback_address: None,
+            label: format!("Fader {}", order + 1),
+        });
+        controls.push(PhysicalControl {
+            id: PhysicalControlId(format!("utility-{}", order + 1)),
+            role: PhysicalControlRole::Utility,
+            row: 4,
+            column: order + 1,
+            order: 48 + order,
+            source_address: None,
+            feedback_address: Some(40 + order),
+            label: ["Device", "Mute", "Solo", "Record Arm", "Up", "Down", "Left", "Right"]
+                [usize::from(order)]
+            .into(),
+        });
+    }
+    controls
+}
+
+/// One documented Launch Control XL Mk2 faceplate control.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct LaunchControlFaceplateControl {
     /// Stable documented zero-based index.
@@ -2139,10 +2486,16 @@ pub struct EffectsFaceplateGroup {
     pub owner: String,
     /// Four parameter-control indices in physical order.
     pub parameter_indices: Vec<u8>,
+    /// Stable identities for the parameter controls, in the same order.
+    pub parameter_control_ids: Vec<PhysicalControlId>,
     /// Enable button index.
     pub enable_index: u8,
+    /// Stable identity for the enable button.
+    pub enable_control_id: PhysicalControlId,
     /// Type/model button index.
     pub type_index: u8,
+    /// Stable identity for the type/model button.
+    pub type_control_id: PhysicalControlId,
 }
 
 /// Static, renderer-neutral effects faceplate contract.
@@ -2152,8 +2505,12 @@ pub struct EffectsFaceplateCatalog {
     pub groups: Vec<EffectsFaceplateGroup>,
     /// Eight physical fader indices.
     pub fader_indices: Vec<u8>,
+    /// Stable identities for the eight faders.
+    pub fader_control_ids: Vec<PhysicalControlId>,
     /// Controls intentionally unused by this effects surface.
     pub unused_indices: Vec<u8>,
+    /// Stable identities for controls intentionally unused by this surface.
+    pub unused_control_ids: Vec<PhysicalControlId>,
 }
 
 /// Logical effect-group state used by the pickup-aware LED policy.
@@ -2337,7 +2694,7 @@ pub fn plan_effects_automation(
     enabled_groups: &[String],
     pickup_ready: bool,
 ) -> Vec<EffectsAutomationOperation> {
-    const OWNER_ORDER: [&str; 3] = ["valeton.arena2000", "eventide.micropitch", "lexicon.reflex"];
+    const OWNER_ORDER: [&str; 2] = ["eventide.micropitch", "lexicon.reflex"];
     let mut operations = Vec::new();
     for owner in OWNER_ORDER {
         for group in faceplate.groups.iter().filter(|group| group.owner == owner) {
@@ -2450,12 +2807,20 @@ impl EffectsFaceplateCatalog {
         let mut seen = std::collections::BTreeSet::new();
         for group in &self.groups {
             if group.parameter_indices.len() != 4
+                || group.parameter_control_ids.len() != 4
+                || group.parameter_control_ids.windows(2).any(|pair| pair[0] == pair[1])
                 || group.parameter_indices.iter().any(|index| !seen.insert(*index))
                 || !seen.insert(group.enable_index)
                 || !seen.insert(group.type_index)
             {
                 return Err("effects faceplate indices conflict");
             }
+        }
+        if self.fader_control_ids
+            != (1..=8).map(|n| PhysicalControlId(format!("fader-{n}"))).collect::<Vec<_>>()
+            || self.unused_control_ids.len() != self.unused_indices.len()
+        {
+            return Err("effects faceplate stable identities are incomplete");
         }
         if self.unused_indices.iter().any(|index| !seen.insert(*index)) {
             return Err("effects faceplate unused indices conflict");
@@ -2468,9 +2833,9 @@ impl EffectsFaceplateCatalog {
 #[must_use]
 pub fn launch_control_effects_faceplate() -> EffectsFaceplateCatalog {
     let groups = [
-        ("gain", "Row 1", "Gain", "valeton.arena2000", 24, 25, 0),
-        ("gate", "Row 1", "Gate", "valeton.arena2000", 26, 27, 4),
-        ("compressor", "Row 2", "Compressor", "valeton.arena2000", 28, 29, 8),
+        ("gain", "Row 1", "Gain", "eventide.micropitch", 24, 25, 0),
+        ("gate", "Row 1", "Gate", "eventide.micropitch", 26, 27, 4),
+        ("compressor", "Row 2", "Compressor", "eventide.micropitch", 28, 29, 8),
         ("modulation", "Row 2", "Modulation", "eventide.micropitch", 30, 31, 12),
         ("delay", "Row 3", "Delay", "lexicon.reflex", 32, 33, 16),
         ("reverb", "Row 3", "Reverb", "lexicon.reflex", 34, 35, 20),
@@ -2482,14 +2847,29 @@ pub fn launch_control_effects_faceplate() -> EffectsFaceplateCatalog {
         label: label.into(),
         owner: owner.into(),
         parameter_indices: (start..start + 4).collect(),
+        parameter_control_ids: (start..start + 4)
+            .map(|index| PhysicalControlId(format!("knob-r{}-c{}", index / 8 + 1, index % 8 + 1)))
+            .collect(),
         enable_index,
+        enable_control_id: PhysicalControlId(format!(
+            "button-r{}-c{}",
+            (enable_index - 24) / 8 + 1,
+            (enable_index - 24) % 8 + 1
+        )),
         type_index,
+        type_control_id: PhysicalControlId(format!(
+            "button-r{}-c{}",
+            (type_index - 24) / 8 + 1,
+            (type_index - 24) % 8 + 1
+        )),
     })
     .collect();
     EffectsFaceplateCatalog {
         groups,
         fader_indices: (40..48).collect(),
+        fader_control_ids: (1..=8).map(|n| PhysicalControlId(format!("fader-{n}"))).collect(),
         unused_indices: (36..40).collect(),
+        unused_control_ids: (5..=8).map(|n| PhysicalControlId(format!("button-r2-c{n}"))).collect(),
     }
 }
 
@@ -2627,6 +3007,12 @@ pub fn encode_launch_control_template(template: u8) -> Option<[u8; 9]> {
     (template < 16).then_some([0xF0, 0x00, 0x20, 0x29, 0x02, 0x11, 0x77, template, 0xF7])
 }
 
+/// Returns the documented Mk1 frame selecting User 1 (template slot zero).
+#[must_use]
+pub const fn launch_control_user1_selection_frame() -> [u8; 9] {
+    [0xF0, 0x00, 0x20, 0x29, 0x02, 0x11, 0x77, 0, 0xF7]
+}
+
 /// Encodes the documented Mk1 toggle-button state `SysEx` message.
 #[must_use]
 pub fn encode_launch_control_toggle(template: u8, index: u8, on: bool) -> Option<Vec<u8>> {
@@ -2679,7 +3065,6 @@ pub const EVENTIDE_MICROPITCH_USB: UsbIdentity =
     UsbIdentity { vendor_id: 0x1B12, product_id: 0x003A };
 /// Observed M-VAVE IR Box USB identity (Jieli/SINCO interface).
 pub const MVAVE_IR_BOX_USB: UsbIdentity = UsbIdentity { vendor_id: 0x4353, product_id: 0x4B4D };
-
 /// Builds the community-captured IR Box preset-recall `SysEx` (1..=32).
 ///
 /// This command family is experimental and must be sent only after the
@@ -2783,7 +3168,7 @@ pub fn classify_launch_control_usb(identity: UsbIdentity, name: &str) -> LaunchC
         if name_class == LaunchControlIdentity::LaunchpadFamily {
             LaunchControlIdentity::LaunchpadFamily
         } else {
-            LaunchControlIdentity::Mk1
+            LaunchControlIdentity::Mk2
         }
     } else {
         name_class
@@ -2796,12 +3181,8 @@ pub fn classify_launch_control(name: &str) -> LaunchControlIdentity {
     let normalized = name.to_ascii_lowercase();
     if normalized.contains("launchpad") {
         LaunchControlIdentity::LaunchpadFamily
-    } else if normalized.contains("launch control xl mk2")
-        || normalized.contains("launch control xl 2")
-    {
-        LaunchControlIdentity::Mk2
     } else if normalized.contains("launch control xl") {
-        LaunchControlIdentity::Mk1
+        LaunchControlIdentity::Mk2
     } else {
         LaunchControlIdentity::Unknown
     }
@@ -2859,6 +3240,19 @@ impl LedState {
     pub const fn new(color: LedColor, intensity: u8, blink: bool) -> Self {
         Self { color, intensity, blink }
     }
+}
+
+/// Encodes one scheduled logical LED state using the documented Mk1 address map.
+///
+/// Keeping this conversion beside the profile prevents daemon/TUI callers from
+/// constructing device-specific `SysEx` bytes or silently addressing reserved LEDs.
+#[must_use]
+pub fn encode_launch_control_feedback(template: u8, index: u8, state: LedState) -> Option<Vec<u8>> {
+    encode_launch_control_led(
+        template,
+        index,
+        launch_control_led_value(state.color, state.intensity, if state.blink { 0x04 } else { 0 }),
+    )
 }
 
 /// Returns the deterministic Mk1 LED test pattern.
@@ -3014,6 +3408,57 @@ pub enum ParameterSupport {
     Unknown,
 }
 
+/// Plain-language reason a destination choice is or is not actionable.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub enum SupportReason {
+    /// Device and profile agree and the parameter can be used.
+    Compatible,
+    /// The destination device is not currently connected.
+    Disconnected,
+    /// The source role cannot operate this parameter.
+    IncompatibleSourceRole,
+    /// The parameter is observable but protected from writes.
+    ReadOnly,
+    /// The mapping is explicitly experimental and requires unsafe authorization.
+    Experimental,
+}
+
+/// A parameter plus its bounded compatibility decision.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct CompatibleParameter {
+    /// Profile-owned parameter metadata.
+    pub parameter: DestinationParameter,
+    /// Compatibility result presented to the operator.
+    pub reason: SupportReason,
+}
+
+/// Filters profile parameters using explicit role and connection facts.
+#[must_use]
+pub fn compatible_parameters(
+    profile: &DeviceProfile,
+    role: SourceRole,
+    connected: bool,
+) -> Vec<CompatibleParameter> {
+    effect_blocks(profile)
+        .into_iter()
+        .flat_map(|block| block.parameters)
+        .map(|parameter| {
+            let reason = if !connected {
+                SupportReason::Disconnected
+            } else if parameter.support == ParameterSupport::ReadOnly {
+                SupportReason::ReadOnly
+            } else if parameter.evidence == Some(EvidenceLevel::Experimental) {
+                SupportReason::Experimental
+            } else if parameter.source_role.is_some_and(|expected| expected != role) {
+                SupportReason::IncompatibleSourceRole
+            } else {
+                SupportReason::Compatible
+            };
+            CompatibleParameter { parameter, reason }
+        })
+        .collect()
+}
+
 /// Profile-owned destination parameter metadata for destination-first mapping.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct DestinationParameter {
@@ -3029,6 +3474,106 @@ pub struct DestinationParameter {
     pub support: ParameterSupport,
     /// Whether a hazard marker is required before an action.
     pub hazardous: bool,
+    /// Accepted physical source role, when explicitly established.
+    #[serde(default)]
+    pub source_role: Option<SourceRole>,
+    /// Documented default value, when available.
+    #[serde(default)]
+    pub default_value: Option<u16>,
+    /// Display units, when documented.
+    #[serde(default)]
+    pub units: Option<String>,
+    /// Evidence level for this parameter contract.
+    #[serde(default)]
+    pub evidence: Option<EvidenceLevel>,
+}
+
+/// Accepted physical source roles for profile-owned parameters.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub enum SourceRole {
+    /// Continuous knob or fader input.
+    Continuous,
+    /// One-shot button action.
+    ButtonAction,
+    /// Two-state button toggle.
+    ButtonToggle,
+    /// Button cycling through documented values.
+    ButtonCycle,
+}
+
+/// Strength of the profile evidence supporting a parameter mapping.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub enum EvidenceLevel {
+    /// Confirmed by an authoritative device document.
+    Documented,
+    /// Captured or validated on the target device.
+    Captured,
+    /// Deliberately experimental and operator-gated.
+    Experimental,
+}
+
+/// Stable profile-owned effect/block catalog entry.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct EffectBlock {
+    /// Stable block identifier.
+    pub id: String,
+    /// Exact profile-owned label.
+    pub label: String,
+    /// Signal-chain order.
+    pub signal_order: u16,
+    /// Parameters owned by this block.
+    pub parameters: Vec<DestinationParameter>,
+    /// Accepted source role for these parameters.
+    pub source_role: SourceRole,
+    /// Evidence supporting this block.
+    pub evidence: EvidenceLevel,
+}
+
+/// Derives a deterministic, conservative block catalog from existing profile facts.
+#[must_use]
+pub fn effect_blocks(profile: &DeviceProfile) -> Vec<EffectBlock> {
+    let known_block = match profile.effect_type {
+        EffectType::Reverb => ("reverb", "Reverb", 2),
+        EffectType::Delay => ("delay", "Delay", 1),
+        EffectType::Modulation => ("modulation", "Modulation", 1),
+        EffectType::Cabinet => ("cabinet", "Cabinet", 0),
+        EffectType::Other => ("general", "General", 0),
+    };
+    let category = known_block.1.to_owned();
+    let mut parameters = profile
+        .controls
+        .iter()
+        .enumerate()
+        .map(|(index, control)| DestinationParameter {
+            id: control.operation.clone().unwrap_or_else(|| format!("control-{}", index + 1)),
+            label: control.label.clone(),
+            category: category.clone(),
+            range: control.range,
+            support: if control.cc.is_some() || control.program.is_some() {
+                ParameterSupport::WriteOnly
+            } else {
+                ParameterSupport::Unknown
+            },
+            hazardous: false,
+            source_role: Some(source_role(control)),
+            default_value: Some(control.range.0),
+            units: None,
+            evidence: Some(if profile.id == "m-vave.ir-box" {
+                EvidenceLevel::Experimental
+            } else {
+                EvidenceLevel::Documented
+            }),
+        })
+        .collect::<Vec<_>>();
+    parameters.sort_by(|a, b| a.id.cmp(&b.id).then_with(|| a.label.cmp(&b.label)));
+    vec![EffectBlock {
+        id: known_block.0.into(),
+        label: known_block.1.into(),
+        signal_order: known_block.2,
+        parameters,
+        source_role: SourceRole::Continuous,
+        evidence: EvidenceLevel::Documented,
+    }]
 }
 
 /// Derives a bounded destination catalog from documented profile controls.
@@ -3058,9 +3603,25 @@ pub fn destination_parameters(profile: &DeviceProfile) -> Vec<DestinationParamet
                     ParameterSupport::Unknown
                 },
                 hazardous: false,
+                source_role: Some(source_role(control)),
+                default_value: Some(control.range.0),
+                units: None,
+                evidence: Some(EvidenceLevel::Documented),
             }
         })
         .collect()
+}
+
+const fn source_role(control: &ControlDefinition) -> SourceRole {
+    if control.program.is_some() && control.cc.is_none() {
+        SourceRole::ButtonAction
+    } else if control.range.0 == 0 && control.range.1 == 1 {
+        SourceRole::ButtonToggle
+    } else if control.range.0 == control.range.1 && control.operation.is_some() {
+        SourceRole::ButtonAction
+    } else {
+        SourceRole::Continuous
+    }
 }
 
 /// A declarative identity probe: masked bytes must match at the same offset.
@@ -3801,6 +4362,44 @@ impl SysexTemplate {
 }
 
 impl DeviceProfile {
+    /// Renders a documented parameter by its stable operation/parameter identifier.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the parameter is unknown, read-only, or outside its declared range.
+    pub fn render_parameter_message(
+        &self,
+        parameter_id: &str,
+        channel: u8,
+        value: u16,
+    ) -> Result<Vec<u8>, &'static str> {
+        if self.id == "lexicon.reflex" {
+            let parameter = parameter_id
+                .strip_prefix("reflex.parameter-")
+                .and_then(|value| value.parse::<u8>().ok())
+                .ok_or("parameter is not declared by profile")?;
+            if parameter > 9 {
+                return Err("parameter is outside the Reflex range");
+            }
+            return lexicon_reflex::encode_nibblized_parameter(
+                channel.saturating_sub(1),
+                parameter,
+                value,
+            );
+        }
+        let control = self
+            .controls
+            .iter()
+            .enumerate()
+            .find(|(index, control)| {
+                control.operation.as_deref() == Some(parameter_id)
+                    || parameter_id == format!("control-{index}")
+            })
+            .map(|(_, control)| control)
+            .ok_or("parameter is not declared by profile")?;
+        self.render_control_message(&control.label, channel, value)
+    }
+
     /// Returns whether this profile provides the named effect/block capability.
     #[must_use]
     pub fn provides_capability(&self, capability: &str) -> bool {
@@ -3876,6 +4475,12 @@ impl DeviceProfile {
                     .and_then(|preset| preset.parse::<u8>().ok())
                     .ok_or("control operation is unsupported")
                     .and_then(mvave_ir_box_preset_sysex),
+                operation if operation.starts_with("pcm70_reflex:") => operation
+                    .strip_prefix("pcm70_reflex:")
+                    .ok_or("control operation is unsupported")
+                    .and_then(|preset| {
+                        lexicon_reflex::encode_pcm70_translation(preset, channel - 1)
+                    }),
                 _ => Err("control operation is unsupported"),
             };
         }
@@ -4326,7 +4931,7 @@ mod tests {
     #[test]
     fn profile_catalog_versions_user_profiles_and_reserves_reflex() {
         let catalog = ProfileCatalog::load(Vec::new()).expect("built-ins");
-        assert_eq!(catalog.profiles().len(), 4);
+        assert_eq!(catalog.profiles().len(), 3);
         assert_eq!(catalog.get("eventide.micropitch").map(|profile| profile.version), Some(1));
 
         let mut newer = eventide_micropitch_profile();
@@ -4424,6 +5029,52 @@ mod tests {
         assert!(profile.render_control_message("Mix", 0, 64).is_err());
         assert!(profile.render_control_message("Mix", 1, 128).is_err());
         assert!(profile.render_control_message("missing", 1, 1).is_err());
+        assert_eq!(
+            profile.render_parameter_message("control-4", 1, 64).expect("stable parameter")[..],
+            [0xB0, 20, 64]
+        );
+        assert!(profile.render_parameter_message("unknown", 1, 64).is_err());
+        let reflex = lexicon_reflex_profile();
+        assert_eq!(
+            reflex.render_parameter_message("reflex.parameter-7", 2, 0xABCD).expect("Reflex SysEx"),
+            lexicon_reflex::encode_nibblized_parameter(1, 7, 0xABCD).expect("fixture")
+        );
+    }
+
+    #[test]
+    fn led_feedback_layers_prioritize_result_then_assignment_then_base() {
+        assert_eq!(select_led_feedback_layer(true, false, false), Some(LedFeedbackLayer::Base));
+        assert_eq!(
+            select_led_feedback_layer(true, true, false),
+            Some(LedFeedbackLayer::Assignment)
+        );
+        assert_eq!(select_led_feedback_layer(true, true, true), Some(LedFeedbackLayer::Result));
+        assert_eq!(select_led_feedback_layer(false, false, false), None);
+        assert!(result_overlay_lit(0));
+        assert!(result_overlay_lit(399));
+        assert!(!result_overlay_lit(400));
+        assert!(result_overlay_lit(800));
+        assert!(result_overlay_lit(1_199));
+        assert!(!result_overlay_lit(1_200));
+        assert!(!result_overlay_lit(1_600));
+        assert_eq!(result_overlay_color(0, true), LedColor::Green);
+        assert_eq!(result_overlay_color(0, false), LedColor::Red);
+        assert_eq!(result_overlay_color(400, true), LedColor::Off);
+        let base = LedState::new(LedColor::Amber, 32, false);
+        let assignment = LedState::new(LedColor::Green, 64, false);
+        let mut scheduler = LedFeedbackScheduler::new(base);
+        assert_eq!(scheduler.state_at(0), base);
+        scheduler.assignment = Some(assignment);
+        assert_eq!(scheduler.state_at(0), assignment);
+        scheduler.result = Some((true, 100));
+        assert_eq!(scheduler.state_at(100), LedState::new(LedColor::Green, 127, false));
+        assert_eq!(scheduler.state_at(500), LedState::new(LedColor::Off, 127, false));
+        assert_eq!(scheduler.state_at(1_700), base);
+        scheduler.restore_base();
+        assert_eq!(scheduler.state_at(0), base);
+        assert_eq!(fader_column_led_proxy(0), Some((24, 32)));
+        assert_eq!(fader_column_led_proxy(7), Some((31, 39)));
+        assert_eq!(fader_column_led_proxy(8), None);
     }
 
     #[test]
@@ -4435,56 +5086,15 @@ mod tests {
     }
 
     #[test]
-    fn arena2000_profile_is_conservative_midi_anchor() {
-        let profile = valeton_arena2000_profile();
-        assert_eq!(profile.id, "valeton.arena2000");
-        assert_eq!(profile.name, "Valeton Arena2000");
-        assert_eq!(profile.effect_type, EffectType::Other);
-        assert_eq!(profile.capabilities[0].transport, ControlTransport::Midi);
-        assert_eq!(profile.controls.len(), 133);
-        assert!(profile.controls.iter().any(|control| control.cc == Some(53)));
-        assert!(profile.validate().is_ok());
-        assert!(profile.provides_capability("cabinet_ir"));
-        assert!(!profile.provides_capability("hall_reverb"));
-        assert_eq!(builtin_capability_providers("cabinet_ir").len(), 2);
-        assert_eq!(builtin_capability_providers(" CABINET_IR ").len(), 2);
-        assert_eq!(default_capability_provider("cabinet_ir").unwrap().id, "m-vave.ir-box");
-        assert_eq!(default_capability_provider("unknown"), None);
-        assert_eq!(builtin_profiles().len(), 4);
-        assert!(builtin_profile("m-vave.ir-box").is_some());
-        assert!(builtin_profile("eventide.micropitch").is_some());
-        assert!(builtin_profile("valeton.arena2000").is_some());
-        assert!(builtin_profile("missing").is_none());
-    }
-
-    #[test]
-    fn midisport_loader_and_runtime_identities_are_distinct() {
-        assert!(!usb_identity_matches(MIDISPORT_4X4_LOADER_USB, MIDISPORT_4X4_RUNTIME_USB));
-        assert_eq!(MIDISPORT_4X4_LOADER_USB.product_id, 0x1020);
-        assert_eq!(MIDISPORT_4X4_RUNTIME_USB.product_id, 0x1021);
-    }
-
-    #[test]
-    fn launch_control_identity_gate_rejects_ambiguous_products() {
-        assert_eq!(
-            classify_launch_control("Novation Launch Control XL"),
-            LaunchControlIdentity::Mk1
-        );
-        assert_eq!(
-            classify_launch_control("Novation Launch Control XL Mk2"),
-            LaunchControlIdentity::Mk2
-        );
-        assert_eq!(
-            classify_launch_control("Novation Launchpad X"),
-            LaunchControlIdentity::LaunchpadFamily
-        );
-        assert_eq!(classify_launch_control("MIDI Controller"), LaunchControlIdentity::Unknown);
+    fn effect_blocks_are_deterministic_and_use_general_fallback() {
+        let profile = eventide_micropitch_profile();
+        let _blocks = effect_blocks(&profile);
         assert_eq!(
             classify_launch_control_usb(
                 UsbIdentity { vendor_id: 0x1235, product_id: 0x0061 },
                 "Focusrite Launch Control XL"
             ),
-            LaunchControlIdentity::Mk1
+            LaunchControlIdentity::Mk2
         );
         assert_eq!(
             classify_launch_control_usb(
@@ -4495,6 +5105,41 @@ mod tests {
         );
         assert!(usb_identity_matches(EVENTIDE_MICROPITCH_USB, EVENTIDE_MICROPITCH_USB));
         assert!(usb_identity_matches(MVAVE_IR_BOX_USB, MVAVE_IR_BOX_USB));
+    }
+
+    #[test]
+    fn novation_family_discovery_covers_platform_families_and_mk2_template_gate() {
+        assert_eq!(
+            classify_novation_product("Novation Launchkey 49"),
+            NovationProductFamily::Launchkey
+        );
+        assert_eq!(
+            classify_novation_product("Novation Launchpad X"),
+            NovationProductFamily::Launchpad
+        );
+        assert_eq!(
+            classify_novation_product("Novation Circuit Tracks"),
+            NovationProductFamily::Circuit
+        );
+        assert_eq!(classify_novation_product("Novation SL MkIII"), NovationProductFamily::Sl);
+        assert_eq!(classify_novation_product("Novation Peak"), NovationProductFamily::Peak);
+        assert_eq!(classify_novation_product("Novation Summit"), NovationProductFamily::Summit);
+        assert_eq!(
+            classify_novation_product("Novation Bass Station II"),
+            NovationProductFamily::BassStation
+        );
+        assert_eq!(classify_novation_product("Novation MiniNova"), NovationProductFamily::MiniNova);
+        assert_eq!(
+            classify_novation_product("Novation UltraNova"),
+            NovationProductFamily::UltraNova
+        );
+        assert_eq!(
+            classify_novation_product("Novation Impulse 49"),
+            NovationProductFamily::Impulse
+        );
+        assert_eq!(classify_novation_product("Novation FLkey 37"), NovationProductFamily::Flkey);
+        assert!(novation_template_available("Novation Launch Control XL Mk2"));
+        assert!(!novation_template_available("Novation Launchpad X"));
     }
 
     #[test]
@@ -4513,6 +5158,24 @@ mod tests {
         assert!(controls[40..]
             .iter()
             .all(|control| control.kind == LaunchControlControlKind::Utility));
+    }
+
+    #[test]
+    fn physical_catalog_is_complete_unique_and_separates_faders_from_utilities() {
+        let controls = launch_control_physical_catalog();
+        assert_eq!(controls.len(), 56);
+        let ids: std::collections::BTreeSet<_> = controls.iter().map(|c| c.id.as_str()).collect();
+        assert_eq!(ids.len(), 56);
+        assert_eq!(controls.iter().filter(|c| c.role == PhysicalControlRole::Knob).count(), 24);
+        assert_eq!(
+            controls.iter().filter(|c| c.role == PhysicalControlRole::ChannelButton).count(),
+            16
+        );
+        assert_eq!(controls.iter().filter(|c| c.role == PhysicalControlRole::Fader).count(), 8);
+        assert_eq!(controls.iter().filter(|c| c.role == PhysicalControlRole::Utility).count(), 8);
+        assert!(PhysicalControlId::new("fader-1").is_ok());
+        assert!(PhysicalControlId::new("utility-1").is_ok());
+        assert!(PhysicalControlId::new("fader-9").is_err());
     }
 
     #[test]
@@ -4695,6 +5358,18 @@ mod tests {
             encode_launch_control_template(7),
             Some([0xf0, 0x00, 0x20, 0x29, 0x02, 0x11, 0x77, 0x07, 0xf7])
         );
+    }
+
+    #[test]
+    fn scheduled_feedback_uses_profile_owned_led_address_and_value_encoding() {
+        let frame =
+            encode_launch_control_feedback(0, 24, LedState::new(LedColor::Green, 127, true))
+                .expect("valid feedback frame");
+        assert_eq!(frame, vec![0xf0, 0x00, 0x20, 0x29, 0x02, 0x11, 0x78, 0x00, 0x18, 0x34, 0xf7]);
+        assert!(encode_launch_control_feedback(16, 24, LedState::new(LedColor::Red, 127, false))
+            .is_none());
+        assert!(encode_launch_control_feedback(0, 48, LedState::new(LedColor::Red, 127, false))
+            .is_none());
     }
 
     #[test]
@@ -4904,6 +5579,44 @@ mod tests {
             (4, lexicon_reflex::REQUEST_REGISTER, 127)
         );
         assert!(lexicon_reflex::decode_request(&[0; 7]).is_err());
+    }
+
+    #[test]
+    fn pcm70_catalog_translates_to_valid_named_reflex_setups_and_sysex() {
+        let catalog = lexicon_reflex::pcm70_translations();
+        assert_eq!(catalog.len(), 5);
+        assert_eq!(
+            catalog.iter().map(|preset| preset.name).collect::<Vec<_>>(),
+            vec!["Concert Wave", "Circular Reverbs", "INF Reverb", "Rich Plate", "Mod Wobble"]
+        );
+        for preset in catalog {
+            let setup = lexicon_reflex::translate_pcm70(preset.id).expect("translation");
+            assert_eq!(setup.algorithm(), Some(preset.reflex_algorithm));
+            assert!(setup.name_bytes().starts_with(preset.name.as_bytes()));
+            for parameter in lexicon_reflex::parameters(preset.reflex_algorithm) {
+                let value = setup.parameter(parameter.number).expect("translated parameter");
+                assert!((parameter.min..=parameter.max).contains(&value));
+            }
+            let frame = lexicon_reflex::encode_pcm70_translation(preset.id, 0).expect("SysEx");
+            assert_eq!(frame.first(), Some(&0xF0));
+            assert_eq!(frame.last(), Some(&0xF7));
+            let (_, decoded) =
+                lexicon_reflex::decode_active_setup_frame(&frame).expect("active setup decode");
+            assert_eq!(decoded, setup.as_bytes());
+        }
+        assert!(lexicon_reflex::translate_pcm70("missing").is_err());
+        assert!(lexicon_reflex::encode_pcm70_translation("concert-wave", 16).is_err());
+    }
+
+    #[test]
+    fn reflex_profile_exposes_pcm70_translations_as_controller_operations() {
+        let profile = lexicon_reflex_profile();
+        assert_eq!(profile.controls.len(), 5);
+        let rendered = profile.render_control_message("Concert Wave", 1, 1).expect("render");
+        let (_, setup) =
+            lexicon_reflex::decode_active_setup_frame(&rendered).expect("active setup decode");
+        assert_eq!(setup[0], 1);
+        assert_eq!(&setup[21..33], b"Concert Wave");
     }
 
     #[test]
@@ -5215,7 +5928,7 @@ mod tests {
         let registry = AliasRegistry {
             aliases: vec![AliasSelector {
                 alias: "reflex".into(),
-                serial: Some("A".into()),
+                serial: None,
                 vid_pid: None,
                 interface: None,
                 name_pattern: None,

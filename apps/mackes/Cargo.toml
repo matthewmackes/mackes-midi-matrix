@@ -11,6 +11,7 @@ mackes-domain = { path = "../../crates/domain" }
 mackes-tui = { path = "../../crates/tui" }
 ratatui.workspace = true
 crossterm.workspace = true
+owo-colors.workspace = true
 mackes-profiles = { path = "../../crates/profiles" }
 mackes-midi-engine = { path = "../../crates/midi-engine", features = ["midir-backend"] }
 mackes-ipc = { path = "../../crates/ipc" }
