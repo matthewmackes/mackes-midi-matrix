@@ -3518,12 +3518,17 @@ Workspace all-feature tests, strict daemon Clippy, worklist validation, and diff
 
 #### [ ] W089 — Hierarchical Learn catalog
 
-- **Status:** `READY`
+- **Status:** `IN_PROGRESS`
 - **Owner:** Luna
 - **Depends on:** W076, W077, W085
 - **Objective:** make Learn present a deterministic catalog of Device → Preset (when available) → Effect → Type → Parameter.
 - **Implementation:** extend the assignment browser and wire contract with explicit catalog levels, profile-owned preset/effect/type metadata, bounded selection, keyboard and Mk2 arrow parity, and clear empty-state handling.
 - **Acceptance:** entering Learn always renders the current level, candidate count, selected item, and breadcrumb; no catalog level is silently skipped.
+
+**Evidence update:** 2026-09-01 — TUI now renders the catalog breadcrumb and explicit
+`PRESETS NONE` branch, and the Reflex profile exposes its five PCM70 translator presets alongside
+effect/type/parameter metadata. Focused TUI/CLI tests and strict Clippy pass. Interactive level
+transitions and preset commits remain open under W089/W090.
 
 #### [ ] W090 — Preset-to-button assignment
 

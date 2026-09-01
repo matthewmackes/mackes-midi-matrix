@@ -6700,6 +6700,8 @@ mod tests {
             mackes_profiles::SourceRole::Continuous,
         );
         assert_eq!(choices.devices, vec!["lexicon.reflex", "eventide.micropitch"]);
+        assert_eq!(choices.presets.len(), 5);
+        assert!(choices.presets.iter().any(|(_, label)| label == "Concert Wave"));
         assert!(!choices.effects.is_empty());
         assert!(choices.parameters.iter().all(|choice| {
             matches!(

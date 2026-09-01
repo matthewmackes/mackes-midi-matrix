@@ -104,10 +104,12 @@ fn run_tui() -> Result<(), String> {
                     &assignment_wizard,
                     mackes_tui::Viewport::new(terminal.size().map_or(80, |size| size.width), 24),
                 );
-                if !assignment_choices.parameters.is_empty() {
+                if assignment_wizard.session.phase != mackes_ipc::AssignmentPhase::Idle {
                     lines.push("CATALOG  Device > Preset > Effect > Type > Parameter".into());
                     lines.push(format!("DEVICE   {}", assignment_choices.devices.join(", ")));
-                    if !assignment_choices.presets.is_empty() {
+                    if assignment_choices.presets.is_empty() {
+                        lines.push("PRESETS  NONE".into());
+                    } else {
                         lines.push(format!(
                             "PRESETS  {}",
                             assignment_choices
@@ -128,15 +130,19 @@ fn run_tui() -> Result<(), String> {
                             .join(", ")
                     ));
                     lines.push(format!("TYPES    {}", assignment_choices.types.join(", ")));
-                    lines.push("DESTINATION / EFFECT / PARAMETER".into());
-                    for (index, choice) in assignment_choices.parameters.iter().enumerate() {
-                        lines.push(format!(
-                            "{} {} / {} / {}",
-                            if index == assignment_choices.selected { ">" } else { " " },
-                            choice.profile_id,
-                            choice.effect_id,
-                            choice.id
-                        ));
+                    if assignment_choices.parameters.is_empty() {
+                        lines.push("PARAMETERS NONE".into());
+                    } else {
+                        lines.push("DESTINATION / EFFECT / PARAMETER".into());
+                        for (index, choice) in assignment_choices.parameters.iter().enumerate() {
+                            lines.push(format!(
+                                "{} {} / {} / {}",
+                                if index == assignment_choices.selected { ">" } else { " " },
+                                choice.profile_id,
+                                choice.effect_id,
+                                choice.id
+                            ));
+                        }
                     }
                 }
                 lines
