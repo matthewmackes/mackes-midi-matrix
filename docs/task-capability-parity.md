@@ -7,7 +7,7 @@ legacy action.
 | Legacy capability | Primary section | Current destination | Parity status |
 | --- | --- | --- | --- |
 | Dashboard health, scene, panic, live activity | Live | Live landing and HUD | Covered |
-| MIDI Learn capture and review | Map Controls | Assignment/browser workflow | Partial: controller capture pending reviewed User 1 artifact |
+| MIDI Learn capture and review | Map Controls | Assignment/browser workflow | Partial: controller capture pending Factory Template 1 qualification |
 | Routing and durable parameter mappings | Map Controls | Mapping browser and Advanced inspector | Partial: browser/mutations wired; full end-to-end fixture pending |
 | Reflex profile and algorithm controls | Devices | Profile-backed device view | Covered by profile workspace tests |
 | Eventide MicroPitch controls | Devices | Profile-backed device view | Covered by device workspace tests |

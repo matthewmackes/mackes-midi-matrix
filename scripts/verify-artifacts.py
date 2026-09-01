@@ -11,7 +11,7 @@ import sys
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 SCHEMAS = ROOT / "schemas"
 FIXTURES = ROOT / "fixtures"
-USER1_MANIFEST = ROOT / "docs" / "mackes-launch-control-xl-mk2-user1-manifest.json"
+FACTORY1_MANIFEST = ROOT / "docs" / "mackes-launch-control-xl-mk2-factory1-manifest.json"
 
 PRIVATE_PATTERNS = (
     re.compile(r"/(?:home|root)/[^\s\"']+"),
@@ -42,14 +42,14 @@ def check_fixtures() -> None:
                 raise SystemExit(f"possible private data in fixture {path}: {pattern.pattern}")
 
 
-def check_user1_manifest() -> None:
+def check_factory1_manifest() -> None:
     """Validate the reviewable inventory without treating the pending artifact as verified."""
     try:
-        manifest = json.loads(USER1_MANIFEST.read_text(encoding="utf-8"))
+        manifest = json.loads(FACTORY1_MANIFEST.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         raise SystemExit(f"invalid User 1 manifest: {exc}") from exc
-    if manifest.get("target_generation") != "Mk2" or manifest.get("expected_user_slot") != 1:
-        raise SystemExit("User 1 manifest has the wrong target or slot")
+    if manifest.get("target_generation") != "Mk2" or manifest.get("template_name") != "Factory Template 1":
+        raise SystemExit("Factory 1 manifest has the wrong target or template")
     inventory = manifest.get("assignable_inventory")
     if not isinstance(inventory, dict):
         raise SystemExit("User 1 manifest is missing assignable inventory")
@@ -60,7 +60,7 @@ def check_user1_manifest() -> None:
         item = inventory.get(name)
         if not isinstance(item, dict) or item.get("count") != expected:
             raise SystemExit(f"User 1 manifest has an invalid {name} count")
-        numbers = item.get("cc_numbers")
+        numbers = item.get("numbers")
         if not isinstance(numbers, list) or len(numbers) != expected:
             raise SystemExit(f"User 1 manifest has an invalid {name} MIDI inventory")
         if name == "knobs":
@@ -87,14 +87,10 @@ def check_user1_manifest() -> None:
     reserved = manifest.get("reserved_controls")
     if not isinstance(reserved, list) or len(reserved) != 8 or len(set(reserved)) != 8:
         raise SystemExit("User 1 manifest must contain eight unique reserved controls")
-    if manifest.get("sha256") is None:
-        print("User 1 Components artifact checksum pending review")
-    elif not re.fullmatch(r"[0-9a-fA-F]{64}", manifest["sha256"]):
-        raise SystemExit("User 1 artifact checksum is not a SHA-256 digest")
 
 
 if __name__ == "__main__":
     check_schemas()
     check_fixtures()
-    check_user1_manifest()
+    check_factory1_manifest()
     print("artifact checks passed")

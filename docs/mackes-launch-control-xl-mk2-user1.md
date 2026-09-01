@@ -1,4 +1,7 @@
-# MACKES User 1 — Launch Control XL Mk2
+# Retired: MACKES User 1 — Launch Control XL Mk2
+
+This document is retained only for migration history. The production contract is
+[Factory Template 1](mackes-launch-control-xl-mk2-factory1-manifest.json).
 
 This is the reviewed setup contract for the second-generation Novation Launch Control XL.
 It is intentionally a Components workflow: MACKES does not write template definitions or

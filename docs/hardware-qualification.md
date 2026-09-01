@@ -48,12 +48,12 @@ Control Change sweep on channel 8, controller 13, rising from value 1 through
 127 and returning downward. This verifies live MIDI input and value continuity
 through the ALSA path; the physical knob identity was not recorded, so it is
 not treated as a completed stable-ID mapping qualification.
-Because CC13 is outside the reviewed Mk2 User 1 inventory, this observation is
+Because CC13 is outside the retired User 1 inventory, this observation is
 also evidence that the reviewed template is not yet verified on the device.
 In Factory Template 1, the `Device` button was then observed as Note On/Off,
 zero-based MIDI channel 8, note 105, with velocities 127/0. This is retained
 as a factory-template universal-control observation and is not substituted for
-the reviewed User 1 stable-ID map.
+the Factory Template 1 stable-ID map.
 Factory Template 1 `Mute` was observed as Note On/Off on zero-based MIDI
 channel 8, note 106, with velocities 127/0. The paired observation confirms
 the reserved universal-button behavior without changing the controller.
@@ -74,8 +74,8 @@ non-idle state when listening began).
 The leftmost Factory Template 1 fader produced a continuous Control Change
 sweep on zero-based MIDI channel 8, controller 77, reaching value 127. This
 confirms an eligible continuous control can be learned through the same input
-path; its stable physical-ID assignment remains subject to the reviewed User 1
-template.
+path; its stable physical-ID assignment is governed by the Factory Template 1
+contract.
 The top-left eligible Factory Template 1 channel button produced Note On/Off
 on zero-based MIDI channel 8, note 41, with velocities 127/0. This confirms a
 discrete non-universal control is also learnable through the input path.

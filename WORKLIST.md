@@ -3725,6 +3725,11 @@ through that table. Added exact uniqueness, wrong-channel, contradictory User 1 
 release-value rejection tests. ADR, operator-document retirement, migration, and artifact-contract
 alignment remain open.
 
+**Evidence update:** 2026-09-01 — added the versioned machine-readable Factory Template 1
+manifest and retired User 1 onboarding references as migration history. Artifact verification,
+worklist validation, 50 profile tests, and diff checks pass. Transactional legacy tuple migration
+and full release-gate enforcement remain W093/W094 work.
+
 #### [ ] W094 — Make controller artifact readiness a hard release gate
 
 - **Status:** `NOT_STARTED`

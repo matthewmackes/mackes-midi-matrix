@@ -7,8 +7,8 @@
 3. In Map Controls, press Device, move exactly one eligible Launch Control XL Mk2
    knob, button, or fader, then choose the device, effect, and parameter with the
    controller arrows. Press Device again to commit.
-4. Install and verify the MACKES User 1 layout through official Novation Components
-   using [`docs/mackes-launch-control-xl-mk2-user1.md`](mackes-launch-control-xl-mk2-user1.md).
+4. Select and verify Factory Template 1 on the Launch Control XL Mk2 using the
+   [Factory 1 contract](mackes-launch-control-xl-mk2-factory1-manifest.json).
 5. If the template is missing or mismatched, follow the inline recovery message;
    MACKES will not guess an input assignment.
 
