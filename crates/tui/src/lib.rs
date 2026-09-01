@@ -6714,6 +6714,13 @@ mod tests {
             .parameters
             .iter()
             .all(|choice| { choices.effects.iter().any(|(id, _)| id == &choice.effect_id) }));
+        let eventide = AssignmentChoiceBrowser::from_profiles(
+            &["eventide.micropitch"],
+            Some("eventide.micropitch"),
+            mackes_profiles::SourceRole::Continuous,
+        );
+        assert!(eventide.presets.is_empty());
+        assert!(!eventide.parameters.is_empty());
         choices.selected = usize::MAX;
         assert!(choices.move_selection(true));
         assert!(!choices.move_selection(true));
