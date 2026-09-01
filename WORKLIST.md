@@ -3737,7 +3737,8 @@ config migration test and strict config Clippy pass.
 
 #### [ ] W094 — Make controller artifact readiness a hard release gate
 
-- **Status:** `NOT_STARTED`
+- **Status:** `IN_PROGRESS`
+- **Start date:** 2026-09-01
 - **Owner:** Luna
 - **Depends on:** W093
 - **Objective:** prevent a production release from passing while its required controller artifact
@@ -3766,6 +3767,17 @@ config migration test and strict config Clippy pass.
   contains exactly the verified artifact/contract and checksum evidence.
 - **Commands/evidence:** verifier positive/negative suite, installer smoke, archive listing and
   digest check, `scripts/release-gate.sh`, and documented recovery output.
+
+**Work log:** 2026-09-01 — codex — `IN_PROGRESS`; replaced the nullable User 1 Components
+manifest with a versioned offline Factory Template 1 contract, made the verifier require exact
+model/generation/slot/channel/inventory/message-kind fields, and removed the contradictory legacy
+manifest. Positive artifact and governance checks pass; negative fixture coverage and full release
+gate evidence remain.
+
+**Evidence update:** 2026-09-01 — strict Factory 1 artifact verification and packaging are
+now release-gated offline; `scripts/release-gate.sh` passed formatting, repository/worklist
+policy, dependency audit, all workspace tests, strict Clippy, benchmark, hermetic integration,
+installer smoke, archive checksum, and preflight. Negative-fixture coverage remains to be added.
 
 #### [ ] W095 — Enforce daemon-only physical MIDI ownership
 

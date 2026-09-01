@@ -43,26 +43,35 @@ def check_fixtures() -> None:
 
 
 def check_factory1_manifest() -> None:
-    """Validate the reviewable inventory without treating the pending artifact as verified."""
+    """Validate the complete offline Factory Template 1 production contract."""
     try:
         manifest = json.loads(FACTORY1_MANIFEST.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
-        raise SystemExit(f"invalid User 1 manifest: {exc}") from exc
-    if manifest.get("target_generation") != "Mk2" or manifest.get("template_name") != "Factory Template 1":
+        raise SystemExit(f"invalid Factory 1 manifest: {exc}") from exc
+    if (
+        manifest.get("target_model") != "Novation Launch Control XL"
+        or manifest.get("target_generation") != "Mk2"
+        or manifest.get("template_name") != "Factory Template 1"
+        or manifest.get("template_slot") != 1
+        or manifest.get("midi_channel") != 8
+    ):
         raise SystemExit("Factory 1 manifest has the wrong target or template")
     inventory = manifest.get("assignable_inventory")
     if not isinstance(inventory, dict):
-        raise SystemExit("User 1 manifest is missing assignable inventory")
+        raise SystemExit("Factory 1 manifest is missing assignable inventory")
     tuples: set[tuple[str, int]] = set()
     physical_ids: set[str] = set()
     expected_counts = {"knobs": 24, "channel_buttons": 16, "faders": 8}
     for name, expected in expected_counts.items():
         item = inventory.get(name)
         if not isinstance(item, dict) or item.get("count") != expected:
-            raise SystemExit(f"User 1 manifest has an invalid {name} count")
+            raise SystemExit(f"Factory 1 manifest has an invalid {name} count")
         numbers = item.get("numbers")
         if not isinstance(numbers, list) or len(numbers) != expected:
-            raise SystemExit(f"User 1 manifest has an invalid {name} MIDI inventory")
+            raise SystemExit(f"Factory 1 manifest has an invalid {name} MIDI inventory")
+        expected_kind = "note" if name == "channel_buttons" else "cc"
+        if item.get("midi_kind") != expected_kind:
+            raise SystemExit(f"Factory 1 manifest has an invalid {name} message kind")
         if name == "knobs":
             ids = [f"knob-r{row}-c{column}" for row in range(1, 4) for column in range(1, 9)]
         elif name == "channel_buttons":
@@ -75,18 +84,18 @@ def check_factory1_manifest() -> None:
             "faders": "fader-{column}",
         }[name]
         if item.get("physical_id_pattern") != expected_pattern or len(ids) != expected:
-            raise SystemExit(f"User 1 manifest has an invalid {name} physical-ID pattern")
+            raise SystemExit(f"Factory 1 manifest has an invalid {name} physical-ID pattern")
         if physical_ids.intersection(ids):
-            raise SystemExit(f"duplicate User 1 physical control ID in {name}")
+            raise SystemExit(f"duplicate Factory 1 physical control ID in {name}")
         physical_ids.update(ids)
         for number in numbers:
-            key = (item.get("midi_kind", ""), number)
+            key = (manifest["midi_channel"], item["midi_kind"], number)
             if key in tuples:
-                raise SystemExit(f"duplicate User 1 source tuple: {key}")
+                raise SystemExit(f"duplicate Factory 1 source tuple: {key}")
             tuples.add(key)
     reserved = manifest.get("reserved_controls")
     if not isinstance(reserved, list) or len(reserved) != 8 or len(set(reserved)) != 8:
-        raise SystemExit("User 1 manifest must contain eight unique reserved controls")
+        raise SystemExit("Factory 1 manifest must contain eight unique reserved controls")
 
 
 if __name__ == "__main__":
