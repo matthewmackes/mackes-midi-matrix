@@ -1289,6 +1289,7 @@ pub struct AlsaSequencerClient {
     seq: alsa::seq::Seq,
     input_port: i32,
     output_port: i32,
+    pending_wire: VecDeque<(AlsaSequencerAddress, Vec<u8>)>,
 }
 
 #[cfg(feature = "alsa-seq-backend")]
@@ -1334,7 +1335,7 @@ impl AlsaSequencerClient {
                 midi,
             )
             .map_err(|error| error.to_string())?;
-        Ok(Self { seq, input_port, output_port })
+        Ok(Self { seq, input_port, output_port, pending_wire: VecDeque::new() })
     }
 
     /// Returns the volatile ALSA client number allocated to this process.
@@ -1457,6 +1458,38 @@ impl AlsaSequencerClient {
         Ok(events)
     }
 
+    /// Reads the next event belonging to one explicitly subscribed source.
+    ///
+    /// # Errors
+    ///
+    /// Returns an ALSA read or source-address conversion error.
+    pub fn read_wire_event_for(
+        &mut self,
+        source: AlsaSequencerAddress,
+    ) -> Result<Option<Vec<u8>>, String> {
+        if let Some(index) = self.pending_wire.iter().position(|(address, _)| *address == source) {
+            return Ok(self.pending_wire.remove(index).map(|(_, bytes)| bytes));
+        }
+        let mut input = self.seq.input();
+        for _ in 0..32 {
+            if input.event_input_pending(true).map_err(|error| error.to_string())? == 0 {
+                break;
+            }
+            let event = input.event_input().map_err(|error| error.to_string())?;
+            let Some(bytes) = alsa_event_to_wire(&event)? else { continue };
+            let source_address = event.get_source();
+            let address = AlsaSequencerAddress::new(
+                u8::try_from(source_address.client).map_err(|_| "invalid ALSA source client")?,
+                u8::try_from(source_address.port).map_err(|_| "invalid ALSA source port")?,
+            );
+            self.pending_wire.push_back((address, bytes));
+            if address == source {
+                return Ok(self.pending_wire.pop_back().map(|(_, bytes)| bytes));
+            }
+        }
+        Ok(None)
+    }
+
     /// Reads bounded ALSA client/port lifecycle notifications.
     #[must_use]
     pub fn read_lifecycle_events(
@@ -1500,6 +1533,7 @@ impl AlsaSequencerClient {
 pub struct AlsaInputCapture {
     info: EndpointInfo,
     client: Arc<Mutex<AlsaSequencerClient>>,
+    source: AlsaSequencerAddress,
     next_sequence: u64,
 }
 
@@ -1555,6 +1589,7 @@ impl AlsaInputCapture {
                 direction: EndpointDirection::Input,
             },
             client: Arc::clone(client),
+            source: source.address,
             next_sequence: 0,
         })
     }
@@ -1567,8 +1602,8 @@ impl MidiInputAdapter for AlsaInputCapture {
     }
 
     fn receive(&mut self) -> Option<MidiEvent> {
-        let client = self.client.lock().ok()?;
-        let bytes = client.read_wire_events(1).ok()?.into_iter().next()?.1;
+        let mut client = self.client.lock().ok()?;
+        let bytes = client.read_wire_event_for(self.source).ok()??;
         drop(client);
         let message = MidiMessage::from_wire(&bytes).ok()?;
         let sequence = self.next_sequence;

@@ -3401,6 +3401,11 @@ and its owned application ports for all configured inputs. Installed ALSA invent
 **Closure:** 2026-08-31 — architecture and one-client/subscription contracts are implemented,
 tested, documented, and installed locally. Remaining event qualification is tracked by W085–W088.
 
+**Evidence update:** 2026-08-31 — corrected shared-client ingress dispatch to retain bounded
+events by volatile ALSA source address and deliver each event only to the adapter for its explicit
+subscription. This prevents cross-device attribution and queue loss when multiple inputs share the
+daemon client; strict engine Clippy and focused engine/daemon tests pass.
+
 #### [ ] W085 — Nonblocking ALSA event reader and MIDI 1.0 decoder
 
 - **Status:** `NOT_STARTED`
