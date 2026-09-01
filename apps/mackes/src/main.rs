@@ -1038,28 +1038,6 @@ fn run_tui() -> Result<(), String> {
     result
 }
 
-/* retired M-VAVE command handlers removed from the active platform */
-/*
-fn mvave_ir_box_preset(preset: u8, destination: Option<&str>, dry_run: bool) -> Result<String, String> {
-    let bytes = mackes_profiles::mvave_ir_box_preset_sysex(preset).map_err(str::to_owned)?;
-    let hex = bytes.iter().map(|byte| format!("{byte:02X}")).collect::<Vec<_>>().join(" ");
-    if dry_run {
-        return Ok(hex);
-    }
-    let destination = destination.ok_or("M-VAVE destination is required")?;
-    let payload = serde_json::json!({"profile_id":"m-vave.ir-box","control":format!("Preset {preset}"),"channel":1,"value":0,"destination":destination,"confirm":true});
-    let response = daemon_request(
-        mackes_ipc::Command::DeviceControl,
-        &serde_json::to_vec(&payload).map_err(|e| e.to_string())?,
-    );
-    if response.contains("\"ok\":true") {
-        Ok(format!("preset {preset} sent through daemon: {response}"))
-    } else {
-        Err(response)
-    }
-}
-
-*/
 fn reflex_pcm70_preset(
     preset_id: &str,
     destination: Option<&str>,
@@ -1094,31 +1072,6 @@ fn reflex_pcm70_preset(
         Err(format!("Reflex preset send failed: {response}"))
     }
 }
-
-/*
-fn mvave_ir_box_module(module: &str, enabled: bool, destination: &str) -> Result<String, String> {
-    let selector = match module {
-        "ir" => mackes_profiles::MvaveIrBoxModule::Ir,
-        "eq" => mackes_profiles::MvaveIrBoxModule::Eq,
-        _ => return Err("IR Box module must be ir or eq".into()),
-    };
-    let _ = selector;
-    let control = if module == "ir" { "IR" } else { "EQ" };
-    let payload = serde_json::json!({"profile_id":"m-vave.ir-box","control":control,"channel":1,"value":u8::from(enabled),"destination":destination,"confirm":true});
-    let response = daemon_request(
-        mackes_ipc::Command::DeviceControl,
-        &serde_json::to_vec(&payload).map_err(|e| e.to_string())?,
-    );
-    if response.contains("\"ok\":true") {
-        Ok(format!(
-            "{module} {} sent through daemon: {response}",
-            if enabled { "on" } else { "off" }
-        ))
-    } else {
-        Err(response)
-    }
-}
-*/
 
 fn set_default_provider_cli(path: &str, capability: &str, profile_id: &str) -> Result<(), String> {
     let profile = mackes_profiles::builtin_profile(profile_id)
@@ -1263,7 +1216,7 @@ fn main() {
         }
         [command] if command == "--help" || command == "help" => {
             println!(
-                "mackes-midi-matrix: TUI/CLI\n\nUsage:\n  mackes-midi-matrix tui\n  mackes-midi-matrix validate <path> [--json]\n  mackes-midi-matrix export <config> <directory>\n  mackes-midi-matrix doctor [--json]\n  mackes-midi-matrix status [--json]\n  mackes-midi-matrix panic\n  mackes-midi-matrix endpoints [--json]\n  mackes-midi-matrix default get <config> <capability> [--json]\n  mackes-midi-matrix default set <config> <capability> <profile-id>\n  mackes-midi-matrix reflex preset <id> --dry-run\n  mackes-midi-matrix reflex preset <id> <destination-id> --confirm\n  mackes-midi-matrix mvave preset <1-32> [--dry-run]\n  mackes-midi-matrix mvave ir|eq on|off --confirm-unverified\n  mackes-midi-matrix scenes|devices|routes|monitor [--json]\n  mackes-midi-matrix scene list <config> [--json]\n  mackes-midi-matrix backup list|inspect ...\n  mackes-midi-matrix profile validate [--json]\n  mackes-midi-matrix --version"
+                "mackes-midi-matrix: TUI/CLI\n\nUsage:\n  mackes-midi-matrix tui\n  mackes-midi-matrix validate <path> [--json]\n  mackes-midi-matrix export <config> <directory>\n  mackes-midi-matrix doctor [--json]\n  mackes-midi-matrix status [--json]\n  mackes-midi-matrix panic\n  mackes-midi-matrix endpoints [--json]\n  mackes-midi-matrix default get <config> <capability> [--json]\n  mackes-midi-matrix default set <config> <capability> <profile-id>\n  mackes-midi-matrix reflex preset <id> --dry-run\n  mackes-midi-matrix reflex preset <id> <destination-id> --confirm\n  mackes-midi-matrix scenes|devices|routes|monitor [--json]\n  mackes-midi-matrix scene list <config> [--json]\n  mackes-midi-matrix backup list|inspect ...\n  mackes-midi-matrix profile validate [--json]\n  mackes-midi-matrix --version"
             );
             println!("  mackes-midi-matrix learn <endpoint-id> [limit]");
             println!("  mackes-midi-matrix effects faceplate [--json]");
