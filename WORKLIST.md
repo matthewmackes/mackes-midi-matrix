@@ -3553,6 +3553,10 @@ Focused TUI tests, strict Clippy, formatting, and diff checks pass.
 back-navigation and state-machine coverage. Learn now has authoritative Device → Preset → Effect
 → Type → Parameter levels; preset payload integration and physical qualification remain open.
 
+**Evidence update:** 2026-09-01 — Type-level arrow navigation now uses a bounded type cursor,
+matching the explicit state-machine phase and preventing cross-level selection drift. Workspace
+checks and strict TUI/CLI Clippy pass.
+
 #### [ ] W090 — Preset-to-button assignment
 
 - **Status:** `IN_PROGRESS`

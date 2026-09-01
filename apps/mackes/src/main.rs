@@ -2510,6 +2510,10 @@ fn synchronize_events(
                             == mackes_ipc::AssignmentPhase::ChoosePreset
                         {
                             assignment_choices.move_preset_selection(false);
+                        } else if assignment_wizard.session.phase
+                            == mackes_ipc::AssignmentPhase::ChooseType
+                        {
+                            assignment_choices.move_type_selection(false);
                         } else {
                             assignment_choices.move_selection(false);
                         }
@@ -2519,6 +2523,10 @@ fn synchronize_events(
                             == mackes_ipc::AssignmentPhase::ChoosePreset
                         {
                             assignment_choices.move_preset_selection(true);
+                        } else if assignment_wizard.session.phase
+                            == mackes_ipc::AssignmentPhase::ChooseType
+                        {
+                            assignment_choices.move_type_selection(true);
                         } else {
                             assignment_choices.move_selection(true);
                         }
