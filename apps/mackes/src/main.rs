@@ -96,57 +96,101 @@ fn run_tui() -> Result<(), String> {
         if workspace == 2 && learn_workspace.phase == mackes_tui::LearnPhase::Capturing {
             poll_learn_capture(&mut learn_workspace);
         }
-        dashboard.assignment_feedback =
-            if assignment_wizard.session.phase == mackes_ipc::AssignmentPhase::Idle {
-                Vec::new()
-            } else {
-                let mut lines = mackes_tui::assignment_wizard_lines(
-                    &assignment_wizard,
-                    mackes_tui::Viewport::new(terminal.size().map_or(80, |size| size.width), 24),
-                );
-                if assignment_wizard.session.phase != mackes_ipc::AssignmentPhase::Idle {
-                    lines.push("CATALOG  Device > Preset > Effect > Type > Parameter".into());
-                    lines.push(format!("DEVICE   {}", assignment_choices.devices.join(", ")));
-                    if assignment_choices.presets.is_empty() {
-                        lines.push("PRESETS  NONE".into());
-                    } else {
-                        lines.push(format!(
-                            "PRESETS  {}",
-                            assignment_choices
-                                .presets
-                                .iter()
-                                .map(|(_, label)| label.as_str())
-                                .collect::<Vec<_>>()
-                                .join(" | ")
-                        ));
-                    }
+        dashboard.assignment_feedback = if assignment_wizard.session.phase
+            == mackes_ipc::AssignmentPhase::Idle
+        {
+            Vec::new()
+        } else {
+            let mut lines = mackes_tui::assignment_wizard_lines(
+                &assignment_wizard,
+                mackes_tui::Viewport::new(terminal.size().map_or(80, |size| size.width), 24),
+            );
+            if assignment_wizard.session.phase != mackes_ipc::AssignmentPhase::Idle {
+                lines.push("CATALOG  Device > Preset > Effect > Type > Parameter".into());
+                lines.push(format!("DEVICE   {}", assignment_choices.devices.join(", ")));
+                if assignment_choices.presets.is_empty() {
+                    lines.push("PRESETS  NONE".into());
+                } else {
                     lines.push(format!(
-                        "EFFECTS  {}",
+                        "PRESETS  {}",
                         assignment_choices
-                            .effects
+                            .presets
                             .iter()
                             .map(|(_, label)| label.as_str())
                             .collect::<Vec<_>>()
-                            .join(", ")
+                            .join(" | ")
                     ));
-                    lines.push(format!("TYPES    {}", assignment_choices.types.join(", ")));
-                    if assignment_choices.parameters.is_empty() {
-                        lines.push("PARAMETERS NONE".into());
-                    } else {
-                        lines.push("DESTINATION / EFFECT / PARAMETER".into());
-                        for (index, choice) in assignment_choices.parameters.iter().enumerate() {
+                }
+                lines.push(format!(
+                    "EFFECTS  {}",
+                    assignment_choices
+                        .effects
+                        .iter()
+                        .map(|(_, label)| label.as_str())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ));
+                lines.push(format!("TYPES    {}", assignment_choices.types.join(", ")));
+                match assignment_wizard.session.phase {
+                    mackes_ipc::AssignmentPhase::ChooseDevice => {
+                        lines.push("SELECT DEVICE".into());
+                        for (index, device) in assignment_choices.devices.iter().enumerate() {
                             lines.push(format!(
-                                "{} {} / {} / {}",
+                                "{} {}",
                                 if index == assignment_choices.selected { ">" } else { " " },
-                                choice.profile_id,
-                                choice.effect_id,
-                                choice.id
+                                device
                             ));
                         }
                     }
+                    mackes_ipc::AssignmentPhase::ChoosePreset => {
+                        lines.push("SELECT PRESET".into());
+                        for (index, (_, preset)) in assignment_choices.presets.iter().enumerate() {
+                            lines.push(format!(
+                                "{} {}",
+                                if index == assignment_choices.selected { ">" } else { " " },
+                                preset
+                            ));
+                        }
+                    }
+                    mackes_ipc::AssignmentPhase::ChooseEffect => {
+                        lines.push("SELECT EFFECT".into());
+                        for (index, (_, effect)) in assignment_choices.effects.iter().enumerate() {
+                            lines.push(format!(
+                                "{} {}",
+                                if index == assignment_choices.selected { ">" } else { " " },
+                                effect
+                            ));
+                        }
+                    }
+                    mackes_ipc::AssignmentPhase::ChooseType => {
+                        lines.push("SELECT TYPE".into());
+                        for (index, type_name) in assignment_choices.types.iter().enumerate() {
+                            lines.push(format!(
+                                "{} {}",
+                                if index == assignment_choices.selected { ">" } else { " " },
+                                type_name
+                            ));
+                        }
+                    }
+                    _ => {}
                 }
-                lines
-            };
+                if assignment_choices.parameters.is_empty() {
+                    lines.push("PARAMETERS NONE".into());
+                } else {
+                    lines.push("DESTINATION / EFFECT / PARAMETER".into());
+                    for (index, choice) in assignment_choices.parameters.iter().enumerate() {
+                        lines.push(format!(
+                            "{} {} / {} / {}",
+                            if index == assignment_choices.selected { ">" } else { " " },
+                            choice.profile_id,
+                            choice.effect_id,
+                            choice.id
+                        ));
+                    }
+                }
+            }
+            lines
+        };
         terminal
             .draw(|frame| {
                 let content = match workspace {

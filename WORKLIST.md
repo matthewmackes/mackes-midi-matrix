@@ -3557,6 +3557,10 @@ back-navigation and state-machine coverage. Learn now has authoritative Device �
 matching the explicit state-machine phase and preventing cross-level selection drift. Workspace
 checks and strict TUI/CLI Clippy pass.
 
+**Evidence update:** 2026-09-01 — Learn feedback now renders the selected item at each active
+catalog level (Device, Preset, Effect, Type, and Parameter), with bounded markers and explicit
+empty states. Workspace checks and strict TUI Clippy pass.
+
 #### [ ] W090 — Preset-to-button assignment
 
 - **Status:** `IN_PROGRESS`
