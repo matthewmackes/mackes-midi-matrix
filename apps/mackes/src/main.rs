@@ -312,7 +312,19 @@ fn run_tui() -> Result<(), String> {
                                     }
                                     _ => {}
                                 }
-                                let request = assignment_wizard.request(assignment_action, None);
+                                let request = if assignment_action
+                                    == mackes_ipc::AssignmentAction::Enter
+                                    && assignment_wizard.session.phase
+                                        == mackes_ipc::AssignmentPhase::ChooseParameter
+                                {
+                                    assignment_wizard
+                                        .selected_destination_request(&assignment_choices)
+                                        .unwrap_or_else(|| {
+                                            assignment_wizard.request(assignment_action, None)
+                                        })
+                                } else {
+                                    assignment_wizard.request(assignment_action, None)
+                                };
                                 if let Ok(payload) = serde_json::to_vec(&request) {
                                     let response =
                                         daemon_request(mackes_ipc::Command::Assignment, &payload);
@@ -2586,8 +2598,18 @@ fn synchronize_events(
                     "right" => {
                         // The Mk2's physical Right arrow is the hardware
                         // equivalent of keyboard Enter while Learn is active.
-                        let request =
-                            assignment_wizard.request(mackes_ipc::AssignmentAction::Enter, None);
+                        let request = if assignment_wizard.session.phase
+                            == mackes_ipc::AssignmentPhase::ChooseParameter
+                        {
+                            assignment_wizard
+                                .selected_destination_request(assignment_choices)
+                                .unwrap_or_else(|| {
+                                    assignment_wizard
+                                        .request(mackes_ipc::AssignmentAction::Enter, None)
+                                })
+                        } else {
+                            assignment_wizard.request(mackes_ipc::AssignmentAction::Enter, None)
+                        };
                         if let Ok(request_payload) = serde_json::to_vec(&request) {
                             let response =
                                 daemon_request(mackes_ipc::Command::Assignment, &request_payload);

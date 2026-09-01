@@ -1605,6 +1605,7 @@ impl Daemon {
             if let Some(action) = Self::launch_control_factory1_navigation(&event) {
                 if action == "right"
                     && self.assignment_session.phase != mackes_ipc::AssignmentPhase::Idle
+                    && self.assignment_session.phase != mackes_ipc::AssignmentPhase::ChooseParameter
                 {
                     let _ = self.apply_assignment_request(mackes_ipc::AssignmentRequest {
                         generation: self.assignment_generation,
