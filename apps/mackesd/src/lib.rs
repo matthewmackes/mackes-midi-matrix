@@ -1179,9 +1179,13 @@ impl Daemon {
                 }));
                 continue;
             }
-            let Some(source_endpoint) =
+            let source_endpoint = if mapping.source_endpoint == "controller" {
+                event.endpoint
+            } else if let Some(source_endpoint) =
                 mackes_midi_engine::numeric_endpoint_id(&mapping.source_endpoint)
-            else {
+            {
+                source_endpoint
+            } else {
                 continue;
             };
             let Some(destination_endpoint) =

@@ -3575,6 +3575,11 @@ Runtime persistence and physical button/SysEx qualification remain open.
 Launch Control knobs, channel buttons, and faders, preventing committed mappings from falling back
 to source number zero. Profile catalog regression and strict profile/daemon Clippy pass.
 
+**Evidence update:** 2026-09-01 — learned controller mappings now resolve the capture source
+endpoint to the originating runtime event when using the controller-owned source identity. This
+allows native ALSA button/knob mappings to dispatch without accepting unrelated endpoint IDs;
+workspace checks, daemon dispatch regression, and strict Clippy pass.
+
 #### [ ] W091 — Preset parameter projection and LED state
 
 - **Status:** `IN_PROGRESS`
