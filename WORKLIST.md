@@ -3588,10 +3588,71 @@ workspace checks, daemon dispatch regression, and strict Clippy pass.
 
 - **Status:** `IN_PROGRESS`
 - **Owner:** Luna
-- **Depends on:** W090
+- **Depends on:** W090, W093, W095, W096
 - **Objective:** when a preset is loaded, project its documented parameters and update the Novation controls.
-- **Implementation:** define profile-owned preset parameter payloads, apply bounded values to mapped knobs/faders, emit controller LED colors by destination owner, and preserve OFF until a valid mapping exists.
-- **Acceptance:** loading a preset updates every mapped parameter deterministically, unmapped controls remain dark, and restart/resync restores values and colors without phantom assignments.
+- **Verified LED audit (2026-09-01):** LED support is only partially wired. Yellow Learn
+  acknowledgment is encoded, sent, and physically observed. Red Eventide and amber Lexicon owner
+  colors exist in software but are not physically qualified. Blue is not a supported Launch
+  Control XL Mk2 LED color and must not be promised. The two-green-pulse scheduler exists only as a
+  state model: production does not advance its clock and retransmit the resulting frames. Startup
+  restores template settings instead of persisted learned mappings; reconnect has no authoritative
+  LED replay; writes use broad output-name matching and a hard-coded template; send failures and
+  counters are not exposed. Faders have no individual LED address and require an explicit proxy
+  policy. Therefore the full persistent LED contract is not built, wired, or release-qualified.
+- **Mandatory correction:**
+  1. Complete W093 first and use its single authoritative Mk2 template/page, control inventory,
+     channel convention, LED address, and stable input/output identity. Remove hard-coded template
+     `8`, template `0`/`8` ambiguity, and broad `Launch Control XL` output-name fan-out from runtime
+     feedback code.
+  2. Make the daemon the sole owner of desired and actual controller LED state. Every LED intent
+     must identify the stable controller output, authoritative template/page, physical control,
+     layer, color, behavior, generation, and reason. The CLI and TUI may request or render state but
+     must never open the MIDI output or maintain a competing LED truth.
+  3. Derive the base layer from the persisted mapping store, not template settings: unmapped is
+     OFF; active Learn control is yellow; committed Lexicon is amber; committed Eventide is red;
+     other valid owners are green only when explicitly defined. Never represent amber as blue or
+     claim unsupported colors.
+  4. Preserve normal base state beneath temporary overlays. Device entry acknowledges visibly;
+     the captured control remains yellow throughout Learn; successful atomic persistence produces
+     exactly two visible green blinks and then restores the destination-owner color; failure
+     produces the documented red failure indication and then restores the prior valid base state.
+     Cancel or timeout must remove every transient overlay without changing the saved mapping.
+  5. Wire the scheduler to a daemon monotonic timer/tick and emit changed frames at their specified
+     deadlines. Completion of mapping persistence must automatically transition W096 to
+     `Succeeded` or `Failed`, arm the result sequence once, and prevent duplicate pulses from
+     retries, duplicate input, or multiple TUI subscribers.
+  6. Rebuild and replay desired LED state after daemon restart, controller reconnect, template/page
+     reselection, mapping create/replace/delete, preset load, and output-registry recovery. Replay
+     only after W095 resolves one unambiguous matching output; duplicates must fail closed without
+     writing to either device.
+  7. Treat each knob and channel button according to the W093 feedback-address inventory. Do not
+     emit nonexistent per-fader LED messages. Define and document the two channel-button LEDs in a
+     fader column as its proxy, including precedence when those buttons also have assignments, or
+     explicitly report fader LED feedback as unsupported until that conflict is resolved.
+  8. Route preset-load projection and LED restoration through one ordered daemon transaction so a
+     partially sent value set cannot advertise a successful preset. Bound and coalesce traffic,
+     preserve ordinary routing, and recover deterministically after mid-batch disconnect.
+  9. Check every MIDI send result. Publish attempted/sent/coalesced/failed LED counters, last error,
+     target stable identity, template/page, pending scheduler deadline, and desired-versus-actual
+     state in diagnostics. A zero-send path or wrong endpoint must be visible in the TUI/status and
+     release evidence.
+- **Tests to add first:** exact golden SysEx bytes for every supported Mk2 LED address/color and the
+  selected W093 template; unsupported color/address rejection; unmapped OFF; Lexicon amber;
+  Eventide red; active Learn yellow; fake-clock two-green success and red failure sequences;
+  overlay/base restoration; create/replace/delete; restart; reconnect with changed ALSA client
+  number; template reselect; duplicate-device fail-closed behavior; send failure and retry;
+  coalescing/order; preset projection interrupted mid-batch; fader proxy precedence; two TUI
+  subscribers; duplicate commit/result events; diagnostics counter accuracy.
+- **Physical qualification:** with one identified Launch Control XL Mk2, record the exact selected
+  template/page and output identity, then verify OFF at clean start, yellow capture, Lexicon amber,
+  Eventide red, exactly two green success blinks, failure red, replacement, deletion, daemon
+  restart, USB reconnect, and preset-load projection. Record unsupported blue and the chosen fader
+  proxy behavior explicitly in `docs/hardware-qualification.md`.
+- **Acceptance:** loading a preset updates every mapped parameter deterministically; unmapped
+  controls remain dark; no write reaches the wrong or ambiguous endpoint; restart/reconnect and
+  template reselection restore values and owner colors solely from persisted mappings; temporary
+  Learn/result overlays complete at exact fake-clock and observed physical timings; all failures
+  are visible and recoverable; the physical qualification matrix passes with evidence.
 
 **Evidence update:** 2026-09-01 — Reflex now exposes a bounded, profile-owned parameter projection
 for each PCM70 translation, preserving algorithm-specific values for downstream controller
