@@ -4881,3 +4881,9 @@ midir backend.
 DeviceControl path. Built-in profiles now expose only supported Reflex and Eventide devices;
 operator M-VAVE command dispatch is removed. Profile tests, daemon/operator checks, and worklist
 validation pass. Historical M-VAVE research remains append-only audit material.
+
+**Evidence update:** 2026-09-01 — daemon-owned DeviceControl sends now increment the aggregate
+sent counter, append a redacted audit record with actor/action/target, and publish a state event.
+A focused regression covers the counter/audit projection. Strict daemon Clippy, all-feature check,
+worklist validation, and diff hygiene pass; this sandbox denies its Unix-socket bind test with
+`EPERM`, while the normal release gate has previously exercised daemon socket tests.

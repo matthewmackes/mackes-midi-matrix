@@ -2213,6 +2213,21 @@ impl Daemon {
             .collect()
     }
 
+    fn record_device_control_send(&mut self, destination: &str, profile_id: &str, control: &str) {
+        self.sent_events = self.sent_events.saturating_add(1);
+        self.audit.append(mackes_scene_engine::AuditRecord {
+            timestamp: self.state_sequence,
+            actor: "local-ipc".into(),
+            source: mackes_scene_engine::AuditSource::LocalCli,
+            action_id: format!("device-control:{profile_id}:{control}"),
+            target_alias: destination.into(),
+            risk: mackes_scene_engine::RiskClass::Normal,
+            allowed: true,
+            result: "sent".into(),
+        });
+        self.record_state_event(Command::Monitor);
+    }
+
     fn snapshot_response(&self) -> String {
         serde_json::json!({
             "ok": true,
@@ -2802,6 +2817,7 @@ impl Daemon {
                     return stream
                         .write_all(format!("{{\"ok\":false,\"error\":\"{error}\"}}\n").as_bytes());
                 }
+                self.record_device_control_send(destination, profile_id, control);
                 return stream.write_all(
                     format!(
                         "{{\"ok\":true,\"generation\":{},\"bytes\":{}}}\n",
@@ -4543,6 +4559,21 @@ mod tests {
             .expect("snapshot");
         assert_eq!(snapshot["audit_count"], 1);
         assert_eq!(snapshot["audit"][0]["action"], "route_replace");
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn daemon_device_control_send_is_counted_and_audited() {
+        let path =
+            std::env::temp_dir().join(format!("mackes-device-audit-{}.sock", std::process::id()));
+        let mut daemon = Daemon::bind(&path).expect("daemon");
+        assert_eq!(daemon.activity_counters().1, 0);
+        daemon.record_device_control_send("eventide-out", "eventide.micropitch", "Mix");
+        assert_eq!(daemon.activity_counters().1, 1);
+        let record = daemon.audit.newest_first().next().expect("audit record");
+        assert_eq!(record.action_id, "device-control:eventide.micropitch:Mix");
+        assert_eq!(record.target_alias, "eventide-out");
+        assert!(record.allowed);
         let _ = std::fs::remove_file(path);
     }
 
