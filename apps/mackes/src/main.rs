@@ -78,6 +78,7 @@ fn run_tui() -> Result<(), String> {
                 &mut setlist_editor,
                 &mut learn_workspace,
                 &mut assignment_wizard,
+                &mut assignment_choices,
                 &mut task_shell,
             )
         };
@@ -2423,6 +2424,7 @@ fn synchronize_events(
     setlists: &mut mackes_tui::SetlistEditor,
     learn: &mut mackes_tui::LearnWorkspace,
     assignment_wizard: &mut mackes_tui::AssignmentWizard,
+    assignment_choices: &mut mackes_tui::AssignmentChoiceBrowser,
     task_shell: &mut mackes_tui::TaskShellState,
 ) -> Result<String, String> {
     let payload = serde_json::to_vec(&serde_json::json!({
@@ -2460,8 +2462,8 @@ fn synchronize_events(
         project_setlists(setlists, payload);
         project_learn_alias(learn, payload);
         reconcile_assignment_session(assignment_wizard, payload);
-        if assignment_wizard.session.phase == mackes_ipc::AssignmentPhase::Idle {
-            if let Some(action) = payload.get("ui_navigation").and_then(serde_json::Value::as_str) {
+        if let Some(action) = payload.get("ui_navigation").and_then(serde_json::Value::as_str) {
+            if assignment_wizard.session.phase == mackes_ipc::AssignmentPhase::Idle {
                 let shell_action = match action {
                     "up" => Some(mackes_tui::ShellAction::Up),
                     "down" => Some(mackes_tui::ShellAction::Down),
@@ -2471,6 +2473,16 @@ fn synchronize_events(
                 };
                 if let Some(shell_action) = shell_action {
                     task_shell.apply(shell_action);
+                }
+            } else {
+                match action {
+                    "up" => {
+                        assignment_choices.move_selection(false);
+                    }
+                    "down" => {
+                        assignment_choices.move_selection(true);
+                    }
+                    _ => {}
                 }
             }
         }

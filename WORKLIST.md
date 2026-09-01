@@ -3482,6 +3482,12 @@ reconciliation, and single-client consolidation remain W085/W086/W088 acceptance
 Note 105 press/release entered `AwaitControl`, and CC13 knob activity was observed with matching
 daemon counters. Navigation, LED result, 100-pair integrity, and reconnect remain.
 
+**Evidence update:** 2026-09-01 — corrected local IPC authorization to accept root and verified
+supplementary `mackes-control` membership rather than comparing only the peer's primary GID.
+Hardware `ui_navigation` events now move the assignment choice browser during Learn and retain
+normal task-shell navigation while Idle. IPC/TUI tests and strict Clippy pass; the installed daemon
+no longer logs `IPC peer is not in mackes-control` for the active TUI.
+
 **Evidence update:** 2026-09-01 — rebuilt daemon now registers all seven configured native inputs
 without startup `Device or resource busy` failures by treating an already-existing ALSA source
 subscription as idempotent. The daemon-only Device capture window recorded no new press, so the

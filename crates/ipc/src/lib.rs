@@ -1100,8 +1100,28 @@ impl AccessPolicy {
     /// Returns whether the captured peer may access the control socket.
     #[must_use]
     pub const fn allows(self, identity: PeerIdentity) -> bool {
-        identity.uid == self.daemon_uid || identity.gid == self.control_gid
+        identity.uid == 0 || identity.uid == self.daemon_uid || identity.gid == self.control_gid
     }
+}
+
+#[cfg(target_os = "linux")]
+fn peer_has_supplementary_group(identity: PeerIdentity, group: u32) -> bool {
+    let Ok(status) = std::fs::read_to_string(format!("/proc/{}/status", identity.pid)) else {
+        return false;
+    };
+    let uid_matches = status
+        .lines()
+        .find_map(|line| line.strip_prefix("Uid:"))
+        .and_then(|values| values.split_whitespace().next())
+        .and_then(|value| value.parse::<u32>().ok())
+        == Some(identity.uid);
+    uid_matches
+        && status.lines().find_map(|line| line.strip_prefix("Groups:")).is_some_and(|values| {
+            values
+                .split_whitespace()
+                .filter_map(|value| value.parse::<u32>().ok())
+                .any(|candidate| candidate == group)
+        })
 }
 
 /// Bound local Unix socket server. The daemon owns command dispatch after accepting a stream.
@@ -1156,7 +1176,7 @@ impl LocalServer {
     ) -> io::Result<(UnixStream, PeerIdentity)> {
         let stream = self.accept()?;
         let identity = peer_identity(&stream)?;
-        if !policy.allows(identity) {
+        if !policy.allows(identity) && !peer_has_supplementary_group(identity, policy.control_gid) {
             return Err(io::Error::new(
                 io::ErrorKind::PermissionDenied,
                 "IPC peer is not in mackes-control",
@@ -1562,6 +1582,15 @@ mod tests {
         );
         assert_eq!(authorize(Command::Health, ActorClass::RtpMidi), Authorization::Denied);
         assert_eq!(authorize(Command::UnsafeMode, ActorClass::LocalTui), Authorization::Allowed);
+    }
+
+    #[test]
+    fn local_access_policy_accepts_root_daemon_and_primary_control_group() {
+        let policy = AccessPolicy { control_gid: 987, daemon_uid: 991 };
+        assert!(policy.allows(PeerIdentity { uid: 0, gid: 0, pid: 1 }));
+        assert!(policy.allows(PeerIdentity { uid: 991, gid: 991, pid: 1 }));
+        assert!(policy.allows(PeerIdentity { uid: 1000, gid: 987, pid: 1 }));
+        assert!(!policy.allows(PeerIdentity { uid: 1000, gid: 1000, pid: 1 }));
     }
 
     #[cfg(unix)]
