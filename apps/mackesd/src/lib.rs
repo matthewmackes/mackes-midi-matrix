@@ -1153,6 +1153,31 @@ impl Daemon {
         }
     }
 
+    fn send_control_led_feedback(&mut self, control_id: &str, state: mackes_profiles::LedState) {
+        let Some(index) = mackes_profiles::launch_control_physical_catalog()
+            .into_iter()
+            .find(|control| control.id.as_str() == control_id)
+            .and_then(|control| control.feedback_address)
+        else {
+            return;
+        };
+        let Some(bytes) = mackes_profiles::encode_launch_control_feedback(8, index, state) else {
+            return;
+        };
+        let Ok(message) = mackes_domain::MidiMessage::from_wire(&bytes) else { return };
+        for endpoint in self.outputs.endpoint_ids_named("Launch Control XL") {
+            self.send_event_to_endpoint(
+                endpoint,
+                mackes_domain::MidiEvent {
+                    timestamp: mackes_domain::TimestampNanos::new(0),
+                    sequence: 0,
+                    endpoint,
+                    message: message.clone(),
+                },
+            );
+        }
+    }
+
     /// Reapplies the durable owner color for every mapped Launch Control LED.
     ///
     /// This is deliberately derived from the mapping store, rather than from the
@@ -1558,12 +1583,20 @@ impl Daemon {
                     let result = self.apply_assignment_request(mackes_ipc::AssignmentRequest {
                         generation: self.assignment_generation,
                         action: mackes_ipc::AssignmentAction::ControlCaptured,
-                        physical_control_id: Some(control_id),
+                        physical_control_id: Some(control_id.clone()),
                         destination_profile: None,
                         destination_effect: None,
                         destination_parameter: None,
                     });
                     if result.applied {
+                        self.send_control_led_feedback(
+                            &control_id,
+                            mackes_profiles::LedState::new(
+                                mackes_profiles::LedColor::Yellow,
+                                127,
+                                true,
+                            ),
+                        );
                         processed += 1;
                         continue;
                     }
