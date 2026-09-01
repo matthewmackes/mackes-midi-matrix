@@ -3421,6 +3421,11 @@ daemon client; strict engine Clippy and focused engine/daemon tests pass.
 - **Acceptance:** exact Mk2 Device packets arrive once per press without loss, duplication, or polling-delay assumptions and match existing domain fixtures.
 - **Luna checkpoint:** freeze golden events/counters before daemon exposure.
 
+**Evidence update:** 2026-09-01 — live Mk2 capture observed Device Note 105 press/release and
+knob CC13 values through `aseqdump`; simultaneous daemon status reached
+`assignment_session.phase=AwaitControl` with `received=452` and `last_sequence=146`.
+Arrow, commit, saturation, and full 100-pair evidence remain open.
+
 #### [ ] W086 — ALSA announcement, hot-plug, reconnect, and stable identity supervisor
 
 - **Status:** `NOT_STARTED`
@@ -3461,6 +3466,10 @@ feature-gated native ALSA adapter by default while retaining existing output/rou
 Local release installation completes with no `input unavailable` errors, and ALSA lists native
 MACKES input clients for the physical inventory. Exact Device delivery, event parity, reconnect
 reconciliation, and single-client consolidation remain W085/W086/W088 acceptance work.
+
+**Evidence update:** 2026-09-01 — native Device-to-Learn path is physically verified on the Mk2:
+Note 105 press/release entered `AwaitControl`, and CC13 knob activity was observed with matching
+daemon counters. Navigation, LED result, 100-pair integrity, and reconnect remain.
 
 #### [ ] W088 — Native ALSA hardware qualification, rollback, and release closure
 

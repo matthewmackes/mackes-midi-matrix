@@ -90,3 +90,13 @@ qualification host, and the connected MIDISPORT has transitioned from loader
 identity `0763:1020` to runtime identity `0763:1021`. The four runtime ports
 are therefore available for the remaining physical routing and reconnect
 qualification; package installation is no longer a prerequisite.
+
+## Native ALSA qualification capture
+
+2026-09-01 — with the corrected daemon installed, a bounded live `aseqdump -p 24:0`
+capture observed the Mk2 Device Note On/Off on channel 8, note 105, followed by a
+top-left knob CC13 sweep. Simultaneous daemon status reported `received=452`,
+`last_sequence=146`, the Launch Control stable endpoint, and assignment phase
+`AwaitControl`. This proves native ALSA delivery through Device into Learn and
+continuous knob activity. Arrow navigation, commit/LED result, 100-pair integrity,
+and USB reconnect remain to be captured.
