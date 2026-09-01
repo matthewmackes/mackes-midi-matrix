@@ -3828,6 +3828,11 @@ than opening ALSA/midir or scanning `/dev/snd`. CLI all-feature check and strict
 `midir` enumeration, adapter construction, and `/dev/snd` access under `apps/mackes`; it is
 wired into both repository verification and the release gate and passes on the current tree.
 
+**Evidence update:** 2026-09-01 — the full release gate passed after the ownership cutover,
+including workspace tests, strict Clippy, throughput benchmark, hermetic integration, installer
+smoke, packaging checksum, and preflight. Remaining W095 evidence is focused IPC audit/counter
+coverage and an explicitly targeted physical send.
+
 #### [ ] W096 — Establish one authoritative Learn catalog and cursor state
 
 - **Status:** `READY`
