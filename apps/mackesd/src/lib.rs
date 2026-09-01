@@ -1603,6 +1603,20 @@ impl Daemon {
                 }
             }
             if let Some(action) = Self::launch_control_factory1_navigation(&event) {
+                if action == "right"
+                    && self.assignment_session.phase != mackes_ipc::AssignmentPhase::Idle
+                {
+                    let _ = self.apply_assignment_request(mackes_ipc::AssignmentRequest {
+                        generation: self.assignment_generation,
+                        action: mackes_ipc::AssignmentAction::Enter,
+                        physical_control_id: None,
+                        destination_profile: None,
+                        destination_effect: None,
+                        destination_parameter: None,
+                    });
+                    processed += 1;
+                    continue;
+                }
                 self.record_navigation_event(action);
                 processed += 1;
                 continue;
