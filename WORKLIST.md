@@ -3424,6 +3424,11 @@ strict engine Clippy pass. Daemon integration remains W087.
 - **Acceptance:** reconnect restores intended subscriptions/stable IDs; ambiguity and permission failure remain visible and fail closed.
 - **Luna checkpoint:** prove fake reconnect with changed address and duplicate rejection before daemon wiring.
 
+**Work log:** 2026-08-31 — codex — `IN_PROGRESS`; native client now subscribes to ALSA system
+announcements and decodes bounded client/port start, change, exit, subscribe, and unsubscribe
+events into typed lifecycle records. Native-feature compilation, strict engine Clippy, and 56
+all-feature engine tests pass. Desired/actual subscription reconciliation and daemon wiring remain.
+
 #### [ ] W087 — Daemon cutover to native ALSA and callback-input removal
 
 - **Status:** `NOT_STARTED`
@@ -3438,6 +3443,12 @@ strict engine Clippy pass. Daemon integration remains W087.
 - **Commands:** focused daemon/engine/IPC/TUI tests; workspace all-features tests; strict Clippy; benchmark/integration; installer/worklist/repository/artifact checks.
 - **Acceptance:** installed daemon reacts to Device/controls/arrows through native ALSA; daemon and `aseqdump` agree; no root or shell helper is required.
 - **Luna checkpoint:** feature-flag cutover, prove hermetic parity, install locally, and remove callback input from default only after W088 evidence.
+
+**Work log:** 2026-08-31 — codex — `IN_PROGRESS`; daemon input provisioning now selects the
+feature-gated native ALSA adapter by default while retaining existing output/routing boundaries.
+Local release installation completes with no `input unavailable` errors, and ALSA lists native
+MACKES input clients for the physical inventory. Exact Device delivery, event parity, reconnect
+reconciliation, and single-client consolidation remain W085/W086/W088 acceptance work.
 
 #### [ ] W088 — Native ALSA hardware qualification, rollback, and release closure
 

@@ -1383,6 +1383,19 @@ impl AlsaSequencerClient {
         self.seq.subscribe_port(&subscription).map_err(|error| error.to_string())
     }
 
+    /// Subscribes the owned input port to ALSA's system announcement port.
+    ///
+    /// # Errors
+    ///
+    /// Returns the ALSA subscription error.
+    pub fn subscribe_announcements(&self) -> Result<(), String> {
+        let client = self.client_id()?;
+        let subscription = alsa::seq::PortSubscribe::empty().map_err(|error| error.to_string())?;
+        subscription.set_sender(alsa::seq::Addr::system_announce());
+        subscription.set_dest(alsa::seq::Addr { client: client.into(), port: self.input_port });
+        self.seq.subscribe_port(&subscription).map_err(|error| error.to_string())
+    }
+
     /// Enumerates external ALSA MIDI ports with stable runtime descriptors.
     #[must_use]
     pub fn discover_ports(&self) -> Vec<AlsaSequencerPort> {
@@ -1440,6 +1453,119 @@ impl AlsaSequencerClient {
             events.push((AlsaSequencerAddress::new(client, port), bytes));
         }
         Ok(events)
+    }
+
+    /// Reads bounded ALSA client/port lifecycle notifications.
+    #[must_use]
+    pub fn read_lifecycle_events(
+        &self,
+        limit: usize,
+    ) -> Vec<(AlsaSequencerLifecycle, AlsaSequencerAddress)> {
+        let mut input = self.seq.input();
+        let mut events = Vec::new();
+        for _ in 0..limit {
+            if input.event_input_pending(true).unwrap_or(0) == 0 {
+                break;
+            }
+            let Ok(event) = input.event_input() else { break };
+            let lifecycle = match event.get_type() {
+                alsa::seq::EventType::ClientStart | alsa::seq::EventType::PortStart => {
+                    AlsaSequencerLifecycle::Started
+                }
+                alsa::seq::EventType::ClientChange | alsa::seq::EventType::PortChange => {
+                    AlsaSequencerLifecycle::Changed
+                }
+                alsa::seq::EventType::ClientExit | alsa::seq::EventType::PortExit => {
+                    AlsaSequencerLifecycle::Exited
+                }
+                alsa::seq::EventType::PortSubscribed => AlsaSequencerLifecycle::Subscribed,
+                alsa::seq::EventType::PortUnsubscribed => AlsaSequencerLifecycle::Unsubscribed,
+                _ => continue,
+            };
+            let address = event.get_data::<alsa::seq::Addr>().unwrap_or_else(|| event.get_source());
+            let (Ok(client), Ok(port)) = (u8::try_from(address.client), u8::try_from(address.port))
+            else {
+                continue;
+            };
+            events.push((lifecycle, AlsaSequencerAddress::new(client, port)));
+        }
+        events
+    }
+}
+
+/// Native ALSA input adapter with one explicit source subscription.
+#[cfg(feature = "alsa-seq-backend")]
+pub struct AlsaInputCapture {
+    info: EndpointInfo,
+    client: AlsaSequencerClient,
+    next_sequence: u64,
+}
+
+#[cfg(feature = "alsa-seq-backend")]
+impl std::fmt::Debug for AlsaInputCapture {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.debug_struct("AlsaInputCapture").field("info", &self.info).finish_non_exhaustive()
+    }
+}
+
+#[cfg(feature = "alsa-seq-backend")]
+impl AlsaInputCapture {
+    /// Opens a named ALSA source, creates an application client, and subscribes it explicitly.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when ALSA cannot open, discover, or subscribe the requested source.
+    pub fn open_named(name: &str) -> Result<Self, String> {
+        let client = AlsaSequencerClient::open("MACKES input")?;
+        let requested_address =
+            name.split_whitespace().last().and_then(|address| address.split_once(':')).and_then(
+                |(client, port)| {
+                    Some(AlsaSequencerAddress::new(client.parse().ok()?, port.parse().ok()?))
+                },
+            );
+        let source = client
+            .discover_ports()
+            .into_iter()
+            .find(|port| {
+                port.readable && (port.port_name == name || requested_address == Some(port.address))
+            })
+            .ok_or_else(|| format!("ALSA MIDI input not found: {name}"))?;
+        client.subscribe_input(source.address)?;
+        client.subscribe_announcements()?;
+        Ok(Self {
+            info: EndpointInfo {
+                id: stable_endpoint_id(name, EndpointDirection::Input),
+                name: name.to_owned(),
+                direction: EndpointDirection::Input,
+            },
+            client,
+            next_sequence: 0,
+        })
+    }
+}
+
+#[cfg(feature = "alsa-seq-backend")]
+impl MidiInputAdapter for AlsaInputCapture {
+    fn info(&self) -> &EndpointInfo {
+        &self.info
+    }
+
+    fn receive(&mut self) -> Option<MidiEvent> {
+        let bytes = self.client.read_wire_events(1).ok()?.into_iter().next()?.1;
+        let message = MidiMessage::from_wire(&bytes).ok()?;
+        let sequence = self.next_sequence;
+        self.next_sequence = self.next_sequence.saturating_add(1);
+        Some(MidiEvent {
+            timestamp: TimestampNanos::new(
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .ok()
+                    .and_then(|duration| u64::try_from(duration.as_nanos()).ok())?,
+            ),
+            sequence,
+            endpoint: numeric_endpoint_id(&self.info.id)?,
+            message,
+        })
     }
 }
 
