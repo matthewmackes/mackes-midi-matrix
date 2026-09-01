@@ -1493,6 +1493,12 @@ impl AlsaSequencerClient {
                 break;
             }
             let event = input.event_input().map_err(|error| error.to_string())?;
+            eprintln!(
+                "native filtered reader saw {:?} from {}:{}",
+                event.get_type(),
+                event.get_source().client,
+                event.get_source().port
+            );
             let Some(bytes) = alsa_event_to_wire(&event)? else { continue };
             let source_address = event.get_source();
             let address = AlsaSequencerAddress::new(
@@ -1623,6 +1629,9 @@ impl MidiInputAdapter for AlsaInputCapture {
         let bytes = client.read_wire_event_for(self.source).ok()??;
         drop(client);
         let message = MidiMessage::from_wire(&bytes).ok()?;
+        if bytes.as_slice() == [0x98, 105, 127] {
+            eprintln!("native projection Device endpoint={}", self.info.id);
+        }
         let sequence = self.next_sequence;
         self.next_sequence = self.next_sequence.saturating_add(1);
         Some(MidiEvent {
@@ -1820,6 +1829,18 @@ impl InputRegistry {
     #[must_use]
     pub fn new(capacity: usize) -> Self {
         Self { inputs: Vec::new(), capacity: capacity.max(1) }
+    }
+
+    /// Returns the number of registered input adapters.
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.inputs.len()
+    }
+
+    /// Returns whether no input adapters are registered.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.inputs.is_empty()
     }
 
     /// Adds an input unless full or its stable ID is duplicated.
