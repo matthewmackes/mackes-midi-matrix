@@ -1940,72 +1940,6 @@ pub fn eventide_micropitch_profile() -> DeviceProfile {
     }
 }
 
-/// Conservative built-in profile for the M-VAVE IR Box MIDI endpoint.
-///
-/// The endpoint identity is known from host enumeration; only experimentally captured
-/// preset/module operations are enabled, and they remain explicitly sent-unverified.
-#[must_use]
-pub fn mvave_ir_box_profile() -> DeviceProfile {
-    DeviceProfile {
-        id: "m-vave.ir-box".into(),
-        version: 1,
-        name: "M-VAVE IR Box".into(),
-        effect_type: EffectType::Cabinet,
-        identity_probes: Vec::new(),
-        provided_capabilities: vec!["cabinet_ir".into(), "eq".into()],
-        capabilities: vec![CapabilityDefinition {
-            id: "midi-endpoint".into(),
-            transport: ControlTransport::Midi,
-            unsafe_on_connect: false,
-        }],
-        controls: {
-            let mut controls = (1_u8..=32)
-                .map(|preset| ControlDefinition {
-                    label: format!("Preset {preset}"),
-                    cc: None,
-                    program: None,
-                    range: (0, 0),
-                    operation: Some(format!("mvave_preset:{preset}")),
-                })
-                .collect::<Vec<_>>();
-            controls.extend([
-                ControlDefinition {
-                    label: "IR".into(),
-                    cc: None,
-                    program: None,
-                    range: (0, 1),
-                    operation: Some("mvave_ir".into()),
-                },
-                ControlDefinition {
-                    label: "EQ".into(),
-                    cc: None,
-                    program: None,
-                    range: (0, 1),
-                    operation: Some("mvave_eq".into()),
-                },
-            ]);
-            controls
-        },
-        queries: Vec::new(),
-        replies: Vec::new(),
-        templates: Vec::new(),
-        max_message_size: 1024,
-        documented_features: vec![
-            "32 IR/cabinet presets".into(),
-            "IR module enable/disable".into(),
-            "Custom IR import/export".into(),
-            "9-band EQ enable/disable".into(),
-            "EQ frequency and gain".into(),
-            "Low Cut".into(),
-            "Hi Cut".into(),
-            "Output volume".into(),
-            "IR volume".into(),
-            "Bypass".into(),
-            "Factory reset".into(),
-        ],
-    }
-}
-
 /// Conservative built-in Lexicon Reflex profile anchor.
 #[must_use]
 pub fn lexicon_reflex_profile() -> DeviceProfile {
@@ -3225,90 +3159,6 @@ pub struct UsbIdentity {
 /// Observed Eventide `MicroPitch` USB identity.
 pub const EVENTIDE_MICROPITCH_USB: UsbIdentity =
     UsbIdentity { vendor_id: 0x1B12, product_id: 0x003A };
-/// Observed M-VAVE IR Box USB identity (Jieli/SINCO interface).
-pub const MVAVE_IR_BOX_USB: UsbIdentity = UsbIdentity { vendor_id: 0x4353, product_id: 0x4B4D };
-/// Builds the community-captured IR Box preset-recall `SysEx` (1..=32).
-///
-/// This command family is experimental and must be sent only after the
-/// endpoint identity has been confirmed as [`MVAVE_IR_BOX_USB`].
-///
-/// # Errors
-///
-/// Returns an error when the preset is outside the device's 1–32 range.
-pub fn mvave_ir_box_preset_sysex(preset: u8) -> Result<Vec<u8>, &'static str> {
-    if !(1..=32).contains(&preset) {
-        return Err("IR Box preset must be 1..=32");
-    }
-    let index = preset - 1;
-    let (low, high) =
-        if index < 14 { (0x34_u8 - index * 4, 0) } else { (0x7C_u8 - (index - 14) * 4, 3) };
-    Ok(vec![
-        0xF0, 0x00, 0x32, 0x09, 0x49, 0x00, 0x00, 0x00, 0x02, index, 0x00, 0x00, 0x00, 0x1E, 0x00,
-        0x00, 0x00, index, low, high, 0xF7,
-    ])
-}
-
-/// Builds the community-captured IR/EQ module toggle `SysEx`.
-///
-/// The device acknowledges these messages, but the capture source reports no
-/// reliable state read-back; callers must therefore classify the result as
-/// sent-unverified until an independent state query is established.
-#[must_use]
-pub fn mvave_ir_box_module_sysex(module: MvaveIrBoxModule, enabled: bool) -> Vec<u8> {
-    let selector = match module {
-        MvaveIrBoxModule::Ir => 0x11,
-        MvaveIrBoxModule::Eq => 0x12,
-    };
-    let value = u8::from(enabled);
-    let checksum = match module {
-        MvaveIrBoxModule::Ir => {
-            if enabled {
-                [0x4E, 0x03]
-            } else {
-                [0x50, 0x03]
-            }
-        }
-        MvaveIrBoxModule::Eq => {
-            if enabled {
-                [0x4C, 0x03]
-            } else {
-                [0x4E, 0x03]
-            }
-        }
-    };
-    vec![
-        0xF0,
-        0x00,
-        0x32,
-        0x09,
-        0x49,
-        0x00,
-        0x00,
-        0x40,
-        0x02,
-        selector,
-        0x00,
-        0x00,
-        0x00,
-        0x10,
-        0x00,
-        0x00,
-        0x00,
-        value,
-        checksum[0],
-        checksum[1],
-        0xF7,
-    ]
-}
-
-/// IR Box module selectors used by the experimental `SysEx` family.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum MvaveIrBoxModule {
-    /// Impulse-response module.
-    Ir,
-    /// Equalizer module.
-    Eq,
-}
 /// MIDISPORT 4x4 USB loader identity before firmware initialization.
 pub const MIDISPORT_4X4_LOADER_USB: UsbIdentity =
     UsbIdentity { vendor_id: 0x0763, product_id: 0x1020 };
@@ -3720,11 +3570,7 @@ pub fn effect_blocks(profile: &DeviceProfile) -> Vec<EffectBlock> {
             source_role: Some(source_role(control)),
             default_value: Some(control.range.0),
             units: None,
-            evidence: Some(if profile.id == "m-vave.ir-box" {
-                EvidenceLevel::Experimental
-            } else {
-                EvidenceLevel::Documented
-            }),
+            evidence: Some(EvidenceLevel::Documented),
         })
         .collect::<Vec<_>>();
     parameters.sort_by(|a, b| a.id.cmp(&b.id).then_with(|| a.label.cmp(&b.label)));
@@ -4633,13 +4479,6 @@ impl DeviceProfile {
         let value = u8::try_from(value).map_err(|_| "control value is invalid")?;
         if let Some(operation) = control.operation.as_deref() {
             return match operation {
-                "mvave_ir" => Ok(mvave_ir_box_module_sysex(MvaveIrBoxModule::Ir, value != 0)),
-                "mvave_eq" => Ok(mvave_ir_box_module_sysex(MvaveIrBoxModule::Eq, value != 0)),
-                operation if operation.starts_with("mvave_preset:") => operation
-                    .strip_prefix("mvave_preset:")
-                    .and_then(|preset| preset.parse::<u8>().ok())
-                    .ok_or("control operation is unsupported")
-                    .and_then(mvave_ir_box_preset_sysex),
                 operation if operation.starts_with("pcm70_reflex:") => operation
                     .strip_prefix("pcm70_reflex:")
                     .ok_or("control operation is unsupported")
@@ -5269,7 +5108,7 @@ mod tests {
             LaunchControlIdentity::LaunchpadFamily
         );
         assert!(usb_identity_matches(EVENTIDE_MICROPITCH_USB, EVENTIDE_MICROPITCH_USB));
-        assert!(usb_identity_matches(MVAVE_IR_BOX_USB, MVAVE_IR_BOX_USB));
+        assert!(usb_identity_matches(MIDISPORT_4X4_LOADER_USB, MIDISPORT_4X4_LOADER_USB));
     }
 
     #[test]
@@ -6081,40 +5920,6 @@ mod tests {
         let (result, matches) = resolve_alias(&selector, &endpoints);
         assert_eq!(result, Resolution::Matched);
         assert_eq!(matches[0].serial.as_deref(), Some("A"));
-    }
-
-    #[test]
-    fn mvave_ir_box_preset_sysex_matches_captured_family() {
-        assert_eq!(
-            mvave_ir_box_preset_sysex(5).expect("preset"),
-            vec![
-                0xF0, 0x00, 0x32, 0x09, 0x49, 0x00, 0x00, 0x00, 0x02, 0x04, 0x00, 0x00, 0x00, 0x1E,
-                0x00, 0x00, 0x00, 0x04, 0x24, 0x00, 0xF7
-            ]
-        );
-        assert_eq!(mvave_ir_box_preset_sysex(32).expect("preset")[18..20], [0x38, 0x03]);
-        assert!(mvave_ir_box_preset_sysex(0).is_err());
-        assert!(mvave_ir_box_preset_sysex(33).is_err());
-        let profile = mvave_ir_box_profile();
-        assert_eq!(
-            profile.render_control_message("IR", 1, 1).expect("IR control"),
-            mvave_ir_box_module_sysex(MvaveIrBoxModule::Ir, true)
-        );
-        assert_eq!(
-            profile.render_control_message("EQ", 1, 0).expect("EQ control"),
-            mvave_ir_box_module_sysex(MvaveIrBoxModule::Eq, false)
-        );
-        assert_eq!(
-            profile.render_control_message("Preset 5", 1, 0).expect("preset control"),
-            mvave_ir_box_preset_sysex(5).expect("preset frame")
-        );
-        assert_eq!(
-            mvave_ir_box_module_sysex(MvaveIrBoxModule::Ir, true),
-            vec![
-                0xF0, 0x00, 0x32, 0x09, 0x49, 0x00, 0x00, 0x40, 0x02, 0x11, 0x00, 0x00, 0x00, 0x10,
-                0x00, 0x00, 0x00, 0x01, 0x4E, 0x03, 0xF7
-            ]
-        );
     }
 
     #[test]

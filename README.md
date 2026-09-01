@@ -98,9 +98,6 @@ mackes-midi-matrix device-control eventide.micropitch Mix 1 64 <output-id> --con
 mackes-midi-matrix device-query <profile-id> <query-id>
 ```
 
-The confirmation-gated device-control path also supports captured M-VAVE IR Box operations:
-`Preset 1`–`Preset 32`, `IR`, and `EQ`.
-
 Raw SysEx is bounded to 1–1024 bytes, must be written as framed `F0 ... F7` hexadecimal, and
 also requires explicit confirmation and a registered output:
 
