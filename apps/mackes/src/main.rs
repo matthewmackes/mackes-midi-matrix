@@ -311,10 +311,18 @@ fn run_tui() -> Result<(), String> {
                             if let Some(assignment_action) = assignment_action {
                                 match assignment_action {
                                     mackes_ipc::AssignmentAction::Up => {
-                                        assignment_choices.move_selection(false);
+                                        move_assignment_selection(
+                                            &mut assignment_choices,
+                                            assignment_wizard.session.phase,
+                                            false,
+                                        );
                                     }
                                     mackes_ipc::AssignmentAction::Down => {
-                                        assignment_choices.move_selection(true);
+                                        move_assignment_selection(
+                                            &mut assignment_choices,
+                                            assignment_wizard.session.phase,
+                                            true,
+                                        );
                                     }
                                     _ => {}
                                 }
@@ -2505,7 +2513,28 @@ fn project_routes(editor: &mut mackes_tui::RoutingEditor, payload: &serde_json::
 }
 
 #[allow(clippy::too_many_arguments)]
-#[allow(clippy::too_many_lines)]
+fn move_assignment_selection(
+    choices: &mut mackes_tui::AssignmentChoiceBrowser,
+    phase: mackes_ipc::AssignmentPhase,
+    down: bool,
+) {
+    match phase {
+        mackes_ipc::AssignmentPhase::ChoosePreset => {
+            choices.move_preset_selection(down);
+        }
+        mackes_ipc::AssignmentPhase::ChooseEffect => {
+            choices.move_effect_selection(down);
+        }
+        mackes_ipc::AssignmentPhase::ChooseType => {
+            choices.move_type_selection(down);
+        }
+        _ => {
+            choices.move_selection(down);
+        }
+    }
+}
+
+#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
 fn synchronize_events(
     state: &mut mackes_tui::ClientState,
     dashboard: &mut mackes_tui::DashboardState,
@@ -2576,30 +2605,18 @@ fn synchronize_events(
             } else {
                 match action {
                     "up" => {
-                        if assignment_wizard.session.phase
-                            == mackes_ipc::AssignmentPhase::ChoosePreset
-                        {
-                            assignment_choices.move_preset_selection(false);
-                        } else if assignment_wizard.session.phase
-                            == mackes_ipc::AssignmentPhase::ChooseType
-                        {
-                            assignment_choices.move_type_selection(false);
-                        } else {
-                            assignment_choices.move_selection(false);
-                        }
+                        move_assignment_selection(
+                            assignment_choices,
+                            assignment_wizard.session.phase,
+                            false,
+                        );
                     }
                     "down" => {
-                        if assignment_wizard.session.phase
-                            == mackes_ipc::AssignmentPhase::ChoosePreset
-                        {
-                            assignment_choices.move_preset_selection(true);
-                        } else if assignment_wizard.session.phase
-                            == mackes_ipc::AssignmentPhase::ChooseType
-                        {
-                            assignment_choices.move_type_selection(true);
-                        } else {
-                            assignment_choices.move_selection(true);
-                        }
+                        move_assignment_selection(
+                            assignment_choices,
+                            assignment_wizard.session.phase,
+                            true,
+                        );
                     }
                     "right" => {
                         // The Mk2's physical Right arrow is the hardware
