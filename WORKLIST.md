@@ -3994,6 +3994,11 @@ local dependency edges and reviewed no-growth ceilings for each oversized root s
 through repository verification and therefore the release gate. The policy and repository checks
 pass before the first behavior-preserving module extraction.
 
+**Evidence update:** 2026-09-01 — extracted the Eventide MicroPitch built-in profile into a private
+device module while retaining `eventide_micropitch_profile` as the stable public boundary. Profile
+characterization tests (49) and the architecture policy pass; subsequent extractions retain the
+same API-first approach.
+
 #### [ ] W098 — Architecture-correction release closure
 
 - **Status:** `NOT_STARTED`

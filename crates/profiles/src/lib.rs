@@ -2,6 +2,8 @@
 use serde::{Deserialize, Serialize};
 use std::{fs, path::Path};
 
+mod eventide_micropitch;
+
 /// Hardcoded Lexicon Reflex Rev. 1 protocol constants.
 pub mod lexicon_reflex {
     /// Manual-defined Reflex DSP algorithm metadata.
@@ -1871,73 +1873,10 @@ pub const fn effect_color(effect: EffectType) -> ColorToken {
     }
 }
 
-fn eventide_cc_control(label: &str, cc: u8) -> ControlDefinition {
-    ControlDefinition {
-        label: label.into(),
-        cc: Some(cc),
-        program: None,
-        range: (0, 127),
-        operation: None,
-    }
-}
-
 /// Built-in Eventide `MicroPitch` profile from the firmware 1.0+ quick-reference MIDI table.
 #[must_use]
 pub fn eventide_micropitch_profile() -> DeviceProfile {
-    DeviceProfile {
-        id: "eventide.micropitch".into(),
-        version: 1,
-        name: "Eventide MicroPitch".into(),
-        effect_type: EffectType::Modulation,
-        identity_probes: Vec::new(),
-        provided_capabilities: vec![
-            "pitch_shift".into(),
-            "detune".into(),
-            "delay".into(),
-            "chorus".into(),
-            "modulation".into(),
-        ],
-        capabilities: vec![CapabilityDefinition {
-            id: "midi-cc-pc".into(),
-            transport: ControlTransport::Midi,
-            unsafe_on_connect: false,
-        }],
-        controls: vec![
-            eventide_cc_control("Expression Pedal", 4),
-            eventide_cc_control("TAP TEMPO", 9),
-            eventide_cc_control("ACTIVE/BYPASS", 14),
-            eventide_cc_control("FLEX", 15),
-            eventide_cc_control("Mix", 20),
-            eventide_cc_control("Pitch A", 21),
-            eventide_cc_control("Pitch B", 22),
-            eventide_cc_control("Depth", 23),
-            eventide_cc_control("Rate/Sens", 24),
-            eventide_cc_control("Pitch Mix", 25),
-            eventide_cc_control("Tone", 26),
-            eventide_cc_control("Delay A", 27),
-            eventide_cc_control("Delay B", 28),
-            eventide_cc_control("Mod", 29),
-            eventide_cc_control("Feedback", 30),
-            eventide_cc_control("Out Lvl", 31),
-            ControlDefinition {
-                label: "Preset 1".into(),
-                cc: None,
-                program: Some(1),
-                range: (0, 0),
-                operation: None,
-            },
-        ],
-        queries: Vec::new(),
-        replies: Vec::new(),
-        templates: Vec::new(),
-        max_message_size: 1024,
-        documented_features: vec![
-            "MIDI Program Change loads presets 1–127".into(),
-            "MIDI Program Change in Save Mode stores presets 1–127".into(),
-            "MIDI over USB or EXP pedal jack".into(),
-            "Catch Up knob function".into(),
-        ],
-    }
+    eventide_micropitch::profile()
 }
 
 /// Conservative built-in Lexicon Reflex profile anchor.
