@@ -3999,6 +3999,11 @@ device module while retaining `eventide_micropitch_profile` as the stable public
 characterization tests (49) and the architecture policy pass; subsequent extractions retain the
 same API-first approach.
 
+**Evidence update:** 2026-09-01 — `scripts/release-gate.sh` passes after the architecture-policy
+and Eventide module extraction: repository policy (including the new dependency/size gate), strict
+artifact checks, workspace tests and Clippy, routing benchmark, hermetic integration, installer
+smoke, release archive checksum, and preflight all completed successfully.
+
 #### [ ] W098 — Architecture-correction release closure
 
 - **Status:** `NOT_STARTED`
