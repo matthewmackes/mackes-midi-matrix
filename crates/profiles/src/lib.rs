@@ -1062,6 +1062,25 @@ pub mod lexicon_reflex {
         let setup = translate_pcm70(id)?;
         encode_active_setup_frame(channel, setup.as_bytes())
     }
+
+    /// Returns the documented parameter values carried by a translated PCM70 preset.
+    ///
+    /// The result is ordered by the Reflex parameter number and is bounded by the
+    /// profile's ten audio parameters so callers can safely project it to controls.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for an unknown translation or invalid compiled preset data.
+    pub fn pcm70_translation_parameters(id: &str) -> Result<Vec<(u8, u16)>, &'static str> {
+        let setup = translate_pcm70(id)?;
+        let algorithm = setup.algorithm().ok_or("translated Reflex algorithm is invalid")?;
+        Ok(parameters(algorithm)
+            .iter()
+            .filter_map(|metadata| {
+                setup.parameter(metadata.number).map(|value| (metadata.number, value))
+            })
+            .collect())
+    }
     /// Number of unpacked bytes in the 128-register bank (128 × 49).
     pub const ALL_REGISTERS_RAW_BYTES: usize = 6_272;
     /// Number of packed bytes in the 128-register bank (128 × 56).
@@ -5609,6 +5628,10 @@ mod tests {
         }
         assert!(lexicon_reflex::translate_pcm70("missing").is_err());
         assert!(lexicon_reflex::encode_pcm70_translation("concert-wave", 16).is_err());
+        let projected = lexicon_reflex::pcm70_translation_parameters("concert-wave")
+            .expect("parameter projection");
+        assert!(!projected.is_empty());
+        assert!(projected.iter().all(|(number, _value)| *number <= 9));
     }
 
     #[test]

@@ -3550,12 +3550,17 @@ Runtime persistence and physical button/SysEx qualification remain open.
 
 #### [ ] W091 — Preset parameter projection and LED state
 
-- **Status:** `READY`
+- **Status:** `IN_PROGRESS`
 - **Owner:** Luna
 - **Depends on:** W090
 - **Objective:** when a preset is loaded, project its documented parameters and update the Novation controls.
 - **Implementation:** define profile-owned preset parameter payloads, apply bounded values to mapped knobs/faders, emit controller LED colors by destination owner, and preserve OFF until a valid mapping exists.
 - **Acceptance:** loading a preset updates every mapped parameter deterministically, unmapped controls remain dark, and restart/resync restores values and colors without phantom assignments.
+
+**Evidence update:** 2026-09-01 — Reflex now exposes a bounded, profile-owned parameter projection
+for each PCM70 translation, preserving algorithm-specific values for downstream controller
+population. Focused profile tests and strict Clippy pass; Novation output projection and LED
+resync remain open.
 
 #### [ ] W092 — Catalog and preset end-to-end qualification
 
