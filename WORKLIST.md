@@ -3594,6 +3594,11 @@ for each PCM70 translation, preserving algorithm-specific values for downstream 
 population. Focused profile tests and strict Clippy pass; Novation output projection and LED
 resync remain open.
 
+**Evidence update:** 2026-09-01 — daemon dispatch now projects loaded Reflex preset values to
+enabled mapped Reflex parameters as normalized controller events on Launch Control XL outputs.
+The projection is bounded, profile-owned, and isolated from mapping-store borrows; workspace checks
+and strict daemon Clippy pass. Physical feedback and LED qualification remain open.
+
 #### [ ] W092 — Catalog and preset end-to-end qualification
 
 - **Status:** `NOT_STARTED`

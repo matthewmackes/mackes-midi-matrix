@@ -1147,6 +1147,53 @@ impl Daemon {
         }
     }
 
+    fn project_reflex_preset_to_controller(&mut self, preset_id: &str) {
+        let Ok(values) =
+            mackes_profiles::lexicon_reflex::pcm70_translation_controller_values(preset_id)
+        else {
+            return;
+        };
+        let values = values.into_iter().collect::<std::collections::BTreeMap<_, _>>();
+        let outputs = self.outputs.endpoint_ids_named("Launch Control XL");
+        let mappings = self
+            .mapping_store
+            .active
+            .iter()
+            .filter(|mapping| mapping.enabled && mapping.destination_profile == "lexicon.reflex")
+            .cloned()
+            .collect::<Vec<_>>();
+        for mapping in mappings {
+            let Some(parameter) = mapping
+                .destination_parameter
+                .strip_prefix("reflex.parameter-")
+                .and_then(|value| value.parse::<u8>().ok())
+            else {
+                continue;
+            };
+            let Some(value) = values.get(&parameter).copied() else { continue };
+            for endpoint in outputs.iter().copied() {
+                self.send_event_to_endpoint(
+                    endpoint,
+                    mackes_domain::MidiEvent {
+                        timestamp: mackes_domain::TimestampNanos::new(0),
+                        sequence: 0,
+                        endpoint,
+                        message: mackes_domain::MidiMessage::ControlChange {
+                            channel: mackes_domain::MidiChannel::new(mapping.source_channel)
+                                .expect("validated mapping channel"),
+                            controller: mackes_domain::SevenBit::new(u16::from(
+                                mapping.source_number,
+                            ))
+                            .expect("validated mapping controller"),
+                            value: mackes_domain::SevenBit::new(u16::from(value))
+                                .expect("normalized controller value"),
+                        },
+                    },
+                );
+            }
+        }
+    }
+
     fn experimental_mapping(mapping: &mackes_config::ControlMapping) -> bool {
         mackes_profiles::builtin_profile(&mapping.destination_profile).is_some_and(|profile| {
             mackes_profiles::destination_parameters(&profile)
@@ -1166,7 +1213,14 @@ impl Daemon {
         let routed = self.route_event(event);
         let mut sent = 0;
         let mut unmatched = 0;
-        for mapping in self.mapping_store.active.iter().filter(|mapping| mapping.enabled).cloned() {
+        let active_mappings = self
+            .mapping_store
+            .active
+            .iter()
+            .filter(|mapping| mapping.enabled)
+            .cloned()
+            .collect::<Vec<_>>();
+        for mapping in active_mappings {
             let now =
                 u64::try_from(self.safety_clock.elapsed().as_nanos().min(u128::from(u64::MAX)))
                     .unwrap_or(u64::MAX);
@@ -1231,6 +1285,11 @@ impl Daemon {
                 };
                 mapped.message = message;
                 if self.outputs.send_to_endpoint(destination_endpoint, mapped).is_ok() {
+                    if let Some(preset_id) =
+                        mapping.destination_parameter.strip_prefix("pcm70_reflex:")
+                    {
+                        self.project_reflex_preset_to_controller(preset_id);
+                    }
                     sent += 1;
                     self.last_mapping_activity = Some(serde_json::json!({
                         "mapping_id": mapping.id,
