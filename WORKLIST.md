@@ -3549,6 +3549,10 @@ and physical qualification remain open.
 arrow events from crossing into parameter indices while the authoritative phase is `ChoosePreset`.
 Focused TUI tests, strict Clippy, formatting, and diff checks pass.
 
+**Evidence update:** 2026-09-01 — added `ChooseType` between effect and parameter, with explicit
+back-navigation and state-machine coverage. Learn now has authoritative Device → Preset → Effect
+→ Type → Parameter levels; preset payload integration and physical qualification remain open.
+
 #### [ ] W090 — Preset-to-button assignment
 
 - **Status:** `IN_PROGRESS`
