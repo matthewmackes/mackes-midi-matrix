@@ -139,3 +139,8 @@ reader and requires the controller to transmit a MIDI template/event.
 Launch Control control LED visibly acknowledged a captured Learn control with the yellow blinking
 feedback state. This verifies the action-level LED acknowledgment path; persistent owner colors
 and preset-load projection remain to be qualified.
+
+2026-09-01 — after installing the daemon-side Right-arrow correction, the operator completed
+Device → knob → Right Arrow testing. The native daemon recorded CC107 from the Mk2 and advanced
+the authoritative assignment session to `ChooseParameter`, proving the physical Right Arrow now
+performs the same Enter transition as the keyboard while Learn is active.
