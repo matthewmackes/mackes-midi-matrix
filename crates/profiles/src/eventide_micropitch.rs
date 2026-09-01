@@ -1,4 +1,4 @@
-//! Eventide MicroPitch built-in profile.
+//! Eventide `MicroPitch` built-in profile.
 
 use super::{CapabilityDefinition, ControlDefinition, ControlTransport, DeviceProfile, EffectType};
 
@@ -14,7 +14,7 @@ fn cc_control(label: &str, cc: u8) -> ControlDefinition {
 
 /// Builds the Eventide `MicroPitch` profile from its firmware 1.0+ MIDI table.
 #[must_use]
-pub(super) fn profile() -> DeviceProfile {
+pub fn profile() -> DeviceProfile {
     DeviceProfile {
         id: "eventide.micropitch".into(),
         version: 1,
