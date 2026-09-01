@@ -3394,6 +3394,10 @@ capability flags and runtime addresses; the native reader converts bounded note,
 pressure, pitch-bend, and SysEx events into MIDI wire messages. All-feature engine tests (56) and
 strict engine Clippy pass. Daemon integration remains W087.
 
+**Evidence update:** 2026-08-31 — daemon provisioning now reuses one shared native ALSA client
+and its owned application ports for all configured inputs. Installed ALSA inventory shows one
+`MACKES input` client and one `MACKES output` client with explicit Mk2 subscriptions.
+
 #### [ ] W085 — Nonblocking ALSA event reader and MIDI 1.0 decoder
 
 - **Status:** `NOT_STARTED`
@@ -3467,6 +3471,11 @@ reconciliation, and single-client consolidation remain W085/W086/W088 acceptance
 `Group=mackes-control`, `SupplementaryGroups=audio`, and `DeviceAllow=/dev/snd/seq rw`.
 Local verification reports `ActiveState=active`; workspace all-feature tests, strict focused
 Clippy, worklist validation, and diff checks pass. Physical event/reconnect qualification remains.
+
+**Evidence update:** 2026-08-31 — corrected the native input ownership boundary so all configured
+hardware inputs share one daemon-owned nonblocking ALSA Sequencer client and its application ports;
+adapters now hold synchronized views of that client rather than opening one client per source.
+Workspace all-feature tests, strict daemon Clippy, worklist validation, and diff checks pass.
 
 ### Integration, performance, and release
 

@@ -238,6 +238,9 @@ pub struct Daemon {
     rtp_peer: mackes_midi_engine::RtpMidiPeer,
     outputs: mackes_midi_engine::OutputRegistry,
     inputs: mackes_midi_engine::InputRegistry,
+    #[cfg(feature = "alsa-seq-backend")]
+    alsa_input_client:
+        Option<std::sync::Arc<std::sync::Mutex<mackes_midi_engine::AlsaSequencerClient>>>,
     virtual_ports: Option<mackes_midi_engine::VirtualMidiPorts>,
     virtual_ingress: Receiver<(u64, Vec<u8>)>,
     virtual_ingress_tx: Sender<(u64, Vec<u8>)>,
@@ -563,6 +566,8 @@ impl Daemon {
             rtp_peer: mackes_midi_engine::RtpMidiPeer::new(0, 32).map_err(io::Error::other)?,
             outputs: mackes_midi_engine::OutputRegistry::new(64),
             inputs: mackes_midi_engine::InputRegistry::new(64),
+            #[cfg(feature = "alsa-seq-backend")]
+            alsa_input_client: None,
             virtual_ports: None,
             virtual_ingress,
             virtual_ingress_tx,
@@ -1355,7 +1360,17 @@ impl Daemon {
     pub fn provision_input(&mut self, name: &str) -> Result<(), String> {
         #[cfg(feature = "alsa-seq-backend")]
         {
-            let input = mackes_midi_engine::AlsaInputCapture::open_named(name)?;
+            let client = if let Some(client) = self.alsa_input_client.clone() {
+                client
+            } else {
+                let client = std::sync::Arc::new(std::sync::Mutex::new(
+                    mackes_midi_engine::AlsaSequencerClient::open("MACKES input")?,
+                ));
+                self.alsa_input_client = Some(client.clone());
+                client
+            };
+            let input =
+                mackes_midi_engine::AlsaInputCapture::open_named_with_client(name, &client)?;
             self.register_input(Box::new(input)).map_err(str::to_owned)
         }
         #[cfg(not(feature = "alsa-seq-backend"))]

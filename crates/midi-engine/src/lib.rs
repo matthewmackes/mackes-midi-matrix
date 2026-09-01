@@ -7,6 +7,8 @@ use mackes_domain::{
 use std::collections::{HashMap, VecDeque};
 #[cfg(feature = "alsa-seq-backend")]
 use std::ffi::CString;
+#[cfg(feature = "alsa-seq-backend")]
+use std::sync::Mutex;
 use std::sync::{Arc, RwLock};
 
 /// Direction of a MIDI endpoint.
@@ -1497,7 +1499,7 @@ impl AlsaSequencerClient {
 #[cfg(feature = "alsa-seq-backend")]
 pub struct AlsaInputCapture {
     info: EndpointInfo,
-    client: AlsaSequencerClient,
+    client: Arc<Mutex<AlsaSequencerClient>>,
     next_sequence: u64,
 }
 
@@ -1516,29 +1518,43 @@ impl AlsaInputCapture {
     ///
     /// Returns an error when ALSA cannot open, discover, or subscribe the requested source.
     pub fn open_named(name: &str) -> Result<Self, String> {
-        let client = AlsaSequencerClient::open("MACKES input")?;
+        let client = Arc::new(Mutex::new(AlsaSequencerClient::open("MACKES input")?));
+        Self::open_named_with_client(name, &client)
+    }
+
+    /// Opens a named source on an already-owned daemon client.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the client lock, discovery, or subscription fails.
+    pub fn open_named_with_client(
+        name: &str,
+        client: &Arc<Mutex<AlsaSequencerClient>>,
+    ) -> Result<Self, String> {
         let requested_address =
             name.split_whitespace().last().and_then(|address| address.split_once(':')).and_then(
                 |(client, port)| {
                     Some(AlsaSequencerAddress::new(client.parse().ok()?, port.parse().ok()?))
                 },
             );
-        let source = client
+        let client_guard = client.lock().map_err(|_| "ALSA client lock poisoned".to_owned())?;
+        let source = client_guard
             .discover_ports()
             .into_iter()
             .find(|port| {
                 port.readable && (port.port_name == name || requested_address == Some(port.address))
             })
             .ok_or_else(|| format!("ALSA MIDI input not found: {name}"))?;
-        client.subscribe_input(source.address)?;
-        client.subscribe_announcements()?;
+        client_guard.subscribe_input(source.address)?;
+        client_guard.subscribe_announcements()?;
+        drop(client_guard);
         Ok(Self {
             info: EndpointInfo {
                 id: stable_endpoint_id(name, EndpointDirection::Input),
                 name: name.to_owned(),
                 direction: EndpointDirection::Input,
             },
-            client,
+            client: Arc::clone(client),
             next_sequence: 0,
         })
     }
@@ -1551,7 +1567,9 @@ impl MidiInputAdapter for AlsaInputCapture {
     }
 
     fn receive(&mut self) -> Option<MidiEvent> {
-        let bytes = self.client.read_wire_events(1).ok()?.into_iter().next()?.1;
+        let client = self.client.lock().ok()?;
+        let bytes = client.read_wire_events(1).ok()?.into_iter().next()?.1;
+        drop(client);
         let message = MidiMessage::from_wire(&bytes).ok()?;
         let sequence = self.next_sequence;
         self.next_sequence = self.next_sequence.saturating_add(1);
