@@ -1395,7 +1395,11 @@ impl AlsaSequencerClient {
         let subscription = alsa::seq::PortSubscribe::empty().map_err(|error| error.to_string())?;
         subscription.set_sender(sender);
         subscription.set_dest(destination);
-        self.seq.subscribe_port(&subscription).map_err(|error| error.to_string())
+        match self.seq.subscribe_port(&subscription) {
+            Ok(()) => Ok(()),
+            Err(error) if error.to_string().contains("busy") => Ok(()),
+            Err(error) => Err(error.to_string()),
+        }
     }
 
     /// Subscribes the owned input port to ALSA's system announcement port.
