@@ -1044,23 +1044,18 @@ fn mvave_ir_box_preset(preset: u8, dry_run: bool) -> Result<String, String> {
     if dry_run {
         return Ok(hex);
     }
-    let endpoint = mackes_midi_engine::enumerate_midir_ports()?
-        .into_iter()
-        .find(|endpoint| {
-            endpoint.direction == mackes_midi_engine::EndpointDirection::Output
-                && endpoint.name.contains("SINCO MIDI 1")
-        })
-        .ok_or("M-VAVE IR Box/SINCO MIDI output is unavailable")?;
-    let mut output = mackes_midi_engine::MidirOutputAdapter::open_id(&endpoint.id)?;
-    let message = mackes_domain::MidiMessage::from_wire(&bytes).map_err(str::to_owned)?;
-    let event = mackes_domain::MidiEvent {
-        timestamp: mackes_domain::TimestampNanos::new(0),
-        sequence: 0,
-        endpoint: mackes_domain::EndpointId::new(1).expect("nonzero endpoint"),
-        message,
-    };
-    output.send_checked(&event)?;
-    Ok(format!("preset {preset} sent to {}", endpoint.name))
+    let destination = std::env::var("MACKES_MVAVE_DESTINATION")
+        .map_err(|_| "M-VAVE destination is required in MACKES_MVAVE_DESTINATION")?;
+    let payload = serde_json::json!({"profile_id":"m-vave.ir-box","control":format!("Preset {preset}"),"channel":1,"value":0,"destination":destination,"confirm":true});
+    let response = daemon_request(
+        mackes_ipc::Command::DeviceControl,
+        &serde_json::to_vec(&payload).map_err(|e| e.to_string())?,
+    );
+    if response.contains("\"ok\":true") {
+        Ok(format!("preset {preset} sent through daemon: {response}"))
+    } else {
+        Err(response)
+    }
 }
 
 fn reflex_pcm70_preset(
@@ -1104,27 +1099,23 @@ fn mvave_ir_box_module(module: &str, enabled: bool) -> Result<String, String> {
         "eq" => mackes_profiles::MvaveIrBoxModule::Eq,
         _ => return Err("IR Box module must be ir or eq".into()),
     };
-    let bytes = mackes_profiles::mvave_ir_box_module_sysex(selector, enabled);
-    let endpoint = mackes_midi_engine::enumerate_midir_ports()?
-        .into_iter()
-        .find(|endpoint| {
-            endpoint.direction == mackes_midi_engine::EndpointDirection::Output
-                && endpoint.name.contains("SINCO MIDI 1")
-        })
-        .ok_or("M-VAVE IR Box/SINCO MIDI output is unavailable")?;
-    let mut output = mackes_midi_engine::MidirOutputAdapter::open_id(&endpoint.id)?;
-    let message = mackes_domain::MidiMessage::from_wire(&bytes).map_err(str::to_owned)?;
-    output.send_checked(&mackes_domain::MidiEvent {
-        timestamp: mackes_domain::TimestampNanos::new(0),
-        sequence: 0,
-        endpoint: mackes_domain::EndpointId::new(1).expect("nonzero endpoint"),
-        message,
-    })?;
-    Ok(format!(
-        "{module} {} sent-unverified to {}",
-        if enabled { "on" } else { "off" },
-        endpoint.name
-    ))
+    let _ = selector;
+    let destination = std::env::var("MACKES_MVAVE_DESTINATION")
+        .map_err(|_| "M-VAVE destination is required in MACKES_MVAVE_DESTINATION")?;
+    let control = if module == "ir" { "IR" } else { "EQ" };
+    let payload = serde_json::json!({"profile_id":"m-vave.ir-box","control":control,"channel":1,"value":u8::from(enabled),"destination":destination,"confirm":true});
+    let response = daemon_request(
+        mackes_ipc::Command::DeviceControl,
+        &serde_json::to_vec(&payload).map_err(|e| e.to_string())?,
+    );
+    if response.contains("\"ok\":true") {
+        Ok(format!(
+            "{module} {} sent through daemon: {response}",
+            if enabled { "on" } else { "off" }
+        ))
+    } else {
+        Err(response)
+    }
 }
 
 fn set_default_provider_cli(path: &str, capability: &str, profile_id: &str) -> Result<(), String> {
@@ -2778,32 +2769,20 @@ fn dispatch_ui_command(command: mackes_tui::UiCommand) -> String {
 }
 
 fn discovered_endpoints() -> Vec<String> {
-    if let Ok(ports) = mackes_midi_engine::enumerate_midir_ports() {
-        if !ports.is_empty() {
-            return ports
+    let response = daemon_request(mackes_ipc::Command::Endpoints, b"{}");
+    serde_json::from_str::<serde_json::Value>(&response)
+        .ok()
+        .and_then(|value| value.get("endpoints").cloned())
+        .and_then(|value| value.as_array().cloned())
+        .map(|entries| {
+            entries
                 .into_iter()
-                .map(|port| {
-                    let direction = match port.direction {
-                        mackes_midi_engine::EndpointDirection::Input => "input",
-                        mackes_midi_engine::EndpointDirection::Output => "output",
-                    };
-                    format!("{} [{direction}]", port.name)
+                .filter_map(|entry| {
+                    entry.get("name").and_then(serde_json::Value::as_str).map(str::to_owned)
                 })
-                .collect();
-        }
-    }
-    midi_nodes()
-}
-
-fn midi_nodes() -> Vec<String> {
-    let Ok(entries) = std::fs::read_dir("/dev/snd") else { return Vec::new() };
-    let mut nodes = entries
-        .flatten()
-        .filter_map(|entry| entry.file_name().into_string().ok())
-        .filter(|name| name.starts_with("midiC") && name.contains('D'))
-        .collect::<Vec<_>>();
-    nodes.sort();
-    nodes
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 fn backup_entries(directory: &std::path::Path) -> Vec<String> {

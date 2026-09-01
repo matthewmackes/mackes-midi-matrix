@@ -3786,7 +3786,8 @@ validation pass.
 
 #### [ ] W095 — Enforce daemon-only physical MIDI ownership
 
-- **Status:** `READY`
+- **Status:** `IN_PROGRESS`
+- **Start date:** 2026-09-01
 - **Owner:** Luna
 - **Depends on:** W087
 - **Parallel with:** W093 and W096 after IPC request contracts are frozen.
@@ -3817,6 +3818,11 @@ validation pass.
   uses the same output registry, safety policy, and bounded error contract.
 - **Commands/evidence:** dependency-tree assertion, policy test, focused IPC/daemon/CLI tests,
   strict Clippy, integration suite, and one physical M-VAVE/Reflex send through daemon IPC.
+
+**Work log:** 2026-09-01 — codex — `IN_PROGRESS`; removed direct M-VAVE physical output
+enumeration/open/send paths from the operator CLI and routed preset/module operations through
+daemon-owned DeviceControl IPC. Endpoint display now reads the daemon Endpoints response rather
+than opening ALSA/midir or scanning `/dev/snd`. CLI all-feature check and strict Clippy pass.
 
 #### [ ] W096 — Establish one authoritative Learn catalog and cursor state
 
