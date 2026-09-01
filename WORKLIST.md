@@ -3988,6 +3988,12 @@ the operator binary cannot compile the physical backend; daemon IPC remains its 
 - **Commands/evidence:** `cargo metadata` dependency audit, workspace tests/Clippy, repository
   policy checks, clean-clone package test, archive inventory, and before/after module map.
 
+**Evidence update:** 2026-09-01 — added `docs/architecture.md` as the canonical workspace-boundary
+map and `scripts/check-architecture.py` as a repository policy gate. The gate verifies permitted
+local dependency edges and reviewed no-growth ceilings for each oversized root source file; it runs
+through repository verification and therefore the release gate. The policy and repository checks
+pass before the first behavior-preserving module extraction.
+
 #### [ ] W098 — Architecture-correction release closure
 
 - **Status:** `NOT_STARTED`
