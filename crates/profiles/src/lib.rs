@@ -2380,6 +2380,117 @@ pub enum PhysicalControlRole {
     Utility,
 }
 
+/// MIDI message family emitted by the authoritative Launch Control XL Mk2 layout.
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LaunchControlSourceKind {
+    /// MIDI Control Change.
+    ControlChange,
+    /// MIDI Note On/Off.
+    Note,
+}
+
+/// Press/value behavior for one control in the authoritative Mk2 layout.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LaunchControlInputBehavior {
+    /// A continuous 0-127 value.
+    Continuous,
+    /// A nonzero press followed by a zero-valued release.
+    PressRelease,
+}
+
+/// One exact input/feedback tuple in the authoritative Factory Template 1 layout.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct LaunchControlLayoutControl {
+    /// Stable physical identity, independent of the wire tuple.
+    pub physical_control_id: String,
+    /// Physical role.
+    pub role: PhysicalControlRole,
+    /// Zero-based MIDI channel (wire channel 9).
+    pub channel: u8,
+    /// Input message family.
+    pub source_kind: LaunchControlSourceKind,
+    /// Note or controller number.
+    pub source_number: u8,
+    /// Value/press behavior.
+    pub behavior: LaunchControlInputBehavior,
+    /// Optional documented LED index. Faders have no individual LED.
+    pub feedback_address: Option<u8>,
+}
+
+/// The sole machine-readable Launch Control XL Mk2 production layout.
+///
+/// Factory Template 1 is selected on the hardware. The table is based on the
+/// physically captured Mk2 input tuples recorded in the qualification matrix;
+/// it does not define or transmit a Components template.
+#[must_use]
+pub fn launch_control_mk2_factory1_layout() -> Vec<LaunchControlLayoutControl> {
+    let catalog = launch_control_physical_catalog();
+    catalog
+        .into_iter()
+        .filter_map(|control| {
+            let (source_kind, source_number, behavior) = match control.role {
+                PhysicalControlRole::Knob | PhysicalControlRole::Fader => (
+                    LaunchControlSourceKind::ControlChange,
+                    control.source_address?,
+                    LaunchControlInputBehavior::Continuous,
+                ),
+                PhysicalControlRole::ChannelButton => (
+                    LaunchControlSourceKind::Note,
+                    control.source_address?,
+                    LaunchControlInputBehavior::PressRelease,
+                ),
+                PhysicalControlRole::Utility => {
+                    let order = control.order.checked_sub(48)?;
+                    if order < 4 {
+                        (
+                            LaunchControlSourceKind::Note,
+                            105 + order,
+                            LaunchControlInputBehavior::PressRelease,
+                        )
+                    } else {
+                        (
+                            LaunchControlSourceKind::ControlChange,
+                            100 + order,
+                            LaunchControlInputBehavior::PressRelease,
+                        )
+                    }
+                }
+            };
+            Some(LaunchControlLayoutControl {
+                physical_control_id: control.id.as_str().to_owned(),
+                role: control.role,
+                channel: 8,
+                source_kind,
+                source_number,
+                behavior,
+                feedback_address: control.feedback_address,
+            })
+        })
+        .collect()
+}
+
+/// Resolves an active Factory Template 1 input without guessing or aliases.
+#[must_use]
+pub fn resolve_launch_control_mk2_factory1_input(
+    channel: u8,
+    source_kind: LaunchControlSourceKind,
+    source_number: u8,
+    value: u8,
+) -> Option<String> {
+    if value == 0 {
+        return None;
+    }
+    let mut matches = launch_control_mk2_factory1_layout().into_iter().filter(|control| {
+        control.channel == channel
+            && control.source_kind == source_kind
+            && control.source_number == source_number
+    });
+    let control = matches.next()?;
+    matches.next().is_none().then_some(control.physical_control_id)
+}
+
 /// Complete stable physical-control metadata.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct PhysicalControl {
@@ -5235,6 +5346,57 @@ mod tests {
         assert_eq!(controls[24].source_address, Some(41));
         assert_eq!(controls[32].source_address, Some(57));
         assert_eq!(controls[40].source_address, Some(77));
+    }
+
+    #[test]
+    fn mk2_factory1_layout_is_complete_unique_and_exact() {
+        let layout = launch_control_mk2_factory1_layout();
+        assert_eq!(layout.len(), 56);
+        let identities = layout
+            .iter()
+            .map(|control| control.physical_control_id.as_str())
+            .collect::<std::collections::BTreeSet<_>>();
+        let tuples = layout
+            .iter()
+            .map(|control| (control.channel, control.source_kind, control.source_number))
+            .collect::<std::collections::BTreeSet<_>>();
+        assert_eq!(identities.len(), 56);
+        assert_eq!(tuples.len(), 56);
+        assert!(layout.iter().all(|control| control.channel == 8));
+        assert_eq!(
+            resolve_launch_control_mk2_factory1_input(
+                8,
+                LaunchControlSourceKind::ControlChange,
+                13,
+                127
+            ),
+            Some("knob-r1-c1".into())
+        );
+        assert_eq!(
+            resolve_launch_control_mk2_factory1_input(8, LaunchControlSourceKind::Note, 105, 127),
+            Some("utility-1".into())
+        );
+        assert!(resolve_launch_control_mk2_factory1_input(
+            0,
+            LaunchControlSourceKind::ControlChange,
+            13,
+            127
+        )
+        .is_none());
+        assert!(resolve_launch_control_mk2_factory1_input(
+            8,
+            LaunchControlSourceKind::ControlChange,
+            21,
+            127
+        )
+        .is_none());
+        assert!(resolve_launch_control_mk2_factory1_input(
+            8,
+            LaunchControlSourceKind::Note,
+            105,
+            0
+        )
+        .is_none());
     }
 
     #[test]

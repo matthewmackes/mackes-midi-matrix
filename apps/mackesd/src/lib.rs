@@ -1630,56 +1630,45 @@ impl Daemon {
         (processed, sent, unmatched)
     }
 
-    const fn is_launch_control_factory1_device_press(event: &mackes_domain::MidiEvent) -> bool {
-        matches!(
-            event.message,
-            mackes_domain::MidiMessage::NoteOn { channel, note, velocity }
-                if channel.wire() == 8 && note.as_u8() == 105 && velocity.as_u8() > 0
-        )
+    fn is_launch_control_factory1_device_press(event: &mackes_domain::MidiEvent) -> bool {
+        matches!(Self::launch_control_factory1_control_id(event).as_deref(), Some("utility-1"))
     }
 
-    const fn launch_control_factory1_navigation(
+    fn launch_control_factory1_navigation(
         event: &mackes_domain::MidiEvent,
     ) -> Option<&'static str> {
-        let mackes_domain::MidiMessage::ControlChange { channel, controller, value } =
-            event.message
-        else {
+        let mackes_domain::MidiMessage::ControlChange { value, .. } = event.message else {
             return None;
         };
-        if channel.wire() != 8 || value.as_u8() == 0 {
+        if value.as_u8() == 0 {
             return None;
         }
-        match controller.as_u8() {
-            104 => Some("up"),
-            105 => Some("down"),
-            106 => Some("left"),
-            107 => Some("right"),
+        match Self::launch_control_factory1_control_id(event).as_deref() {
+            Some("utility-5") => Some("up"),
+            Some("utility-6") => Some("down"),
+            Some("utility-7") => Some("left"),
+            Some("utility-8") => Some("right"),
             _ => None,
         }
     }
 
     fn launch_control_factory1_control_id(event: &mackes_domain::MidiEvent) -> Option<String> {
-        let (kind, number, active) = match event.message {
-            mackes_domain::MidiMessage::ControlChange { channel, controller, value } => {
-                ("cc", controller.as_u8(), channel.wire() == 8 && value.as_u8() > 0)
-            }
-            mackes_domain::MidiMessage::NoteOn { channel, note, velocity } => {
-                ("note", note.as_u8(), channel.wire() == 8 && velocity.as_u8() > 0)
-            }
+        let (kind, number, channel, value) = match event.message {
+            mackes_domain::MidiMessage::ControlChange { channel, controller, value } => (
+                mackes_profiles::LaunchControlSourceKind::ControlChange,
+                controller.as_u8(),
+                channel.wire(),
+                value.as_u8(),
+            ),
+            mackes_domain::MidiMessage::NoteOn { channel, note, velocity } => (
+                mackes_profiles::LaunchControlSourceKind::Note,
+                note.as_u8(),
+                channel.wire(),
+                velocity.as_u8(),
+            ),
             _ => return None,
         };
-        if !active {
-            return None;
-        }
-        match (kind, number) {
-            ("cc", 13..=20) => Some(format!("knob-r1-c{}", number - 12)),
-            ("cc", 29..=36) => Some(format!("knob-r2-c{}", number - 28)),
-            ("cc", 49..=56) => Some(format!("knob-r3-c{}", number - 48)),
-            ("cc", 77..=84) => Some(format!("fader-{}", number - 76)),
-            ("note", 41..=48) => Some(format!("button-r1-c{}", number - 40)),
-            ("note", 57..=64) => Some(format!("button-r2-c{}", number - 56)),
-            _ => None,
-        }
+        mackes_profiles::resolve_launch_control_mk2_factory1_input(channel, kind, number, value)
     }
 
     fn record_navigation_event(&mut self, action: &'static str) {

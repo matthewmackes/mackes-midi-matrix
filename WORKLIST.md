@@ -3674,7 +3674,8 @@ and strict daemon Clippy pass. Physical feedback and LED qualification remain op
 
 #### [ ] W093 — Reconcile the authoritative Launch Control XL Mk2 layout contract
 
-- **Status:** `READY`
+- **Status:** `IN_PROGRESS`
+- **Start date:** 2026-09-01
 - **Owner:** Luna
 - **Depends on:** W083, W089
 - **Parallel with:** W095 and W097 after the contract inventory below is frozen.
@@ -3716,6 +3717,13 @@ and strict daemon Clippy pass. Physical feedback and LED qualification remain op
 - **Commands/evidence:** focused profile/config/daemon tests, strict Clippy, artifact verifier,
   migration fixture output, exact Components checksum when applicable, and updated physical
   capture evidence in `docs/hardware-qualification.md`.
+
+**Work log:** 2026-09-01 — codex — `IN_PROGRESS`; selected the physically proven Factory
+Template 1 contract, added a profile-owned typed 56-control layout including all assignable and
+utility input tuples, and changed daemon Device/navigation/capture decoding to resolve solely
+through that table. Added exact uniqueness, wrong-channel, contradictory User 1 tuple, and
+release-value rejection tests. ADR, operator-document retirement, migration, and artifact-contract
+alignment remain open.
 
 #### [ ] W094 — Make controller artifact readiness a hard release gate
 
