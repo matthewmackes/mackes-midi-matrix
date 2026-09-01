@@ -569,6 +569,8 @@ pub enum AssignmentPhase {
     AwaitControl,
     /// Choosing a connected compatible device.
     ChooseDevice,
+    /// Choosing a profile-owned preset when the device provides one.
+    ChoosePreset,
     /// Choosing an effect block.
     ChooseEffect,
     /// Choosing a destination parameter.
@@ -752,10 +754,14 @@ impl AssignmentSession {
         self.phase = match (self.phase, action) {
             (AssignmentPhase::Idle, AssignmentAction::Start) => AssignmentPhase::AwaitControl,
             (AssignmentPhase::AwaitControl, AssignmentAction::ControlCaptured)
-            | (AssignmentPhase::ChooseEffect, AssignmentAction::Back) => {
-                AssignmentPhase::ChooseDevice
+            | (
+                AssignmentPhase::ChooseEffect | AssignmentPhase::ChoosePreset,
+                AssignmentAction::Back,
+            ) => AssignmentPhase::ChooseDevice,
+            (AssignmentPhase::ChooseDevice, AssignmentAction::Enter) => {
+                AssignmentPhase::ChoosePreset
             }
-            (AssignmentPhase::ChooseDevice, AssignmentAction::Enter)
+            (AssignmentPhase::ChoosePreset, AssignmentAction::Enter)
             | (AssignmentPhase::ChooseParameter, AssignmentAction::Back) => {
                 AssignmentPhase::ChooseEffect
             }
@@ -1683,10 +1689,14 @@ mod tests {
         assert!(session.apply(AssignmentAction::Start));
         assert!(session.apply(AssignmentAction::ControlCaptured));
         assert!(session.apply(AssignmentAction::Enter));
+        assert_eq!(session.phase, AssignmentPhase::ChoosePreset);
+        assert!(session.apply(AssignmentAction::Enter));
         assert_eq!(session.phase, AssignmentPhase::ChooseEffect);
         assert!(session.apply(AssignmentAction::Back));
         assert_eq!(session.phase, AssignmentPhase::ChooseDevice);
         assert!(session.apply(AssignmentAction::Enter));
+        assert!(session.apply(AssignmentAction::Enter));
+        assert_eq!(session.phase, AssignmentPhase::ChooseEffect);
         assert!(session.apply(AssignmentAction::Enter));
         assert_eq!(session.phase, AssignmentPhase::ChooseParameter);
         assert!(session.apply(AssignmentAction::Back));
@@ -1732,6 +1742,7 @@ mod tests {
         assert!(!session.has_draft);
         session.apply(AssignmentAction::Start);
         session.apply(AssignmentAction::ControlCaptured);
+        session.apply(AssignmentAction::Enter);
         session.apply(AssignmentAction::Enter);
         session.apply(AssignmentAction::Enter);
         assert_eq!(session.phase, AssignmentPhase::ChooseParameter);

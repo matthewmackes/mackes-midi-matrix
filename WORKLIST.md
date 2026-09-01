@@ -3540,6 +3540,11 @@ transitions and preset commits remain open under W089/W090.
 `pcm70_reflex:*` catalog IDs produce the same validated active-setup SysEx as the direct preset
 control path. Focused profile tests and strict profile Clippy pass.
 
+**Evidence update:** 2026-09-01 — added `ChoosePreset` to the authoritative assignment state
+machine, making Device → Preset → Effect an explicit transition sequence with back-navigation;
+state-machine tests and strict IPC/TUI/daemon Clippy pass. Preset selection payload integration
+and physical qualification remain open.
+
 #### [ ] W090 — Preset-to-button assignment
 
 - **Status:** `IN_PROGRESS`

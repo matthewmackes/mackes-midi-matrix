@@ -1530,6 +1530,7 @@ pub fn assignment_wizard_lines(wizard: &AssignmentWizard, viewport: Viewport) ->
         mackes_ipc::AssignmentPhase::Idle => "READY",
         mackes_ipc::AssignmentPhase::AwaitControl => "MOVE ONLY ONE CONTROL",
         mackes_ipc::AssignmentPhase::ChooseDevice => "CHOOSE DEVICE",
+        mackes_ipc::AssignmentPhase::ChoosePreset => "CHOOSE PRESET",
         mackes_ipc::AssignmentPhase::ChooseEffect => "CHOOSE EFFECT",
         mackes_ipc::AssignmentPhase::ChooseParameter => "CHOOSE PARAMETER",
         mackes_ipc::AssignmentPhase::ConfirmReplace => "REPLACE EXISTING MAPPING?",
