@@ -1290,6 +1290,7 @@ pub struct AlsaSequencerClient {
     input_port: i32,
     output_port: i32,
     pending_wire: VecDeque<(AlsaSequencerAddress, Vec<u8>)>,
+    desired_inputs: Vec<AlsaSequencerAddress>,
     announcements_subscribed: bool,
 }
 
@@ -1341,6 +1342,7 @@ impl AlsaSequencerClient {
             input_port,
             output_port,
             pending_wire: VecDeque::new(),
+            desired_inputs: Vec::new(),
             announcements_subscribed: false,
         })
     }
@@ -1382,7 +1384,7 @@ impl AlsaSequencerClient {
     /// # Errors
     ///
     /// Returns the ALSA subscription error.
-    pub fn subscribe_input(&self, source: AlsaSequencerAddress) -> Result<(), String> {
+    pub fn subscribe_input(&mut self, source: AlsaSequencerAddress) -> Result<(), String> {
         let client = self.client_id()?;
         let destination = alsa::seq::Addr { client: client.into(), port: self.input_port };
         let sender =
@@ -1390,16 +1392,43 @@ impl AlsaSequencerClient {
         if alsa::seq::PortSubscribeIter::new(&self.seq, sender, alsa::seq::QuerySubsType::READ)
             .any(|subscription| subscription.get_dest() == destination)
         {
+            if !self.desired_inputs.contains(&source) {
+                self.desired_inputs.push(source);
+            }
             return Ok(());
         }
         let subscription = alsa::seq::PortSubscribe::empty().map_err(|error| error.to_string())?;
         subscription.set_sender(sender);
         subscription.set_dest(destination);
         match self.seq.subscribe_port(&subscription) {
-            Ok(()) => Ok(()),
+            Ok(()) => {
+                if !self.desired_inputs.contains(&source) {
+                    self.desired_inputs.push(source);
+                }
+                Ok(())
+            }
             Err(error) if error.to_string().contains("busy") => Ok(()),
             Err(error) => Err(error.to_string()),
         }
+    }
+
+    /// Reconciles the bounded desired input set against ALSA subscriptions.
+    ///
+    /// Missing subscriptions are recreated; existing subscriptions are left untouched.
+    /// Sources that have disappeared are reported to the caller and remain desired so a
+    /// later announcement/poll can restore them when the same address returns.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when ALSA cannot query the client or restore a desired subscription.
+    pub fn reconcile_input_subscriptions(&mut self) -> Result<usize, String> {
+        let desired = self.desired_inputs.clone();
+        let mut restored = 0_usize;
+        for source in desired {
+            self.subscribe_input(source)?;
+            restored = restored.saturating_add(1);
+        }
+        Ok(restored)
     }
 
     /// Subscribes the owned input port to ALSA's system announcement port.

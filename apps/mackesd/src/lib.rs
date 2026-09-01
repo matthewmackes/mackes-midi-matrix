@@ -1392,6 +1392,12 @@ impl Daemon {
     /// Polls each daemon-owned input once in stable registration order.
     #[must_use]
     pub fn poll_inputs(&mut self) -> Vec<mackes_domain::MidiEvent> {
+        #[cfg(feature = "alsa-seq-backend")]
+        if let Some(client) = self.alsa_input_client.as_ref() {
+            if let Ok(mut client) = client.lock() {
+                let _ = client.reconcile_input_subscriptions();
+            }
+        }
         let mut events = self.deferred_inputs.drain(..).collect::<Vec<_>>();
         events.extend(self.inputs.poll_once());
         events

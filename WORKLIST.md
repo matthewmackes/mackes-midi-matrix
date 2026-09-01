@@ -3457,6 +3457,12 @@ announcements and decodes bounded client/port start, change, exit, subscribe, an
 events into typed lifecycle records. Native-feature compilation, strict engine Clippy, and 56
 all-feature engine tests pass. Desired/actual subscription reconciliation and daemon wiring remain.
 
+**Evidence update:** 2026-09-01 — native client now retains a bounded desired-input set and
+reconciles subscriptions from the daemon polling boundary, recreating missing subscriptions
+without opening additional clients or routing from the reader. Workspace checks, lifecycle tests,
+and strict engine/daemon Clippy pass. Changed-address identity recovery and physical reconnect
+qualification remain open.
+
 #### [ ] W087 — Daemon cutover to native ALSA and callback-input removal
 
 - **Status:** `IN_PROGRESS`
