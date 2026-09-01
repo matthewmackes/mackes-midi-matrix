@@ -1560,8 +1560,12 @@ pub struct AssignmentParameterChoice {
 pub struct AssignmentChoiceBrowser {
     /// Connected profile IDs in catalog order.
     pub devices: Vec<String>,
+    /// Profile-owned preset choices shown between device and effect.
+    pub presets: Vec<(String, String)>,
     /// Effect blocks for the selected profile in signal order.
     pub effects: Vec<(String, String)>,
+    /// Parameter types shown between effect and parameter.
+    pub types: Vec<String>,
     /// Role-filtered parameter choices in profile order.
     pub parameters: Vec<AssignmentParameterChoice>,
     /// Current bounded index at the active chooser level.
@@ -1589,39 +1593,76 @@ impl AssignmentChoiceBrowser {
         let Some(profile) = mackes_profiles::builtin_profile(profile_id) else {
             return Self { devices, ..Self::default() };
         };
+        let presets = if profile_id == "lexicon.reflex" {
+            mackes_profiles::lexicon_reflex::pcm70_translations()
+                .iter()
+                .map(|preset| (preset.id.to_owned(), preset.name.to_owned()))
+                .collect()
+        } else {
+            Vec::new()
+        };
         let blocks = mackes_profiles::effect_blocks(&profile);
         let effects =
             blocks.iter().map(|block| (block.id.clone(), block.label.clone())).collect::<Vec<_>>();
-        let parameters = mackes_profiles::compatible_parameters(&profile, role, true)
-            .into_iter()
-            .filter(|item| {
-                matches!(
-                    item.reason,
-                    mackes_profiles::SupportReason::Compatible
-                        | mackes_profiles::SupportReason::Experimental
-                )
-            })
-            .map(|item| {
-                let (effect_id, effect_label) = blocks
-                    .iter()
-                    .find(|block| {
-                        block.parameters.iter().any(|parameter| parameter.id == item.parameter.id)
-                    })
-                    .map_or_else(
-                        || ("general".to_owned(), "General".to_owned()),
-                        |block| (block.id.clone(), block.label.clone()),
-                    );
-                AssignmentParameterChoice {
+        let mut parameters: Vec<AssignmentParameterChoice> =
+            mackes_profiles::compatible_parameters(&profile, role, true)
+                .into_iter()
+                .filter(|item| {
+                    matches!(
+                        item.reason,
+                        mackes_profiles::SupportReason::Compatible
+                            | mackes_profiles::SupportReason::Experimental
+                    )
+                })
+                .map(|item| {
+                    let (effect_id, effect_label) = blocks
+                        .iter()
+                        .find(|block| {
+                            block
+                                .parameters
+                                .iter()
+                                .any(|parameter| parameter.id == item.parameter.id)
+                        })
+                        .map_or_else(
+                            || ("general".to_owned(), "General".to_owned()),
+                            |block| (block.id.clone(), block.label.clone()),
+                        );
+                    AssignmentParameterChoice {
+                        profile_id: profile.id.clone(),
+                        effect_id,
+                        effect_label,
+                        id: item.parameter.id,
+                        label: item.parameter.label,
+                        reason: item.reason,
+                    }
+                })
+                .collect();
+        // PCM70 translator controls are profile-owned preset selectors.  They
+        // intentionally have a 0..1 value range, but are valid destinations
+        // for a continuous controller such as a knob or fader.
+        if parameters.is_empty() && profile_id == "lexicon.reflex" {
+            parameters = mackes_profiles::destination_parameters(&profile)
+                .into_iter()
+                .map(|parameter| AssignmentParameterChoice {
                     profile_id: profile.id.clone(),
-                    effect_id,
-                    effect_label,
-                    id: item.parameter.id,
-                    label: item.parameter.label,
-                    reason: item.reason,
+                    effect_id: "reverb".to_owned(),
+                    effect_label: "Reverb".to_owned(),
+                    id: parameter.id,
+                    label: parameter.label,
+                    reason: mackes_profiles::SupportReason::Compatible,
+                })
+                .collect();
+        }
+        let types = parameters.iter().map(|parameter| parameter.effect_label.clone()).fold(
+            Vec::new(),
+            |mut types, label| {
+                if !types.contains(&label) {
+                    types.push(label);
                 }
-            })
-            .collect();
-        Self { devices, effects, parameters, selected: 0 }
+                types
+            },
+        );
+        Self { devices, presets, effects, types, parameters, selected: 0 }
     }
 
     /// Moves selection without wrapping and reports whether it changed.

@@ -3516,6 +3516,41 @@ hardware inputs share one daemon-owned nonblocking ALSA Sequencer client and its
 adapters now hold synchronized views of that client rather than opening one client per source.
 Workspace all-feature tests, strict daemon Clippy, worklist validation, and diff checks pass.
 
+#### [ ] W089 — Hierarchical Learn catalog
+
+- **Status:** `READY`
+- **Owner:** Luna
+- **Depends on:** W076, W077, W085
+- **Objective:** make Learn present a deterministic catalog of Device → Preset (when available) → Effect → Type → Parameter.
+- **Implementation:** extend the assignment browser and wire contract with explicit catalog levels, profile-owned preset/effect/type metadata, bounded selection, keyboard and Mk2 arrow parity, and clear empty-state handling.
+- **Acceptance:** entering Learn always renders the current level, candidate count, selected item, and breadcrumb; no catalog level is silently skipped.
+
+#### [ ] W090 — Preset-to-button assignment
+
+- **Status:** `READY`
+- **Owner:** Luna
+- **Depends on:** W089
+- **Objective:** allow presets to be assigned to Novation buttons while continuous parameters remain assignable to knobs/faders.
+- **Implementation:** add a typed preset assignment draft and commit path, validate source-role compatibility, persist atomically, and expose preset identity in mapping/status snapshots.
+- **Acceptance:** button sources can commit presets; knob/fader sources cannot commit presets; duplicate/conflicting destinations fail closed and survive restart.
+
+#### [ ] W091 — Preset parameter projection and LED state
+
+- **Status:** `READY`
+- **Owner:** Luna
+- **Depends on:** W090
+- **Objective:** when a preset is loaded, project its documented parameters and update the Novation controls.
+- **Implementation:** define profile-owned preset parameter payloads, apply bounded values to mapped knobs/faders, emit controller LED colors by destination owner, and preserve OFF until a valid mapping exists.
+- **Acceptance:** loading a preset updates every mapped parameter deterministically, unmapped controls remain dark, and restart/resync restores values and colors without phantom assignments.
+
+#### [ ] W092 — Catalog and preset end-to-end qualification
+
+- **Status:** `NOT_STARTED`
+- **Owner:** Luna
+- **Depends on:** W089, W090, W091, W088
+- **Objective:** qualify the complete catalog workflow on the Launch Control XL Mk2 and include it in the next release gate.
+- **Acceptance:** Device entry, catalog navigation, button preset assignment, knob parameter assignment, preset load projection, LED feedback, persistence, reconnect, and release artifacts all pass with evidence in `docs/hardware-qualification.md`.
+
 ### Integration, performance, and release
 
 #### [x] W050 — Full virtual-MIDI and RTP-MIDI integration suite

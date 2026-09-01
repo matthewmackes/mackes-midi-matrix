@@ -105,6 +105,29 @@ fn run_tui() -> Result<(), String> {
                     mackes_tui::Viewport::new(terminal.size().map_or(80, |size| size.width), 24),
                 );
                 if !assignment_choices.parameters.is_empty() {
+                    lines.push("CATALOG  Device > Preset > Effect > Type > Parameter".into());
+                    lines.push(format!("DEVICE   {}", assignment_choices.devices.join(", ")));
+                    if !assignment_choices.presets.is_empty() {
+                        lines.push(format!(
+                            "PRESETS  {}",
+                            assignment_choices
+                                .presets
+                                .iter()
+                                .map(|(_, label)| label.as_str())
+                                .collect::<Vec<_>>()
+                                .join(" | ")
+                        ));
+                    }
+                    lines.push(format!(
+                        "EFFECTS  {}",
+                        assignment_choices
+                            .effects
+                            .iter()
+                            .map(|(_, label)| label.as_str())
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    ));
+                    lines.push(format!("TYPES    {}", assignment_choices.types.join(", ")));
                     lines.push("DESTINATION / EFFECT / PARAMETER".into());
                     for (index, choice) in assignment_choices.parameters.iter().enumerate() {
                         lines.push(format!(
