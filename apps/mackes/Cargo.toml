@@ -13,7 +13,7 @@ ratatui.workspace = true
 crossterm.workspace = true
 owo-colors.workspace = true
 mackes-profiles = { path = "../../crates/profiles" }
-mackes-midi-engine = { path = "../../crates/midi-engine", features = ["midir-backend"] }
+mackes-midi-engine = { path = "../../crates/midi-engine" }
 mackes-ipc = { path = "../../crates/ipc" }
 mackes-scene-engine = { path = "../../crates/scene-engine" }
 serde_json.workspace = true

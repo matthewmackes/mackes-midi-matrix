@@ -3837,6 +3837,11 @@ coverage and an explicitly targeted physical send.
 device, preset, effect, type, and parameter cursors, with active-level navigation and round-trip
 serialization tests. This freezes the daemon-side cursor contract for the dependent W096 work.
 
+**Evidence update:** 2026-09-01 — removed the `midir-backend` feature from the operator
+application dependency. `cargo check -p mackes-midi-matrix --no-default-features`, feature-tree
+inspection, and strict operator Clippy pass; the app can no longer transitively enable the physical
+midir backend.
+
 #### [ ] W096 — Establish one authoritative Learn catalog and cursor state
 
 - **Status:** `READY`
