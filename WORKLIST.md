@@ -3791,10 +3791,10 @@ validation pass.
 - **Owner:** Luna
 - **Depends on:** W087
 - **Parallel with:** W093 and W096 after IPC request contracts are frozen.
-- **Objective:** ensure every physical MIDI read/write, including M-VAVE preset/module commands,
+- **Objective:** ensure every supported physical MIDI read/write,
   is owned, serialized, authorized, audited, counted, and observed by the daemon.
-- **Problem to correct:** `apps/mackes` directly enumerates `midir` ports, opens physical outputs,
-  and transmits M-VAVE preset/module messages, bypassing daemon output ownership and safety state.
+- **Problem to correct:** `apps/mackes` directly enumerated `midir` ports and opened physical
+  outputs, bypassing daemon output ownership and safety state. M-VAVE is retired and excluded.
 - **Implementation:**
   1. Define typed IPC operations for every remaining direct CLI device action, including dry-run
      rendering, explicit destination, confirmation, unsafe/experimental gate, and bounded result.
@@ -3817,9 +3817,9 @@ validation pass.
   repository policy enforces the boundary; every device write appears in daemon audit/activity and
   uses the same output registry, safety policy, and bounded error contract.
 - **Commands/evidence:** dependency-tree assertion, policy test, focused IPC/daemon/CLI tests,
-  strict Clippy, integration suite, and one physical M-VAVE/Reflex send through daemon IPC.
+  strict Clippy, integration suite, and one physical Reflex/Eventide send through daemon IPC.
 
-**Work log:** 2026-09-01 — codex — `IN_PROGRESS`; removed direct M-VAVE physical output
+**Work log:** 2026-09-01 — codex — `IN_PROGRESS`; removed direct physical output
 enumeration/open/send paths from the operator CLI and routed preset/module operations through
 daemon-owned DeviceControl IPC. Endpoint display now reads the daemon Endpoints response rather
 than opening ALSA/midir or scanning `/dev/snd`. CLI all-feature check and strict Clippy pass.
@@ -3841,6 +3841,10 @@ serialization tests. This freezes the daemon-side cursor contract for the depend
 application dependency. `cargo check -p mackes-midi-matrix --no-default-features`, feature-tree
 inspection, and strict operator Clippy pass; the app can no longer transitively enable the physical
 midir backend.
+
+**Evidence update:** 2026-09-01 — `cargo check -p mackes-midi-matrix --no-default-features`
+and strict operator Clippy pass with no `midir` feature in the app dependency tree. This proves
+the operator binary cannot compile the physical backend; daemon IPC remains its only hardware path.
 
 #### [ ] W096 — Establish one authoritative Learn catalog and cursor state
 
@@ -4871,3 +4875,9 @@ tests, or code presence alone is not release completion.
 | 2026-08-30 | WORKLIST/W072–W080 | operator/codex | approved TUI redesign → governed Luna workstream | Added the task-oriented five-section shell, hardware-first `move control → device → effect → parameter` workflow, stable non-overlapping Novation identities, profile effect hierarchy, durable parameter mappings, daemon evaluator, mapping browser/Undo, four-part visual polish, legacy rehome, migration, and software release-gate packets. W072 and W076 are READY; downstream items are dependency-gated. |
 | 2026-08-30 | WORKLIST/W072–W082 | operator/codex | controller-driven assignment specification → governed Luna workstream | Assigned the full redesign stream to Luna; replaced Map Controls-only capture with short Device entry from any screen; specified 750 ms cancel, 250 ms source disambiguation, controller/keyboard navigation parity, exact large-distance screens, atomic replacement, interruption recovery, official Components User 1 artifact/onboarding, and layered fake-clock-testable LED feedback. Added W081/W082 and extended W076/W077/W080, dependency waves, proposal, and release acceptance evidence. |
 | 2026-08-31 | WORKLIST/W083–W088 | operator/codex | native ALSA correction → governed Luna workstream | Recorded the `aseqdump`-visible/daemon-missing Launch Control Device defect and added an implementation-ready native ALSA Sequencer migration: architecture contract, client/ports/subscriptions, bounded decoder, announcement/reconnect supervisor, daemon cutover, least-privilege deployment, rollback, and physical Mk2 qualification. W083 is READY; downstream packets remain dependency-gated. |
+midir backend.
+
+**Evidence update:** 2026-09-01 — retired M-VAVE from the active platform catalog and daemon
+DeviceControl path. Built-in profiles now expose only supported Reflex and Eventide devices;
+operator M-VAVE command dispatch is removed. Profile tests, daemon/operator checks, and worklist
+validation pass. Historical M-VAVE research remains append-only audit material.

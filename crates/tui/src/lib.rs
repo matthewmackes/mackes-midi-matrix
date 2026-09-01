@@ -4924,8 +4924,6 @@ fn destination_profile_for_name(name: &str) -> Option<mackes_profiles::DevicePro
         "eventide.micropitch"
     } else if name.contains("reflex") || name.contains("lexicon") {
         "lexicon.reflex"
-    } else if name.contains("m-vave") || name.contains("mvave") || name.contains("ir box") {
-        "m-vave.ir-box"
     } else {
         return None;
     };
@@ -5962,7 +5960,7 @@ mod tests {
 
     #[test]
     fn destination_browser_filters_unknown_devices_and_cycles_supported_profiles() {
-        let names = ["Reflex", "M-VAVE IR Box"];
+        let names = ["Reflex"];
         for name in names {
             let device = PhysicalDevice {
                 name: name.into(),

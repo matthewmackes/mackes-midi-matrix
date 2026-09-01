@@ -1038,14 +1038,15 @@ fn run_tui() -> Result<(), String> {
     result
 }
 
-fn mvave_ir_box_preset(preset: u8, dry_run: bool) -> Result<String, String> {
+/* retired M-VAVE command handlers removed from the active platform */
+/*
+fn mvave_ir_box_preset(preset: u8, destination: Option<&str>, dry_run: bool) -> Result<String, String> {
     let bytes = mackes_profiles::mvave_ir_box_preset_sysex(preset).map_err(str::to_owned)?;
     let hex = bytes.iter().map(|byte| format!("{byte:02X}")).collect::<Vec<_>>().join(" ");
     if dry_run {
         return Ok(hex);
     }
-    let destination = std::env::var("MACKES_MVAVE_DESTINATION")
-        .map_err(|_| "M-VAVE destination is required in MACKES_MVAVE_DESTINATION")?;
+    let destination = destination.ok_or("M-VAVE destination is required")?;
     let payload = serde_json::json!({"profile_id":"m-vave.ir-box","control":format!("Preset {preset}"),"channel":1,"value":0,"destination":destination,"confirm":true});
     let response = daemon_request(
         mackes_ipc::Command::DeviceControl,
@@ -1058,6 +1059,7 @@ fn mvave_ir_box_preset(preset: u8, dry_run: bool) -> Result<String, String> {
     }
 }
 
+*/
 fn reflex_pcm70_preset(
     preset_id: &str,
     destination: Option<&str>,
@@ -1093,15 +1095,14 @@ fn reflex_pcm70_preset(
     }
 }
 
-fn mvave_ir_box_module(module: &str, enabled: bool) -> Result<String, String> {
+/*
+fn mvave_ir_box_module(module: &str, enabled: bool, destination: &str) -> Result<String, String> {
     let selector = match module {
         "ir" => mackes_profiles::MvaveIrBoxModule::Ir,
         "eq" => mackes_profiles::MvaveIrBoxModule::Eq,
         _ => return Err("IR Box module must be ir or eq".into()),
     };
     let _ = selector;
-    let destination = std::env::var("MACKES_MVAVE_DESTINATION")
-        .map_err(|_| "M-VAVE destination is required in MACKES_MVAVE_DESTINATION")?;
     let control = if module == "ir" { "IR" } else { "EQ" };
     let payload = serde_json::json!({"profile_id":"m-vave.ir-box","control":control,"channel":1,"value":u8::from(enabled),"destination":destination,"confirm":true});
     let response = daemon_request(
@@ -1117,6 +1118,7 @@ fn mvave_ir_box_module(module: &str, enabled: bool) -> Result<String, String> {
         Err(response)
     }
 }
+*/
 
 fn set_default_provider_cli(path: &str, capability: &str, profile_id: &str) -> Result<(), String> {
     let profile = mackes_profiles::builtin_profile(profile_id)
@@ -1339,16 +1341,6 @@ fn main() {
             }
             println!("{}: {} (configured)", capability.trim(), profile_id);
         }
-        [device, action, value] if device == "mvave" && action == "preset" => {
-            let preset = value.parse::<u8>().unwrap_or(0);
-            match mvave_ir_box_preset(preset, false) {
-                Ok(result) => println!("{result}"),
-                Err(error) => {
-                    eprintln!("mackes-midi-matrix: {error}");
-                    std::process::exit(2);
-                }
-            }
-        }
         [device, action, preset, flag]
             if device == "reflex" && action == "preset" && flag == "--dry-run" =>
         {
@@ -1364,32 +1356,6 @@ fn main() {
             if device == "reflex" && action == "preset" && flag == "--confirm" =>
         {
             match reflex_pcm70_preset(preset, Some(destination), false) {
-                Ok(result) => println!("{result}"),
-                Err(error) => {
-                    eprintln!("mackes-midi-matrix: {error}");
-                    std::process::exit(2);
-                }
-            }
-        }
-        [device, action, value, flag]
-            if device == "mvave" && action == "preset" && flag == "--dry-run" =>
-        {
-            let preset = value.parse::<u8>().unwrap_or(0);
-            match mvave_ir_box_preset(preset, true) {
-                Ok(result) => println!("{result}"),
-                Err(error) => {
-                    eprintln!("mackes-midi-matrix: {error}");
-                    std::process::exit(2);
-                }
-            }
-        }
-        [device, module, state, confirmation]
-            if device == "mvave"
-                && matches!(module.as_str(), "ir" | "eq")
-                && matches!(state.as_str(), "on" | "off")
-                && confirmation == "--confirm-unverified" =>
-        {
-            match mvave_ir_box_module(module, state == "on") {
                 Ok(result) => println!("{result}"),
                 Err(error) => {
                     eprintln!("mackes-midi-matrix: {error}");

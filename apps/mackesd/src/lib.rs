@@ -2793,43 +2793,6 @@ impl Daemon {
                     return stream
                         .write_all(b"{\"ok\":false,\"error\":\"unknown device profile\"}\n");
                 };
-                if profile_id == "m-vave.ir-box" {
-                    let payload = control
-                        .strip_prefix("Preset ")
-                        .and_then(|value| value.parse::<u8>().ok())
-                        .map_or_else(
-                            || {
-                                (control == "IR" || control == "EQ").then(|| {
-                                    mackes_profiles::mvave_ir_box_module_sysex(
-                                        if control == "IR" {
-                                            mackes_profiles::MvaveIrBoxModule::Ir
-                                        } else {
-                                            mackes_profiles::MvaveIrBoxModule::Eq
-                                        },
-                                        control_value != 0,
-                                    )
-                                })
-                            },
-                            |preset| mackes_profiles::mvave_ir_box_preset_sysex(preset).ok(),
-                        );
-                    let Some(payload) = payload else {
-                        return stream
-                            .write_all(b"{\"ok\":false,\"error\":\"invalid M-VAVE control\"}\n");
-                    };
-                    if let Err(error) = self.outputs.send_direct(destination, &payload) {
-                        return stream.write_all(
-                            format!("{{\"ok\":false,\"error\":\"{error}\"}}\n").as_bytes(),
-                        );
-                    }
-                    return stream.write_all(
-                        format!(
-                            "{{\"ok\":true,\"generation\":{},\"bytes\":{}}}\n",
-                            self.generation,
-                            serde_json::to_string(&payload).unwrap_or_else(|_| "[]".into())
-                        )
-                        .as_bytes(),
-                    );
-                }
                 let Ok(payload) = profile.render_control_message(control, channel, control_value)
                 else {
                     return stream

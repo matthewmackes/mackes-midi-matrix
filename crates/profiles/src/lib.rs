@@ -2057,7 +2057,7 @@ pub fn lexicon_reflex_profile() -> DeviceProfile {
 /// Returns the built-in conservative device-profile catalog in stable order.
 #[must_use]
 pub fn builtin_profiles() -> Vec<DeviceProfile> {
-    vec![lexicon_reflex_profile(), eventide_micropitch_profile(), mvave_ir_box_profile()]
+    vec![lexicon_reflex_profile(), eventide_micropitch_profile()]
 }
 
 /// Looks up a built-in profile by its stable identifier.
@@ -5096,7 +5096,7 @@ mod tests {
     #[test]
     fn profile_catalog_versions_user_profiles_and_reserves_reflex() {
         let catalog = ProfileCatalog::load(Vec::new()).expect("built-ins");
-        assert_eq!(catalog.profiles().len(), 3);
+        assert_eq!(catalog.profiles().len(), 2);
         assert_eq!(catalog.get("eventide.micropitch").map(|profile| profile.version), Some(1));
 
         let mut newer = eventide_micropitch_profile();
