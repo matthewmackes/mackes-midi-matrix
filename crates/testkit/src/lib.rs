@@ -144,6 +144,8 @@ mod tests {
         assert!(!session.apply(mackes_ipc::AssignmentAction::Down));
         assert!(session.apply(mackes_ipc::AssignmentAction::Enter));
         assert!(session.apply(mackes_ipc::AssignmentAction::Enter));
+        assert!(session.apply(mackes_ipc::AssignmentAction::Enter));
+        assert!(session.apply(mackes_ipc::AssignmentAction::Enter));
         assert_eq!(session.phase, mackes_ipc::AssignmentPhase::ChooseParameter);
         let incomplete = mackes_ipc::AssignmentRequest {
             generation: 0,
@@ -163,6 +165,8 @@ mod tests {
         let mut recovery = mackes_ipc::AssignmentSession::new("devices");
         assert!(recovery.apply(mackes_ipc::AssignmentAction::Start));
         assert!(recovery.apply(mackes_ipc::AssignmentAction::ControlCaptured));
+        assert!(recovery.apply(mackes_ipc::AssignmentAction::Enter));
+        assert!(recovery.apply(mackes_ipc::AssignmentAction::Enter));
         assert!(recovery.apply(mackes_ipc::AssignmentAction::Enter));
         assert!(recovery.apply(mackes_ipc::AssignmentAction::Enter));
         assert_eq!(recovery.phase, mackes_ipc::AssignmentPhase::ChooseParameter);
