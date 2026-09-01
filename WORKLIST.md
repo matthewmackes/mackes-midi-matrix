@@ -3833,6 +3833,10 @@ including workspace tests, strict Clippy, throughput benchmark, hermetic integra
 smoke, packaging checksum, and preflight. Remaining W095 evidence is focused IPC audit/counter
 coverage and an explicitly targeted physical send.
 
+**Evidence update:** 2026-09-01 — assignment IPC snapshots now carry independent bounded
+device, preset, effect, type, and parameter cursors, with active-level navigation and round-trip
+serialization tests. This freezes the daemon-side cursor contract for the dependent W096 work.
+
 #### [ ] W096 — Establish one authoritative Learn catalog and cursor state
 
 - **Status:** `READY`

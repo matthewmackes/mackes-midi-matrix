@@ -677,6 +677,24 @@ pub struct AssignmentSession {
     /// Phase to restore when an interrupted draft is explicitly resumed.
     #[serde(default)]
     pub interrupted_phase: Option<AssignmentPhase>,
+    /// Per-level cursors, persisted in the daemon snapshot so views cannot leak selection.
+    #[serde(default)]
+    pub cursors: AssignmentCursors,
+}
+
+/// Bounded cursor positions for each assignment catalog level.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
+pub struct AssignmentCursors {
+    /// Device catalog cursor.
+    pub device: u16,
+    /// Preset catalog cursor.
+    pub preset: u16,
+    /// Effect catalog cursor.
+    pub effect: u16,
+    /// Type catalog cursor.
+    pub kind: u16,
+    /// Parameter catalog cursor.
+    pub parameter: u16,
 }
 
 /// Device-button gesture classification used by the assignment session.
@@ -741,13 +759,40 @@ impl AssignmentSession {
             total: 0,
             has_draft: false,
             interrupted_phase: None,
+            cursors: AssignmentCursors::default(),
         }
     }
 
     /// Sets the bounded candidate count and clamps the current position.
     pub fn set_total(&mut self, total: u16) {
         self.total = total;
-        self.index = self.index.min(total.saturating_sub(1));
+        self.index = self.active_cursor().min(total.saturating_sub(1));
+        self.set_active_cursor(self.index);
+    }
+
+    /// Returns the authoritative cursor for the current catalog level.
+    #[must_use]
+    pub const fn active_cursor(&self) -> u16 {
+        match self.phase {
+            AssignmentPhase::ChooseDevice => self.cursors.device,
+            AssignmentPhase::ChoosePreset => self.cursors.preset,
+            AssignmentPhase::ChooseEffect => self.cursors.effect,
+            AssignmentPhase::ChooseType => self.cursors.kind,
+            AssignmentPhase::ChooseParameter => self.cursors.parameter,
+            _ => self.index,
+        }
+    }
+
+    const fn set_active_cursor(&mut self, value: u16) {
+        match self.phase {
+            AssignmentPhase::ChooseDevice => self.cursors.device = value,
+            AssignmentPhase::ChoosePreset => self.cursors.preset = value,
+            AssignmentPhase::ChooseEffect => self.cursors.effect = value,
+            AssignmentPhase::ChooseType => self.cursors.kind = value,
+            AssignmentPhase::ChooseParameter => self.cursors.parameter = value,
+            _ => {}
+        }
+        self.index = value;
     }
 
     /// Applies one typed action and returns whether the phase changed.
@@ -791,11 +836,11 @@ impl AssignmentSession {
                 AssignmentPhase::Idle
             }
             (phase, AssignmentAction::Up) if self.index > 0 => {
-                self.index -= 1;
+                self.set_active_cursor(self.index - 1);
                 phase
             }
             (phase, AssignmentAction::Down) if self.total > 0 && self.index + 1 < self.total => {
-                self.index += 1;
+                self.set_active_cursor(self.index + 1);
                 phase
             }
             (phase, AssignmentAction::Cancel) if phase != AssignmentPhase::Idle => {
@@ -1764,6 +1809,27 @@ mod tests {
         assert_eq!(session.phase, AssignmentPhase::Succeeded);
         assert!(session.apply(AssignmentAction::Cancel));
         assert_eq!(session.phase, AssignmentPhase::Idle);
+    }
+
+    #[test]
+    fn assignment_session_keeps_independent_catalog_cursors() {
+        let mut session = AssignmentSession::new("map");
+        session.phase = AssignmentPhase::ChooseDevice;
+        session.set_total(4);
+        session.apply(AssignmentAction::Down);
+        session.apply(AssignmentAction::Down);
+        assert_eq!(session.active_cursor(), 2);
+        session.phase = AssignmentPhase::ChooseEffect;
+        session.set_total(3);
+        session.apply(AssignmentAction::Down);
+        assert_eq!(session.active_cursor(), 1);
+        session.phase = AssignmentPhase::ChooseDevice;
+        assert_eq!(session.active_cursor(), 2);
+        let encoded = serde_json::to_string(&session).expect("cursor state serializes");
+        let restored: AssignmentSession =
+            serde_json::from_str(&encoded).expect("cursor state restores");
+        assert_eq!(restored.cursors.device, 2);
+        assert_eq!(restored.cursors.effect, 1);
     }
 
     #[test]
