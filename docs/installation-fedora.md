@@ -105,3 +105,25 @@ The production daemon only requires the ALSA runtime library; these packages
 are qualification prerequisites and are not silently installed by MACKES.
 Physical writes additionally require a map record containing `status=verified` and
 `physical_test=pass`, plus `MACKES_CONFIRM_PHYSICAL_WRITE=1`.
+
+## Native ALSA recovery
+
+The production service owns one native ALSA Sequencer client. Verify ownership and the
+configured input registrations with:
+
+```text
+systemctl status mackes-midi-matrix.service --no-pager
+/usr/local/bin/mackes-midi-matrix status --json
+aconnect -l
+journalctl -u mackes-midi-matrix.service -b --no-pager
+```
+
+The expected service identity is `User=mackes`, `Group=mackes-control`, with `audio`
+supplementary access and `/dev/snd/seq` read/write access. Do not run the daemon as root or
+change the control socket to world-writable. If a controller is reconnected, restart the
+service only after confirming the device has returned in `aconnect -l`; mappings are retained
+and native subscriptions are reconciled by the daemon.
+
+For a failed native migration, restore the previously installed daemon binary from the retained
+release artifact, restart the service, and confirm `health=ready` plus the expected input count.
+The rollback is software-only and does not reset the controller or overwrite processor presets.
