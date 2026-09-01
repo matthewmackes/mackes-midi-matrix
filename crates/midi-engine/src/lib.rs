@@ -1290,6 +1290,7 @@ pub struct AlsaSequencerClient {
     input_port: i32,
     output_port: i32,
     pending_wire: VecDeque<(AlsaSequencerAddress, Vec<u8>)>,
+    announcements_subscribed: bool,
 }
 
 #[cfg(feature = "alsa-seq-backend")]
@@ -1335,7 +1336,13 @@ impl AlsaSequencerClient {
                 midi,
             )
             .map_err(|error| error.to_string())?;
-        Ok(Self { seq, input_port, output_port, pending_wire: VecDeque::new() })
+        Ok(Self {
+            seq,
+            input_port,
+            output_port,
+            pending_wire: VecDeque::new(),
+            announcements_subscribed: false,
+        })
     }
 
     /// Returns the volatile ALSA client number allocated to this process.
@@ -1377,12 +1384,17 @@ impl AlsaSequencerClient {
     /// Returns the ALSA subscription error.
     pub fn subscribe_input(&self, source: AlsaSequencerAddress) -> Result<(), String> {
         let client = self.client_id()?;
+        let destination = alsa::seq::Addr { client: client.into(), port: self.input_port };
+        let sender =
+            alsa::seq::Addr { client: i32::from(source.client), port: i32::from(source.port) };
+        if alsa::seq::PortSubscribeIter::new(&self.seq, sender, alsa::seq::QuerySubsType::READ)
+            .any(|subscription| subscription.get_dest() == destination)
+        {
+            return Ok(());
+        }
         let subscription = alsa::seq::PortSubscribe::empty().map_err(|error| error.to_string())?;
-        subscription.set_sender(alsa::seq::Addr {
-            client: i32::from(source.client),
-            port: i32::from(source.port),
-        });
-        subscription.set_dest(alsa::seq::Addr { client: client.into(), port: self.input_port });
+        subscription.set_sender(sender);
+        subscription.set_dest(destination);
         self.seq.subscribe_port(&subscription).map_err(|error| error.to_string())
     }
 
@@ -1391,12 +1403,17 @@ impl AlsaSequencerClient {
     /// # Errors
     ///
     /// Returns the ALSA subscription error.
-    pub fn subscribe_announcements(&self) -> Result<(), String> {
+    pub fn subscribe_announcements(&mut self) -> Result<(), String> {
+        if self.announcements_subscribed {
+            return Ok(());
+        }
         let client = self.client_id()?;
         let subscription = alsa::seq::PortSubscribe::empty().map_err(|error| error.to_string())?;
         subscription.set_sender(alsa::seq::Addr::system_announce());
         subscription.set_dest(alsa::seq::Addr { client: client.into(), port: self.input_port });
-        self.seq.subscribe_port(&subscription).map_err(|error| error.to_string())
+        self.seq.subscribe_port(&subscription).map_err(|error| error.to_string())?;
+        self.announcements_subscribed = true;
+        Ok(())
     }
 
     /// Enumerates external ALSA MIDI ports with stable runtime descriptors.
@@ -1571,7 +1588,7 @@ impl AlsaInputCapture {
                     Some(AlsaSequencerAddress::new(client.parse().ok()?, port.parse().ok()?))
                 },
             );
-        let client_guard = client.lock().map_err(|_| "ALSA client lock poisoned".to_owned())?;
+        let mut client_guard = client.lock().map_err(|_| "ALSA client lock poisoned".to_owned())?;
         let source = client_guard
             .discover_ports()
             .into_iter()
