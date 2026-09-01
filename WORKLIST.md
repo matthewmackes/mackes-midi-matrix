@@ -3530,6 +3530,10 @@ Workspace all-feature tests, strict daemon Clippy, worklist validation, and diff
 effect/type/parameter metadata. Focused TUI/CLI tests and strict Clippy pass. Interactive level
 transitions and preset commits remain open under W089/W090.
 
+**Evidence update:** 2026-09-01 — corrected the Reflex profile renderer so the displayed
+`pcm70_reflex:*` catalog IDs produce the same validated active-setup SysEx as the direct preset
+control path. Focused profile tests and strict profile Clippy pass.
+
 #### [ ] W090 — Preset-to-button assignment
 
 - **Status:** `READY`

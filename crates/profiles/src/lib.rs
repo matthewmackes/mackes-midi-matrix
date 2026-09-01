@@ -4374,6 +4374,9 @@ impl DeviceProfile {
         value: u16,
     ) -> Result<Vec<u8>, &'static str> {
         if self.id == "lexicon.reflex" {
+            if let Some(preset) = parameter_id.strip_prefix("pcm70_reflex:") {
+                return lexicon_reflex::encode_pcm70_translation(preset, channel.saturating_sub(1));
+            }
             let parameter = parameter_id
                 .strip_prefix("reflex.parameter-")
                 .and_then(|value| value.parse::<u8>().ok())
@@ -5615,6 +5618,10 @@ mod tests {
         let rendered = profile.render_control_message("Concert Wave", 1, 1).expect("render");
         let (_, setup) =
             lexicon_reflex::decode_active_setup_frame(&rendered).expect("active setup decode");
+        let parameter_rendered = profile
+            .render_parameter_message("pcm70_reflex:concert-wave", 1, 127)
+            .expect("translator parameter render");
+        assert_eq!(parameter_rendered, rendered);
         assert_eq!(setup[0], 1);
         assert_eq!(&setup[21..33], b"Concert Wave");
     }
