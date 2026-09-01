@@ -3332,9 +3332,9 @@ test, strict Clippy, worklist validation, formatting, and diff hygiene pass.
 
 ### Native ALSA Sequencer control-surface runtime
 
-#### [ ] W083 — Native ALSA Sequencer architecture and backend contract
+#### [x] W083 — Native ALSA Sequencer architecture and backend contract
 
-- **Status:** `IN_PROGRESS`
+- **Status:** `DONE`
 - **Start date:** —
 - **Owner:** Luna
 - **Depends on:** W020, W022
@@ -3364,9 +3364,9 @@ owned ingress/egress application-port pair, explicit input subscription, bounded
 query, and MIDI 1.0/SysEx event-to-wire conversion. Native-feature compilation and strict
 engine Clippy pass; daemon cutover and physical qualification remain W087/W088.
 
-#### [ ] W084 — ALSA client, application ports, discovery, and explicit subscriptions
+#### [x] W084 — ALSA client, application ports, discovery, and explicit subscriptions
 
-- **Status:** `IN_PROGRESS`
+- **Status:** `DONE`
 - **Owner:** Luna
 - **Depends on:** W083
 - **Parallel with:** none in `crates/midi-engine`.
@@ -3397,6 +3397,9 @@ strict engine Clippy pass. Daemon integration remains W087.
 **Evidence update:** 2026-08-31 — daemon provisioning now reuses one shared native ALSA client
 and its owned application ports for all configured inputs. Installed ALSA inventory shows one
 `MACKES input` client and one `MACKES output` client with explicit Mk2 subscriptions.
+
+**Closure:** 2026-08-31 — architecture and one-client/subscription contracts are implemented,
+tested, documented, and installed locally. Remaining event qualification is tracked by W085–W088.
 
 #### [ ] W085 — Nonblocking ALSA event reader and MIDI 1.0 decoder
 
