@@ -17,6 +17,7 @@ printf 'release-gate: repository policy and worklist\n'
 scripts/verify-repository.sh
 printf 'release-gate: controller template artifact\n'
 python3 scripts/verify-artifacts.py
+python3 scripts/test-verify-artifacts.py
 printf 'release-gate: locked dependency metadata\n'
 cargo metadata --locked --all-features --format-version 1 >/dev/null
 printf 'release-gate: dependency advisories\n'

@@ -42,16 +42,17 @@ def check_fixtures() -> None:
                 raise SystemExit(f"possible private data in fixture {path}: {pattern.pattern}")
 
 
-def check_factory1_manifest() -> None:
+def check_factory1_manifest(path: pathlib.Path = FACTORY1_MANIFEST) -> None:
     """Validate the complete offline Factory Template 1 production contract."""
     try:
-        manifest = json.loads(FACTORY1_MANIFEST.read_text(encoding="utf-8"))
+        manifest = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         raise SystemExit(f"invalid Factory 1 manifest: {exc}") from exc
     if (
         manifest.get("target_model") != "Novation Launch Control XL"
         or manifest.get("target_generation") != "Mk2"
         or manifest.get("template_name") != "Factory Template 1"
+        or manifest.get("template_version") != "1.0.0"
         or manifest.get("template_slot") != 1
         or manifest.get("midi_channel") != 8
     ):
@@ -99,7 +100,12 @@ def check_factory1_manifest() -> None:
 
 
 if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--manifest", type=pathlib.Path, default=FACTORY1_MANIFEST)
+    args = parser.parse_args()
     check_schemas()
     check_fixtures()
-    check_factory1_manifest()
+    check_factory1_manifest(args.manifest)
     print("artifact checks passed")

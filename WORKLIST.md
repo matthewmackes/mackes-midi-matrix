@@ -3779,6 +3779,11 @@ now release-gated offline; `scripts/release-gate.sh` passed formatting, reposito
 policy, dependency audit, all workspace tests, strict Clippy, benchmark, hermetic integration,
 installer smoke, archive checksum, and preflight. Negative-fixture coverage remains to be added.
 
+**Evidence update:** 2026-09-01 — added `scripts/test-verify-artifacts.py` and wired it into
+the release gate. The offline matrix proves positive readiness and rejects malformed, stale,
+wrong-model, wrong-slot, modified, and missing manifests; artifact negative checks and worklist
+validation pass.
+
 #### [ ] W095 — Enforce daemon-only physical MIDI ownership
 
 - **Status:** `READY`
