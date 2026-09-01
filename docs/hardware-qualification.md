@@ -117,3 +117,9 @@ seven registered native daemon inputs, connected Launch Control XL input/output 
 least-privilege service identity `User=mackes`, `Group=mackes-control`,
 `SupplementaryGroups=audio`. Service health is `ready`; physical commit/LED, 100-pair integrity,
 and USB reconnect evidence remain open.
+
+2026-09-01 — a fresh ten-second direct `aseqdump -p 24:0` observation window reported no
+events, while the daemon remained `ready` with seven registered inputs. The ALSA subscription
+graph was verified separately (`24:0` connected to daemon ingress `130:0`), so this run does not
+support application-level failure attribution; controller transmission/template mode remains the
+next physical investigation.
