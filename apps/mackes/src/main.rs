@@ -2536,8 +2536,15 @@ fn synchronize_events(
         project_setlists(setlists, payload);
         project_learn_alias(learn, payload);
         reconcile_assignment_session(assignment_wizard, payload);
+        let daemon_assignment_active = payload
+            .get("assignment_session")
+            .and_then(|value| value.get("phase"))
+            .and_then(serde_json::Value::as_str)
+            .is_some_and(|phase| phase != "Idle");
         if let Some(action) = payload.get("ui_navigation").and_then(serde_json::Value::as_str) {
-            if assignment_wizard.session.phase == mackes_ipc::AssignmentPhase::Idle {
+            if assignment_wizard.session.phase == mackes_ipc::AssignmentPhase::Idle
+                && !daemon_assignment_active
+            {
                 let shell_action = match action {
                     "up" => Some(mackes_tui::ShellAction::Up),
                     "down" => Some(mackes_tui::ShellAction::Down),
