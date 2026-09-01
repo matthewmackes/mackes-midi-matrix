@@ -3824,6 +3824,10 @@ enumeration/open/send paths from the operator CLI and routed preset/module opera
 daemon-owned DeviceControl IPC. Endpoint display now reads the daemon Endpoints response rather
 than opening ALSA/midir or scanning `/dev/snd`. CLI all-feature check and strict Clippy pass.
 
+**Evidence update:** 2026-09-01 — repository ownership policy now mechanically rejects
+`midir` enumeration, adapter construction, and `/dev/snd` access under `apps/mackes`; it is
+wired into both repository verification and the release gate and passes on the current tree.
+
 #### [ ] W096 — Establish one authoritative Learn catalog and cursor state
 
 - **Status:** `READY`

@@ -14,6 +14,7 @@ fi
 printf 'release-gate: formatting\n'
 cargo fmt --check
 printf 'release-gate: repository policy and worklist\n'
+python3 scripts/check-midi-ownership.py
 scripts/verify-repository.sh
 printf 'release-gate: controller template artifact\n'
 python3 scripts/verify-artifacts.py
