@@ -177,11 +177,17 @@ fn run_tui() -> Result<(), String> {
                 if assignment_choices.parameters.is_empty() {
                     lines.push("PARAMETERS NONE".into());
                 } else {
+                    let parameters_active = assignment_wizard.session.phase
+                        == mackes_ipc::AssignmentPhase::ChooseParameter;
                     lines.push("DESTINATION / EFFECT / PARAMETER".into());
                     for (index, choice) in assignment_choices.parameters.iter().enumerate() {
                         lines.push(format!(
                             "{} {} / {} / {}",
-                            if index == assignment_choices.selected { ">" } else { " " },
+                            if parameters_active && index == assignment_choices.selected {
+                                ">"
+                            } else {
+                                " "
+                            },
                             choice.profile_id,
                             choice.effect_id,
                             choice.id
