@@ -2213,13 +2213,13 @@ impl Daemon {
             .collect()
     }
 
-    fn record_device_control_send(&mut self, destination: &str, profile_id: &str, control: &str) {
+    fn record_physical_send(&mut self, destination: &str, action: impl Into<String>) {
         self.sent_events = self.sent_events.saturating_add(1);
         self.audit.append(mackes_scene_engine::AuditRecord {
             timestamp: self.state_sequence,
             actor: "local-ipc".into(),
             source: mackes_scene_engine::AuditSource::LocalCli,
-            action_id: format!("device-control:{profile_id}:{control}"),
+            action_id: action.into(),
             target_alias: destination.into(),
             risk: mackes_scene_engine::RiskClass::Normal,
             allowed: true,
@@ -2817,7 +2817,10 @@ impl Daemon {
                     return stream
                         .write_all(format!("{{\"ok\":false,\"error\":\"{error}\"}}\n").as_bytes());
                 }
-                self.record_device_control_send(destination, profile_id, control);
+                self.record_physical_send(
+                    destination,
+                    format!("device-control:{profile_id}:{control}"),
+                );
                 return stream.write_all(
                     format!(
                         "{{\"ok\":true,\"generation\":{},\"bytes\":{}}}\n",
@@ -2863,6 +2866,7 @@ impl Daemon {
                     return stream
                         .write_all(format!("{{\"ok\":false,\"error\":\"{error}\"}}\n").as_bytes());
                 }
+                self.record_physical_send(destination, "sysex");
                 return stream.write_all(
                     format!(
                         "{{\"ok\":true,\"generation\":{},\"bytes_sent\":{}}}\n",
@@ -4568,7 +4572,7 @@ mod tests {
             std::env::temp_dir().join(format!("mackes-device-audit-{}.sock", std::process::id()));
         let mut daemon = Daemon::bind(&path).expect("daemon");
         assert_eq!(daemon.activity_counters().1, 0);
-        daemon.record_device_control_send("eventide-out", "eventide.micropitch", "Mix");
+        daemon.record_physical_send("eventide-out", "device-control:eventide.micropitch:Mix");
         assert_eq!(daemon.activity_counters().1, 1);
         let record = daemon.audit.newest_first().next().expect("audit record");
         assert_eq!(record.action_id, "device-control:eventide.micropitch:Mix");

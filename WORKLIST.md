@@ -4898,6 +4898,10 @@ A focused regression covers the counter/audit projection. Strict daemon Clippy, 
 worklist validation, and diff hygiene pass; this sandbox denies its Unix-socket bind test with
 `EPERM`, while the normal release gate has previously exercised daemon socket tests.
 
+**Evidence update:** 2026-09-01 — generalized physical-send observability so confirmed raw
+SysEx and profile DeviceControl sends use one counter/audit/state-event recorder. Strict daemon
+Clippy and all-feature check pass; the socket regression remains covered by the passing full gate.
+
 **Evidence update:** 2026-09-01 — the ownership policy now also rejects `midir-backend` in the
 operator Cargo manifest, preventing the physical backend from being restored through dependency
 features as well as source calls.
