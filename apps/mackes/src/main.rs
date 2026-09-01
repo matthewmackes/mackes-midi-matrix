@@ -2506,10 +2506,22 @@ fn synchronize_events(
             } else {
                 match action {
                     "up" => {
-                        assignment_choices.move_selection(false);
+                        if assignment_wizard.session.phase
+                            == mackes_ipc::AssignmentPhase::ChoosePreset
+                        {
+                            assignment_choices.move_preset_selection(false);
+                        } else {
+                            assignment_choices.move_selection(false);
+                        }
                     }
                     "down" => {
-                        assignment_choices.move_selection(true);
+                        if assignment_wizard.session.phase
+                            == mackes_ipc::AssignmentPhase::ChoosePreset
+                        {
+                            assignment_choices.move_preset_selection(true);
+                        } else {
+                            assignment_choices.move_selection(true);
+                        }
                     }
                     _ => {}
                 }

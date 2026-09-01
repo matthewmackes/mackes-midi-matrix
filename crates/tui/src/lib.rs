@@ -1712,6 +1712,21 @@ impl AssignmentChoiceBrowser {
         self.selected = next;
         changed
     }
+
+    /// Moves selection within the bounded preset level.
+    pub fn move_preset_selection(&mut self, down: bool) -> bool {
+        if self.presets.is_empty() {
+            return false;
+        }
+        let next = if down {
+            self.selected.saturating_add(1).min(self.presets.len() - 1)
+        } else {
+            self.selected.saturating_sub(1)
+        };
+        let changed = next != self.selected;
+        self.selected = next;
+        changed
+    }
 }
 
 /// Transactional fine-grained filter draft for a mapping editor.

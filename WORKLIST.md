@@ -3545,6 +3545,10 @@ machine, making Device → Preset → Effect an explicit transition sequence wit
 state-machine tests and strict IPC/TUI/daemon Clippy pass. Preset selection payload integration
 and physical qualification remain open.
 
+**Evidence update:** 2026-09-01 — preset navigation now uses its own bounded cursor, preventing
+arrow events from crossing into parameter indices while the authoritative phase is `ChoosePreset`.
+Focused TUI tests, strict Clippy, formatting, and diff checks pass.
+
 #### [ ] W090 — Preset-to-button assignment
 
 - **Status:** `IN_PROGRESS`
