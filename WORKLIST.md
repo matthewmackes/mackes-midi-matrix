@@ -3734,6 +3734,43 @@ and strict daemon Clippy pass. Physical feedback and LED qualification remain op
   the TUI owns per-level cursors and final commits. This permits stale phases, duplicate movement,
   a caret appearing at multiple levels, no-op final selection, and behavior that depends on which
   TUI process consumes an event.
+- **Mandatory defect inventory from the 2026-09-01 workflow review:**
+  1. The TUI constructs the browser once with hard-coded connected profiles, hard-coded selected
+     profile `lexicon.reflex`, and hard-coded `Continuous` role. It is not rebuilt from live daemon
+     inventory or the captured control role, so Eventide and button workflows cannot be trusted.
+  2. Selecting a Device sends only `Enter`; no selected device ID crosses IPC and no downstream
+     catalog is rebuilt. Effect and Type selections likewise do not filter the final parameter
+     list. These levels are currently presentation, not authoritative choices.
+  3. `AssignmentChoiceBrowser` has one `selected: usize` shared by Device, Preset, Effect, Type,
+     and Parameter. Level-specific clamps reduce visible symptoms but selection leaks between
+     levels and cannot be reconstructed after restart.
+  4. Hardware control capture is stored as daemon-only `assignment_control_id`, while the TUI
+     commit builder reads its separate local `candidates` list. Native hardware capture does not
+     populate that list, allowing the final commit to omit `physical_control_id` and fail the
+     complete-destination contract.
+  5. `AssignmentSession.index` and `total` exist but are not populated from the actual catalog;
+     snapshots expose phase without the selected IDs, candidates, captured control, or filtered
+     catalog needed to reproduce the screen.
+  6. Intermediate physical Right Arrow transitions are applied directly in the daemon, while
+     final Right Arrow is emitted as a TUI navigation event. Keyboard handling is a third path.
+     One gesture therefore has phase-dependent owners and multiple failure modes.
+  7. The committed mapping currently hard-codes source channel `0`, despite qualified Mk2 events
+     arriving on zero-based channel `7` (displayed/wire channel 8); it hard-codes destination
+     endpoint `processor`; and source endpoint `controller` acts as a wildcard. A saved mapping may
+     never match the Mk2, may target no registered output, or may accept another device's event.
+  8. Device selection is not bound to a concrete connected output endpoint or stable identity, so
+     the final profile choice cannot prove where MIDI will be sent.
+  9. The declared 750 ms Device hold-to-cancel classifier and 250 ms candidate-disambiguation
+     window are tested as pure helpers but are not used by the production input path, which accepts
+     the first eligible event immediately.
+  10. Successful persistence leaves the state at `Committing`; production code has no automatic
+      transition to `Succeeded` or `Failed`. Result LED timing and workflow completion therefore
+      depend on an action that only tests explicitly send.
+  11. Assignment request rejection, generation conflict, empty selection, and serialization
+      failure are usually swallowed by the TUI path instead of becoming a persistent visible
+      operator error with a retry/recovery action.
+  12. Multiple TUI processes may subscribe simultaneously, but client-local cursor ownership gives
+      each a divergent catalog while all target one daemon session.
 - **Implementation:**
   1. Extend the typed assignment snapshot with catalog level, breadcrumb, candidate IDs/labels,
      candidate count, selected index per level (or one level-scoped index), selected typed IDs,
@@ -3759,10 +3796,18 @@ and strict daemon Clippy pass. Physical feedback and LED qualification remain op
 - **Tests to add first:** full forward/backward hierarchy; explicit Preset NONE; independent cursor
   bounds; keyboard/controller parity; one event advances once; final commit carries selected ID;
   button/preset and knob/parameter role gates; replacement; TUI disconnect/reconnect mid-session;
-  two TUI subscribers; stale generation; empty/removed profile; LED event sequence.
+  two TUI subscribers; stale generation; empty/removed profile; LED event sequence; live device
+  selection changes the profile/catalog; Effect/Type filters change the final parameter set;
+  hardware capture survives into commit; qualified channel/source tuple matches after persistence;
+  selected stable output endpoint receives the rendered message; unrelated input cannot trigger a
+  controller mapping; 749/750 ms Device boundaries; 250 ms duplicate/ambiguous capture; persistence
+  success/failure reaches a terminal state; every rejection is visible and retryable.
 - **Acceptance:** daemon snapshots alone reconstruct the complete Learn screen and selection;
   keyboard and controller traces yield identical state/result sequences; TUI restarts do not alter
-  or lose the session; no caret can appear at two levels; one final action commits exactly once.
+  or lose the session; no caret can appear at two levels; one final action commits exactly once;
+  the saved mapping contains the captured stable source identity/channel/number and selected stable
+  destination endpoint; it dispatches after restart and reconnect; success/failure terminates with
+  the documented LED sequence and an actionable visible result.
 - **Commands/evidence:** IPC golden fixtures, daemon/TUI reducer tests, hermetic end-to-end trace,
   strict Clippy, release viewport snapshots, and physical Mk2 catalog walkthrough.
 
