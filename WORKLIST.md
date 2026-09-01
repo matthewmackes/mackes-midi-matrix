@@ -3611,6 +3611,223 @@ and strict daemon Clippy pass. Physical feedback and LED qualification remain op
 - **Objective:** qualify the complete catalog workflow on the Launch Control XL Mk2 and include it in the next release gate.
 - **Acceptance:** Device entry, catalog navigation, button preset assignment, knob parameter assignment, preset load projection, LED feedback, persistence, reconnect, and release artifacts all pass with evidence in `docs/hardware-qualification.md`.
 
+#### [ ] W093 — Reconcile the authoritative Launch Control XL Mk2 layout contract
+
+- **Status:** `READY`
+- **Owner:** Luna
+- **Depends on:** W083, W089
+- **Parallel with:** W095 and W097 after the contract inventory below is frozen.
+- **Objective:** make the documented controller template, runtime decoder, physical-control catalog,
+  migration behavior, tests, and hardware qualification describe one exact Mk2 layout.
+- **Problem to correct:** the reviewed User 1 manifest currently declares knob CCs
+  `21–28/41–48/61–68` and channel-button CCs `69–76/85–92`, while the production Factory 1
+  decoder/catalog accepts knob CCs `13–20/29–36/49–56` and channel-button notes
+  `41–48/57–64`. Both cannot remain authoritative. The artifact also names User 1 while the
+  physically qualified implementation and documentation contain Factory 1 evidence.
+- **Implementation:**
+  1. Inventory every Mk2 input and feedback tuple used by the daemon, profile catalog, config
+     migration, Components manifest, ADRs, TUI labels, fixtures, and qualification document.
+  2. Record one ADR choosing the production contract: either the reviewed User 1 Components
+     layout or the physically proven Factory 1 layout. State the exact slot/template, MIDI
+     channel convention, message kind, number, press/release semantics, LED address, model gate,
+     and firmware assumptions for every assignable and utility control.
+  3. Create one profile-owned typed layout table and derive daemon decoding, assignment source
+     addresses, UI inventory, artifact validation, and tests from it. Remove duplicated numeric
+     match tables from application code.
+  4. If User 1 remains authoritative, produce/import the official Components artifact, migrate
+     Factory 1 mappings without guessing, and fail closed when the observed template differs. If
+     Factory 1 becomes authoritative, retire the contradictory User 1 requirement and manifest
+     instead of leaving a false install step.
+  5. Preserve stable physical IDs (`knob-r*-c*`, `button-r*-c*`, `fader-*`, utilities) and provide
+     an explicit migration for any changed source tuple. Never silently rewrite a destination.
+  6. Update onboarding, recovery, release notes, and hardware qualification to name the same
+     layout and exact operator action.
+- **Allowed files:** layout/profile modules, daemon decoder, config migration, IPC inventory,
+  Components artifact/manifest, ADRs, fixtures, TUI labels, focused tests, operator docs.
+- **Excluded behavior:** supporting two implicit layouts under one identity, name-only template
+  detection, undocumented SysEx, number guessing, or accepting an unrecognized layout.
+- **Tests to add first:** manifest/runtime tuple equality; uniqueness; every knob/button/fader and
+  utility press/release; wrong channel/kind/number rejection; model mismatch; migration from the
+  previous Factory 1 records; reconnect/template resync; no duplicate physical IDs.
+- **Acceptance:** one machine-readable layout is the sole source of truth; every generated and
+  runtime consumer agrees byte-for-byte; wrong layouts visibly fail closed; existing mappings
+  migrate transactionally; the Mk2 walkthrough records all utility and assignable controls.
+- **Commands/evidence:** focused profile/config/daemon tests, strict Clippy, artifact verifier,
+  migration fixture output, exact Components checksum when applicable, and updated physical
+  capture evidence in `docs/hardware-qualification.md`.
+
+#### [ ] W094 — Make controller artifact readiness a hard release gate
+
+- **Status:** `NOT_STARTED`
+- **Owner:** Luna
+- **Depends on:** W093
+- **Objective:** prevent a production release from passing while its required controller artifact
+  is absent, unreviewed, mismatched, or has a null checksum.
+- **Problem to correct:** `verify-artifacts.py` currently prints “checksum pending review” and
+  exits successfully even though the manifest says a null checksum must fail readiness.
+- **Implementation:**
+  1. Separate development inspection from production readiness using explicit commands or flags;
+     the default release gate must use strict production readiness.
+  2. Require a legal distributable artifact when W093 selects User 1, a 64-character SHA-256,
+     exact manifest/artifact digest equality, target model/generation/slot equality, complete
+     inventory, and a versioned artifact filename.
+  3. If W093 selects Factory 1 and no artifact is required, remove the misleading artifact
+     requirement and replace it with a versioned factory-layout contract fixture; do not retain a
+     nullable production manifest.
+  4. Make packaging include the required artifact/contract and make preflight report a precise
+     remediation on absence or mismatch.
+  5. Add negative release-gate fixtures for null, malformed, stale, wrong-model, wrong-slot,
+     modified, and missing artifacts.
+- **Allowed files:** artifact verifier, release/package scripts, installer preflight, manifest or
+  replacement contract, legal fixtures, release docs, tests.
+- **Excluded behavior:** warning-only production checks, network downloads during release, digest
+  updates without artifact review, or bypass flags in `release-gate.sh`.
+- **Acceptance:** every incomplete or mismatched production artifact fails before compilation or
+  packaging; the selected W093 contract passes deterministically offline; the release archive
+  contains exactly the verified artifact/contract and checksum evidence.
+- **Commands/evidence:** verifier positive/negative suite, installer smoke, archive listing and
+  digest check, `scripts/release-gate.sh`, and documented recovery output.
+
+#### [ ] W095 — Enforce daemon-only physical MIDI ownership
+
+- **Status:** `READY`
+- **Owner:** Luna
+- **Depends on:** W087
+- **Parallel with:** W093 and W096 after IPC request contracts are frozen.
+- **Objective:** ensure every physical MIDI read/write, including M-VAVE preset/module commands,
+  is owned, serialized, authorized, audited, counted, and observed by the daemon.
+- **Problem to correct:** `apps/mackes` directly enumerates `midir` ports, opens physical outputs,
+  and transmits M-VAVE preset/module messages, bypassing daemon output ownership and safety state.
+- **Implementation:**
+  1. Define typed IPC operations for every remaining direct CLI device action, including dry-run
+     rendering, explicit destination, confirmation, unsafe/experimental gate, and bounded result.
+  2. Move endpoint resolution, profile rendering, output send, pacing, safety decision, audit
+     record, counters, and activity publication into the daemon.
+  3. Remove `midir-backend` from the operator application and remove all physical enumeration,
+     adapter construction, `/dev/snd` fallback discovery, and output sends from TUI/CLI code.
+  4. Keep read-only endpoint display sourced from authoritative daemon snapshots/queries.
+  5. Make daemon unavailability fail closed; no client-side fallback may open hardware.
+  6. Add a repository policy check that rejects backend adapter construction or MIDI-port open
+     calls outside `crates/midi-engine` and the daemon adapter boundary.
+- **Allowed files:** IPC, daemon, CLI/TUI adapters, MIDI engine interfaces, policy scripts,
+  focused tests, ADR-0002 clarification, operator docs.
+- **Excluded behavior:** dual output owners, direct client fallback, shelling out to ALSA tools,
+  destination name guessing, fabricated endpoint IDs, or weaker confirmation.
+- **Tests to add first:** CLI cannot open MIDI; daemon-unavailable write fails; exact destination
+  required; confirmation/unsafe denial; successful send increments daemon counters and audit;
+  output failure is visible; concurrent commands preserve order; panic still reaches all outputs.
+- **Acceptance:** the operator binary has no MIDI backend feature and cannot open hardware;
+  repository policy enforces the boundary; every device write appears in daemon audit/activity and
+  uses the same output registry, safety policy, and bounded error contract.
+- **Commands/evidence:** dependency-tree assertion, policy test, focused IPC/daemon/CLI tests,
+  strict Clippy, integration suite, and one physical M-VAVE/Reflex send through daemon IPC.
+
+#### [ ] W096 — Establish one authoritative Learn catalog and cursor state
+
+- **Status:** `READY`
+- **Owner:** Luna
+- **Depends on:** W089, W090
+- **Parallel with:** W095 after typed IPC fields are agreed.
+- **Objective:** eliminate split daemon/TUI authority for Learn phase transitions, catalog
+  candidates, selected indexes, navigation, commit payloads, and LED outcomes.
+- **Problem to correct:** the daemon currently advances physical Right Arrow for some phases while
+  the TUI owns per-level cursors and final commits. This permits stale phases, duplicate movement,
+  a caret appearing at multiple levels, no-op final selection, and behavior that depends on which
+  TUI process consumes an event.
+- **Implementation:**
+  1. Extend the typed assignment snapshot with catalog level, breadcrumb, candidate IDs/labels,
+     candidate count, selected index per level (or one level-scoped index), selected typed IDs,
+     captured control role, and explicit pending action/result.
+  2. Choose one authority—prefer the daemon because sessions must survive TUI restarts—and route
+     keyboard Enter/arrows and Novation arrows through the same typed assignment actions.
+  3. Move Device → Preset (including explicit NONE) → Effect → Type → Parameter filtering and
+     source-role validation into the authority. A button may select a preset; knobs/faders may
+     select continuous parameters; invalid combinations fail visibly.
+  4. Make Right/Enter advance exactly one level, Left/Esc back exactly one level, Up/Down mutate
+     only the active level, and final Right/Enter produce exactly one complete typed commit.
+  5. Remove client-local catalog mutation and duplicate direct daemon phase transitions. TUI
+     becomes a renderer/input adapter over authoritative snapshots and sequenced results.
+  6. Preserve interrupted drafts and selected IDs across TUI restart; reconcile safely when
+     profiles disappear or mappings conflict.
+  7. Bind LED feedback to authoritative events: Device acknowledgment, active control yellow,
+     two green success blinks, owner color, failure red, and unmapped OFF.
+- **Allowed files:** assignment IPC/state machine, daemon catalog service, profile metadata access,
+  TUI renderer/input adapter, mapping persistence, LED scheduler, tests and ADR updates.
+- **Excluded behavior:** shared cursor across levels, phase inference from rendered text, duplicate
+  Enter handling, optimistic client commits, multiple TUI consumers mutating one session, or
+  untyped destination strings crossing the final commit boundary.
+- **Tests to add first:** full forward/backward hierarchy; explicit Preset NONE; independent cursor
+  bounds; keyboard/controller parity; one event advances once; final commit carries selected ID;
+  button/preset and knob/parameter role gates; replacement; TUI disconnect/reconnect mid-session;
+  two TUI subscribers; stale generation; empty/removed profile; LED event sequence.
+- **Acceptance:** daemon snapshots alone reconstruct the complete Learn screen and selection;
+  keyboard and controller traces yield identical state/result sequences; TUI restarts do not alter
+  or lose the session; no caret can appear at two levels; one final action commits exactly once.
+- **Commands/evidence:** IPC golden fixtures, daemon/TUI reducer tests, hermetic end-to-end trace,
+  strict Clippy, release viewport snapshots, and physical Mk2 catalog walkthrough.
+
+#### [ ] W097 — Modularize the implementation tree and reconcile architecture documentation
+
+- **Status:** `READY`
+- **Owner:** Luna
+- **Depends on:** W093 contract freeze
+- **Parallel with:** W094–W096 only when file ownership is disjoint.
+- **Objective:** turn the current crate-level separation into maintainable internal modules and
+  make the tracked repository tree match ADR-0002 and operator documentation.
+- **Problem to correct:** core behavior is concentrated in single files of roughly 4,600–6,800
+  lines; several documented top-level directories are empty/untracked; README backend text is
+  stale; layout policy does not mechanically enforce the claimed ownership boundaries.
+- **Implementation:**
+  1. Split `crates/profiles` by device and shared profile contracts; split `crates/midi-engine` by
+     domain routing, native ALSA, optional backends, transport, scheduler, and adapters.
+  2. Split `crates/tui` by assignment, task shell, renderers, device workspaces, mapping editor,
+     reducer, and terminal lifecycle. Split daemon code by IPC service, input supervisor,
+     assignment/catalog, routing, output/LED, persistence, diagnostics, and lifecycle.
+  3. Split CLI commands into focused modules; keep `main.rs` limited to argument dispatch and
+     application composition.
+  4. Preserve public APIs or provide deliberate migrations; use private modules by default and
+     prevent dependency cycles or new cross-layer access.
+  5. Decide which top-level directories are real product contracts. Add tracked README/index and
+     artifacts where required, or remove them from ADR/tree diagrams when Rust modules are the
+     canonical source. Remove empty local residue such as the untracked `crates/firebox` directory;
+     retain only `docs/firebox-findings.md` as the historical record.
+  6. Update README/ADRs to describe native ALSA production ownership, optional rollback backends,
+     actual package paths, generated artifacts, and release qualification accurately.
+  7. Add architecture checks for allowed dependency edges, backend ownership, maximum source-file
+     growth thresholds, tracked canonical directories, and stale generated artifacts.
+- **Allowed files:** module moves within existing crates/apps, Cargo manifests, architecture tests,
+  ADRs, README, tree indexes, repository scripts. No behavior change beyond extraction unless
+  required by W093/W095/W096.
+- **Excluded behavior:** broad rewrites without characterization tests, public re-export sprawl,
+  cyclic dependencies, duplicate compatibility implementations, or deleting historical evidence.
+- **Tests to add first:** characterization tests for moved public behavior, dependency-edge policy,
+  forbidden backend ownership, module API smoke tests, package/archive inventory, documentation
+  link checks, and clean-clone canonical-tree validation.
+- **Acceptance:** no core source file exceeds the agreed reviewed threshold without a documented
+  exception; package dependencies follow the ADR; physical I/O ownership is mechanically checked;
+  a clean clone contains the documented tree; all behavior and golden fixtures remain stable.
+- **Commands/evidence:** `cargo metadata` dependency audit, workspace tests/Clippy, repository
+  policy checks, clean-clone package test, archive inventory, and before/after module map.
+
+#### [ ] W098 — Architecture-correction release closure
+
+- **Status:** `NOT_STARTED`
+- **Owner:** Luna
+- **Depends on:** W088, W092, W093, W094, W095, W096, W097
+- **Objective:** prove the corrected tree and contracts are fit for the next feature-complete
+  release rather than relying only on green unit tests.
+- **Implementation:** run a requirement-by-requirement audit of W093–W097; rebuild artifacts from a
+  clean clone; install on the qualification host; execute the complete Mk2 Learn/preset/LED,
+  reconnect, persistence, daemon-only output, M-VAVE/Reflex, and rollback walkthrough; reconcile
+  all release metadata and versioning; commit exact evidence.
+- **Acceptance:** no open architecture mismatch, warning-only artifact requirement, client-owned
+  physical MIDI path, split Learn authority, undocumented tree path, ignored default software
+  failure, or unfinished W085–W097 acceptance remains. Full release gate and physical walkthrough
+  pass against the exact tagged commit and packaged binaries.
+- **Commands/evidence:** clean-clone `scripts/release-gate.sh`, package checksums/provenance,
+  installed binary hashes, service identity/subscriptions, hardware capture summary, mapping
+  restart/reconnect proof, archive inventory, and final worklist reconciliation.
+
 ### Integration, performance, and release
 
 #### [x] W050 — Full virtual-MIDI and RTP-MIDI integration suite
@@ -3765,6 +3982,11 @@ W005 + W010 + W055 + W072 + W074 + W075 + W081 ───────── W082
 W016 + W055 + W072–W076 + W081 + W082 ────────────────── W077 ── W078 ── W079
 W050 + W052 + W072–W079 + W081 + W082 ───────────────────────────────── W080
 W020 + W022 ── W083 ── W084 ── W085 ── W086 ── W087 ── W088
+W083 + W089 ── W093 ── W094
+W087 ───────── W095
+W089 + W090 ── W096
+W093 ───────── W097
+W088 + W092 + W093–W097 ── W098
 
 W015 + W031 + W040 ── W050 ── W051
 W010 + W045 ───────── W052
@@ -3793,6 +4015,7 @@ following order is the default scheduler; a human may record an ADR-approved exc
 | 8 Connected-device TUI | W054–W061 | Software identity/activity/rendering/mapping contracts pass; W061 physical qualification is transferred to deferred W071. |
 | 9 Task-oriented usability redesign | W072–W082 | Stable physical identity, profile hierarchy, mapping contracts/runtime, five-task shell, official User 1 template, controller-driven assignment session/LED engine, distance-first wizard, browser/Undo, legacy rehome, migration, and software release gate pass. |
 | 10 Native ALSA control-surface runtime | W083–W088 | ADR/contracts, one native ALSA client, explicit subscriptions, bounded event decoding, hot-plug identity, daemon cutover, and physical Mk2 qualification pass. |
+| 11 Architecture correction and feature-complete closure | W093–W098 | One authoritative Mk2 layout, strict artifact readiness, daemon-only MIDI ownership, one authoritative Learn catalog, maintainable tracked tree, and clean-clone/hardware release proof pass. |
 
 W027 is complete as a retired-device removal record and has no downstream release capability.
 When W015 lacks an approved AppleMIDI
