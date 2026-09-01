@@ -2487,6 +2487,7 @@ fn project_routes(editor: &mut mackes_tui::RoutingEditor, payload: &serde_json::
 }
 
 #[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_lines)]
 fn synchronize_events(
     state: &mut mackes_tui::ClientState,
     dashboard: &mut mackes_tui::DashboardState,
@@ -2573,6 +2574,21 @@ fn synchronize_events(
                             assignment_choices.move_type_selection(true);
                         } else {
                             assignment_choices.move_selection(true);
+                        }
+                    }
+                    "right" => {
+                        // The Mk2's physical Right arrow is the hardware
+                        // equivalent of keyboard Enter while Learn is active.
+                        let request =
+                            assignment_wizard.request(mackes_ipc::AssignmentAction::Enter, None);
+                        if let Ok(request_payload) = serde_json::to_vec(&request) {
+                            let response =
+                                daemon_request(mackes_ipc::Command::Assignment, &request_payload);
+                            if let Ok(result) =
+                                serde_json::from_str::<mackes_ipc::AssignmentResult>(&response)
+                            {
+                                assignment_wizard.reconcile(result);
+                            }
                         }
                     }
                     _ => {}
