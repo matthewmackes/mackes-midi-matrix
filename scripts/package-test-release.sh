@@ -38,13 +38,17 @@ install -m 0755 "$root_dir/target/release/mackes-midi-matrix" \
 install -m 0755 "$root_dir/target/release/mackes-midi-matrixd" \
   "$staging/$bundle_name/target/release/mackes-midi-matrixd"
 install -m 0755 "$root_dir/scripts/install-fedora.sh" \
-  "$staging/$bundle_name/scripts/install-fedora.sh"
+  "$root_dir/scripts/verify-artifacts.py" \
+  "$root_dir/scripts/test-verify-artifacts.py" \
+  "$staging/$bundle_name/scripts/"
 install -m 0644 "$root_dir/packaging/mackes.service" \
   "$staging/$bundle_name/packaging/mackes.service"
 install -m 0644 "$root_dir/README.md" "$root_dir/LICENSE" "$root_dir/Cargo.lock" \
   "$staging/$bundle_name/"
 install -m 0644 "$root_dir/docs/installation-fedora.md" \
-  "$root_dir/docs/hardware-qualification.md" "$staging/$bundle_name/docs/"
+  "$root_dir/docs/hardware-qualification.md" \
+  "$root_dir/docs/mackes-launch-control-xl-mk2-factory1-manifest.json" \
+  "$staging/$bundle_name/docs/"
 install -m 0644 "$root_dir/docs/releases/$version.md" "$staging/$bundle_name/RELEASE_NOTES.md"
 printf 'version=%s\nsource_commit=%s\n' "$version" "$source_commit" >"$staging/$bundle_name/BUILD_PROVENANCE"
 

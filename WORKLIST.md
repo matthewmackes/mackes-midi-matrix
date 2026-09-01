@@ -3735,9 +3735,9 @@ migration for legacy stable IDs, preserving destinations while translating known
 tuples to Factory 1 channel/kind/number values and rejecting ambiguous records. Focused
 config migration test and strict config Clippy pass.
 
-#### [ ] W094 — Make controller artifact readiness a hard release gate
+#### [x] W094 — Make controller artifact readiness a hard release gate
 
-- **Status:** `IN_PROGRESS`
+- **Status:** `DONE`
 - **Start date:** 2026-09-01
 - **Owner:** Luna
 - **Depends on:** W093
@@ -3783,6 +3783,11 @@ installer smoke, archive checksum, and preflight. Negative-fixture coverage rema
 the release gate. The offline matrix proves positive readiness and rejects malformed, stale,
 wrong-model, wrong-slot, modified, and missing manifests; artifact negative checks and worklist
 validation pass.
+
+**Closure:** 2026-09-01 — the versioned Factory Template 1 contract is strict and offline;
+release gating runs positive and negative validation before compilation. Packaging now includes the
+contract plus the verifier scripts, and archive inspection confirmed all three paths. The contract
+is the verified release artifact; no nullable Components artifact remains.
 
 #### [ ] W095 — Enforce daemon-only physical MIDI ownership
 
