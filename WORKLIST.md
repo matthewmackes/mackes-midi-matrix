@@ -3463,6 +3463,11 @@ reconciliation, and single-client consolidation remain W085/W086/W088 acceptance
 - **Acceptance:** walkthrough passes on Mk2, daemon solely owns production subscriptions, permissions are reproducible/least privilege, rollback is documented, and no native-input defect is falsely complete.
 - **Luna checkpoint:** physical evidence is mandatory. If a step fails, record it and leave the item blocked rather than weakening acceptance.
 
+**Evidence update:** 2026-08-31 — installed service unit now declares `User=mackes`,
+`Group=mackes-control`, `SupplementaryGroups=audio`, and `DeviceAllow=/dev/snd/seq rw`.
+Local verification reports `ActiveState=active`; workspace all-feature tests, strict focused
+Clippy, worklist validation, and diff checks pass. Physical event/reconnect qualification remains.
+
 ### Integration, performance, and release
 
 #### [x] W050 — Full virtual-MIDI and RTP-MIDI integration suite

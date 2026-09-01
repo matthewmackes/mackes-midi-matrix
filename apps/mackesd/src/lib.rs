@@ -1353,8 +1353,16 @@ impl Daemon {
     ///
     /// Returns an adapter/backend or registry validation error.
     pub fn provision_input(&mut self, name: &str) -> Result<(), String> {
-        let input = mackes_midi_engine::MidirInputCapture::open_named(name)?;
-        self.register_input(Box::new(input)).map_err(str::to_owned)
+        #[cfg(feature = "alsa-seq-backend")]
+        {
+            let input = mackes_midi_engine::AlsaInputCapture::open_named(name)?;
+            self.register_input(Box::new(input)).map_err(str::to_owned)
+        }
+        #[cfg(not(feature = "alsa-seq-backend"))]
+        {
+            let input = mackes_midi_engine::MidirInputCapture::open_named(name)?;
+            self.register_input(Box::new(input)).map_err(str::to_owned)
+        }
     }
 
     /// Polls each daemon-owned input once in stable registration order.
