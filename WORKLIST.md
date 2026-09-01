@@ -3571,6 +3571,10 @@ preset catalog entry and emit a typed commit destination (`pcm70_reflex:<id>`); 
 continue using parameter destinations. Focused TUI tests and strict daemon/TUI Clippy pass.
 Runtime persistence and physical button/SysEx qualification remain open.
 
+**Evidence update:** 2026-09-01 — populated the Factory 1 source-address contract for all
+Launch Control knobs, channel buttons, and faders, preventing committed mappings from falling back
+to source number zero. Profile catalog regression and strict profile/daemon Clippy pass.
+
 #### [ ] W091 — Preset parameter projection and LED state
 
 - **Status:** `IN_PROGRESS`

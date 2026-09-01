@@ -2414,7 +2414,11 @@ pub fn launch_control_physical_catalog() -> Vec<PhysicalControl> {
             row,
             column,
             order,
-            source_address: None,
+            source_address: Some(match row {
+                1 => 13 + (column - 1),
+                2 => 29 + (column - 1),
+                _ => 49 + (column - 1),
+            }),
             feedback_address: Some(order),
             label: launch_control_index_label(order).unwrap_or_default(),
         });
@@ -2429,7 +2433,7 @@ pub fn launch_control_physical_catalog() -> Vec<PhysicalControl> {
             row,
             column,
             order: 24 + order,
-            source_address: None,
+            source_address: Some(if row == 1 { 41 + order % 8 } else { 57 + order % 8 }),
             feedback_address: Some(index),
             label: launch_control_index_label(index).unwrap_or_default(),
         });
@@ -2441,7 +2445,7 @@ pub fn launch_control_physical_catalog() -> Vec<PhysicalControl> {
             row: 3,
             column: order + 1,
             order: 40 + order,
-            source_address: None,
+            source_address: Some(77 + order),
             feedback_address: None,
             label: format!("Fader {}", order + 1),
         });
@@ -5226,6 +5230,11 @@ mod tests {
         assert!(PhysicalControlId::new("fader-1").is_ok());
         assert!(PhysicalControlId::new("utility-1").is_ok());
         assert!(PhysicalControlId::new("fader-9").is_err());
+        assert_eq!(controls[0].source_address, Some(13));
+        assert_eq!(controls[8].source_address, Some(29));
+        assert_eq!(controls[24].source_address, Some(41));
+        assert_eq!(controls[32].source_address, Some(57));
+        assert_eq!(controls[40].source_address, Some(77));
     }
 
     #[test]
