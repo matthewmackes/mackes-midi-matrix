@@ -1658,17 +1658,31 @@ impl AssignmentChoiceBrowser {
         // intentionally have a 0..1 value range, but are valid destinations
         // for a continuous controller such as a knob or fader.
         if parameters.is_empty() && profile_id == "lexicon.reflex" {
-            parameters = mackes_profiles::destination_parameters(&profile)
-                .into_iter()
-                .map(|parameter| AssignmentParameterChoice {
-                    profile_id: profile.id.clone(),
-                    effect_id: "reverb".to_owned(),
-                    effect_label: "Reverb".to_owned(),
-                    id: parameter.id,
-                    label: parameter.label,
-                    reason: mackes_profiles::SupportReason::Compatible,
-                })
-                .collect();
+            parameters = if role == mackes_profiles::SourceRole::Continuous {
+                mackes_profiles::lexicon_reflex::parameters(1)
+                    .iter()
+                    .map(|parameter| AssignmentParameterChoice {
+                        profile_id: profile.id.clone(),
+                        effect_id: "reverb".to_owned(),
+                        effect_label: "Reverb".to_owned(),
+                        id: format!("reflex.parameter-{}", parameter.number),
+                        label: format!("{} ({})", parameter.description, parameter.mrc_name),
+                        reason: mackes_profiles::SupportReason::Compatible,
+                    })
+                    .collect()
+            } else {
+                mackes_profiles::destination_parameters(&profile)
+                    .into_iter()
+                    .map(|parameter| AssignmentParameterChoice {
+                        profile_id: profile.id.clone(),
+                        effect_id: "reverb".to_owned(),
+                        effect_label: "Reverb".to_owned(),
+                        id: parameter.id,
+                        label: parameter.label,
+                        reason: mackes_profiles::SupportReason::Compatible,
+                    })
+                    .collect()
+            };
         }
         let types = parameters.iter().map(|parameter| parameter.effect_label.clone()).fold(
             Vec::new(),
