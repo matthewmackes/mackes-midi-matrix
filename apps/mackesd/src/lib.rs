@@ -3492,8 +3492,24 @@ mod tests {
             destination_effect: None,
             destination_parameter: None,
         });
-        let result = daemon.apply_assignment_request(mackes_ipc::AssignmentRequest {
+        let type_level = daemon.apply_assignment_request(mackes_ipc::AssignmentRequest {
             generation: chooser.generation,
+            action: mackes_ipc::AssignmentAction::Enter,
+            physical_control_id: None,
+            destination_profile: None,
+            destination_effect: None,
+            destination_parameter: None,
+        });
+        let parameter_level = daemon.apply_assignment_request(mackes_ipc::AssignmentRequest {
+            generation: type_level.generation,
+            action: mackes_ipc::AssignmentAction::Enter,
+            physical_control_id: None,
+            destination_profile: None,
+            destination_effect: None,
+            destination_parameter: None,
+        });
+        let result = daemon.apply_assignment_request(mackes_ipc::AssignmentRequest {
+            generation: parameter_level.generation,
             action: mackes_ipc::AssignmentAction::Commit,
             physical_control_id: Some("knob-r1-c1".into()),
             destination_profile: Some("lexicon.reflex".into()),
