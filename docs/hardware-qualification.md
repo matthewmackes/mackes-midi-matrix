@@ -111,3 +111,9 @@ the dashboard-binding poll consumed Device before the Learn dispatcher.
 movement to stable control `knob-r1-c1`. The authoritative assignment session advanced from
 `AwaitControl` to `ChooseDevice`, `has_draft` became true, and daemon status reported 64 received
 events with the Mk2 stable endpoint. This verifies physical continuous-control capture.
+
+2026-09-01 — fresh host qualification confirms USB identity `1235:0061`, ALSA client `24`,
+seven registered native daemon inputs, connected Launch Control XL input/output ports, and
+least-privilege service identity `User=mackes`, `Group=mackes-control`,
+`SupplementaryGroups=audio`. Service health is `ready`; physical commit/LED, 100-pair integrity,
+and USB reconnect evidence remain open.
