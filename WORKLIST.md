@@ -3789,6 +3789,11 @@ release gating runs positive and negative validation before compilation. Packagi
 contract plus the verifier scripts, and archive inspection confirmed all three paths. The contract
 is the verified release artifact; no nullable Components artifact remains.
 
+**Final gate evidence:** 2026-09-01 — `scripts/release-gate.sh` passed end-to-end after archive
+contract inclusion: repository/ownership policy, strict positive and negative artifact checks,
+dependency audit,  workspace tests, strict Clippy, benchmark, hermetic integration, installer
+smoke, release checksum, and preflight.
+
 #### [ ] W095 — Enforce daemon-only physical MIDI ownership
 
 - **Status:** `IN_PROGRESS`
