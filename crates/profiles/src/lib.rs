@@ -1081,6 +1081,34 @@ pub mod lexicon_reflex {
             })
             .collect())
     }
+
+    /// Returns translated preset parameters normalized for a MIDI controller.
+    ///
+    /// Each tuple is `(Reflex parameter number, 0..=127 controller value)`.
+    /// Normalization uses the algorithm-specific documented parameter range.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for an unknown translation or invalid compiled preset data.
+    pub fn pcm70_translation_controller_values(id: &str) -> Result<Vec<(u8, u8)>, &'static str> {
+        let setup = translate_pcm70(id)?;
+        let algorithm = setup.algorithm().ok_or("translated Reflex algorithm is invalid")?;
+        Ok(parameters(algorithm)
+            .iter()
+            .filter_map(|metadata| {
+                let value = setup.parameter(metadata.number)?;
+                let span = u32::from(metadata.max.saturating_sub(metadata.min));
+                let normalized = u8::try_from(
+                    (u32::from(value.saturating_sub(metadata.min)) * 127)
+                        .checked_div(span)
+                        .unwrap_or(0)
+                        .min(127),
+                )
+                .ok()?;
+                Some((metadata.number, normalized))
+            })
+            .collect())
+    }
     /// Number of unpacked bytes in the 128-register bank (128 × 49).
     pub const ALL_REGISTERS_RAW_BYTES: usize = 6_272;
     /// Number of packed bytes in the 128-register bank (128 × 56).
@@ -5632,6 +5660,10 @@ mod tests {
             .expect("parameter projection");
         assert!(!projected.is_empty());
         assert!(projected.iter().all(|(number, _value)| *number <= 9));
+        let controller_values = lexicon_reflex::pcm70_translation_controller_values("concert-wave")
+            .expect("controller projection");
+        assert_eq!(controller_values.len(), projected.len());
+        assert!(controller_values.iter().all(|(_, value)| *value <= 127));
     }
 
     #[test]
