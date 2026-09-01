@@ -1077,6 +1077,12 @@ impl Daemon {
                     self.assignment_previous_store = None;
                 }
                 self.assignment_generation = self.assignment_generation.saturating_add(1);
+                if request.action == mackes_ipc::AssignmentAction::Commit
+                    || request.action == mackes_ipc::AssignmentAction::ConfirmReplace
+                    || request.action == mackes_ipc::AssignmentAction::Succeed
+                {
+                    self.send_mapping_led_feedback();
+                }
                 let phase = self.assignment_session.phase;
                 self.assignment_leds.assignment = match phase {
                     mackes_ipc::AssignmentPhase::Idle => {
@@ -1144,6 +1150,62 @@ impl Daemon {
                     message: message.clone(),
                 },
             );
+        }
+    }
+
+    /// Reapplies the durable owner color for every mapped Launch Control LED.
+    ///
+    /// This is deliberately derived from the mapping store, rather than from the
+    /// transient Learn session, so a successful commit and a reconnect use the
+    /// same source of truth.  The XL Mk2 exposes red/green/amber, therefore the
+    /// Lexicon owner uses the documented amber representation.
+    fn send_mapping_led_feedback(&mut self) {
+        let outputs = self.outputs.endpoint_ids_named("Launch Control XL");
+        let catalog = mackes_profiles::launch_control_physical_catalog();
+        for control in catalog {
+            let Some(index) = control.feedback_address else { continue };
+            let state = self
+                .mapping_store
+                .active
+                .iter()
+                .find(|mapping| mapping.physical_control_id == control.id.as_str())
+                .map_or(
+                    mackes_profiles::LedState::new(mackes_profiles::LedColor::Off, 0, false),
+                    |mapping| {
+                        let color = if mapping
+                            .destination_profile
+                            .to_ascii_lowercase()
+                            .contains("eventide")
+                        {
+                            mackes_profiles::LedColor::Red
+                        } else if mapping
+                            .destination_profile
+                            .to_ascii_lowercase()
+                            .contains("lexicon")
+                        {
+                            mackes_profiles::LedColor::Amber
+                        } else {
+                            mackes_profiles::LedColor::Green
+                        };
+                        mackes_profiles::LedState::new(color, 127, false)
+                    },
+                );
+            let Some(bytes) = mackes_profiles::encode_launch_control_feedback(8, index, state)
+            else {
+                continue;
+            };
+            let Ok(message) = mackes_domain::MidiMessage::from_wire(&bytes) else { continue };
+            for endpoint in &outputs {
+                self.send_event_to_endpoint(
+                    *endpoint,
+                    mackes_domain::MidiEvent {
+                        timestamp: mackes_domain::TimestampNanos::new(0),
+                        sequence: 0,
+                        endpoint: *endpoint,
+                        message: message.clone(),
+                    },
+                );
+            }
         }
     }
 
