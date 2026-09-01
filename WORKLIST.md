@@ -3408,7 +3408,7 @@ daemon client; strict engine Clippy and focused engine/daemon tests pass.
 
 #### [ ] W085 — Nonblocking ALSA event reader and MIDI 1.0 decoder
 
-- **Status:** `NOT_STARTED`
+- **Status:** `IN_PROGRESS`
 - **Owner:** Luna
 - **Depends on:** W084
 - **Parallel with:** daemon-independent fixture work only.
@@ -3425,6 +3425,12 @@ daemon client; strict engine Clippy and focused engine/daemon tests pass.
 knob CC13 values through `aseqdump`; simultaneous daemon status reached
 `assignment_session.phase=AwaitControl` with `received=452` and `last_sequence=146`.
 Arrow, commit, saturation, and full 100-pair evidence remain open.
+
+**Evidence update:** 2026-09-01 — fixed the actual Device-loss boundary: dashboard binding
+polling consumed and discarded unmatched events before the normal input dispatcher. A bounded
+deferred queue now carries unmatched events into Device/Learn/routing dispatch. A regression test
+proves Device reaches `AwaitControl`; the installed daemon physically reproduced the transition
+with seven registered inputs, `received=1`, and state journal sequence 3.
 
 #### [ ] W086 — ALSA announcement, hot-plug, reconnect, and stable identity supervisor
 
@@ -3448,7 +3454,7 @@ all-feature engine tests pass. Desired/actual subscription reconciliation and da
 
 #### [ ] W087 — Daemon cutover to native ALSA and callback-input removal
 
-- **Status:** `NOT_STARTED`
+- **Status:** `IN_PROGRESS`
 - **Owner:** Luna
 - **Depends on:** W086
 - **Parallel with:** TUI presentation work consuming frozen snapshots.

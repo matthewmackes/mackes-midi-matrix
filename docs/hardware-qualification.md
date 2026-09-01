@@ -100,3 +100,9 @@ top-left knob CC13 sweep. Simultaneous daemon status reported `received=452`,
 `AwaitControl`. This proves native ALSA delivery through Device into Learn and
 continuous knob activity. Arrow navigation, commit/LED result, 100-pair integrity,
 and USB reconnect remain to be captured.
+
+2026-09-01 — after fixing the dashboard poll to defer unmatched MIDI events, a daemon-only
+physical Device press transitioned the authoritative assignment session from `Idle` to
+`AwaitControl`. Status reported `registered_inputs=7`, `received=1`, `last_sequence=3`, and
+the Mk2 stable endpoint with Note Off 105 activity. This closes the prior discrepancy where
+the dashboard-binding poll consumed Device before the Learn dispatcher.

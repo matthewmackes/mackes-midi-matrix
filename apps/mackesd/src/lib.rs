@@ -238,6 +238,7 @@ pub struct Daemon {
     rtp_peer: mackes_midi_engine::RtpMidiPeer,
     outputs: mackes_midi_engine::OutputRegistry,
     inputs: mackes_midi_engine::InputRegistry,
+    deferred_inputs: VecDeque<mackes_domain::MidiEvent>,
     #[cfg(feature = "alsa-seq-backend")]
     alsa_input_client:
         Option<std::sync::Arc<std::sync::Mutex<mackes_midi_engine::AlsaSequencerClient>>>,
@@ -566,6 +567,7 @@ impl Daemon {
             rtp_peer: mackes_midi_engine::RtpMidiPeer::new(0, 32).map_err(io::Error::other)?,
             outputs: mackes_midi_engine::OutputRegistry::new(64),
             inputs: mackes_midi_engine::InputRegistry::new(64),
+            deferred_inputs: VecDeque::with_capacity(256),
             #[cfg(feature = "alsa-seq-backend")]
             alsa_input_client: None,
             virtual_ports: None,
@@ -1383,7 +1385,9 @@ impl Daemon {
     /// Polls each daemon-owned input once in stable registration order.
     #[must_use]
     pub fn poll_inputs(&mut self) -> Vec<mackes_domain::MidiEvent> {
-        self.inputs.poll_once()
+        let mut events = self.deferred_inputs.drain(..).collect::<Vec<_>>();
+        events.extend(self.inputs.poll_once());
+        events
     }
 
     /// Polls registered MIDI inputs and routes a bounded batch through the normal path.
@@ -1488,6 +1492,7 @@ impl Daemon {
         let mut commands = Vec::with_capacity(limit.min(32));
         for event in events.into_iter().take(limit.min(128)) {
             let mut matched: Option<(Command, bool)> = None;
+            let mut consumed_by_binding = false;
             for binding in bindings {
                 let trigger_matches = match (&binding.trigger, &event.message) {
                     (
@@ -1528,6 +1533,7 @@ impl Daemon {
                     _ => false,
                 };
                 if trigger_matches {
+                    consumed_by_binding = true;
                     if matched.is_some() {
                         matched = None;
                         break;
@@ -1542,6 +1548,8 @@ impl Daemon {
             }
             if let Some(command) = matched {
                 commands.push(command);
+            } else if !consumed_by_binding && self.deferred_inputs.len() < 256 {
+                self.deferred_inputs.push_back(event);
             }
         }
         commands
@@ -3938,6 +3946,38 @@ mod tests {
         assert!(response.contains("\"panic\":true"));
         assert_eq!(daemon.state_sequence, 1);
         assert!(daemon.handle_dashboard_command(Command::Shutdown).contains("not allowed"));
+        let _ = fs::remove_file(path);
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn dashboard_poll_defers_unmatched_device_press_for_assignment_dispatch() {
+        use mackes_midi_engine::MidiOutputAdapter;
+
+        let path = std::env::temp_dir()
+            .join(format!("mackes-dashboard-device-{}.sock", std::process::id()));
+        let mut daemon = Daemon::bind(&path).expect("daemon");
+        let mut input = mackes_midi_engine::VirtualEndpoint::new(
+            "launch-control",
+            "Launch Control XL",
+            mackes_midi_engine::EndpointDirection::Input,
+        );
+        input.send(mackes_domain::MidiEvent {
+            timestamp: mackes_domain::TimestampNanos::new(1),
+            sequence: 1,
+            endpoint: mackes_domain::EndpointId::new(1).expect("endpoint"),
+            message: mackes_domain::MidiMessage::NoteOn {
+                channel: mackes_domain::MidiChannel::new(9).expect("channel"),
+                note: mackes_domain::SevenBit::new(105).expect("note"),
+                velocity: mackes_domain::SevenBit::new(127).expect("velocity"),
+            },
+        });
+        daemon.register_input(Box::new(input)).expect("register input");
+
+        assert!(daemon.process_dashboard_commands(&[], 128).is_empty());
+        assert_eq!(daemon.assignment_session.phase, mackes_ipc::AssignmentPhase::Idle);
+        assert_eq!(daemon.poll_and_dispatch_inputs(128).0, 1);
+        assert_eq!(daemon.assignment_session.phase, mackes_ipc::AssignmentPhase::AwaitControl);
         let _ = fs::remove_file(path);
     }
 
