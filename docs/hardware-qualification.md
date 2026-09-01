@@ -123,3 +123,9 @@ events, while the daemon remained `ready` with seven registered inputs. The ALSA
 graph was verified separately (`24:0` connected to daemon ingress `130:0`), so this run does not
 support application-level failure attribution; controller transmission/template mode remains the
 next physical investigation.
+
+2026-09-01 — after installing the current pushed build, a fresh twenty-second direct
+`aseqdump -p 24:0` window again reported `Waiting for data` with no events during the requested
+Device press. USB/ALSA enumeration remained healthy and the service was active. This reproduces
+the upstream physical-transmission/template-mode blocker; no application-level qualification
+claim is made from this run.
