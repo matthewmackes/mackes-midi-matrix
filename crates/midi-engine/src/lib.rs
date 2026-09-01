@@ -40,6 +40,9 @@ pub struct AlsaSequencerAddress {
     pub port: u8,
 }
 
+/// Maximum number of native ALSA input subscriptions retained for reconciliation.
+pub const MAX_ALSA_DESIRED_INPUTS: usize = 64;
+
 /// Descriptive native ALSA Sequencer port record used before subscription.
 #[cfg(feature = "alsa-seq-backend")]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -1393,6 +1396,9 @@ impl AlsaSequencerClient {
             .any(|subscription| subscription.get_dest() == destination)
         {
             if !self.desired_inputs.contains(&source) {
+                if self.desired_inputs.len() >= MAX_ALSA_DESIRED_INPUTS {
+                    return Err("native ALSA desired input capacity exceeded".to_owned());
+                }
                 self.desired_inputs.push(source);
             }
             return Ok(());
@@ -1403,6 +1409,9 @@ impl AlsaSequencerClient {
         match self.seq.subscribe_port(&subscription) {
             Ok(()) => {
                 if !self.desired_inputs.contains(&source) {
+                    if self.desired_inputs.len() >= MAX_ALSA_DESIRED_INPUTS {
+                        return Err("native ALSA desired input capacity exceeded".to_owned());
+                    }
                     self.desired_inputs.push(source);
                 }
                 Ok(())
