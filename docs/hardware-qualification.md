@@ -106,3 +106,8 @@ physical Device press transitioned the authoritative assignment session from `Id
 `AwaitControl`. Status reported `registered_inputs=7`, `received=1`, `last_sequence=3`, and
 the Mk2 stable endpoint with Note Off 105 activity. This closes the prior discrepancy where
 the dashboard-binding poll consumed Device before the Learn dispatcher.
+
+2026-09-01 — the installed Factory 1 control map then resolved a physical top-left knob CC13
+movement to stable control `knob-r1-c1`. The authoritative assignment session advanced from
+`AwaitControl` to `ChooseDevice`, `has_draft` became true, and daemon status reported 64 received
+events with the Mk2 stable endpoint. This verifies physical continuous-control capture.

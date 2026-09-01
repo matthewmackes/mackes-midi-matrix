@@ -1411,6 +1411,22 @@ impl Daemon {
                 processed += 1;
                 continue;
             }
+            if self.assignment_session.phase == mackes_ipc::AssignmentPhase::AwaitControl {
+                if let Some(control_id) = Self::launch_control_factory1_control_id(&event) {
+                    let result = self.apply_assignment_request(mackes_ipc::AssignmentRequest {
+                        generation: self.assignment_generation,
+                        action: mackes_ipc::AssignmentAction::ControlCaptured,
+                        physical_control_id: Some(control_id),
+                        destination_profile: None,
+                        destination_effect: None,
+                        destination_parameter: None,
+                    });
+                    if result.applied {
+                        processed += 1;
+                        continue;
+                    }
+                }
+            }
             if let Some(action) = Self::launch_control_factory1_navigation(&event) {
                 self.record_navigation_event(action);
                 processed += 1;
@@ -1448,6 +1464,30 @@ impl Daemon {
             105 => Some("down"),
             106 => Some("left"),
             107 => Some("right"),
+            _ => None,
+        }
+    }
+
+    fn launch_control_factory1_control_id(event: &mackes_domain::MidiEvent) -> Option<String> {
+        let (kind, number, active) = match event.message {
+            mackes_domain::MidiMessage::ControlChange { channel, controller, value } => {
+                ("cc", controller.as_u8(), channel.wire() == 8 && value.as_u8() > 0)
+            }
+            mackes_domain::MidiMessage::NoteOn { channel, note, velocity } => {
+                ("note", note.as_u8(), channel.wire() == 8 && velocity.as_u8() > 0)
+            }
+            _ => return None,
+        };
+        if !active {
+            return None;
+        }
+        match (kind, number) {
+            ("cc", 13..=20) => Some(format!("knob-r1-c{}", number - 12)),
+            ("cc", 29..=36) => Some(format!("knob-r2-c{}", number - 28)),
+            ("cc", 49..=56) => Some(format!("knob-r3-c{}", number - 48)),
+            ("cc", 77..=84) => Some(format!("fader-{}", number - 76)),
+            ("note", 41..=48) => Some(format!("button-r1-c{}", number - 40)),
+            ("note", 57..=64) => Some(format!("button-r2-c{}", number - 56)),
             _ => None,
         }
     }
@@ -3629,6 +3669,47 @@ mod tests {
             },
         };
         assert!(Daemon::is_launch_control_factory1_device_press(&event));
+    }
+
+    #[test]
+    fn factory1_assignable_controls_resolve_to_stable_physical_ids() {
+        let event = |message| mackes_domain::MidiEvent {
+            timestamp: mackes_domain::TimestampNanos::new(1),
+            sequence: 1,
+            endpoint: mackes_domain::EndpointId::new(1).expect("endpoint"),
+            message,
+        };
+        let channel = mackes_domain::MidiChannel::new(9).expect("channel");
+        assert_eq!(
+            Daemon::launch_control_factory1_control_id(&event(
+                mackes_domain::MidiMessage::ControlChange {
+                    channel,
+                    controller: mackes_domain::SevenBit::new(13).expect("controller"),
+                    value: mackes_domain::SevenBit::new(1).expect("value"),
+                }
+            )),
+            Some("knob-r1-c1".into())
+        );
+        assert_eq!(
+            Daemon::launch_control_factory1_control_id(&event(
+                mackes_domain::MidiMessage::ControlChange {
+                    channel,
+                    controller: mackes_domain::SevenBit::new(77).expect("controller"),
+                    value: mackes_domain::SevenBit::new(127).expect("value"),
+                }
+            )),
+            Some("fader-1".into())
+        );
+        assert_eq!(
+            Daemon::launch_control_factory1_control_id(&event(
+                mackes_domain::MidiMessage::NoteOn {
+                    channel,
+                    note: mackes_domain::SevenBit::new(41).expect("note"),
+                    velocity: mackes_domain::SevenBit::new(127).expect("velocity"),
+                }
+            )),
+            Some("button-r1-c1".into())
+        );
     }
 
     #[test]

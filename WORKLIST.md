@@ -3432,6 +3432,11 @@ deferred queue now carries unmatched events into Device/Learn/routing dispatch. 
 proves Device reaches `AwaitControl`; the installed daemon physically reproduced the transition
 with seven registered inputs, `received=1`, and state journal sequence 3.
 
+**Evidence update:** 2026-09-01 — added the Factory 1 physical map for 24 knobs, 16 channel
+buttons, and 8 faders. Physical CC13 now resolves to `knob-r1-c1`; the installed daemon advanced
+from `AwaitControl` to `ChooseDevice` with `has_draft=true`. Forty-one daemon tests and strict
+Clippy pass.
+
 #### [ ] W086 — ALSA announcement, hot-plug, reconnect, and stable identity supervisor
 
 - **Status:** `NOT_STARTED`
