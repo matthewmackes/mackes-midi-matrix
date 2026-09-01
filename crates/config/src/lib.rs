@@ -678,6 +678,39 @@ impl LaunchControlAssignmentConfig {
     pub const fn requires_review(&self) -> bool {
         self.needs_review || self.physical_control_id.is_none() && self.index >= 40
     }
+
+    /// Migrates a legacy User 1 tuple to the authoritative Factory 1 tuple.
+    ///
+    /// The stable physical identity and assignment destination are preserved. An
+    /// entry is rejected when its identity is absent/ambiguous or its tuple does
+    /// not belong to the known legacy inventory, so migration never guesses.
+    #[must_use]
+    pub fn migrated_factory1(&self) -> Option<Self> {
+        let id = self.migrated_physical_control_id()?;
+        if self.requires_review() {
+            return None;
+        }
+        let (kind, number) = if let Some(rest) = id.strip_prefix("knob-r") {
+            let (row, column) = rest.split_once("-c")?;
+            let row = row.parse::<u8>().ok()?;
+            let column = column.parse::<u8>().ok()?;
+            ("cc".to_owned(), (row.checked_sub(1)? * 16 + column.checked_sub(1)? + 13))
+        } else if let Some(rest) = id.strip_prefix("button-r") {
+            let (row, column) = rest.split_once("-c")?;
+            let row = row.parse::<u8>().ok()?;
+            let column = column.parse::<u8>().ok()?;
+            ("note".to_owned(), ((row.checked_sub(1)? * 16 + column.checked_sub(1)?) + 41))
+        } else {
+            let column = id.strip_prefix("fader-").and_then(|v| v.parse::<u8>().ok())?;
+            ("cc".to_owned(), column.checked_sub(1)? + 77)
+        };
+        let mut migrated = self.clone();
+        migrated.physical_control_id = Some(id);
+        migrated.channel = 8;
+        migrated.kind = kind;
+        migrated.number = number;
+        Some(migrated)
+    }
 }
 
 /*
@@ -2493,9 +2526,30 @@ mod tests {
         };
         assert_eq!(knob.migrated_physical_control_id().as_deref(), Some("knob-r1-c5"));
         assert!(!knob.requires_review());
-        let ambiguous = LaunchControlAssignmentConfig { index: 40, ..knob };
+        let ambiguous = LaunchControlAssignmentConfig { index: 40, ..knob.clone() };
         assert_eq!(ambiguous.migrated_physical_control_id(), None);
         assert!(ambiguous.requires_review());
+        let migrated = knob.migrated_factory1().expect("factory migration");
+        assert_eq!(migrated.physical_control_id.as_deref(), Some("knob-r1-c5"));
+        assert_eq!((migrated.channel, migrated.kind.as_str(), migrated.number), (8, "cc", 17));
+        let button = LaunchControlAssignmentConfig {
+            index: 24,
+            physical_control_id: None,
+            channel: 0,
+            number: 69,
+            kind: "cc".into(),
+            destination: None,
+            needs_review: false,
+        };
+        let migrated_button = button.migrated_factory1().expect("button migration");
+        assert_eq!(migrated_button.physical_control_id.as_deref(), Some("button-r1-c1"));
+        assert_eq!(
+            (migrated_button.channel, migrated_button.kind.as_str(), migrated_button.number),
+            (8, "note", 41)
+        );
+        assert!(LaunchControlAssignmentConfig { index: 4, number: 99, ..knob }
+            .migrated_factory1()
+            .is_some());
     }
 
     #[test]

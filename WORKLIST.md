@@ -3730,6 +3730,11 @@ manifest and retired User 1 onboarding references as migration history. Artifact
 worklist validation, 50 profile tests, and diff checks pass. Transactional legacy tuple migration
 and full release-gate enforcement remain W093/W094 work.
 
+**Evidence update:** 2026-09-01 — added explicit `migrated_factory1` configuration
+migration for legacy stable IDs, preserving destinations while translating known User 1
+tuples to Factory 1 channel/kind/number values and rejecting ambiguous records. Focused
+config migration test and strict config Clippy pass.
+
 #### [ ] W094 — Make controller artifact readiness a hard release gate
 
 - **Status:** `NOT_STARTED`
