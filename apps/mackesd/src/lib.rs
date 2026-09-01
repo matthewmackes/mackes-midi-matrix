@@ -1520,6 +1520,10 @@ impl Daemon {
         #[cfg(feature = "alsa-seq-backend")]
         if let Some(client) = self.alsa_input_client.as_ref() {
             if let Ok(mut client) = client.lock() {
+                // Drain bounded ALSA announcements first. The engine preserves
+                // ordinary MIDI in its deferred wire queue, so reconnect
+                // supervision cannot consume Device/knob traffic.
+                let _ = client.read_lifecycle_events(32);
                 let _ = client.reconcile_input_subscriptions();
             }
         }

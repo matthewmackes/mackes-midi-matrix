@@ -42,6 +42,9 @@ pub struct AlsaSequencerAddress {
 
 /// Maximum number of native ALSA input subscriptions retained for reconciliation.
 pub const MAX_ALSA_DESIRED_INPUTS: usize = 64;
+/// Maximum ordinary MIDI events retained while lifecycle notifications are drained.
+#[cfg(feature = "alsa-seq-backend")]
+const MAX_ALSA_PENDING_WIRE: usize = 256;
 
 /// Descriptive native ALSA Sequencer port record used before subscription.
 #[cfg(feature = "alsa-seq-backend")]
@@ -1552,7 +1555,7 @@ impl AlsaSequencerClient {
     /// Reads bounded ALSA client/port lifecycle notifications.
     #[must_use]
     pub fn read_lifecycle_events(
-        &self,
+        &mut self,
         limit: usize,
     ) -> Vec<(AlsaSequencerLifecycle, AlsaSequencerAddress)> {
         let mut input = self.seq.input();
@@ -1574,7 +1577,20 @@ impl AlsaSequencerClient {
                 }
                 alsa::seq::EventType::PortSubscribed => AlsaSequencerLifecycle::Subscribed,
                 alsa::seq::EventType::PortUnsubscribed => AlsaSequencerLifecycle::Unsubscribed,
-                _ => continue,
+                _ => {
+                    if let Ok(Some(bytes)) = alsa_event_to_wire(&event) {
+                        let source = event.get_source();
+                        if let (Ok(client), Ok(port)) =
+                            (u8::try_from(source.client), u8::try_from(source.port))
+                        {
+                            if self.pending_wire.len() < MAX_ALSA_PENDING_WIRE {
+                                self.pending_wire
+                                    .push_back((AlsaSequencerAddress::new(client, port), bytes));
+                            }
+                        }
+                    }
+                    continue;
+                }
             };
             let address = event.get_data::<alsa::seq::Addr>().unwrap_or_else(|| event.get_source());
             let (Ok(client), Ok(port)) = (u8::try_from(address.client), u8::try_from(address.port))
