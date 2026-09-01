@@ -3997,7 +3997,7 @@ the operator binary cannot compile the physical backend; daemon IPC remains its 
   release rather than relying only on green unit tests.
 - **Implementation:** run a requirement-by-requirement audit of W093–W097; rebuild artifacts from a
   clean clone; install on the qualification host; execute the complete Mk2 Learn/preset/LED,
-  reconnect, persistence, daemon-only output, M-VAVE/Reflex, and rollback walkthrough; reconcile
+  reconnect, persistence, daemon-only output, supported Reflex, and rollback walkthrough; reconcile
   all release metadata and versioning; commit exact evidence.
 - **Acceptance:** no open architecture mismatch, warning-only artifact requirement, client-owned
   physical MIDI path, split Learn authority, undocumented tree path, ignored default software
