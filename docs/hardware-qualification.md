@@ -129,3 +129,8 @@ next physical investigation.
 Device press. USB/ALSA enumeration remained healthy and the service was active. This reproduces
 the upstream physical-transmission/template-mode blocker; no application-level qualification
 claim is made from this run.
+
+2026-09-01 — a separate fifteen-second capture on the Mk2 HUI port (`aseqdump -p 24:1`) also
+reported no events during a requested Device press. Both exposed controller input ports are
+therefore covered by direct observation; the remaining fault is upstream of the native ALSA
+reader and requires the controller to transmit a MIDI template/event.
