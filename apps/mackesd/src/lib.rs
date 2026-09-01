@@ -931,7 +931,13 @@ impl Daemon {
                         controller_profile: "launch-control-xl-mk2".into(),
                         physical_control_id: control_id.into(),
                         source_endpoint: "controller".into(),
-                        source_kind: "cc".into(),
+                        source_kind: if control.role
+                            == mackes_profiles::PhysicalControlRole::ChannelButton
+                        {
+                            "note".into()
+                        } else {
+                            "cc".into()
+                        },
                         source_channel: 0,
                         source_number: control.source_address.unwrap_or_default(),
                         destination_endpoint: "processor".into(),
@@ -1186,6 +1192,7 @@ impl Daemon {
             let class = match mapping.source_kind.as_str() {
                 "cc" => mackes_midi_engine::MessageClass::ControlChange,
                 "pc" => mackes_midi_engine::MessageClass::ProgramChange,
+                "note" => mackes_midi_engine::MessageClass::Note,
                 _ => continue,
             };
             let parameter = mackes_midi_engine::ParameterMapping {

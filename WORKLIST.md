@@ -3536,12 +3536,17 @@ control path. Focused profile tests and strict profile Clippy pass.
 
 #### [ ] W090 — Preset-to-button assignment
 
-- **Status:** `READY`
+- **Status:** `IN_PROGRESS`
 - **Owner:** Luna
 - **Depends on:** W089
 - **Objective:** allow presets to be assigned to Novation buttons while continuous parameters remain assignable to knobs/faders.
 - **Implementation:** add a typed preset assignment draft and commit path, validate source-role compatibility, persist atomically, and expose preset identity in mapping/status snapshots.
 - **Acceptance:** button sources can commit presets; knob/fader sources cannot commit presets; duplicate/conflicting destinations fail closed and survive restart.
+
+**Evidence update:** 2026-09-01 — captured channel-button sources now select the Reflex PCM70
+preset catalog entry and emit a typed commit destination (`pcm70_reflex:<id>`); continuous sources
+continue using parameter destinations. Focused TUI tests and strict daemon/TUI Clippy pass.
+Runtime persistence and physical button/SysEx qualification remain open.
 
 #### [ ] W091 — Preset parameter projection and LED state
 

@@ -1487,6 +1487,23 @@ impl AssignmentWizard {
         &self,
         choices: &AssignmentChoiceBrowser,
     ) -> Option<mackes_ipc::AssignmentRequest> {
+        if self.candidates.first().is_some_and(|id| {
+            mackes_profiles::launch_control_physical_catalog().into_iter().any(|control| {
+                control.id.as_str() == id
+                    && control.role == mackes_profiles::PhysicalControlRole::ChannelButton
+            })
+        }) {
+            if let Some((preset_id, _)) = choices.presets.get(choices.selected) {
+                return Some(self.destination_request(&AssignmentParameterChoice {
+                    profile_id: "lexicon.reflex".into(),
+                    effect_id: "reverb".into(),
+                    effect_label: "Reverb".into(),
+                    id: format!("pcm70_reflex:{preset_id}"),
+                    label: preset_id.clone(),
+                    reason: mackes_profiles::SupportReason::Compatible,
+                }));
+            }
+        }
         choices.parameters.get(choices.selected).map(|choice| self.destination_request(choice))
     }
 
@@ -6653,6 +6670,22 @@ mod tests {
         assert_eq!(request.destination_effect.as_deref(), Some("algorithm-1"));
         assert_eq!(request.destination_parameter.as_deref(), Some("reflex.mix"));
         assert!(request.has_complete_destination());
+        assert!(request.validate().is_ok());
+    }
+
+    #[test]
+    fn assignment_wizard_selects_reflex_preset_for_channel_button() {
+        let mut wizard = AssignmentWizard::new();
+        wizard.start(AppSection::Devices);
+        wizard.capture("button-r1-c1").expect("capture");
+        let choices = AssignmentChoiceBrowser::from_profiles(
+            &["lexicon.reflex"],
+            Some("lexicon.reflex"),
+            mackes_profiles::SourceRole::ButtonAction,
+        );
+        let request = wizard.selected_destination_request(&choices).expect("preset request");
+        assert_eq!(request.destination_effect.as_deref(), Some("reverb"));
+        assert_eq!(request.destination_parameter.as_deref(), Some("pcm70_reflex:concert-wave"));
         assert!(request.validate().is_ok());
     }
 
