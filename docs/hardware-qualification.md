@@ -134,3 +134,8 @@ claim is made from this run.
 reported no events during a requested Device press. Both exposed controller input ports are
 therefore covered by direct observation; the remaining fault is upstream of the native ALSA
 reader and requires the controller to transmit a MIDI template/event.
+
+2026-09-01 — operator observation after installing the current build confirmed the physical
+Launch Control control LED visibly acknowledged a captured Learn control with the yellow blinking
+feedback state. This verifies the action-level LED acknowledgment path; persistent owner colors
+and preset-load projection remain to be qualified.
