@@ -6,6 +6,7 @@ import re
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 OPERATOR = ROOT / "apps" / "mackes" / "src"
+OPERATOR_MANIFEST = ROOT / "apps" / "mackes" / "Cargo.toml"
 FORBIDDEN = (re.compile(r"\benumerate_midir_ports\b"), re.compile(r"\bMidir(?:Input|Output)Adapter\b"), re.compile(r"\bMidi(?:Input|Output)\b"), re.compile(r"/dev/snd"))
 violations = []
 for path in sorted(OPERATOR.rglob("*.rs")):
@@ -15,4 +16,6 @@ for path in sorted(OPERATOR.rglob("*.rs")):
                 violations.append(f"{path}:{line_number}: {pattern.pattern}")
 if violations:
     raise SystemExit("operator physical MIDI ownership violation:\n" + "\n".join(violations))
+if "midir-backend" in OPERATOR_MANIFEST.read_text(encoding="utf-8"):
+    raise SystemExit("operator physical MIDI ownership violation: Cargo.toml enables midir-backend")
 print("MIDI ownership policy passed")

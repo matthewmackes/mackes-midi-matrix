@@ -4887,3 +4887,7 @@ sent counter, append a redacted audit record with actor/action/target, and publi
 A focused regression covers the counter/audit projection. Strict daemon Clippy, all-feature check,
 worklist validation, and diff hygiene pass; this sandbox denies its Unix-socket bind test with
 `EPERM`, while the normal release gate has previously exercised daemon socket tests.
+
+**Evidence update:** 2026-09-01 — the ownership policy now also rejects `midir-backend` in the
+operator Cargo manifest, preventing the physical backend from being restored through dependency
+features as well as source calls.
