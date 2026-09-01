@@ -5,6 +5,8 @@ use mackes_domain::{
     SystemCommonMessage, TimestampNanos,
 };
 use std::collections::{HashMap, VecDeque};
+#[cfg(feature = "alsa-seq-backend")]
+use std::ffi::CString;
 use std::sync::{Arc, RwLock};
 
 /// Direction of a MIDI endpoint.
@@ -25,6 +27,54 @@ pub struct EndpointInfo {
     pub name: String,
     /// Endpoint direction.
     pub direction: EndpointDirection,
+}
+
+/// Volatile ALSA Sequencer client/port address for a live subscription.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+pub struct AlsaSequencerAddress {
+    /// Runtime ALSA client number.
+    pub client: u8,
+    /// Runtime ALSA port number.
+    pub port: u8,
+}
+
+/// Descriptive native ALSA Sequencer port record used before subscription.
+#[cfg(feature = "alsa-seq-backend")]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AlsaSequencerPort {
+    /// Runtime client/port address.
+    pub address: AlsaSequencerAddress,
+    /// ALSA client display name.
+    pub client_name: String,
+    /// ALSA port display name.
+    pub port_name: String,
+    /// Whether the port can be read by an application.
+    pub readable: bool,
+    /// Whether the port can be written by an application.
+    pub writable: bool,
+}
+
+impl AlsaSequencerAddress {
+    /// Creates an address, rejecting values outside ALSA's MIDI address range.
+    #[must_use]
+    pub const fn new(client: u8, port: u8) -> Self {
+        Self { client, port }
+    }
+}
+
+/// Lifecycle notifications needed to reconcile native ALSA subscriptions.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum AlsaSequencerLifecycle {
+    /// A client or port became visible.
+    Started,
+    /// Metadata for a client or port changed.
+    Changed,
+    /// A client or port disappeared.
+    Exited,
+    /// A subscription was established.
+    Subscribed,
+    /// A subscription was removed.
+    Unsubscribed,
 }
 
 /// Connection state of a physical MIDI device projection.
@@ -1229,6 +1279,231 @@ pub fn numeric_endpoint_id(stable_id: &str) -> Option<mackes_domain::EndpointId>
         .fold(0_u64, |hash, byte| hash.wrapping_mul(257).wrapping_add(u64::from(byte)))
         .max(1);
     mackes_domain::EndpointId::new(value)
+}
+
+/// Native ALSA Sequencer client with one owned application ingress and egress port.
+#[cfg(feature = "alsa-seq-backend")]
+pub struct AlsaSequencerClient {
+    seq: alsa::seq::Seq,
+    input_port: i32,
+    output_port: i32,
+}
+
+#[cfg(feature = "alsa-seq-backend")]
+impl std::fmt::Debug for AlsaSequencerClient {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("AlsaSequencerClient")
+            .field("input_port", &self.input_port)
+            .field("output_port", &self.output_port)
+            .finish_non_exhaustive()
+    }
+}
+
+#[cfg(feature = "alsa-seq-backend")]
+impl AlsaSequencerClient {
+    /// Opens a nonblocking ALSA Sequencer client and creates owned application ports.
+    ///
+    /// # Errors
+    ///
+    /// Returns the ALSA error when the client or either port cannot be created.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the name contains NUL or ALSA rejects client/port creation.
+    pub fn open(client_name: &str) -> Result<Self, String> {
+        let seq = alsa::seq::Seq::open(None, None, true).map_err(|error| error.to_string())?;
+        let client_name = CString::new(client_name).map_err(|_| "client name contains NUL")?;
+        seq.set_client_name(&client_name).map_err(|error| error.to_string())?;
+        let input_name = CString::new("MACKES Input").map_err(|_| "input name contains NUL")?;
+        let output_name = CString::new("MACKES Output").map_err(|_| "output name contains NUL")?;
+        let midi = alsa::seq::PortType::MIDI_GENERIC | alsa::seq::PortType::APPLICATION;
+        let input_port = seq
+            .create_simple_port(
+                &input_name,
+                alsa::seq::PortCap::WRITE | alsa::seq::PortCap::SUBS_WRITE,
+                midi,
+            )
+            .map_err(|error| error.to_string())?;
+        let output_port = seq
+            .create_simple_port(
+                &output_name,
+                alsa::seq::PortCap::READ | alsa::seq::PortCap::SUBS_READ,
+                midi,
+            )
+            .map_err(|error| error.to_string())?;
+        Ok(Self { seq, input_port, output_port })
+    }
+
+    /// Returns the volatile ALSA client number allocated to this process.
+    ///
+    /// # Errors
+    ///
+    /// Returns an ALSA query or range-conversion error.
+    pub fn client_id(&self) -> Result<u8, String> {
+        self.seq.client_id().map_err(|error| error.to_string()).and_then(|id| {
+            u8::try_from(id).map_err(|_| "ALSA client number outside MIDI range".to_owned())
+        })
+    }
+
+    /// Returns the owned ingress and egress port addresses.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if ALSA reports an invalid client or port number.
+    pub fn application_ports(
+        &self,
+    ) -> Result<(AlsaSequencerAddress, AlsaSequencerAddress), String> {
+        let client = self.client_id()?;
+        Ok((
+            AlsaSequencerAddress::new(
+                client,
+                u8::try_from(self.input_port).map_err(|_| "invalid input port")?,
+            ),
+            AlsaSequencerAddress::new(
+                client,
+                u8::try_from(self.output_port).map_err(|_| "invalid output port")?,
+            ),
+        ))
+    }
+
+    /// Explicitly subscribes an external source to the owned ingress port.
+    ///
+    /// # Errors
+    ///
+    /// Returns the ALSA subscription error.
+    pub fn subscribe_input(&self, source: AlsaSequencerAddress) -> Result<(), String> {
+        let client = self.client_id()?;
+        let subscription = alsa::seq::PortSubscribe::empty().map_err(|error| error.to_string())?;
+        subscription.set_sender(alsa::seq::Addr {
+            client: i32::from(source.client),
+            port: i32::from(source.port),
+        });
+        subscription.set_dest(alsa::seq::Addr { client: client.into(), port: self.input_port });
+        self.seq.subscribe_port(&subscription).map_err(|error| error.to_string())
+    }
+
+    /// Enumerates external ALSA MIDI ports with stable runtime descriptors.
+    #[must_use]
+    pub fn discover_ports(&self) -> Vec<AlsaSequencerPort> {
+        let mut ports = Vec::new();
+        for client in alsa::seq::ClientIter::new(&self.seq) {
+            let Ok(client_name) = client.get_name() else { continue };
+            for port in alsa::seq::PortIter::new(&self.seq, client.get_client()) {
+                let Ok(port_name) = port.get_name() else { continue };
+                let address = AlsaSequencerAddress {
+                    client: u8::try_from(port.get_client()).unwrap_or_default(),
+                    port: u8::try_from(port.get_port()).unwrap_or_default(),
+                };
+                let capabilities = port.get_capability();
+                ports.push(AlsaSequencerPort {
+                    address,
+                    client_name: client_name.to_owned(),
+                    port_name: port_name.to_owned(),
+                    readable: capabilities.contains(alsa::seq::PortCap::READ),
+                    writable: capabilities.contains(alsa::seq::PortCap::WRITE),
+                });
+            }
+        }
+        ports
+    }
+
+    /// Reads the number of currently pending native ALSA events without blocking.
+    ///
+    /// # Errors
+    ///
+    /// Returns the ALSA pending-event query error.
+    pub fn pending_events(&self) -> Result<u32, String> {
+        self.seq.input().event_input_pending(true).map_err(|error| error.to_string())
+    }
+
+    /// Reads at most `limit` pending events as validated MIDI wire messages.
+    ///
+    /// # Errors
+    ///
+    /// Returns an ALSA read error or a malformed MIDI conversion error.
+    pub fn read_wire_events(
+        &self,
+        limit: usize,
+    ) -> Result<Vec<(AlsaSequencerAddress, Vec<u8>)>, String> {
+        let mut input = self.seq.input();
+        let mut events = Vec::new();
+        for _ in 0..limit {
+            if input.event_input_pending(true).map_err(|error| error.to_string())? == 0 {
+                break;
+            }
+            let event = input.event_input().map_err(|error| error.to_string())?;
+            let Some(bytes) = alsa_event_to_wire(&event)? else { continue };
+            let source = event.get_source();
+            let client = u8::try_from(source.client).map_err(|_| "invalid ALSA source client")?;
+            let port = u8::try_from(source.port).map_err(|_| "invalid ALSA source port")?;
+            events.push((AlsaSequencerAddress::new(client, port), bytes));
+        }
+        Ok(events)
+    }
+}
+
+#[cfg(feature = "alsa-seq-backend")]
+fn alsa_event_to_wire(event: &alsa::seq::Event<'_>) -> Result<Option<Vec<u8>>, String> {
+    use alsa::seq::{EvCtrl, EvNote, EventType};
+    let channel_status = |base: u8, channel: u8| {
+        base.checked_add(channel).ok_or_else(|| "invalid MIDI channel".to_owned())
+    };
+    let seven = |value: i32| {
+        u8::try_from(value)
+            .ok()
+            .filter(|value| *value < 128)
+            .ok_or_else(|| "MIDI value out of range".to_owned())
+    };
+    let bytes = match event.get_type() {
+        EventType::Noteon => {
+            let data = event.get_data::<EvNote>().ok_or("missing note data")?;
+            Some(vec![channel_status(0x90, data.channel)?, data.note, data.velocity])
+        }
+        EventType::Noteoff => {
+            let data = event.get_data::<EvNote>().ok_or("missing note data")?;
+            Some(vec![channel_status(0x80, data.channel)?, data.note, data.velocity])
+        }
+        EventType::Keypress => {
+            let data = event.get_data::<EvNote>().ok_or("missing pressure data")?;
+            Some(vec![channel_status(0xa0, data.channel)?, data.note, data.velocity])
+        }
+        EventType::Controller => {
+            let data = event.get_data::<EvCtrl>().ok_or("missing controller data")?;
+            Some(vec![
+                channel_status(0xb0, data.channel)?,
+                u8::try_from(data.param)
+                    .ok()
+                    .filter(|value| *value < 128)
+                    .ok_or_else(|| "MIDI controller out of range".to_owned())?,
+                seven(data.value)?,
+            ])
+        }
+        EventType::Pgmchange => {
+            let data = event.get_data::<EvCtrl>().ok_or("missing program data")?;
+            Some(vec![channel_status(0xc0, data.channel)?, seven(data.value)?])
+        }
+        EventType::Chanpress => {
+            let data = event.get_data::<EvCtrl>().ok_or("missing channel pressure data")?;
+            Some(vec![channel_status(0xd0, data.channel)?, seven(data.value)?])
+        }
+        EventType::Pitchbend => {
+            let data = event.get_data::<EvCtrl>().ok_or("missing pitch data")?;
+            let value = u16::try_from(data.value.saturating_add(8192))
+                .map_err(|_| "pitch value out of range")?;
+            if value > 16_383 {
+                return Err("pitch value out of range".into());
+            }
+            Some(vec![
+                channel_status(0xe0, data.channel)?,
+                (value & 0x7f) as u8,
+                u8::try_from(value >> 7).map_err(|_| "pitch value out of range")?,
+            ])
+        }
+        EventType::Sysex => event.get_ext().map(<[u8]>::to_vec),
+        _ => None,
+    };
+    Ok(bytes)
 }
 
 /// Enumerates physical MIDI ports through the Fedora `midir` backend.
@@ -4397,6 +4672,14 @@ mod tests {
         assert_ne!(input, stable_endpoint_id("Launch Control XL", EndpointDirection::Output));
         assert_ne!(input, stable_endpoint_id("Launch Control XL HUI", EndpointDirection::Input));
         assert!(input.starts_with("midir-in-"));
+    }
+
+    #[test]
+    fn native_alsa_address_is_runtime_only_and_lifecycle_is_typed() {
+        let address = AlsaSequencerAddress::new(24, 0);
+        assert_eq!(address, AlsaSequencerAddress { client: 24, port: 0 });
+        assert_ne!(AlsaSequencerLifecycle::Started, AlsaSequencerLifecycle::Exited);
+        assert_eq!(AlsaSequencerLifecycle::Subscribed, AlsaSequencerLifecycle::Subscribed);
     }
 
     #[test]

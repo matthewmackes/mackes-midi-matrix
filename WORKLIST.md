@@ -7,12 +7,12 @@
 
 | Field | Value |
 |---|---|
-| Worklist version | 1.10 |
+| Worklist version | 1.11 |
 | Product stage | 0.1.11 installed release / v1.0 controller-driven usability redesign |
 | Target release | v1.0 |
 | Primary platform | Fedora Linux 44, x86_64 |
 | Language | Rust |
-| Last updated | 2026-08-30 |
+| Last updated | 2026-08-31 |
 | Overall status | `IN_PROGRESS` (software release scope; post-release qualification tracked in §6.1) |
 | Canonical file | `WORKLIST.md` |
 
@@ -3330,6 +3330,128 @@ after a failed assignment and verifies disk state matches the pre-assignment sto
 test, strict Clippy, worklist validation, formatting, and diff hygiene pass.
 
 
+### Native ALSA Sequencer control-surface runtime
+
+#### [ ] W083 — Native ALSA Sequencer architecture and backend contract
+
+- **Status:** `IN_PROGRESS`
+- **Start date:** —
+- **Owner:** Luna
+- **Depends on:** W020, W022
+- **Parallel with:** documentation-only work that does not alter MIDI endpoint, adapter, or daemon contracts.
+- **Problem statement:** the installed Linux daemon opens hardware inputs through `midir` by exact display name and depends on callback delivery into a polled mutex queue. `aseqdump` repeatedly observes Launch Control XL Mk2 Factory Template 1 Device packets (channel 8, note 105, velocity 127/0) while the daemon records no input batch or assignment transition. Service-account audio membership, ALSA enumeration, output access, the TUI socket, and the hardware template have been verified, so the callback/name-binding layer is the unresolved boundary.
+- **Objective:** freeze an industry-standard Linux MIDI transport contract based on one native ALSA Sequencer client, owned application ports, explicit subscriptions, nonblocking event reads, and client/port lifecycle notifications.
+- **Implementation:** add an ADR making ALSA Sequencer the authoritative Fedora hardware backend; define backend-neutral endpoint identity, source address, subscription, event-read, announcement, reconnect, queue-bound, and error contracts. Preserve MIDI 1.0 domain messages, routing semantics, stable public endpoint IDs, SysEx bounds, virtual ports, and non-Linux builds. Treat PipeWire/JACK as an optional external patch-bay bridge. Specify a feature-gated rollback path through W088.
+- **Public contracts changed:** backend endpoint descriptor and lifecycle event types only; no TUI, mapping, profile, scene, or hardware-protocol behavior changes.
+- **Allowed files:** one ADR, `crates/midi-engine` traits/types and focused tests, workspace dependency metadata, and this worklist.
+- **Excluded behavior:** raw `/dev/snd/midi*` polling, production shell calls to `aconnect`/`aseqdump`, display-name-only opens, unbounded queues, callback-thread routing, mandatory PipeWire/JACK, mapping changes, or early rollback removal.
+- **Tests to add first:** stable client/port identity; duplicate names remain distinct; capability filtering; queue bounds; lifecycle ordering; unknown event rejection; non-Linux feature-disabled build.
+- **Commands:** focused engine tests; workspace all-feature check; strict Clippy; ADR/repository/worklist checks and diff hygiene.
+- **Acceptance:** contracts support W084–W088 without hardware, name guesses, callback-owned routing, or later public-schema invention.
+- **Luna checkpoint:** land ADR and red contract tests first; stop for review before ALSA I/O. Do not start W084 until tests and strict Clippy pass.
+
+**Work log:** 2026-08-31 — codex — `IN_PROGRESS`; added ADR-0009 defining the native ALSA
+Sequencer client/port/subscription contract, stable identity rules, bounded nonblocking reads,
+lifecycle handling, privilege requirements, and rollback boundary. W084 remains dependency-gated
+until contract tests and strict Clippy evidence are recorded. W084 remains dependency-gated.
+
+**Evidence update:** 2026-08-31 — added typed `AlsaSequencerAddress` and
+`AlsaSequencerLifecycle` contracts with regression coverage; 56 MIDI-engine tests, formatting,
+worklist validation, and diff checks pass. Native client I/O and subscription behavior remain open.
+
+**Evidence update:** 2026-08-31 — added the feature-gated native `AlsaSequencerClient` with one
+owned ingress/egress application-port pair, explicit input subscription, bounded pending-event
+query, and MIDI 1.0/SysEx event-to-wire conversion. Native-feature compilation and strict
+engine Clippy pass; daemon cutover and physical qualification remain W087/W088.
+
+#### [ ] W084 — ALSA client, application ports, discovery, and explicit subscriptions
+
+- **Status:** `IN_PROGRESS`
+- **Owner:** Luna
+- **Depends on:** W083
+- **Parallel with:** none in `crates/midi-engine`.
+- **Objective:** implement the native ALSA Sequencer connection/subscription layer without changing daemon routing.
+- **Implementation:** use the Rust `alsa` crate over `snd_seq_*`; open one duplex nonblocking MACKES client; create named application input/output ports with correct capabilities/types; enumerate external ports; reject system, self, Midi Through, and direction-incompatible ports; explicitly subscribe hardware sources to MACKES input and MACKES output to hardware sinks; retain numeric client/port addresses and derive stable IDs from direction plus verified metadata. Make subscription idempotent and distinguish already-subscribed, permission-denied, disappeared-port, and backend failures.
+- **Allowed files:** `crates/midi-engine`, Cargo metadata/lockfile, focused tests, and ALSA fake/seam code. No daemon/TUI edits.
+- **Excluded behavior:** parsing `aconnect`, sleeps, global ALSA handles, one client per hardware port, name-only selection, arbitrary software-port auto-subscription, or physical writes in default tests.
+- **Tests to add first:** fake inventory; duplicate names/addresses; filtering; self/Midi Through exclusion; idempotent subscribe/unsubscribe; disappearing source; permission denial; endpoint bounds; one-client/owned-port invariant.
+- **Commands:** engine fake-backend tests; Linux feature build; strict Clippy; ignored `snd-seq-dummy` loopback test with explicit ports.
+- **Acceptance:** read-only diagnostics report exact ALSA addresses and active subscriptions; failures preserve a usable client and bounded inventory.
+- **Luna checkpoint:** provide fake-inventory/subscription evidence before physical connection.
+
+**Work log:** 2026-08-31 — codex — `IN_PROGRESS`; added the optional `alsa-seq-backend` feature and
+pinned the already-locked `alsa` 0.9.1 dependency. `cargo check -p mackes-midi-engine
+--features alsa-seq-backend` and worklist validation pass. Native client/port implementation and
+subscription tests remain open.
+
+**Evidence update:** 2026-08-31 — implemented `AlsaSequencerClient` with one nonblocking native
+client, owned MIDI application ingress/egress ports, explicit input subscriptions, bounded pending
+queries, and direct runtime address reporting. All-feature engine compilation and strict Clippy
+pass. Full subscription discovery, announcement reconciliation, and daemon cutover remain open.
+
+**Evidence update:** 2026-08-31 — native discovery now enumerates ALSA client/port records with
+capability flags and runtime addresses; the native reader converts bounded note, CC, program,
+pressure, pitch-bend, and SysEx events into MIDI wire messages. All-feature engine tests (56) and
+strict engine Clippy pass. Daemon integration remains W087.
+
+#### [ ] W085 — Nonblocking ALSA event reader and MIDI 1.0 decoder
+
+- **Status:** `NOT_STARTED`
+- **Owner:** Luna
+- **Depends on:** W084
+- **Parallel with:** daemon-independent fixture work only.
+- **Objective:** convert subscribed ALSA events into the existing bounded `MidiEvent` stream, including Launch Control Device/arrows.
+- **Implementation:** read available events nonblockingly; preserve source address, ordering, monotonic sequence, and timestamps; decode note, CC, program, pressure, bend, supported system events, and variable SysEx through domain validation. Drain only the configured batch limit, count malformed/unsupported/overflow events, never route on the reader thread, and resolve source addresses to W083 stable IDs.
+- **Allowed files:** `crates/midi-engine`, legal redacted fixtures, testkit adapters, focused tests. Daemon wiring belongs to W087.
+- **Excluded behavior:** byte guessing, SysEx truncation, blocking reads, sleeps, callback queues, inconsistent velocity-zero semantics, or unsubscribed-source acceptance.
+- **Tests to add first:** Device note 105; arrows CC 104–107; knob/fader CC; velocity zero; channel/range bounds; ordered mixed events; fragmented/maximum/oversized SysEx; unsupported event; source spoof rejection; saturation/recovery; timestamp/sequence projection.
+- **Commands:** decoder/reader and domain/routing tests; strict Clippy; ignored `snd-seq-dummy` ingress test.
+- **Acceptance:** exact Mk2 Device packets arrive once per press without loss, duplication, or polling-delay assumptions and match existing domain fixtures.
+- **Luna checkpoint:** freeze golden events/counters before daemon exposure.
+
+#### [ ] W086 — ALSA announcement, hot-plug, reconnect, and stable identity supervisor
+
+- **Status:** `NOT_STARTED`
+- **Owner:** Luna
+- **Depends on:** W085
+- **Parallel with:** W087 fixture preparation after W085 contracts freeze.
+- **Objective:** keep subscriptions correct across USB reconnects, client-number changes, duplicate names, daemon restarts, and bridge activity.
+- **Implementation:** consume ALSA system announcement events; reconcile desired/actual subscriptions for client/port start, change, exit, subscribe, and unsubscribe; preserve stable identity using direction, normalized hardware identity, port name/index, and configured disambiguation; fail closed on duplicates. Publish connected/degraded/disconnected transitions and request LED/base reapplication only after the correct output returns.
+- **Allowed files:** engine, identity compatibility code required by the ADR, fake announcement streams, focused tests, one fixture.
+- **Excluded behavior:** volatile-number identity, name-only reconnect, infinite retry, sleeps, first-duplicate selection, or mapping deletion on disconnect.
+- **Tests to add first:** changed client number; removal during traffic; duplicate Launch Controls; asymmetric input/output return; event-storm coalescing; stale announcements; daemon restart; ambiguity recovery; one LED-resync intent.
+- **Commands:** engine/testkit lifecycle tests; strict Clippy; documented ignored physical reconnect command.
+- **Acceptance:** reconnect restores intended subscriptions/stable IDs; ambiguity and permission failure remain visible and fail closed.
+- **Luna checkpoint:** prove fake reconnect with changed address and duplicate rejection before daemon wiring.
+
+#### [ ] W087 — Daemon cutover to native ALSA and callback-input removal
+
+- **Status:** `NOT_STARTED`
+- **Owner:** Luna
+- **Depends on:** W086
+- **Parallel with:** TUI presentation work consuming frozen snapshots.
+- **Objective:** make native ALSA the production Linux hardware path while preserving routing, Learn, assignment, LEDs, monitoring, IPC, and safety.
+- **Implementation:** provision one supervisor at startup; poll bounded native events in the main-loop budget; dispatch through the existing routing boundary; expose lifecycle/counters in diagnostics; wire Device note 105 and arrows CC 104–107 to authoritative assignment/navigation state; preserve output ownership and SysEx. Remove temporary `midi_input_batch` logging and stop using `MidirInputCapture` for production input. Keep only justified feature-gated `midir` virtual/output rollback uses and document them. Migrate startup/config without mapping loss.
+- **Allowed files:** daemon, engine, additive IPC diagnostics, installer/service, focused tests, operator docs. TUI redesign and protocol-byte changes excluded.
+- **Excluded behavior:** dual readers, callback routing, root daemon, mode 0666, weakened `mackes-control`, controller reset, or enumeration-only success claims.
+- **Tests to add first:** native Device press starts once; release does not restart; knob advances; arrows navigate; normal routes continue; malformed/unsubscribed fail closed; pressure degrades health; reconnect preserves assignments/reapplies LEDs; snapshot continuity; config migration; mutually exclusive rollback.
+- **Commands:** focused daemon/engine/IPC/TUI tests; workspace all-features tests; strict Clippy; benchmark/integration; installer/worklist/repository/artifact checks.
+- **Acceptance:** installed daemon reacts to Device/controls/arrows through native ALSA; daemon and `aseqdump` agree; no root or shell helper is required.
+- **Luna checkpoint:** feature-flag cutover, prove hermetic parity, install locally, and remove callback input from default only after W088 evidence.
+
+#### [ ] W088 — Native ALSA hardware qualification, rollback, and release closure
+
+- **Status:** `NOT_STARTED`
+- **Owner:** Luna
+- **Depends on:** W087
+- **Parallel with:** none for final qualification.
+- **Objective:** prove the correction locally and close the old transport without hiding defects behind permissions/manual patching.
+- **Implementation:** add bounded diagnostics for addresses, subscriptions, counters, queue high-water, reconnect count, and backend; update installer/systemd with `SupplementaryGroups=audio`, least-privilege `/dev/snd/seq` expectations, actionable errors, and no root runtime. Document PipeWire/JACK routing, native ALSA troubleshooting, rollback, and recovery.
+- **Required localhost walkthrough:** clean service start; Device enters Learn/lights Device; knob/fader capture opens the large workflow; arrows navigate; commit/LED result complete; routing remains live; 100 press/release pairs have zero loss/duplication; restarts preserve mappings; USB reconnect changes volatile address but restores identity/subscription; simultaneous `aseqdump` does not starve daemon; duplicate names fail closed.
+- **Evidence:** exact commands/summaries in `docs/hardware-qualification.md`; redacted journal; subscription diagnostics before/after reconnect; service identity/modes; full release gate; no ignored default software tests; Mk2 color limitations recorded.
+- **Acceptance:** walkthrough passes on Mk2, daemon solely owns production subscriptions, permissions are reproducible/least privilege, rollback is documented, and no native-input defect is falsely complete.
+- **Luna checkpoint:** physical evidence is mandatory. If a step fails, record it and leave the item blocked rather than weakening acceptance.
+
 ### Integration, performance, and release
 
 #### [x] W050 — Full virtual-MIDI and RTP-MIDI integration suite
@@ -3511,6 +3633,7 @@ following order is the default scheduler; a human may record an ADR-approved exc
 | 7 Release | W053 | Automated gates pass; enabled profiles and any pending physical/network validation are visible and documented; release checklist is signed. Physical disconnect/reconnect and external network tests are post-release qualification, not release blockers. |
 | 8 Connected-device TUI | W054–W061 | Software identity/activity/rendering/mapping contracts pass; W061 physical qualification is transferred to deferred W071. |
 | 9 Task-oriented usability redesign | W072–W082 | Stable physical identity, profile hierarchy, mapping contracts/runtime, five-task shell, official User 1 template, controller-driven assignment session/LED engine, distance-first wizard, browser/Undo, legacy rehome, migration, and software release gate pass. |
+| 10 Native ALSA control-surface runtime | W083–W088 | ADR/contracts, one native ALSA client, explicit subscriptions, bounded event decoding, hot-plug identity, daemon cutover, and physical Mk2 qualification pass. |
 
 W027 is complete as a retired-device removal record and has no downstream release capability.
 When W015 lacks an approved AppleMIDI
@@ -4200,3 +4323,4 @@ tests, or code presence alone is not release completion.
 | 2026-08-29 | W010/W016/W020/W024/W030/W031/W032/W040/W041/W042/W043/W044/W046/W047/W048/W049 | codex | software completion reconciliation → DONE | Reconciled sixteen software items whose implementation evidence was complete and whose only remaining state was independent review; under the approved post-release qualification scope, all are now `DONE`. Worklist validation passes with 42 DONE, 6 READY, 4 IN_PROGRESS, and 3 DEFERRED items. |
 | 2026-08-30 | WORKLIST/W072–W080 | operator/codex | approved TUI redesign → governed Luna workstream | Added the task-oriented five-section shell, hardware-first `move control → device → effect → parameter` workflow, stable non-overlapping Novation identities, profile effect hierarchy, durable parameter mappings, daemon evaluator, mapping browser/Undo, four-part visual polish, legacy rehome, migration, and software release-gate packets. W072 and W076 are READY; downstream items are dependency-gated. |
 | 2026-08-30 | WORKLIST/W072–W082 | operator/codex | controller-driven assignment specification → governed Luna workstream | Assigned the full redesign stream to Luna; replaced Map Controls-only capture with short Device entry from any screen; specified 750 ms cancel, 250 ms source disambiguation, controller/keyboard navigation parity, exact large-distance screens, atomic replacement, interruption recovery, official Components User 1 artifact/onboarding, and layered fake-clock-testable LED feedback. Added W081/W082 and extended W076/W077/W080, dependency waves, proposal, and release acceptance evidence. |
+| 2026-08-31 | WORKLIST/W083–W088 | operator/codex | native ALSA correction → governed Luna workstream | Recorded the `aseqdump`-visible/daemon-missing Launch Control Device defect and added an implementation-ready native ALSA Sequencer migration: architecture contract, client/ports/subscriptions, bounded decoder, announcement/reconnect supervisor, daemon cutover, least-privilege deployment, rollback, and physical Mk2 qualification. W083 is READY; downstream packets remain dependency-gated. |

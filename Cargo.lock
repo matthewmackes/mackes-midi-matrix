@@ -723,6 +723,7 @@ dependencies = [
 name = "mackes-midi-engine"
 version = "0.1.11"
 dependencies = [
+ "alsa",
  "mackes-domain",
  "midir",
  "serde",

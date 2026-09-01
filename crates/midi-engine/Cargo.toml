@@ -9,10 +9,12 @@ rust-version.workspace = true
 mackes-domain = { path = "../domain" }
 serde = { workspace = true, features = ["derive"] }
 midir = { workspace = true, optional = true }
+alsa = { workspace = true, optional = true }
 
 [features]
 default = []
 midir-backend = ["dep:midir"]
+alsa-seq-backend = ["dep:alsa"]
 
 [lints]
 workspace = true
