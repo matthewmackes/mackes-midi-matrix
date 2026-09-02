@@ -329,7 +329,7 @@ impl MidiMessage {
                 .map_err(|_| "invalid SysEx data");
         }
         if status >= 0xF0 {
-            return Err("unsupported system message");
+            return Self::system_from_wire(bytes);
         }
         let channel = MidiChannel::new((status & 0x0F) + 1).ok_or("invalid channel")?;
         let data = &bytes[1..];
@@ -354,6 +354,67 @@ impl MidiMessage {
                 })
             }
             _ => Err("unsupported MIDI status"),
+        }
+    }
+
+    fn system_from_wire(bytes: &[u8]) -> Result<Self, &'static str> {
+        let status = bytes[0];
+        let data = |index: usize| {
+            SevenBit::new(u16::from(*bytes.get(index).ok_or("truncated MIDI message")?))
+                .ok_or("invalid MIDI data")
+        };
+        let exact = |length: usize| match bytes.len().cmp(&length) {
+            std::cmp::Ordering::Less => Err("truncated MIDI message"),
+            std::cmp::Ordering::Greater => Err("trailing MIDI bytes"),
+            std::cmp::Ordering::Equal => Ok(()),
+        };
+        match status {
+            0xF1 => {
+                exact(2)?;
+                Ok(Self::SystemCommon(SystemCommonMessage::TimeCodeQuarterFrame(data(1)?)))
+            }
+            0xF2 => {
+                exact(3)?;
+                Ok(Self::SystemCommon(SystemCommonMessage::SongPosition(
+                    FourteenBit::new(
+                        u16::from(data(1)?.as_u8()) | (u16::from(data(2)?.as_u8()) << 7),
+                    )
+                    .ok_or("invalid song position")?,
+                )))
+            }
+            0xF3 => {
+                exact(2)?;
+                Ok(Self::SystemCommon(SystemCommonMessage::SongSelect(data(1)?)))
+            }
+            0xF6 => {
+                exact(1)?;
+                Ok(Self::SystemCommon(SystemCommonMessage::TuneRequest))
+            }
+            0xF8 => {
+                exact(1)?;
+                Ok(Self::Realtime(RealtimeMessage::Clock))
+            }
+            0xFA => {
+                exact(1)?;
+                Ok(Self::Realtime(RealtimeMessage::Start))
+            }
+            0xFB => {
+                exact(1)?;
+                Ok(Self::Realtime(RealtimeMessage::Continue))
+            }
+            0xFC => {
+                exact(1)?;
+                Ok(Self::Realtime(RealtimeMessage::Stop))
+            }
+            0xFE => {
+                exact(1)?;
+                Ok(Self::Realtime(RealtimeMessage::ActiveSensing))
+            }
+            0xFF => {
+                exact(1)?;
+                Ok(Self::Realtime(RealtimeMessage::Reset))
+            }
+            _ => Err("unsupported system message"),
         }
     }
 
@@ -427,6 +488,16 @@ mod tests {
         let sysex = MidiMessage::from_wire(&[0xF0, 1, 127, 0xF7]).expect("sysex");
         assert_eq!(sysex.wire_bytes(), vec![0xF0, 1, 127, 0xF7]);
         assert!(MidiMessage::from_wire(&[0x90, 60]).is_err());
+        assert_eq!(
+            MidiMessage::from_wire(&[0xF8]).expect("clock"),
+            MidiMessage::Realtime(RealtimeMessage::Clock)
+        );
+        assert_eq!(
+            MidiMessage::from_wire(&[0xF6]).expect("tune"),
+            MidiMessage::SystemCommon(SystemCommonMessage::TuneRequest)
+        );
+        assert_eq!(MidiMessage::from_wire(&[0xF4]), Err("unsupported system message"));
+        assert_eq!(MidiMessage::from_wire(&[0xF8, 0x00]), Err("trailing MIDI bytes"));
     }
 
     #[test]

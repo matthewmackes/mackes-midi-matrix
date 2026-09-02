@@ -29,14 +29,15 @@ reviewed ceilings for the current roots:
 
 | File | Maximum lines |
 | --- | ---: |
-| `crates/profiles/src/lib.rs` | 6,100 |
-| `crates/midi-engine/src/lib.rs` | 5,500 |
-| `crates/tui/src/lib.rs` | 6,900 |
-| `apps/mackesd/src/lib.rs` | 4,700 |
-| `apps/mackes/src/main.rs` | 3,000 |
+| `crates/profiles/src/lib.rs` | 3,100 |
+| `crates/midi-engine/src/lib.rs` | 3,100 |
+| `crates/tui/src/lib.rs` | 4,200 |
+| `apps/mackesd/src/lib.rs` | 3,600 |
+| `apps/mackes/src/main.rs` | 800 |
 
-The ceilings prevent further monolith growth while W097 moves characterized behavior into modules.
-They may only be changed alongside an ADR and a corresponding extraction plan.
+Extracted private modules hold characterized behavior: `profiles::lexicon_reflex`,
+`midi-engine::rtp`, `tui::render`, operator `cli`/`interactive`, and crate-local `tests.rs`
+files. Ceilings track the remaining composition roots. They may only be raised with an ADR.
 
 Run `python3 scripts/check-architecture.py` locally; repository verification and the release gate
 run it automatically.

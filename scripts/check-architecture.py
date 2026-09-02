@@ -11,11 +11,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 
 MAX_LINES = {
-    "crates/profiles/src/lib.rs": 6100,
-    "crates/midi-engine/src/lib.rs": 5500,
-    "crates/tui/src/lib.rs": 6900,
-    "apps/mackesd/src/lib.rs": 4700,
-    "apps/mackes/src/main.rs": 3000,
+    "crates/profiles/src/lib.rs": 3100,
+    "crates/midi-engine/src/lib.rs": 3100,
+    "crates/tui/src/lib.rs": 4200,
+    "apps/mackesd/src/lib.rs": 3600,
+    "apps/mackes/src/main.rs": 800,
 }
 
 ALLOWED_LOCAL_DEPS = {

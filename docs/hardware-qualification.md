@@ -144,3 +144,99 @@ and preset-load projection remain to be qualified.
 Device → knob → Right Arrow testing. The native daemon recorded CC107 from the Mk2 and advanced
 the authoritative assignment session to `ChooseParameter`, proving the physical Right Arrow now
 performs the same Enter transition as the keyboard while Learn is active.
+
+## Native ALSA walkthrough 2026-09-02
+
+Clean `systemctl restart mackes-midi-matrix.service`: `ActiveState=active`, `MainPID=1055809`,
+`User=mackes`, `Group=mackes-control`, `SupplementaryGroups=audio`, `DeviceAllow=/dev/snd/seq rw`,
+`/dev/snd/seq` mode `crw-rw---- root:audio`. Status: `health=ready`, `native_backend=alsa-seq`,
+`registered_inputs=7`, `received=0`, assignment `Idle`, `native_failure` none. USB `1235:0061`
+enumerates as ALSA client `24`; `24:0` is subscribed only by daemon ingress `130:0`, and daemon
+output `131:0` is connected to `24:0`.
+
+Physical Factory Template 1 Device press/release: daemon `received=1`, phase `Idle` →
+`AwaitControl`, last activity Note Off 105 on zero-based channel 8 from Mk2 stable input
+`midir-in-8cb77f53a765bab7`. Operator selected Device pressed-and-released.
+
+Physical top-left knob: CC13 sweep, `has_draft=true`, phase `AwaitControl` → `ChooseDevice`.
+Operator reported the captured control LED went yellow.
+
+Physical Right arrow (CC107 press/release) advanced exactly one catalog level per press:
+`ChooseDevice` → `ChoosePreset` → `ChooseEffect` → `ChooseType` → `ChooseParameter`. Received
+counters advanced by one decoded press per step.
+
+Physical Right on `ChooseParameter` did **not** commit. CC107 was received (`received` 258 → 259)
+and the session remained `ChooseParameter` with `control_mappings` absent from status and
+`sent=0`. Native dispatch applies `Enter` for Right only when the phase is not Idle and not
+`ChooseParameter`; the parameter-level Right is recorded as TUI `ui_navigation` instead of a
+typed Commit with destination IDs. Commit/LED result is therefore incomplete on the controller
+path and remains open under W088/W096. This is not recorded as a passing commit.
+
+USB reconnect, 100-pair integrity, simultaneous `aseqdump` starvation, restart mapping survival,
+and duplicate-name fail-closed remain.
+
+## Native ALSA walkthrough 2026-09-02 (operator-driven)
+
+Service `mackes-midi-matrix.service` `ActiveState=active`, `MainPID=1056166`, `User=mackes`,
+`SupplementaryGroups=audio`, `health=ready`, `native_backend=alsa-seq`, `registered_inputs=7`.
+USB `1235:0061` present with Eventide `1b12:003a` and MIDISPORT `0763:1021`. Mk2 ALSA client
+`24:0` subscribed by daemon ingress `130:0`.
+
+Device short-press: `Idle` → `AwaitControl`, Note Off 105 channel 8. Operator reported Device LED
+lit. Top-left channel button: `AwaitControl` → `ChooseDevice`, Note Off 41, operator reported pad
+LED lit. Four Right arrows (CC107) advanced `ChooseDevice` → `ChoosePreset` → `ChooseEffect` →
+`ChooseType` → `ChooseParameter` (received 2 → 6). Fifth Right was received (received 7) and
+left phase `ChooseParameter` with `sent=0` and no mapping; controller commit is still incomplete
+on this installed daemon. Device hold did not cancel; last accidental pad event was Note Off 41.
+A later Device hold produced Note Off 105 but phase stayed `ChooseParameter`. Host IPC `Cancel`
+at assignment generation 6 returned `Idle`.
+
+Second Learn: Device tap → `AwaitControl`; top-left knob CC13 → `ChooseDevice` (received 12 → 75);
+operator reported knob LED lit.
+
+USB reconnect of Mk2 only: USB device `087` → `088`, identity still `1235:0061`, ALSA client
+still `24`. Learn remained `ChooseDevice`. Input `24:0` resubscribed to `130:0`. Daemon output
+`131` did **not** reconnect to `24:0`. Snapshot `native_led_resync=false`. Operator reported knobs
+lit after replug; that is not treated as daemon LED replay. Post-reconnect Right arrow advanced
+`ChooseDevice` → `ChoosePreset`, CC107, received 110 → 111.
+
+100 press/release pairs on Mute (Note 106): received 111 → 161 (25 pairs) then 161 → 311 (75
+pairs). Exactly 200 Mute events, `dropped=0`, last event Note Off 106, phase stayed
+`ChoosePreset`. This closes the 100-pair integrity step for this walkthrough.
+
+Post-count Down arrow: received 311 → 312, CC105 channel 8, phase stayed `ChoosePreset` (cursor
+unchanged at preset 0). Up arrow: received 312 → 313, CC104 channel 8. Left arrow: received
+313 → 314, CC106 channel 8; phase stayed `ChoosePreset` (this installed daemon dispatched Left
+as ordinary CC rather than Assignment Back). Solo: received 314 → 316, Note Off 107 channel 8.
+Record Arm: received 316 → 318, Note Off 108 channel 8. Leftmost fader: received 318 → 572,
+CC77 channel 8 including value 0. Operator reported no LED change on Solo, Record Arm, or the
+fader; Factory 1 faders have no LED address, and this Learn session only lights Device plus the
+already-captured control.
+
+Rightmost-fader attempt: no new daemon event (`received` stayed 572, last activity still CC77).
+Retry with a full travel: received 572 → 826, CC84 channel 8 value 0.
+
+Bottom-left channel button first attempt: received 826 → 905 with last activity still CC84
+value 79 (fader 8 still moving). Note 57 was not the last event. Two further pad attempts
+produced no new daemon events (`received` stayed 1033, last activity CC13). Top-right knob:
+received 1033 → 1097, CC20 channel 8 value 64. Operator then requested the faceplate sweep be cut to minimum; last sampled activity was CC36
+channel 8 (`received` 1161). Remaining Factory 1 knob/pad cells are not required for this
+walkthrough. Physical session stopped at operator `done`; no Eventide/Reflex write was sent.
+
+Controller commit/LED result, daemon output resubscribe after USB reconnect, restart mapping
+survival, duplicate-name fail-closed, and physical Reflex/Eventide send remain.
+
+## LED contract (software; physical still open)
+
+W091 software owner is the daemon LED surface. Runtime feedback uses Factory Template 1
+(`template` byte `1`) only. Writes require exactly one Launch Control XL Mk2 MIDI output;
+HUI endpoints are ignored; two MIDI endpoints fail closed with a snapshot `led.last_error`.
+Base colors come from persisted mappings: unmapped OFF, Lexicon amber, Eventide red, other
+owners green. Learn capture is yellow. Successful persist uses two 400 ms green pulses, then
+the owner color; failure uses the matching red pulse sequence.
+
+Faders have no individual LED address. Software policy: a mapped fader lights that column's
+two channel-button LEDs as a proxy, unless a button in the column already has its own
+assignment, in which case the button owner wins. Blue is not a Launch Control XL Mk2 color
+and is rejected as `Unknown`. Physical OFF/yellow/amber/red/pulse/proxy qualification remains
+open under W091/W092.

@@ -230,15 +230,22 @@ pub struct Daemon {
     mapping_store: mackes_config::ControlMappingStore,
     assignment_generation: u64,
     assignment_session: mackes_ipc::AssignmentSession,
-    assignment_leds: mackes_profiles::LedFeedbackScheduler,
+    led: led_surface::LedSurface,
     assignment_previous_store: Option<mackes_config::ControlMappingStore>,
     assignment_pending_mapping: Option<mackes_config::ControlMapping>,
     assignment_control_id: Option<String>,
+    assignment_capture_at: Option<Instant>,
+    assignment_device_down_at: Option<Instant>,
     router: mackes_midi_engine::RouterStore,
     rtp_peer: mackes_midi_engine::RtpMidiPeer,
     outputs: mackes_midi_engine::OutputRegistry,
     inputs: mackes_midi_engine::InputRegistry,
     deferred_inputs: VecDeque<mackes_domain::MidiEvent>,
+    alsa_supervisor: mackes_midi_engine::NativeAlsaSupervisor,
+    last_native_failure: Option<&'static str>,
+    native_led_resync: bool,
+    #[cfg(feature = "alsa-seq-backend")]
+    xl_midi_output_address: Option<mackes_midi_engine::AlsaSequencerAddress>,
     #[cfg(feature = "alsa-seq-backend")]
     alsa_input_client:
         Option<std::sync::Arc<std::sync::Mutex<mackes_midi_engine::AlsaSequencerClient>>>,
@@ -556,18 +563,23 @@ impl Daemon {
             mapping_store: mackes_config::ControlMappingStore::default(),
             assignment_generation: 0,
             assignment_session: mackes_ipc::AssignmentSession::new("live"),
-            assignment_leds: mackes_profiles::LedFeedbackScheduler::new(
-                mackes_profiles::LedState::new(mackes_profiles::LedColor::Off, 0, false),
-            ),
+            led: led_surface::LedSurface::default(),
             assignment_previous_store: None,
             assignment_pending_mapping: None,
             assignment_control_id: None,
+            assignment_capture_at: None,
+            assignment_device_down_at: None,
             router: mackes_midi_engine::RouterStore::new(Vec::new(), 0, 8)
                 .map_err(io::Error::other)?,
             rtp_peer: mackes_midi_engine::RtpMidiPeer::new(0, 32).map_err(io::Error::other)?,
             outputs: mackes_midi_engine::OutputRegistry::new(64),
             inputs: mackes_midi_engine::InputRegistry::new(64),
             deferred_inputs: VecDeque::with_capacity(256),
+            alsa_supervisor: mackes_midi_engine::NativeAlsaSupervisor::new(),
+            last_native_failure: None,
+            native_led_resync: false,
+            #[cfg(feature = "alsa-seq-backend")]
+            xl_midi_output_address: None,
             #[cfg(feature = "alsa-seq-backend")]
             alsa_input_client: None,
             virtual_ports: None,
@@ -798,6 +810,9 @@ impl Daemon {
 
     /// Pumps one captured physical input event through routing and outputs.
     ///
+    /// This path exists only for the feature-gated `midir` rollback adapter. Production
+    /// Linux input uses native ALSA polling through [`Self::poll_and_dispatch_inputs`].
+    ///
     /// # Errors
     ///
     /// Returns the MIDI decoder error when the queued input is malformed.
@@ -834,6 +849,85 @@ impl Daemon {
         self.register_output(Box::new(output)).map_err(str::to_owned)
     }
 
+    /// Removes a previously registered output by stable identity.
+    pub fn unregister_output(&mut self, id: &str) -> bool {
+        self.outputs.remove(id)
+    }
+
+    /// Rebuilds controller LEDs from persisted mappings onto the unique Mk2 MIDI output.
+    pub fn replay_controller_leds(&mut self) {
+        self.led.request_full_resync();
+        self.flush_controller_leds();
+    }
+
+    /// Advances the LED scheduler on the daemon monotonic clock and emits due frames.
+    pub fn flush_controller_leds(&mut self) {
+        let now_ms = u64::try_from(self.safety_clock.elapsed().as_millis()).unwrap_or(u64::MAX);
+        self.flush_controller_leds_at(now_ms);
+    }
+
+    fn drop_launch_control_midi_outputs(&mut self) {
+        let ids: Vec<String> = self
+            .outputs
+            .output_infos()
+            .into_iter()
+            .filter(|info| {
+                let lowered = info.name.to_ascii_lowercase();
+                !lowered.contains("hui")
+                    && mackes_profiles::classify_launch_control(&info.name)
+                        == mackes_profiles::LaunchControlIdentity::Mk2
+            })
+            .map(|info| info.id)
+            .collect();
+        for id in ids {
+            self.outputs.remove(&id);
+        }
+    }
+
+    fn reopen_launch_control_midi_output(&mut self) -> Result<(), String> {
+        self.drop_launch_control_midi_outputs();
+        let ports = mackes_midi_engine::enumerate_midir_ports()?;
+        let selected =
+            led_surface::unique_launch_control_midi_output(ports.iter().filter_map(|port| {
+                (port.direction == mackes_midi_engine::EndpointDirection::Output)
+                    .then_some((port.id.as_str(), port.name.as_str()))
+            }))?;
+        self.provision_output(&selected.1)
+    }
+
+    #[cfg(feature = "alsa-seq-backend")]
+    fn restore_launch_control_midi_output(
+        &mut self,
+        ports: &[mackes_midi_engine::AlsaSequencerPort],
+    ) {
+        let current = led_surface::unique_mk2_midi_writable_address(ports);
+        if current == self.xl_midi_output_address {
+            return;
+        }
+        if current.is_none() {
+            self.xl_midi_output_address = None;
+            self.drop_launch_control_midi_outputs();
+            return;
+        }
+        if self.reopen_launch_control_midi_output().is_ok() {
+            self.xl_midi_output_address = current;
+            self.native_led_resync = true;
+            self.replay_controller_leds();
+        }
+    }
+
+    /// Advances LED overlays at an explicit fake-clock instant.
+    pub fn flush_controller_leds_at(&mut self, now_ms: u64) {
+        self.led.flush(
+            now_ms,
+            &self.mapping_store,
+            &self.assignment_session,
+            self.assignment_control_id.as_deref(),
+            &mut self.outputs,
+            self.safety.performance_locked(),
+        );
+    }
+
     /// Sends one already-validated event to a registered endpoint.
     pub fn send_event_to_endpoint(
         &mut self,
@@ -864,7 +958,44 @@ impl Daemon {
     ) -> mackes_ipc::AssignmentResult {
         let mut applied = false;
         let mut reason = None;
-        if request.generation != self.assignment_generation {
+        let mut request = request;
+        if request.action == mackes_ipc::AssignmentAction::ControlCaptured {
+            if let Some(control) = request.physical_control_id.clone() {
+                self.assignment_session.catalog.captured_control_id = Some(control);
+            }
+        }
+        if request.action == mackes_ipc::AssignmentAction::Enter {
+            assignment_catalog::lock_active_selection(&mut self.assignment_session);
+            if assignment_catalog::continuous_preset_forbidden(&self.assignment_session) {
+                reason = Some("preset destinations require a channel button".into());
+            } else if assignment_catalog::button_preset_ready(&self.assignment_session)
+                || self.assignment_session.phase == mackes_ipc::AssignmentPhase::ChooseParameter
+            {
+                if let Some((control, profile, effect, parameter)) =
+                    assignment_catalog::commit_from_catalog(&self.assignment_session)
+                {
+                    request.action = mackes_ipc::AssignmentAction::Commit;
+                    request.physical_control_id = Some(control);
+                    request.destination_profile = Some(profile);
+                    request.destination_effect = Some(effect);
+                    request.destination_parameter = Some(parameter);
+                }
+            }
+        }
+        if request.action == mackes_ipc::AssignmentAction::Commit
+            && !request.has_complete_destination()
+        {
+            if let Some((control, profile, effect, parameter)) =
+                assignment_catalog::commit_from_catalog(&self.assignment_session)
+            {
+                request.physical_control_id = Some(control);
+                request.destination_profile = Some(profile);
+                request.destination_effect = Some(effect);
+                request.destination_parameter = Some(parameter);
+            }
+        }
+        if reason.is_some() {
+        } else if request.generation != self.assignment_generation {
             reason = Some("assignment generation conflict".into());
         } else if let Err(error) = request.clone().validate() {
             reason = Some(error.into());
@@ -881,15 +1012,21 @@ impl Daemon {
         {
             reason = Some("assignment commit requires a complete destination".into());
         } else {
+            self.sync_assignment_catalog();
             if request.action == mackes_ipc::AssignmentAction::ConfirmReplace {
                 let previous_store = self.mapping_store.clone();
                 if let Some(mapping) = self.assignment_pending_mapping.take() {
-                    if let Some(existing) = self.mapping_store.active.iter().find(|existing| {
-                        existing.physical_control_id == mapping.physical_control_id
-                            || (existing.destination_profile == mapping.destination_profile
-                                && existing.destination_effect == mapping.destination_effect
-                                && existing.destination_parameter == mapping.destination_parameter)
-                    }) {
+                    if !assignment_commit::mapping_role_compatible(&mapping) {
+                        reason = Some("preset destinations require a channel button".into());
+                    } else if let Some(existing) =
+                        self.mapping_store.active.iter().find(|existing| {
+                            existing.physical_control_id == mapping.physical_control_id
+                                || (existing.destination_profile == mapping.destination_profile
+                                    && existing.destination_effect == mapping.destination_effect
+                                    && existing.destination_parameter
+                                        == mapping.destination_parameter)
+                        })
+                    {
                         let mut replacement = mapping;
                         replacement.id.clone_from(&existing.id);
                         if let Err(error) =
@@ -921,96 +1058,76 @@ impl Daemon {
             }
             if request.action == mackes_ipc::AssignmentAction::Commit {
                 let previous_store = self.mapping_store.clone();
-                let control_id = request.physical_control_id.as_deref().expect("validated control");
-                let control = mackes_profiles::launch_control_physical_catalog()
-                    .into_iter()
-                    .find(|item| item.id.as_str() == control_id);
-                if let Some(control) = control {
-                    let mapping = mackes_config::ControlMapping {
-                        id: format!("assignment-{control_id}"),
-                        controller_profile: "launch-control-xl-mk2".into(),
-                        physical_control_id: control_id.into(),
-                        source_endpoint: "controller".into(),
-                        source_kind: if control.role
-                            == mackes_profiles::PhysicalControlRole::ChannelButton
-                        {
-                            "note".into()
+                match assignment_commit::mapping_from_request(
+                    &request,
+                    &self.assignment_session.catalog,
+                ) {
+                    Err(error) => reason = Some(error),
+                    Ok(mapping) => {
+                        let is_replace =
+                            request.action == mackes_ipc::AssignmentAction::ConfirmReplace;
+                        let mapping_for_rollback = mapping.clone();
+                        let mut mapping = mapping;
+                        if is_replace {
+                            if let Some(existing) =
+                                self.mapping_store.active.iter().find(|existing| {
+                                    existing.physical_control_id == mapping.physical_control_id
+                                        || (existing.destination_profile
+                                            == mapping.destination_profile
+                                            && existing.destination_effect
+                                                == mapping.destination_effect
+                                            && existing.destination_parameter
+                                                == mapping.destination_parameter)
+                                })
+                            {
+                                mapping.id.clone_from(&existing.id);
+                            }
+                        }
+                        let mutation = if is_replace {
+                            self.mapping_store.replace(self.mapping_store.generation, mapping)
                         } else {
-                            "cc".into()
-                        },
-                        source_channel: 0,
-                        source_number: control.source_address.unwrap_or_default(),
-                        destination_endpoint: "processor".into(),
-                        destination_profile: request
-                            .destination_profile
-                            .clone()
-                            .expect("validated profile"),
-                        destination_effect: request
-                            .destination_effect
-                            .clone()
-                            .expect("validated effect"),
-                        destination_parameter: request
-                            .destination_parameter
-                            .clone()
-                            .expect("validated parameter"),
-                        behavior: mackes_config::MappingBehavior {
-                            source_range: (0, 127),
-                            destination_range: (0, 127),
-                            invert: false,
-                            curve: "linear".into(),
-                        },
-                        enabled: true,
-                        profile_version: 1,
-                    };
-                    let is_replace = request.action == mackes_ipc::AssignmentAction::ConfirmReplace;
-                    let mapping_for_rollback = mapping.clone();
-                    let mut mapping = mapping;
-                    if is_replace {
-                        if let Some(existing) = self.mapping_store.active.iter().find(|existing| {
-                            existing.physical_control_id == mapping.physical_control_id
-                                || (existing.destination_profile == mapping.destination_profile
-                                    && existing.destination_effect == mapping.destination_effect
-                                    && existing.destination_parameter
-                                        == mapping.destination_parameter)
-                        }) {
-                            mapping.id.clone_from(&existing.id);
-                        }
-                    }
-                    let mutation = if is_replace {
-                        self.mapping_store.replace(self.mapping_store.generation, mapping)
-                    } else {
-                        self.mapping_store.activate(self.mapping_store.generation, mapping)
-                    };
-                    if let Err(error) = mutation {
-                        if !is_replace && error.contains("occupied") {
-                            self.assignment_pending_mapping = Some(mapping_for_rollback);
-                            self.assignment_session.phase =
-                                mackes_ipc::AssignmentPhase::ConfirmReplace;
-                            self.assignment_generation =
-                                self.assignment_generation.saturating_add(1);
-                            return mackes_ipc::AssignmentResult {
-                                generation: self.assignment_generation,
-                                session: self.assignment_session.clone(),
-                                applied: true,
-                                reason: Some("existing mapping found; confirm replacement".into()),
-                            };
-                        }
-                        reason = Some(format!("assignment activation failed: {error}"));
-                    } else if let Some(path) = self.config_path.as_deref() {
-                        if mackes_config::save_control_mapping_store(path, &self.mapping_store, 1)
+                            self.mapping_store.activate(self.mapping_store.generation, mapping)
+                        };
+                        if let Err(error) = mutation {
+                            if !is_replace && error.contains("occupied") {
+                                self.assignment_pending_mapping = Some(mapping_for_rollback);
+                                self.assignment_session.phase =
+                                    mackes_ipc::AssignmentPhase::ConfirmReplace;
+                                self.assignment_generation =
+                                    self.assignment_generation.saturating_add(1);
+                                return mackes_ipc::AssignmentResult {
+                                    generation: self.assignment_generation,
+                                    session: self.assignment_session.clone(),
+                                    applied: true,
+                                    reason: Some(
+                                        "existing mapping found; confirm replacement".into(),
+                                    ),
+                                };
+                            }
+                            reason = Some(format!("assignment activation failed: {error}"));
+                        } else if let Some(path) = self.config_path.as_deref() {
+                            if mackes_config::save_control_mapping_store(
+                                path,
+                                &self.mapping_store,
+                                1,
+                            )
                             .is_err()
-                        {
-                            self.mapping_store = previous_store;
-                            reason = Some("assignment persistence failed".into());
+                            {
+                                self.mapping_store = previous_store;
+                                reason = Some("assignment persistence failed".into());
+                            } else {
+                                self.assignment_previous_store = Some(previous_store);
+                            }
                         } else {
                             self.assignment_previous_store = Some(previous_store);
                         }
-                    } else {
-                        self.assignment_previous_store = Some(previous_store);
                     }
                 }
             }
             if reason.is_some() {
+                self.assignment_session.catalog.last_error.clone_from(&reason);
+                self.assignment_session.catalog.pending_action =
+                    Some(format!("{:?}", request.action));
                 return mackes_ipc::AssignmentResult {
                     generation: self.assignment_generation,
                     session: self.assignment_session.clone(),
@@ -1080,33 +1197,34 @@ impl Daemon {
                 if request.action == mackes_ipc::AssignmentAction::Commit
                     || request.action == mackes_ipc::AssignmentAction::ConfirmReplace
                     || request.action == mackes_ipc::AssignmentAction::Succeed
+                    || request.action == mackes_ipc::AssignmentAction::Fail
+                    || request.action == mackes_ipc::AssignmentAction::Cancel
                 {
-                    self.send_mapping_led_feedback();
+                    self.led.request_full_resync();
                 }
-                let phase = self.assignment_session.phase;
-                self.assignment_leds.assignment = match phase {
-                    mackes_ipc::AssignmentPhase::Idle => {
-                        self.assignment_leds.result = None;
-                        None
-                    }
-                    mackes_ipc::AssignmentPhase::Interrupted => Some(
-                        mackes_profiles::LedState::new(mackes_profiles::LedColor::Red, 127, true),
-                    ),
-                    mackes_ipc::AssignmentPhase::Succeeded
-                    | mackes_ipc::AssignmentPhase::Failed => {
-                        self.assignment_leds.result =
-                            Some((phase == mackes_ipc::AssignmentPhase::Succeeded, 0));
-                        None
-                    }
-                    _ => Some(mackes_profiles::LedState::new(
-                        mackes_profiles::LedColor::Green,
-                        127,
-                        true,
-                    )),
-                };
-                self.send_assignment_led_feedback();
+                self.flush_controller_leds();
                 self.record_state_event(Command::Assignment);
+                if applied
+                    && self.assignment_session.phase == mackes_ipc::AssignmentPhase::Committing
+                    && reason.is_none()
+                {
+                    return self.apply_assignment_request(mackes_ipc::AssignmentRequest {
+                        generation: self.assignment_generation,
+                        action: mackes_ipc::AssignmentAction::Succeed,
+                        physical_control_id: None,
+                        destination_profile: None,
+                        destination_effect: None,
+                        destination_parameter: None,
+                    });
+                }
             }
+        }
+        self.sync_assignment_catalog();
+        self.assignment_session.catalog.pending_action = Some(format!("{:?}", request.action));
+        self.assignment_session.catalog.last_error.clone_from(&reason);
+        if applied {
+            self.assignment_session.catalog.last_result =
+                Some(format!("{:?}", self.assignment_session.phase));
         }
         mackes_ipc::AssignmentResult {
             generation: self.assignment_generation,
@@ -1119,7 +1237,7 @@ impl Daemon {
     /// Returns the authoritative assignment LED state at a fake-clock instant.
     #[must_use]
     pub const fn assignment_led_state_at(&self, elapsed_ms: u64) -> mackes_profiles::LedState {
-        self.assignment_leds.state_at(elapsed_ms)
+        self.led.scheduler.state_at(elapsed_ms)
     }
 
     /// Returns the validated Mk1 `SysEx` frame for the current assignment LED state.
@@ -1137,103 +1255,6 @@ impl Daemon {
         )
     }
 
-    fn send_assignment_led_feedback(&mut self) {
-        let Some(bytes) = self.assignment_led_frame_at(8, 40, 0) else { return };
-        let Ok(message) = mackes_domain::MidiMessage::from_wire(&bytes) else { return };
-        for endpoint in self.outputs.endpoint_ids_named("Launch Control XL") {
-            self.send_event_to_endpoint(
-                endpoint,
-                mackes_domain::MidiEvent {
-                    timestamp: mackes_domain::TimestampNanos::new(0),
-                    sequence: 0,
-                    endpoint,
-                    message: message.clone(),
-                },
-            );
-        }
-    }
-
-    fn send_control_led_feedback(&mut self, control_id: &str, state: mackes_profiles::LedState) {
-        let Some(index) = mackes_profiles::launch_control_physical_catalog()
-            .into_iter()
-            .find(|control| control.id.as_str() == control_id)
-            .and_then(|control| control.feedback_address)
-        else {
-            return;
-        };
-        let Some(bytes) = mackes_profiles::encode_launch_control_feedback(8, index, state) else {
-            return;
-        };
-        let Ok(message) = mackes_domain::MidiMessage::from_wire(&bytes) else { return };
-        for endpoint in self.outputs.endpoint_ids_named("Launch Control XL") {
-            self.send_event_to_endpoint(
-                endpoint,
-                mackes_domain::MidiEvent {
-                    timestamp: mackes_domain::TimestampNanos::new(0),
-                    sequence: 0,
-                    endpoint,
-                    message: message.clone(),
-                },
-            );
-        }
-    }
-
-    /// Reapplies the durable owner color for every mapped Launch Control LED.
-    ///
-    /// This is deliberately derived from the mapping store, rather than from the
-    /// transient Learn session, so a successful commit and a reconnect use the
-    /// same source of truth.  The XL Mk2 exposes red/green/amber, therefore the
-    /// Lexicon owner uses the documented amber representation.
-    fn send_mapping_led_feedback(&mut self) {
-        let outputs = self.outputs.endpoint_ids_named("Launch Control XL");
-        let catalog = mackes_profiles::launch_control_physical_catalog();
-        for control in catalog {
-            let Some(index) = control.feedback_address else { continue };
-            let state = self
-                .mapping_store
-                .active
-                .iter()
-                .find(|mapping| mapping.physical_control_id == control.id.as_str())
-                .map_or(
-                    mackes_profiles::LedState::new(mackes_profiles::LedColor::Off, 0, false),
-                    |mapping| {
-                        let color = if mapping
-                            .destination_profile
-                            .to_ascii_lowercase()
-                            .contains("eventide")
-                        {
-                            mackes_profiles::LedColor::Red
-                        } else if mapping
-                            .destination_profile
-                            .to_ascii_lowercase()
-                            .contains("lexicon")
-                        {
-                            mackes_profiles::LedColor::Amber
-                        } else {
-                            mackes_profiles::LedColor::Green
-                        };
-                        mackes_profiles::LedState::new(color, 127, false)
-                    },
-                );
-            let Some(bytes) = mackes_profiles::encode_launch_control_feedback(8, index, state)
-            else {
-                continue;
-            };
-            let Ok(message) = mackes_domain::MidiMessage::from_wire(&bytes) else { continue };
-            for endpoint in &outputs {
-                self.send_event_to_endpoint(
-                    *endpoint,
-                    mackes_domain::MidiEvent {
-                        timestamp: mackes_domain::TimestampNanos::new(0),
-                        sequence: 0,
-                        endpoint: *endpoint,
-                        message: message.clone(),
-                    },
-                );
-            }
-        }
-    }
-
     fn project_reflex_preset_to_controller(&mut self, preset_id: &str) {
         let Ok(values) =
             mackes_profiles::lexicon_reflex::pcm70_translation_controller_values(preset_id)
@@ -1241,7 +1262,11 @@ impl Daemon {
             return;
         };
         let values = values.into_iter().collect::<std::collections::BTreeMap<_, _>>();
-        let outputs = self.outputs.endpoint_ids_named("Launch Control XL");
+        let infos = self.outputs.output_infos();
+        let Ok((endpoint, _)) = led_surface::unique_output_from_infos(&infos) else {
+            self.flush_controller_leds();
+            return;
+        };
         let mappings = self
             .mapping_store
             .active
@@ -1258,8 +1283,9 @@ impl Daemon {
                 continue;
             };
             let Some(value) = values.get(&parameter).copied() else { continue };
-            for endpoint in outputs.iter().copied() {
-                self.send_event_to_endpoint(
+            if self
+                .outputs
+                .send_to_endpoint(
                     endpoint,
                     mackes_domain::MidiEvent {
                         timestamp: mackes_domain::TimestampNanos::new(0),
@@ -1276,9 +1302,13 @@ impl Daemon {
                                 .expect("normalized controller value"),
                         },
                     },
-                );
+                )
+                .is_err()
+            {
+                return;
             }
         }
+        self.flush_controller_leds();
     }
 
     fn experimental_mapping(mapping: &mackes_config::ControlMapping) -> bool {
@@ -1413,6 +1443,48 @@ impl Daemon {
         (sent, unmatched)
     }
 
+    /// Applies one daemon-owned `DeviceControl` request without a client-side MIDI open.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when confirmation is missing, fields are incomplete, the profile cannot
+    /// render the control, or the destination output is not registered.
+    pub fn apply_device_control(&mut self, request: &serde_json::Value) -> Result<Vec<u8>, String> {
+        if request.get("confirm").and_then(serde_json::Value::as_bool) != Some(true) {
+            return Err("device control requires confirmation".into());
+        }
+        let profile_id = request
+            .get("profile_id")
+            .and_then(serde_json::Value::as_str)
+            .ok_or_else(|| "device control fields are required".to_owned())?;
+        let control = request
+            .get("control")
+            .and_then(serde_json::Value::as_str)
+            .ok_or_else(|| "device control fields are required".to_owned())?;
+        let channel = request
+            .get("channel")
+            .and_then(serde_json::Value::as_u64)
+            .and_then(|number| u8::try_from(number).ok())
+            .ok_or_else(|| "device control fields are required".to_owned())?;
+        let control_value = request
+            .get("value")
+            .and_then(serde_json::Value::as_u64)
+            .and_then(|number| u16::try_from(number).ok())
+            .ok_or_else(|| "device control fields are required".to_owned())?;
+        let destination = request
+            .get("destination")
+            .and_then(serde_json::Value::as_str)
+            .ok_or_else(|| "device control fields are required".to_owned())?;
+        let profile =
+            mackes_profiles::builtin_profile(profile_id).ok_or("unknown device profile")?;
+        let payload = profile
+            .render_control_message(control, channel, control_value)
+            .map_err(|_| "invalid device control".to_owned())?;
+        self.outputs.send_direct(destination, &payload)?;
+        self.record_physical_send(destination, format!("device-control:{profile_id}:{control}"));
+        Ok(payload)
+    }
+
     /// Returns bounded aggregate MIDI activity counters.
     #[must_use]
     pub const fn activity_counters(&self) -> (u64, u64, u64) {
@@ -1530,6 +1602,15 @@ impl Daemon {
             };
             let input =
                 mackes_midi_engine::AlsaInputCapture::open_named_with_client(name, &client)?;
+            self.alsa_supervisor.remember(
+                mackes_midi_engine::MidiInputAdapter::info(&input).id.clone(),
+                mackes_midi_engine::NativeHardwareIdentity::new(
+                    name,
+                    name,
+                    0,
+                    mackes_midi_engine::EndpointDirection::Input,
+                ),
+            );
             self.register_input(Box::new(input)).map_err(str::to_owned)
         }
         #[cfg(not(feature = "alsa-seq-backend"))]
@@ -1543,40 +1624,154 @@ impl Daemon {
     #[must_use]
     pub fn poll_inputs(&mut self) -> Vec<mackes_domain::MidiEvent> {
         #[cfg(feature = "alsa-seq-backend")]
-        if let Some(client) = self.alsa_input_client.as_ref() {
-            if let Ok(mut client) = client.lock() {
-                // Drain bounded ALSA announcements first. The engine preserves
-                // ordinary MIDI in its deferred wire queue, so reconnect
-                // supervision cannot consume Device/knob traffic.
-                let _ = client.read_lifecycle_events(32);
-                let _ = client.reconcile_input_subscriptions();
-            }
-        }
+        self.poll_native_alsa_lifecycle();
         let mut events = self.deferred_inputs.drain(..).collect::<Vec<_>>();
         events.extend(self.inputs.poll_once());
         events
     }
 
+    fn apply_native_transitions(
+        &mut self,
+        transitions: Vec<mackes_midi_engine::NativeIdentityTransition>,
+    ) {
+        for transition in transitions {
+            if let Some(failure) = transition.failure {
+                self.last_native_failure = Some(failure);
+                self.health = Health::Degraded;
+            }
+            if transition.led_resync {
+                self.native_led_resync = true;
+                self.replay_controller_leds();
+            }
+        }
+    }
+
+    #[cfg(feature = "alsa-seq-backend")]
+    fn poll_native_alsa_lifecycle(&mut self) {
+        let Some(client) = self.alsa_input_client.clone() else {
+            return;
+        };
+        let Ok(mut client) = client.lock() else {
+            return;
+        };
+        let ports = client.discover_ports();
+        let announcements = client
+            .read_lifecycle_events(32)
+            .into_iter()
+            .map(|(lifecycle, address)| {
+                let identity = ports.iter().find(|port| port.address == address).map(|port| {
+                    mackes_midi_engine::NativeHardwareIdentity::new(
+                        &port.client_name,
+                        &port.port_name,
+                        port.address.port,
+                        if port.readable {
+                            mackes_midi_engine::EndpointDirection::Input
+                        } else {
+                            mackes_midi_engine::EndpointDirection::Output
+                        },
+                    )
+                });
+                mackes_midi_engine::NativePortAnnouncement {
+                    lifecycle,
+                    address,
+                    identity,
+                    permission_denied: false,
+                }
+            })
+            .collect::<Vec<_>>();
+        let _ = client.reconcile_input_subscriptions();
+        drop(client);
+        self.restore_launch_control_midi_output(&ports);
+        for announcement in announcements {
+            self.alsa_supervisor.ingest(announcement);
+        }
+        let transitions = self.alsa_supervisor.reconcile();
+        self.apply_native_transitions(transitions);
+    }
+
     /// Polls registered MIDI inputs and routes a bounded batch through the normal path.
     ///
     /// The bound prevents a busy physical controller from starving IPC and scene work.
+    #[allow(clippy::too_many_lines)]
     pub fn poll_and_dispatch_inputs(&mut self, limit: usize) -> (usize, usize, usize) {
         let events = self.poll_inputs();
         let mut processed = 0;
         let mut sent = 0;
         let mut unmatched = 0;
         for event in events.into_iter().take(limit.min(128)) {
-            if Self::is_launch_control_factory1_device_press(&event) {
+            if let Some(control_id) = Self::launch_control_factory1_control_id(&event) {
+                if control_id == "utility-1" {
+                    self.assignment_device_down_at = Some(Instant::now());
+                    if self.assignment_session.phase == mackes_ipc::AssignmentPhase::Idle {
+                        let _ = self.apply_assignment_request(mackes_ipc::AssignmentRequest {
+                            generation: self.assignment_generation,
+                            action: mackes_ipc::AssignmentAction::Start,
+                            physical_control_id: None,
+                            destination_profile: None,
+                            destination_effect: None,
+                            destination_parameter: None,
+                        });
+                    }
+                    processed += 1;
+                    continue;
+                }
+            } else if Self::launch_control_factory1_layout_id(&event).as_deref()
+                == Some("utility-1")
+            {
+                if let Some(started) = self.assignment_device_down_at.take() {
+                    if started.elapsed() >= Duration::from_millis(750)
+                        && self.assignment_session.phase != mackes_ipc::AssignmentPhase::Idle
+                    {
+                        let _ = self.apply_assignment_request(mackes_ipc::AssignmentRequest {
+                            generation: self.assignment_generation,
+                            action: mackes_ipc::AssignmentAction::Cancel,
+                            physical_control_id: None,
+                            destination_profile: None,
+                            destination_effect: None,
+                            destination_parameter: None,
+                        });
+                    }
+                }
+                processed += 1;
+                continue;
+            }
+            if self
+                .assignment_device_down_at
+                .is_some_and(|started| started.elapsed() >= Duration::from_millis(750))
+                && self.assignment_session.phase != mackes_ipc::AssignmentPhase::Idle
+            {
                 let _ = self.apply_assignment_request(mackes_ipc::AssignmentRequest {
                     generation: self.assignment_generation,
-                    action: mackes_ipc::AssignmentAction::Start,
+                    action: mackes_ipc::AssignmentAction::Cancel,
                     physical_control_id: None,
                     destination_profile: None,
                     destination_effect: None,
                     destination_parameter: None,
                 });
-                processed += 1;
-                continue;
+                self.assignment_device_down_at = None;
+            }
+            if self.assignment_session.phase != mackes_ipc::AssignmentPhase::Idle
+                && self.assignment_session.phase != mackes_ipc::AssignmentPhase::AwaitControl
+            {
+                if let Some(control_id) = Self::launch_control_factory1_control_id(&event) {
+                    let captured = self.assignment_control_id.as_deref();
+                    let assignable =
+                        mackes_profiles::launch_control_physical_catalog().iter().any(|control| {
+                            control.id.as_str() == control_id
+                                && control.role != mackes_profiles::PhysicalControlRole::Utility
+                        });
+                    if assignable
+                        && captured.is_some_and(|id| id != control_id)
+                        && self
+                            .assignment_capture_at
+                            .is_some_and(|started| started.elapsed() < Duration::from_millis(250))
+                    {
+                        self.assignment_session.catalog.last_error =
+                            Some("ambiguous capture within 250 ms".into());
+                        processed += 1;
+                        continue;
+                    }
+                }
             }
             if self.assignment_session.phase == mackes_ipc::AssignmentPhase::AwaitControl {
                 if let Some(control_id) = Self::launch_control_factory1_control_id(&event) {
@@ -1589,27 +1784,44 @@ impl Daemon {
                         destination_parameter: None,
                     });
                     if result.applied {
-                        self.send_control_led_feedback(
-                            &control_id,
-                            mackes_profiles::LedState::new(
-                                mackes_profiles::LedColor::Yellow,
-                                127,
-                                true,
-                            ),
-                        );
+                        self.assignment_capture_at = Some(Instant::now());
+                        if let Some(stable) = self.inputs.stable_id_for_endpoint(event.endpoint) {
+                            self.assignment_session.catalog.source_endpoint = Some(stable);
+                        } else {
+                            self.assignment_session.catalog.source_endpoint =
+                                Some(event.endpoint.get().to_string());
+                        }
+                        if let mackes_domain::MidiMessage::ControlChange {
+                            channel,
+                            controller,
+                            ..
+                        }
+                        | mackes_domain::MidiMessage::NoteOn {
+                            channel,
+                            note: controller,
+                            ..
+                        } = event.message
+                        {
+                            self.assignment_session.catalog.source_channel = Some(channel.wire());
+                            self.assignment_session.catalog.source_number =
+                                Some(controller.as_u8());
+                        }
                         processed += 1;
                         continue;
                     }
                 }
             }
             if let Some(action) = Self::launch_control_factory1_navigation(&event) {
-                if action == "right"
-                    && self.assignment_session.phase != mackes_ipc::AssignmentPhase::Idle
-                    && self.assignment_session.phase != mackes_ipc::AssignmentPhase::ChooseParameter
-                {
+                if self.assignment_session.phase != mackes_ipc::AssignmentPhase::Idle {
+                    let assignment_action = match action {
+                        "up" => mackes_ipc::AssignmentAction::Up,
+                        "down" => mackes_ipc::AssignmentAction::Down,
+                        "left" => mackes_ipc::AssignmentAction::Back,
+                        _ => mackes_ipc::AssignmentAction::Enter,
+                    };
                     let _ = self.apply_assignment_request(mackes_ipc::AssignmentRequest {
                         generation: self.assignment_generation,
-                        action: mackes_ipc::AssignmentAction::Enter,
+                        action: assignment_action,
                         physical_control_id: None,
                         destination_profile: None,
                         destination_effect: None,
@@ -1627,9 +1839,11 @@ impl Daemon {
             sent += event_sent;
             unmatched += event_unmatched;
         }
+        self.flush_controller_leds();
         (processed, sent, unmatched)
     }
 
+    #[cfg(test)]
     fn is_launch_control_factory1_device_press(event: &mackes_domain::MidiEvent) -> bool {
         matches!(Self::launch_control_factory1_control_id(event).as_deref(), Some("utility-1"))
     }
@@ -1650,6 +1864,26 @@ impl Daemon {
             Some("utility-8") => Some("right"),
             _ => None,
         }
+    }
+
+    fn launch_control_factory1_layout_id(event: &mackes_domain::MidiEvent) -> Option<String> {
+        let (kind, number, channel) = match event.message {
+            mackes_domain::MidiMessage::ControlChange { channel, controller, .. } => (
+                mackes_profiles::LaunchControlSourceKind::ControlChange,
+                controller.as_u8(),
+                channel.wire(),
+            ),
+            mackes_domain::MidiMessage::NoteOn { channel, note, .. } => {
+                (mackes_profiles::LaunchControlSourceKind::Note, note.as_u8(), channel.wire())
+            }
+            _ => return None,
+        };
+        mackes_profiles::launch_control_mk2_factory1_layout().into_iter().find_map(|control| {
+            (control.channel == channel
+                && control.source_kind == kind
+                && control.source_number == number)
+                .then_some(control.physical_control_id)
+        })
     }
 
     fn launch_control_factory1_control_id(event: &mackes_domain::MidiEvent) -> Option<String> {
@@ -2247,6 +2481,23 @@ impl Daemon {
             "last_sequence": self.state_sequence,
             "catalog": self.catalog,
             "physical_devices": self.physical_devices,
+            "native_backend": if cfg!(feature = "alsa-seq-backend") {
+                "alsa-seq"
+            } else {
+                "midir-rollback"
+            },
+            "native_led_resync": self.native_led_resync,
+            "native_failure": self.last_native_failure,
+            "led": {
+                "attempted": self.led.diagnostics().attempted,
+                "sent": self.led.diagnostics().sent,
+                "coalesced": self.led.diagnostics().coalesced,
+                "failed": self.led.diagnostics().failed,
+                "last_error": self.led.diagnostics().last_error,
+                "target_id": self.led.diagnostics().target_id,
+                "template": self.led.diagnostics().template,
+                "pending_deadline_ms": self.led.diagnostics().pending_deadline_ms,
+            },
             "health": match self.health {
                 Health::Starting => "starting",
                 Health::Ready => "ready",
@@ -2770,65 +3021,18 @@ impl Daemon {
             if command == Some(Command::DeviceControl) {
                 let value =
                     serde_json::from_slice::<serde_json::Value>(&request).unwrap_or_default();
-                if value.get("confirm").and_then(serde_json::Value::as_bool) != Some(true) {
-                    return stream.write_all(
-                        b"{\"ok\":false,\"error\":\"device control requires confirmation\"}\n",
-                    );
-                }
-                let profile_id = value
-                    .get("profile_id")
-                    .and_then(serde_json::Value::as_str)
-                    .ok_or_else(|| io::Error::other("profile_id is required"));
-                let control = value
-                    .get("control")
-                    .and_then(serde_json::Value::as_str)
-                    .ok_or_else(|| io::Error::other("control is required"));
-                let channel = value
-                    .get("channel")
-                    .and_then(serde_json::Value::as_u64)
-                    .and_then(|number| u8::try_from(number).ok())
-                    .ok_or_else(|| io::Error::other("channel is required"));
-                let control_value = value
-                    .get("value")
-                    .and_then(serde_json::Value::as_u64)
-                    .and_then(|number| u16::try_from(number).ok())
-                    .ok_or_else(|| io::Error::other("value is required"));
-                let destination = value
-                    .get("destination")
-                    .and_then(serde_json::Value::as_str)
-                    .ok_or_else(|| io::Error::other("destination is required"));
-                let (Ok(profile_id), Ok(control), Ok(channel), Ok(control_value), Ok(destination)) =
-                    (profile_id, control, channel, control_value, destination)
-                else {
-                    return stream.write_all(
-                        b"{\"ok\":false,\"error\":\"device control fields are required\"}\n",
-                    );
+                return match self.apply_device_control(&value) {
+                    Ok(payload) => stream.write_all(
+                        format!(
+                            "{{\"ok\":true,\"generation\":{},\"bytes\":{}}}\n",
+                            self.generation,
+                            serde_json::to_string(&payload).unwrap_or_else(|_| "[]".into())
+                        )
+                        .as_bytes(),
+                    ),
+                    Err(error) => stream
+                        .write_all(format!("{{\"ok\":false,\"error\":\"{error}\"}}\n").as_bytes()),
                 };
-                let Some(profile) = mackes_profiles::builtin_profile(profile_id) else {
-                    return stream
-                        .write_all(b"{\"ok\":false,\"error\":\"unknown device profile\"}\n");
-                };
-                let Ok(payload) = profile.render_control_message(control, channel, control_value)
-                else {
-                    return stream
-                        .write_all(b"{\"ok\":false,\"error\":\"invalid device control\"}\n");
-                };
-                if let Err(error) = self.outputs.send_direct(destination, &payload) {
-                    return stream
-                        .write_all(format!("{{\"ok\":false,\"error\":\"{error}\"}}\n").as_bytes());
-                }
-                self.record_physical_send(
-                    destination,
-                    format!("device-control:{profile_id}:{control}"),
-                );
-                return stream.write_all(
-                    format!(
-                        "{{\"ok\":true,\"generation\":{},\"bytes\":{}}}\n",
-                        self.generation,
-                        serde_json::to_string(&payload).unwrap_or_else(|_| "[]".into())
-                    )
-                    .as_bytes(),
-                );
             }
             if command == Some(Command::Sysex) {
                 let value =
@@ -3160,6 +3364,7 @@ impl Daemon {
         if let Ok(document) = mackes_config::load(&path) {
             if let Ok(store) = mackes_config::ControlMappingStore::from_document(&document) {
                 self.mapping_store = store;
+                self.mapping_store.active.retain(assignment_commit::mapping_role_compatible);
                 self.assignment_session.has_draft = !self.mapping_store.drafts.is_empty();
             }
         }
@@ -3176,6 +3381,54 @@ impl Daemon {
             }
         }
         self.config_path = Some(path);
+        if !self.outputs.is_empty() {
+            self.replay_controller_leds();
+        }
+    }
+
+    fn assignment_profile_ids(&self) -> Vec<String> {
+        let mut ids = Vec::new();
+        if let Some(devices) = self.physical_devices.as_array() {
+            for device in devices {
+                let name = device
+                    .get("name")
+                    .and_then(serde_json::Value::as_str)
+                    .unwrap_or_default()
+                    .to_ascii_lowercase();
+                if name.contains("reflex") {
+                    ids.push("lexicon.reflex".into());
+                }
+                if name.contains("eventide") || name.contains("micropitch") {
+                    ids.push("eventide.micropitch".into());
+                }
+            }
+        }
+        if ids.is_empty() {
+            ids.extend(["lexicon.reflex".into(), "eventide.micropitch".into()]);
+        }
+        let mut unique = Vec::new();
+        for id in ids {
+            if !unique.contains(&id) {
+                unique.push(id);
+            }
+        }
+        unique
+    }
+
+    fn sync_assignment_catalog(&mut self) {
+        let profiles = self.assignment_profile_ids();
+        assignment_catalog::refresh(&mut self.assignment_session, &profiles);
+        if self.assignment_session.catalog.source_endpoint.is_none() {
+            self.assignment_session.catalog.source_endpoint = Some("launch-control-xl-mk2".into());
+        }
+        if self.assignment_session.catalog.destination_endpoint.is_none() {
+            self.assignment_session.catalog.destination_endpoint = self
+                .assignment_session
+                .catalog
+                .selected_device
+                .clone()
+                .or_else(|| Some("lexicon.reflex".into()));
+        }
     }
 
     fn scenes_response(&self) -> String {
@@ -3285,1338 +3538,12 @@ pub fn persist_active_scene(path: &Path, scene: Option<&str>) -> Result<(), Stri
     mackes_config::save(path, &updated, 10).map_err(|error| error.to_string())
 }
 
+mod assignment_catalog;
+mod assignment_commit;
+mod led_surface;
+
+#[cfg(all(test, target_os = "linux"))]
+mod native_cutover;
+
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn single_instance_lock_rejects_second_owner() {
-        let path = std::env::temp_dir().join(format!("mackes-lock-{}", std::process::id()));
-        let first = InstanceLock::acquire(&path).expect("first lock");
-        assert!(InstanceLock::acquire(&path).is_err());
-        drop(first);
-        assert!(InstanceLock::acquire(&path).is_ok());
-        let _ = fs::remove_file(path);
-    }
-
-    #[test]
-    fn health_operational_states_are_explicit() {
-        assert!(!Health::Starting.is_operational());
-        assert!(Health::Ready.is_operational());
-        assert!(Health::Degraded.is_operational());
-        assert!(!Health::Stopping.is_operational());
-        assert_eq!(
-            health_after_authorized_command(Health::Starting, Some(Command::Health)),
-            Health::Starting
-        );
-        assert_eq!(
-            health_after_authorized_command(Health::Starting, Some(Command::Snapshot)),
-            Health::Ready
-        );
-    }
-
-    #[test]
-    fn structured_log_line_is_json_and_bounded() {
-        let line = structured_log_line("error", "restore_failed", &"x".repeat(600));
-        let value: serde_json::Value = serde_json::from_str(line.trim()).expect("json");
-        assert_eq!(value["event"], "restore_failed");
-        assert_eq!(value["detail"].as_str().expect("detail").len(), 512);
-    }
-
-    #[test]
-    fn endpoint_settle_policy_is_bounded_and_defaults_to_five_seconds() {
-        assert_eq!(EndpointSettlePolicy::default().window_ms, 5_000);
-        assert_eq!(EndpointSettlePolicy::default().deadline_ms(1_000), 6_000);
-        assert_eq!(EndpointSettlePolicy::new(0), None);
-        assert_eq!(EndpointSettlePolicy::new(250).expect("policy").deadline_ms(u64::MAX), u64::MAX);
-        let policy = EndpointSettlePolicy::default();
-        assert_eq!(policy.classify(1_000, 1_001, false), SettleState::Settling);
-        assert_eq!(policy.classify(1_000, 6_000, false), SettleState::TimedOut);
-        assert_eq!(policy.classify(1_000, 6_000, true), SettleState::Ready);
-        assert_eq!(policy.classify(1_000, 6_001, false), SettleState::TimedOut);
-    }
-
-    #[test]
-    fn experimental_mapping_safety_is_bounded_and_restart_clears_it() {
-        let socket = std::env::temp_dir().join(format!("mackes-safety-{}", std::process::id()));
-        let mut daemon = Daemon::bind(&socket).expect("daemon");
-        daemon.arm_experimental_mappings();
-        let now = daemon.safety_clock.elapsed().as_nanos().try_into().unwrap_or(u64::MAX);
-        assert!(daemon.safety.unsafe_armed(now));
-        daemon.safety.arm_unsafe(0);
-        assert!(!daemon.safety.unsafe_armed(1));
-        drop(daemon);
-        let restarted_socket = socket.with_extension("restart");
-        let mut restarted = Daemon::bind(&restarted_socket).expect("restarted daemon");
-        assert!(!restarted.safety.unsafe_armed(1));
-    }
-
-    #[test]
-    fn daemon_owns_generation_checked_assignment_session() {
-        let socket =
-            std::env::temp_dir().join(format!("mackes-session-{}.sock", std::process::id()));
-        let mut daemon = Daemon::bind(&socket).expect("daemon");
-        let started = daemon.apply_assignment_request(mackes_ipc::AssignmentRequest {
-            generation: 0,
-            action: mackes_ipc::AssignmentAction::Start,
-            physical_control_id: None,
-            destination_profile: None,
-            destination_effect: None,
-            destination_parameter: None,
-        });
-        assert!(started.applied);
-        assert_eq!(started.session.phase, mackes_ipc::AssignmentPhase::AwaitControl);
-        assert_eq!(daemon.assignment_led_state_at(0).color, mackes_profiles::LedColor::Green);
-        let stale = daemon.apply_assignment_request(mackes_ipc::AssignmentRequest {
-            generation: 0,
-            action: mackes_ipc::AssignmentAction::Cancel,
-            physical_control_id: None,
-            destination_profile: None,
-            destination_effect: None,
-            destination_parameter: None,
-        });
-        assert!(!stale.applied);
-        assert_eq!(stale.reason.as_deref(), Some("assignment generation conflict"));
-        let reserved = daemon.apply_assignment_request(mackes_ipc::AssignmentRequest {
-            generation: 1,
-            action: mackes_ipc::AssignmentAction::ControlCaptured,
-            physical_control_id: Some("utility-1".into()),
-            destination_profile: None,
-            destination_effect: None,
-            destination_parameter: None,
-        });
-        assert!(!reserved.applied);
-        assert_eq!(reserved.reason.as_deref(), Some("assignment control is reserved or unknown"));
-        let unknown = daemon.apply_assignment_request(mackes_ipc::AssignmentRequest {
-            generation: 1,
-            action: mackes_ipc::AssignmentAction::ControlCaptured,
-            physical_control_id: Some("syntactically-valid-but-unknown".into()),
-            destination_profile: None,
-            destination_effect: None,
-            destination_parameter: None,
-        });
-        assert!(!unknown.applied);
-        assert_eq!(unknown.reason.as_deref(), Some("assignment control is reserved or unknown"));
-        let _ = fs::remove_file(socket);
-    }
-
-    #[test]
-    fn daemon_assignment_result_uses_scheduler_overlay_then_restores_base() {
-        let socket =
-            std::env::temp_dir().join(format!("mackes-led-session-{}.sock", std::process::id()));
-        let mut daemon = Daemon::bind(&socket).expect("daemon");
-        let start = daemon.apply_assignment_request(mackes_ipc::AssignmentRequest {
-            generation: 0,
-            action: mackes_ipc::AssignmentAction::Start,
-            physical_control_id: None,
-            destination_profile: None,
-            destination_effect: None,
-            destination_parameter: None,
-        });
-        assert!(start.applied);
-        let capture = daemon.apply_assignment_request(mackes_ipc::AssignmentRequest {
-            generation: 1,
-            action: mackes_ipc::AssignmentAction::ControlCaptured,
-            physical_control_id: Some("knob-r1-c1".into()),
-            destination_profile: None,
-            destination_effect: None,
-            destination_parameter: None,
-        });
-        assert!(capture.applied, "{capture:?}");
-        assert!(capture.applied);
-        assert_eq!(daemon.assignment_led_state_at(0).color, mackes_profiles::LedColor::Green);
-        let mut generation = capture.generation;
-        for action in [
-            mackes_ipc::AssignmentAction::Enter,
-            mackes_ipc::AssignmentAction::Enter,
-            mackes_ipc::AssignmentAction::Enter,
-            mackes_ipc::AssignmentAction::Enter,
-            mackes_ipc::AssignmentAction::Commit,
-            mackes_ipc::AssignmentAction::Succeed,
-        ] {
-            let result = daemon.apply_assignment_request(mackes_ipc::AssignmentRequest {
-                generation,
-                action,
-                physical_control_id: (action == mackes_ipc::AssignmentAction::Commit)
-                    .then_some("knob-r1-c1".into()),
-                destination_profile: (action == mackes_ipc::AssignmentAction::Commit)
-                    .then_some("lexicon.reflex".into()),
-                destination_effect: (action == mackes_ipc::AssignmentAction::Commit)
-                    .then_some("algorithm-1".into()),
-                destination_parameter: (action == mackes_ipc::AssignmentAction::Commit)
-                    .then_some("reflex.parameter-1".into()),
-            });
-            assert!(result.applied, "assignment action should apply: {action:?}");
-            generation = result.generation;
-        }
-        assert_eq!(daemon.assignment_led_state_at(0).color, mackes_profiles::LedColor::Green);
-        assert_eq!(daemon.mapping_store.active.len(), 1);
-        assert_eq!(daemon.mapping_store.active[0].destination_parameter, "reflex.parameter-1");
-        assert_eq!(daemon.assignment_led_state_at(1_600).color, mackes_profiles::LedColor::Off);
-        assert_eq!(
-            daemon.assignment_led_frame_at(0, 24, 1_600).expect("base frame"),
-            vec![0xf0, 0x00, 0x20, 0x29, 0x02, 0x11, 0x78, 0x00, 0x18, 0x00, 0xf7]
-        );
-        assert!(daemon.assignment_led_frame_at(16, 24, 0).is_none());
-        let _ = fs::remove_file(socket);
-    }
-
-    #[test]
-    fn daemon_rejects_incomplete_assignment_commit_without_state_change() {
-        let socket = std::env::temp_dir()
-            .join(format!("mackes-incomplete-commit-{}.sock", std::process::id()));
-        let mut daemon = Daemon::bind(&socket).expect("daemon");
-        let start = daemon.apply_assignment_request(mackes_ipc::AssignmentRequest {
-            generation: 0,
-            action: mackes_ipc::AssignmentAction::Start,
-            physical_control_id: None,
-            destination_profile: None,
-            destination_effect: None,
-            destination_parameter: None,
-        });
-        let capture = daemon.apply_assignment_request(mackes_ipc::AssignmentRequest {
-            generation: start.generation,
-            action: mackes_ipc::AssignmentAction::ControlCaptured,
-            physical_control_id: Some("knob-r1-c1".into()),
-            destination_profile: None,
-            destination_effect: None,
-            destination_parameter: None,
-        });
-        let device = daemon.apply_assignment_request(mackes_ipc::AssignmentRequest {
-            generation: capture.generation,
-            action: mackes_ipc::AssignmentAction::Enter,
-            physical_control_id: None,
-            destination_profile: None,
-            destination_effect: None,
-            destination_parameter: None,
-        });
-        assert!(device.applied, "{device:?}");
-        let effect = daemon.apply_assignment_request(mackes_ipc::AssignmentRequest {
-            generation: device.generation,
-            action: mackes_ipc::AssignmentAction::Enter,
-            physical_control_id: None,
-            destination_profile: None,
-            destination_effect: None,
-            destination_parameter: None,
-        });
-        assert!(effect.applied, "{effect:?}");
-        let type_level = daemon.apply_assignment_request(mackes_ipc::AssignmentRequest {
-            generation: effect.generation,
-            action: mackes_ipc::AssignmentAction::Enter,
-            physical_control_id: None,
-            destination_profile: None,
-            destination_effect: None,
-            destination_parameter: None,
-        });
-        let parameter_level = daemon.apply_assignment_request(mackes_ipc::AssignmentRequest {
-            generation: type_level.generation,
-            action: mackes_ipc::AssignmentAction::Enter,
-            physical_control_id: None,
-            destination_profile: None,
-            destination_effect: None,
-            destination_parameter: None,
-        });
-        let result = daemon.apply_assignment_request(mackes_ipc::AssignmentRequest {
-            generation: parameter_level.generation,
-            action: mackes_ipc::AssignmentAction::Commit,
-            physical_control_id: Some("knob-r1-c1".into()),
-            destination_profile: None,
-            destination_effect: None,
-            destination_parameter: None,
-        });
-        assert!(!result.applied);
-        assert_eq!(
-            result.reason.as_deref(),
-            Some("assignment commit requires a complete destination")
-        );
-        assert_eq!(result.session.phase, mackes_ipc::AssignmentPhase::ChooseParameter);
-        let _ = fs::remove_file(socket);
-    }
-
-    #[test]
-    fn occupied_assignment_enters_confirm_replace_and_replaces_atomically() {
-        let socket = std::env::temp_dir()
-            .join(format!("mackes-assignment-replace-{}.sock", std::process::id()));
-        let mut daemon = Daemon::bind(&socket).expect("daemon");
-        daemon.mapping_store.active.push(mackes_config::ControlMapping {
-            id: "existing-map".into(),
-            controller_profile: "launch-control-xl-mk2".into(),
-            physical_control_id: "knob-r1-c1".into(),
-            source_endpoint: "controller".into(),
-            source_kind: "cc".into(),
-            source_channel: 0,
-            source_number: 21,
-            destination_endpoint: "processor".into(),
-            destination_profile: "lexicon.reflex".into(),
-            destination_effect: "algorithm-1".into(),
-            destination_parameter: "reflex.parameter-1".into(),
-            behavior: mackes_config::MappingBehavior {
-                source_range: (0, 127),
-                destination_range: (0, 127),
-                invert: false,
-                curve: "linear".into(),
-            },
-            enabled: true,
-            profile_version: 1,
-        });
-        let start = daemon.apply_assignment_request(mackes_ipc::AssignmentRequest {
-            generation: 0,
-            action: mackes_ipc::AssignmentAction::Start,
-            physical_control_id: None,
-            destination_profile: None,
-            destination_effect: None,
-            destination_parameter: None,
-        });
-        let capture = daemon.apply_assignment_request(mackes_ipc::AssignmentRequest {
-            generation: start.generation,
-            action: mackes_ipc::AssignmentAction::ControlCaptured,
-            physical_control_id: Some("knob-r1-c1".into()),
-            destination_profile: None,
-            destination_effect: None,
-            destination_parameter: None,
-        });
-        let device = daemon.apply_assignment_request(mackes_ipc::AssignmentRequest {
-            generation: capture.generation,
-            action: mackes_ipc::AssignmentAction::Enter,
-            physical_control_id: None,
-            destination_profile: None,
-            destination_effect: None,
-            destination_parameter: None,
-        });
-        let effect = daemon.apply_assignment_request(mackes_ipc::AssignmentRequest {
-            generation: device.generation,
-            action: mackes_ipc::AssignmentAction::Enter,
-            physical_control_id: None,
-            destination_profile: None,
-            destination_effect: None,
-            destination_parameter: None,
-        });
-        let conflict = daemon.apply_assignment_request(mackes_ipc::AssignmentRequest {
-            generation: effect.generation,
-            action: mackes_ipc::AssignmentAction::Commit,
-            physical_control_id: Some("knob-r1-c1".into()),
-            destination_profile: Some("eventide.micropitch".into()),
-            destination_effect: Some("modulation".into()),
-            destination_parameter: Some("control-4".into()),
-        });
-        assert!(conflict.applied, "{conflict:?}");
-        assert_eq!(conflict.session.phase, mackes_ipc::AssignmentPhase::ConfirmReplace);
-        assert_eq!(daemon.mapping_store.active.len(), 1);
-        let confirmed = daemon.apply_assignment_request(mackes_ipc::AssignmentRequest {
-            generation: conflict.generation,
-            action: mackes_ipc::AssignmentAction::ConfirmReplace,
-            physical_control_id: Some("knob-r1-c1".into()),
-            destination_profile: Some("eventide.micropitch".into()),
-            destination_effect: Some("modulation".into()),
-            destination_parameter: Some("control-4".into()),
-        });
-        assert!(confirmed.applied, "{confirmed:?}");
-        assert_eq!(confirmed.session.phase, mackes_ipc::AssignmentPhase::Committing);
-        assert_eq!(daemon.mapping_store.active.len(), 1);
-        assert_eq!(daemon.mapping_store.active[0].id, "existing-map");
-        assert_eq!(daemon.mapping_store.active[0].destination_parameter, "control-4");
-        let _ = fs::remove_file(socket);
-    }
-
-    #[test]
-    fn complete_assignment_commit_persists_to_config() {
-        let socket = std::env::temp_dir()
-            .join(format!("mackes-assignment-persist-{}.sock", std::process::id()));
-        let config = std::env::temp_dir()
-            .join(format!("mackes-assignment-persist-{}.json5", std::process::id()));
-        fs::copy("../../fixtures/config-valid.json5", &config).expect("fixture copy");
-        let mut daemon = Daemon::bind(&socket).expect("daemon");
-        daemon.set_config_path(&config);
-        let start = daemon.apply_assignment_request(mackes_ipc::AssignmentRequest {
-            generation: 0,
-            action: mackes_ipc::AssignmentAction::Start,
-            physical_control_id: None,
-            destination_profile: None,
-            destination_effect: None,
-            destination_parameter: None,
-        });
-        let capture = daemon.apply_assignment_request(mackes_ipc::AssignmentRequest {
-            generation: start.generation,
-            action: mackes_ipc::AssignmentAction::ControlCaptured,
-            physical_control_id: Some("knob-r1-c1".into()),
-            destination_profile: None,
-            destination_effect: None,
-            destination_parameter: None,
-        });
-        let device = daemon.apply_assignment_request(mackes_ipc::AssignmentRequest {
-            generation: capture.generation,
-            action: mackes_ipc::AssignmentAction::Enter,
-            physical_control_id: None,
-            destination_profile: None,
-            destination_effect: None,
-            destination_parameter: None,
-        });
-        let chooser = daemon.apply_assignment_request(mackes_ipc::AssignmentRequest {
-            generation: device.generation,
-            action: mackes_ipc::AssignmentAction::Enter,
-            physical_control_id: None,
-            destination_profile: None,
-            destination_effect: None,
-            destination_parameter: None,
-        });
-        let type_level = daemon.apply_assignment_request(mackes_ipc::AssignmentRequest {
-            generation: chooser.generation,
-            action: mackes_ipc::AssignmentAction::Enter,
-            physical_control_id: None,
-            destination_profile: None,
-            destination_effect: None,
-            destination_parameter: None,
-        });
-        let parameter_level = daemon.apply_assignment_request(mackes_ipc::AssignmentRequest {
-            generation: type_level.generation,
-            action: mackes_ipc::AssignmentAction::Enter,
-            physical_control_id: None,
-            destination_profile: None,
-            destination_effect: None,
-            destination_parameter: None,
-        });
-        let result = daemon.apply_assignment_request(mackes_ipc::AssignmentRequest {
-            generation: parameter_level.generation,
-            action: mackes_ipc::AssignmentAction::Commit,
-            physical_control_id: Some("knob-r1-c1".into()),
-            destination_profile: Some("lexicon.reflex".into()),
-            destination_effect: Some("algorithm-1".into()),
-            destination_parameter: Some("reflex.parameter-1".into()),
-        });
-        assert!(result.applied, "{result:?}");
-        let loaded = mackes_config::load(&config).expect("reloaded config");
-        assert_eq!(loaded.control_mappings.len(), 1);
-        assert_eq!(loaded.control_mappings[0].physical_control_id, "knob-r1-c1");
-        let _ = fs::remove_file(socket);
-        let _ = fs::remove_file(config);
-    }
-
-    #[test]
-    fn failed_assignment_restores_previous_mapping_store() {
-        let socket = std::env::temp_dir()
-            .join(format!("mackes-assignment-rollback-{}.sock", std::process::id()));
-        let config = std::env::temp_dir()
-            .join(format!("mackes-assignment-rollback-{}.json5", std::process::id()));
-        fs::copy("../../fixtures/config-valid.json5", &config).expect("fixture copy");
-        let mut daemon = Daemon::bind(&socket).expect("daemon");
-        daemon.set_config_path(&config);
-        let original = daemon.mapping_store.clone();
-        let start = daemon.apply_assignment_request(mackes_ipc::AssignmentRequest {
-            generation: 0,
-            action: mackes_ipc::AssignmentAction::Start,
-            physical_control_id: None,
-            destination_profile: None,
-            destination_effect: None,
-            destination_parameter: None,
-        });
-        let capture = daemon.apply_assignment_request(mackes_ipc::AssignmentRequest {
-            generation: start.generation,
-            action: mackes_ipc::AssignmentAction::ControlCaptured,
-            physical_control_id: Some("knob-r1-c1".into()),
-            destination_profile: None,
-            destination_effect: None,
-            destination_parameter: None,
-        });
-        let device = daemon.apply_assignment_request(mackes_ipc::AssignmentRequest {
-            generation: capture.generation,
-            action: mackes_ipc::AssignmentAction::Enter,
-            physical_control_id: None,
-            destination_profile: None,
-            destination_effect: None,
-            destination_parameter: None,
-        });
-        let chooser = daemon.apply_assignment_request(mackes_ipc::AssignmentRequest {
-            generation: device.generation,
-            action: mackes_ipc::AssignmentAction::Enter,
-            physical_control_id: None,
-            destination_profile: None,
-            destination_effect: None,
-            destination_parameter: None,
-        });
-        let type_level = daemon.apply_assignment_request(mackes_ipc::AssignmentRequest {
-            generation: chooser.generation,
-            action: mackes_ipc::AssignmentAction::Enter,
-            physical_control_id: None,
-            destination_profile: None,
-            destination_effect: None,
-            destination_parameter: None,
-        });
-        let parameter_level = daemon.apply_assignment_request(mackes_ipc::AssignmentRequest {
-            generation: type_level.generation,
-            action: mackes_ipc::AssignmentAction::Enter,
-            physical_control_id: None,
-            destination_profile: None,
-            destination_effect: None,
-            destination_parameter: None,
-        });
-        let commit = daemon.apply_assignment_request(mackes_ipc::AssignmentRequest {
-            generation: parameter_level.generation,
-            action: mackes_ipc::AssignmentAction::Commit,
-            physical_control_id: Some("knob-r1-c1".into()),
-            destination_profile: Some("lexicon.reflex".into()),
-            destination_effect: Some("algorithm-1".into()),
-            destination_parameter: Some("reflex.parameter-1".into()),
-        });
-        assert!(commit.applied, "{commit:?}");
-        assert_ne!(daemon.mapping_store, original);
-        let failed = daemon.apply_assignment_request(mackes_ipc::AssignmentRequest {
-            generation: commit.generation,
-            action: mackes_ipc::AssignmentAction::Fail,
-            physical_control_id: None,
-            destination_profile: None,
-            destination_effect: None,
-            destination_parameter: None,
-        });
-        assert!(failed.applied, "{failed:?}");
-        assert_eq!(daemon.mapping_store, original);
-        let reloaded = mackes_config::load(&config).expect("reloaded config");
-        assert_eq!(reloaded.control_mappings.len(), original.active.len());
-        assert_eq!(failed.session.phase, mackes_ipc::AssignmentPhase::Failed);
-        let _ = fs::remove_file(socket);
-        let _ = fs::remove_file(config);
-    }
-
-    #[test]
-    fn interrupted_assignment_draft_survives_daemon_rebind() {
-        let socket = std::env::temp_dir()
-            .join(format!("mackes-assignment-resume-{}.sock", std::process::id()));
-        let config = std::env::temp_dir()
-            .join(format!("mackes-assignment-resume-{}.json5", std::process::id()));
-        fs::copy("../../fixtures/config-valid.json5", &config).expect("fixture copy");
-        let mut daemon = Daemon::bind(&socket).expect("daemon");
-        daemon.set_config_path(&config);
-        let start = daemon.apply_assignment_request(mackes_ipc::AssignmentRequest {
-            generation: 0,
-            action: mackes_ipc::AssignmentAction::Start,
-            physical_control_id: None,
-            destination_profile: None,
-            destination_effect: None,
-            destination_parameter: None,
-        });
-        let capture = daemon.apply_assignment_request(mackes_ipc::AssignmentRequest {
-            generation: start.generation,
-            action: mackes_ipc::AssignmentAction::ControlCaptured,
-            physical_control_id: Some("knob-r1-c1".into()),
-            destination_profile: None,
-            destination_effect: None,
-            destination_parameter: None,
-        });
-        let interrupted = daemon.apply_assignment_request(mackes_ipc::AssignmentRequest {
-            generation: capture.generation,
-            action: mackes_ipc::AssignmentAction::Interrupt,
-            physical_control_id: None,
-            destination_profile: None,
-            destination_effect: None,
-            destination_parameter: None,
-        });
-        assert!(interrupted.applied, "{interrupted:?}");
-        assert_eq!(interrupted.session.phase, mackes_ipc::AssignmentPhase::Interrupted);
-        drop(daemon);
-        let mut rebound = Daemon::bind(&socket).expect("rebound daemon");
-        rebound.set_config_path(&config);
-        assert!(rebound.assignment_session.has_draft);
-        assert_eq!(rebound.mapping_store.drafts.len(), 1);
-        assert_eq!(
-            rebound.mapping_store.drafts[0].physical_control_id.as_deref(),
-            Some("knob-r1-c1")
-        );
-        let _ = fs::remove_file(socket);
-        let _ = fs::remove_file(config);
-    }
-
-    #[test]
-    fn mapping_activity_reports_disconnected_destination_without_fallback() {
-        let socket =
-            std::env::temp_dir().join(format!("mackes-activity-{}.sock", std::process::id()));
-        let mut daemon = Daemon::bind(&socket).expect("daemon");
-        daemon.mapping_store.active.push(mackes_config::ControlMapping {
-            id: "activity-map".into(),
-            controller_profile: "controller".into(),
-            physical_control_id: "knob-r1-c1".into(),
-            source_endpoint: "1".into(),
-            source_kind: "cc".into(),
-            source_channel: 0,
-            source_number: 21,
-            destination_endpoint: "2".into(),
-            destination_profile: "eventide.micropitch".into(),
-            destination_effect: "modulation".into(),
-            destination_parameter: "control-4".into(),
-            behavior: mackes_config::MappingBehavior {
-                source_range: (0, 127),
-                destination_range: (0, 127),
-                invert: false,
-                curve: "linear".into(),
-            },
-            enabled: true,
-            profile_version: 1,
-        });
-        let event = mackes_domain::MidiEvent {
-            timestamp: mackes_domain::TimestampNanos::new(1),
-            sequence: 1,
-            endpoint: mackes_midi_engine::numeric_endpoint_id("1").expect("source"),
-            message: mackes_domain::MidiMessage::ControlChange {
-                channel: mackes_domain::MidiChannel::new(1).expect("channel"),
-                controller: mackes_domain::SevenBit::new(21).expect("controller"),
-                value: mackes_domain::SevenBit::new(64).expect("value"),
-            },
-        };
-        assert_eq!(daemon.dispatch_registered(&event), (0, 1));
-        assert_eq!(
-            daemon.last_mapping_activity.as_ref().expect("activity")["reason"],
-            "destination_disconnected"
-        );
-        let _ = fs::remove_file(socket);
-    }
-
-    #[test]
-    fn factory1_device_press_is_reserved_for_assignment_start() {
-        let event = mackes_domain::MidiEvent {
-            timestamp: mackes_domain::TimestampNanos::new(1),
-            sequence: 1,
-            endpoint: mackes_domain::EndpointId::new(1).expect("endpoint"),
-            message: mackes_domain::MidiMessage::NoteOn {
-                channel: mackes_domain::MidiChannel::new(9).expect("channel"),
-                note: mackes_domain::SevenBit::new(105).expect("note"),
-                velocity: mackes_domain::SevenBit::new(127).expect("velocity"),
-            },
-        };
-        assert!(Daemon::is_launch_control_factory1_device_press(&event));
-    }
-
-    #[test]
-    fn factory1_assignable_controls_resolve_to_stable_physical_ids() {
-        let event = |message| mackes_domain::MidiEvent {
-            timestamp: mackes_domain::TimestampNanos::new(1),
-            sequence: 1,
-            endpoint: mackes_domain::EndpointId::new(1).expect("endpoint"),
-            message,
-        };
-        let channel = mackes_domain::MidiChannel::new(9).expect("channel");
-        assert_eq!(
-            Daemon::launch_control_factory1_control_id(&event(
-                mackes_domain::MidiMessage::ControlChange {
-                    channel,
-                    controller: mackes_domain::SevenBit::new(13).expect("controller"),
-                    value: mackes_domain::SevenBit::new(1).expect("value"),
-                }
-            )),
-            Some("knob-r1-c1".into())
-        );
-        assert_eq!(
-            Daemon::launch_control_factory1_control_id(&event(
-                mackes_domain::MidiMessage::ControlChange {
-                    channel,
-                    controller: mackes_domain::SevenBit::new(77).expect("controller"),
-                    value: mackes_domain::SevenBit::new(127).expect("value"),
-                }
-            )),
-            Some("fader-1".into())
-        );
-        assert_eq!(
-            Daemon::launch_control_factory1_control_id(&event(
-                mackes_domain::MidiMessage::NoteOn {
-                    channel,
-                    note: mackes_domain::SevenBit::new(41).expect("note"),
-                    velocity: mackes_domain::SevenBit::new(127).expect("velocity"),
-                }
-            )),
-            Some("button-r1-c1".into())
-        );
-    }
-
-    #[test]
-    fn required_endpoint_readiness_is_complete_and_fail_closed() {
-        let endpoints = vec![
-            mackes_midi_engine::EndpointInfo {
-                id: "donner".into(),
-                name: "Donner".into(),
-                direction: mackes_midi_engine::EndpointDirection::Output,
-            },
-            mackes_midi_engine::EndpointInfo {
-                id: "lexicon".into(),
-                name: "Lexicon".into(),
-                direction: mackes_midi_engine::EndpointDirection::Output,
-            },
-        ];
-        assert!(required_endpoints_ready(&[], &endpoints));
-        assert!(!required_endpoints_ready(&["donner", "missing"], &endpoints));
-        assert!(required_endpoints_ready(&["donner", "lexicon"], &endpoints));
-        assert_eq!(
-            settle_required_endpoints(
-                EndpointSettlePolicy::default(),
-                0,
-                1,
-                &["missing"],
-                &endpoints
-            ),
-            SettleState::Settling
-        );
-        assert_eq!(
-            settle_required_endpoints(
-                EndpointSettlePolicy::default(),
-                0,
-                5_000,
-                &["missing"],
-                &endpoints
-            ),
-            SettleState::TimedOut
-        );
-        let fixture = std::path::Path::new("../../fixtures/config-valid.json5");
-        let readiness = startup_restore_readiness(
-            fixture,
-            EndpointSettlePolicy::default(),
-            0,
-            1,
-            &[],
-            &endpoints,
-        )
-        .or_else(|_| {
-            startup_restore_readiness(
-                std::path::Path::new("fixtures/config-valid.json5"),
-                EndpointSettlePolicy::default(),
-                0,
-                1,
-                &[],
-                &endpoints,
-            )
-        })
-        .expect("restore readiness");
-        assert_eq!(readiness.restore.activation_scene(), Some("intro"));
-        assert_eq!(readiness.endpoints, SettleState::Ready);
-        assert!(readiness.may_activate());
-        let timed_out = RestoreReadiness { endpoints: SettleState::TimedOut, ..readiness };
-        assert!(!timed_out.may_activate());
-    }
-
-    #[cfg(target_os = "linux")]
-    #[test]
-    fn shutdown_request_is_idempotent_and_non_operational() {
-        let path =
-            std::env::temp_dir().join(format!("mackes-shutdown-{}.sock", std::process::id()));
-        let mut daemon = Daemon::bind(&path).expect("daemon");
-        daemon.request_shutdown();
-        daemon.request_shutdown();
-        assert_eq!(daemon.health(), Health::Stopping);
-        assert!(!daemon.health().is_operational());
-        let _ = fs::remove_file(path);
-    }
-
-    #[cfg(target_os = "linux")]
-    #[test]
-    fn nonblocking_control_socket_returns_without_client() {
-        let path =
-            std::env::temp_dir().join(format!("mackes-nonblocking-{}.sock", std::process::id()));
-        let mut daemon = Daemon::bind(&path).expect("daemon");
-        daemon.set_nonblocking(true).expect("nonblocking listener");
-        let error = daemon
-            .serve_once(AccessPolicy { control_gid: 0, daemon_uid: 0 })
-            .expect_err("no client should produce WouldBlock");
-        assert_eq!(error.kind(), std::io::ErrorKind::WouldBlock);
-        let _ = fs::remove_file(path);
-    }
-
-    #[cfg(target_os = "linux")]
-    #[test]
-    fn mapping_ipc_draft_persists_through_typed_request() {
-        use std::io::{Read, Write};
-        use std::os::unix::net::UnixStream;
-        let socket =
-            std::env::temp_dir().join(format!("mackes-mapping-ipc-{}.sock", std::process::id()));
-        let config =
-            std::env::temp_dir().join(format!("mackes-mapping-ipc-{}.json5", std::process::id()));
-        fs::copy("../../fixtures/config-valid.json5", &config).expect("fixture copy");
-        let mut daemon = Daemon::bind(&socket).expect("daemon");
-        daemon.set_config_path(&config);
-        let client_socket = socket.clone();
-        let worker = std::thread::spawn(move || {
-            let mut client = UnixStream::connect(client_socket).expect("connect");
-            client.write_all(br#"{"command":"mappings","operation":"Draft","generation":0,"payload":{"kind":"Draft","draft":{"id":"draft-ipc","step":"source","physical_control_id":"knob-r1-c1"}}}
-"#).expect("write draft");
-            let mut response = String::new();
-            client.read_to_string(&mut response).expect("read response");
-            response
-        });
-        daemon.serve_once(AccessPolicy { control_gid: 0, daemon_uid: 0 }).expect("serve draft");
-        let response = worker.join().expect("client worker");
-        let result: serde_json::Value = serde_json::from_str(response.trim()).expect("result json");
-        assert_eq!(result["outcome"], "Applied");
-        assert_eq!(result["generation"], 1);
-        assert_eq!(mackes_config::load(&config).expect("reload").control_mapping_drafts.len(), 1);
-        let client_socket = socket.clone();
-        let stale = std::thread::spawn(move || {
-            let mut client = UnixStream::connect(client_socket).expect("connect stale");
-            client.write_all(br#"{"command":"mappings","operation":"Draft","generation":0,"payload":{"kind":"Draft","draft":{"id":"draft-stale","step":"source"}}}
-"#).expect("write stale");
-            let mut response = String::new();
-            client.read_to_string(&mut response).expect("read stale");
-            response
-        });
-        daemon.serve_once(AccessPolicy { control_gid: 0, daemon_uid: 0 }).expect("serve stale");
-        let stale_result: serde_json::Value =
-            serde_json::from_str(stale.join().expect("stale worker").trim()).expect("stale json");
-        assert_eq!(stale_result["outcome"], "GenerationConflict");
-        assert_eq!(
-            mackes_config::load(&config).expect("reload stale").control_mapping_drafts.len(),
-            1
-        );
-        let _ = fs::remove_file(socket);
-        let _ = fs::remove_file(config);
-    }
-
-    #[cfg(target_os = "linux")]
-    #[test]
-    fn active_scene_persistence_round_trips_through_config() {
-        let source = std::path::Path::new("../../fixtures/config-valid.json5");
-        let path =
-            std::env::temp_dir().join(format!("mackes-scene-persist-{}.json5", std::process::id()));
-        fs::copy(source, &path).expect("fixture copy");
-        persist_active_scene(&path, Some("intro")).expect("persist scene");
-        let document = mackes_config::load(&path).expect("reload config");
-        assert_eq!(document.settings.active_scene.as_deref(), Some("intro"));
-        let _ = fs::remove_file(path);
-    }
-
-    #[cfg(target_os = "linux")]
-    #[test]
-    fn invalid_restore_can_leave_daemon_degraded_without_stopping() {
-        let path =
-            std::env::temp_dir().join(format!("mackes-degraded-{}.sock", std::process::id()));
-        let mut daemon = Daemon::bind(&path).expect("daemon");
-        daemon.mark_degraded();
-        assert_eq!(daemon.health(), Health::Degraded);
-        assert!(daemon.health().is_operational());
-        daemon.request_shutdown();
-        daemon.mark_degraded();
-        assert_eq!(daemon.health(), Health::Stopping);
-        let _ = fs::remove_file(path);
-    }
-
-    #[cfg(target_os = "linux")]
-    #[test]
-    fn physical_device_refresh_retains_disconnected_identity() {
-        let path =
-            std::env::temp_dir().join(format!("mackes-device-retain-{}.sock", std::process::id()));
-        let mut daemon = Daemon::bind(&path).expect("daemon");
-        let endpoints = vec![
-            mackes_midi_engine::EndpointInfo {
-                id: "input-1".into(),
-                name: "Launch Control XL Mk2".into(),
-                direction: mackes_midi_engine::EndpointDirection::Input,
-            },
-            mackes_midi_engine::EndpointInfo {
-                id: "output-1".into(),
-                name: "Launch Control XL Mk2".into(),
-                direction: mackes_midi_engine::EndpointDirection::Output,
-            },
-        ];
-        daemon.set_physical_devices(&endpoints);
-        daemon.set_physical_devices(&[]);
-        let snapshot: serde_json::Value =
-            serde_json::from_str(&daemon.snapshot_response()).expect("snapshot");
-        assert_eq!(snapshot["physical_devices"][0]["id"], "launch control xl mk2");
-        assert_eq!(snapshot["physical_devices"][0]["state"], "offline");
-        assert_eq!(snapshot["physical_devices"][0]["inputs"][0], "input-1");
-
-        let saturated = (0..40)
-            .map(|index| mackes_midi_engine::EndpointInfo {
-                id: format!("input-{index}"),
-                name: format!("Synthetic Device {index}"),
-                direction: mackes_midi_engine::EndpointDirection::Input,
-            })
-            .collect::<Vec<_>>();
-        daemon.set_physical_devices(&saturated);
-        let saturated_snapshot: serde_json::Value =
-            serde_json::from_str(&daemon.snapshot_response()).expect("snapshot");
-        let devices = saturated_snapshot["physical_devices"].as_array().expect("devices");
-        assert_eq!(devices.len(), MAX_PHYSICAL_DEVICE_RECORDS);
-        assert!(devices.iter().all(|device| device["state"] == "connected"));
-        let _ = fs::remove_file(path);
-    }
-
-    #[cfg(target_os = "linux")]
-    #[test]
-    fn daemon_state_journal_supports_snapshot_replay_and_gap_detection() {
-        let path = std::env::temp_dir().join(format!("mackes-events-{}.sock", std::process::id()));
-        let mut daemon = Daemon::bind(&path).expect("daemon");
-        daemon.generation = 1;
-        daemon.record_state_event(Command::Routes);
-        let snapshot: serde_json::Value =
-            serde_json::from_str(&daemon.snapshot_response()).expect("snapshot");
-        assert_eq!(snapshot["last_sequence"], 1);
-        assert_eq!(snapshot["received"], 0);
-        assert_eq!(snapshot["sent"], 0);
-        assert_eq!(snapshot["dropped"], 0);
-        assert_eq!(snapshot["audit_count"], 0);
-        assert!(snapshot["audit"].as_array().is_some_and(Vec::is_empty));
-        let replay: serde_json::Value =
-            serde_json::from_str(&daemon.subscribe_response(br#"{"after_sequence":0}"#))
-                .expect("replay");
-        assert_eq!(replay["events"].as_array().expect("events").len(), 1);
-        let enveloped_replay: serde_json::Value = serde_json::from_str(
-            &daemon.subscribe_response(br#"{"payload":{"after_sequence":1}}"#),
-        )
-        .expect("enveloped replay");
-        assert!(enveloped_replay["events"].as_array().expect("events").is_empty());
-        for _ in 0..256 {
-            daemon.record_state_event(Command::Monitor);
-        }
-        let gap: serde_json::Value =
-            serde_json::from_str(&daemon.subscribe_response(br#"{"after_sequence":0}"#))
-                .expect("gap");
-        assert_eq!(gap["snapshot_required"], true);
-        assert_eq!(daemon.state_events.len(), 256);
-        let _ = fs::remove_file(path);
-    }
-
-    #[cfg(target_os = "linux")]
-    #[test]
-    fn registered_dispatch_updates_activity_and_publishes_live_event() {
-        let path =
-            std::env::temp_dir().join(format!("mackes-activity-{}.sock", std::process::id()));
-        let mut daemon = Daemon::bind(&path).expect("daemon");
-        let event = mackes_domain::MidiEvent {
-            timestamp: mackes_domain::TimestampNanos::new(1),
-            sequence: 1,
-            endpoint: mackes_domain::EndpointId::new(1).expect("endpoint"),
-            message: mackes_domain::MidiMessage::ControlChange {
-                channel: mackes_domain::MidiChannel::new(1).expect("channel"),
-                controller: mackes_domain::SevenBit::new(1).expect("controller"),
-                value: mackes_domain::SevenBit::new(2).expect("value"),
-            },
-        };
-        assert_eq!(daemon.dispatch_registered(&event), (0, 0));
-        assert_eq!(daemon.activity_counters(), (1, 0, 0));
-        assert_eq!(daemon.state_sequence, 1);
-        let event_payload = serde_json::from_slice::<serde_json::Value>(
-            &daemon.state_events.back().expect("event").payload,
-        )
-        .expect("payload");
-        assert_eq!(event_payload["received"], 1);
-        assert_eq!(event_payload["last_activity"]["kind"], "control_change");
-        assert_eq!(event_payload["last_activity"]["control_id"], "endpoint:1:control_change:1");
-        assert_eq!(event_payload["last_activity"]["timestamp_nanos"], 1);
-        assert_eq!(event_payload["last_activity"]["number"], 1);
-        assert_eq!(event_payload["last_activity"]["value"], 2);
-        assert_eq!(event_payload["last_activity"]["sequence"], 1);
-        let mut burst_event = event.clone();
-        burst_event.sequence = 2;
-        assert_eq!(daemon.dispatch_registered(&burst_event), (0, 0));
-        assert_eq!(daemon.state_events.len(), 1, "activity journal must be rate-limited");
-        let _ = fs::remove_file(path);
-    }
-
-    #[cfg(target_os = "linux")]
-    #[test]
-    fn active_scene_is_published_to_snapshot_and_journal() {
-        let path =
-            std::env::temp_dir().join(format!("mackes-scene-state-{}.sock", std::process::id()));
-        let mut daemon = Daemon::bind(&path).expect("daemon");
-        daemon.set_active_scene(Some("intro".to_owned()));
-        let snapshot = serde_json::from_str::<serde_json::Value>(&daemon.snapshot_response())
-            .expect("snapshot");
-        assert_eq!(snapshot["active_scene"], "intro");
-        let event = serde_json::from_slice::<serde_json::Value>(
-            &daemon.state_events.back().expect("event").payload,
-        )
-        .expect("event payload");
-        assert_eq!(event["active_scene"], "intro");
-        let _ = fs::remove_file(path);
-    }
-
-    #[cfg(target_os = "linux")]
-    #[test]
-    fn dashboard_command_polling_is_bounded_and_requires_registered_input() {
-        let path = std::env::temp_dir()
-            .join(format!("mackes-dashboard-input-{}.sock", std::process::id()));
-        let mut daemon = Daemon::bind(&path).expect("daemon");
-        let binding = mackes_config::DashboardMidiBinding {
-            trigger: mackes_config::DashboardMidiTrigger::NoteOn { channel: 1, note: 36 },
-            command: "panic".into(),
-        };
-        assert!(daemon.poll_dashboard_commands(&[binding], 128).is_empty());
-        assert!(daemon.poll_dashboard_commands(&[], 0).is_empty());
-        let response = daemon.handle_dashboard_command(Command::Panic);
-        assert!(response.contains("\"panic\":true"));
-        assert_eq!(daemon.state_sequence, 1);
-        assert!(daemon.handle_dashboard_command(Command::Shutdown).contains("not allowed"));
-        let _ = fs::remove_file(path);
-    }
-
-    #[cfg(target_os = "linux")]
-    #[test]
-    fn dashboard_poll_defers_unmatched_device_press_for_assignment_dispatch() {
-        use mackes_midi_engine::MidiOutputAdapter;
-
-        let path = std::env::temp_dir()
-            .join(format!("mackes-dashboard-device-{}.sock", std::process::id()));
-        let mut daemon = Daemon::bind(&path).expect("daemon");
-        let mut input = mackes_midi_engine::VirtualEndpoint::new(
-            "launch-control",
-            "Launch Control XL",
-            mackes_midi_engine::EndpointDirection::Input,
-        );
-        input.send(mackes_domain::MidiEvent {
-            timestamp: mackes_domain::TimestampNanos::new(1),
-            sequence: 1,
-            endpoint: mackes_domain::EndpointId::new(1).expect("endpoint"),
-            message: mackes_domain::MidiMessage::NoteOn {
-                channel: mackes_domain::MidiChannel::new(9).expect("channel"),
-                note: mackes_domain::SevenBit::new(105).expect("note"),
-                velocity: mackes_domain::SevenBit::new(127).expect("velocity"),
-            },
-        });
-        daemon.register_input(Box::new(input)).expect("register input");
-
-        assert!(daemon.process_dashboard_commands(&[], 128).is_empty());
-        assert_eq!(daemon.assignment_session.phase, mackes_ipc::AssignmentPhase::Idle);
-        assert_eq!(daemon.poll_and_dispatch_inputs(128).0, 1);
-        assert_eq!(daemon.assignment_session.phase, mackes_ipc::AssignmentPhase::AwaitControl);
-        let _ = fs::remove_file(path);
-    }
-
-    #[cfg(target_os = "linux")]
-    #[test]
-    fn learn_capture_is_observational_bounded_and_endpoint_scoped() {
-        let path = std::env::temp_dir().join(format!("mackes-learn-{}.sock", std::process::id()));
-        let mut daemon = Daemon::bind(&path).expect("daemon");
-        let endpoint = mackes_domain::EndpointId::new(1).expect("endpoint");
-        assert!(daemon.capture_learn_candidates(endpoint, 0).is_empty());
-        assert!(daemon.capture_learn_candidates(endpoint, 128).is_empty());
-    }
-
-    #[cfg(target_os = "linux")]
-    #[test]
-    fn daemon_scene_boundary_enforces_deadline_before_device_executor() {
-        let path = std::env::temp_dir().join(format!("mackes-scene-{}.sock", std::process::id()));
-        let mut daemon = Daemon::bind(&path).expect("daemon");
-        let plan = mackes_scene_engine::ActivationPlan::compile(vec![
-            mackes_scene_engine::ActivationAction {
-                id: "write".into(),
-                description: "write".into(),
-                unsafe_action: false,
-                depends_on: None,
-                destination: None,
-                message: None,
-            },
-        ])
-        .expect("plan");
-        let mut calls = 0;
-        let result = daemon.execute_scene_with_deadline(&plan, false, false, 5, 5, |_| {
-            calls += 1;
-            mackes_scene_engine::ActionResult::Succeeded
-        });
-        assert_eq!(calls, 0);
-        assert_eq!(result[0].1, mackes_scene_engine::ActionResult::TimedOut);
-    }
-
-    #[cfg(target_os = "linux")]
-    #[test]
-    fn startup_restore_uses_ordinary_planner_and_holds_unsafe_actions() {
-        let path =
-            std::env::temp_dir().join(format!("mackes-startup-plan-{}.sock", std::process::id()));
-        let mut daemon = Daemon::bind(&path).expect("daemon");
-        let plan = mackes_scene_engine::ActivationPlan::compile(vec![
-            mackes_scene_engine::ActivationAction {
-                id: "safe".into(),
-                description: "safe".into(),
-                unsafe_action: false,
-                depends_on: None,
-                destination: None,
-                message: None,
-            },
-            mackes_scene_engine::ActivationAction {
-                id: "unsafe".into(),
-                description: "unsafe".into(),
-                unsafe_action: true,
-                depends_on: Some("safe".into()),
-                destination: None,
-                message: None,
-            },
-        ])
-        .expect("plan");
-        let mut calls = 0;
-        let results = daemon.execute_startup_restore(&plan, |_| {
-            calls += 1;
-            mackes_scene_engine::ActionResult::Succeeded
-        });
-        assert_eq!(calls, 1);
-        assert_eq!(results[1].1, mackes_scene_engine::ActionResult::SkippedDependency);
-        let _ = fs::remove_file(path);
-    }
-
-    #[cfg(target_os = "linux")]
-    #[test]
-    fn command_classifier_rejects_unknown_tags() {
-        assert_eq!(classify_command(br#"{"command":"health"}"#), Some(Command::Health));
-        assert_eq!(classify_command(br#"{"command":"snapshot"}"#), Some(Command::Snapshot));
-        assert_eq!(classify_command(br#"{"command":"panic"}"#), Some(Command::Panic));
-        assert_eq!(classify_command(b"not-json"), None);
-        for (tag, expected) in [
-            ("hello", Command::Hello),
-            ("subscribe", Command::Subscribe),
-            ("validate", Command::Validate),
-            ("configuration", Command::Configuration),
-            ("endpoints", Command::Endpoints),
-            ("routes", Command::Routes),
-            ("learn", Command::Learn),
-            ("scenes", Command::Scenes),
-            ("device_query", Command::DeviceQuery),
-            ("device_control", Command::DeviceControl),
-            ("sysex", Command::Sysex),
-            ("backups", Command::Backups),
-            ("monitor", Command::Monitor),
-            ("unsafe_mode", Command::UnsafeMode),
-            ("shutdown", Command::Shutdown),
-        ] {
-            let request = format!(r#"{{"command":"{tag}"}}"#);
-            assert_eq!(classify_command(request.as_bytes()), Some(expected));
-        }
-    }
-
-    #[cfg(target_os = "linux")]
-    #[test]
-    fn command_acknowledgments_are_stable_and_operation_specific() {
-        assert_eq!(
-            command_ack(Command::Health, Health::Ready, 3, &[], None, &[]),
-            "{\"ok\":true,\"generation\":3,\"health\":\"ready\"}\n"
-        );
-        assert_eq!(
-            command_ack(Command::Panic, Health::Ready, 4, &[], None, &[]),
-            "{\"ok\":true,\"generation\":4,\"panic\":true}\n"
-        );
-        assert_eq!(
-            command_ack(Command::Hello, Health::Ready, 5, &[], None, &[]),
-            "{\"ok\":true,\"generation\":5,\"protocol\":1}\n"
-        );
-        assert_eq!(
-            command_ack(Command::Routes, Health::Ready, 6, &[], Some(0), &[]),
-            "{\"ok\":true,\"generation\":6,\"routes\":[],\"route_generation\":0}\n"
-        );
-        assert_eq!(
-            command_ack(Command::Learn, Health::Ready, 7, &[], None, &[]),
-            "{\"ok\":true,\"generation\":7,\"learn\":true}\n"
-        );
-        assert_eq!(
-            command_ack(Command::Scenes, Health::Ready, 7, &[], None, &[]),
-            "{\"ok\":true,\"generation\":7,\"scenes\":[]}\n"
-        );
-        assert_eq!(
-            command_ack(Command::DeviceQuery, Health::Ready, 8, &[], None, &[]),
-            "{\"ok\":true,\"generation\":8,\"devices\":[],\"physical_devices\":[]}\n"
-        );
-        assert_eq!(
-            command_ack(Command::Monitor, Health::Ready, 9, &[], None, &[]),
-            "{\"ok\":true,\"generation\":9,\"monitor\":[]}\n"
-        );
-        assert_eq!(
-            command_ack(Command::UnsafeMode, Health::Ready, 10, &[], None, &[]),
-            "{\"ok\":true,\"generation\":10,\"unsafe_mode\":\"disarmed\"}\n"
-        );
-        assert_eq!(
-            command_ack(Command::Sysex, Health::Ready, 10, &[], None, &[]),
-            "{\"ok\":true,\"generation\":10,\"sysex\":true,\"unsafe_required\":true}\n"
-        );
-        assert_eq!(
-            command_ack(Command::Health, Health::Degraded, 11, &[], None, &[]),
-            "{\"ok\":true,\"generation\":11,\"health\":\"degraded\"}\n"
-        );
-    }
-
-    #[test]
-    fn scenes_query_projects_daemon_scene_catalog() {
-        let path = std::env::temp_dir().join(format!("mackes-scenes-{}.sock", std::process::id()));
-        let mut daemon = Daemon::bind(&path).expect("daemon");
-        daemon.set_scene_ids(vec!["intro".into(), "verse".into()]);
-        daemon.set_active_scene(Some("verse".into()));
-        assert_eq!(daemon.navigate_scene(true).as_deref(), Some("intro"));
-        assert_eq!(daemon.navigate_scene(false).as_deref(), Some("verse"));
-        let response: serde_json::Value =
-            serde_json::from_str(&daemon.scenes_response()).expect("response");
-        assert_eq!(response["scenes"], serde_json::json!(["intro", "verse"]));
-        assert_eq!(response["active_scene"], "verse");
-    }
-
-    #[test]
-    fn persisted_scene_actions_compile_to_ordinary_activation_plan() {
-        let scene = mackes_config::SceneRef {
-            id: "intro".into(),
-            name: Some("Intro".into()),
-            category: Some("opening".into()),
-            actions: vec![mackes_config::SceneAction {
-                id: "set-level".into(),
-                description: "Set level".into(),
-                unsafe_action: true,
-                depends_on: None,
-                destination: None,
-                message: None,
-            }],
-        };
-        let plan = compile_scene_actions(&scene).expect("compile");
-        assert_eq!(plan.actions.len(), 1);
-        assert_eq!(plan.actions[0].id, "set-level");
-        assert!(plan.actions[0].unsafe_action);
-    }
-
-    #[test]
-    fn startup_restore_loads_last_scene_without_unsafe_actions() {
-        let result = startup_restore(std::path::Path::new("../../fixtures/config-valid.json5"));
-        // Cargo runs this test from the workspace root; use the repository-relative fixture.
-        let result = result
-            .or_else(|_| startup_restore(std::path::Path::new("fixtures/config-valid.json5")));
-        let result = result.expect("valid persisted state");
-        assert_eq!(result.active_project.as_deref(), Some("demo"));
-        assert_eq!(result.active_scene, None);
-        assert_eq!(result.scenes, vec!["intro"]);
-        assert!(result.should_activate);
-        assert_eq!(result.activation_scene(), Some("intro"));
-        assert_eq!(result.unsafe_actions_blocked, 1);
-    }
-
-    #[test]
-    fn startup_restore_rejects_missing_active_project() {
-        let path = std::env::temp_dir()
-            .join(format!("mackes-startup-{}-missing.json5", std::process::id()));
-        std::fs::write(
-            &path,
-            "{ schema_version: 1, settings: { active_project: 'missing' }, endpoints: [], projects: [{ id: 'other', scenes: [] }], profiles: [] }",
-        )
-        .expect("write state");
-        let result = startup_restore(&path);
-        let _ = std::fs::remove_file(&path);
-        assert!(
-            matches!(result, Err(ConfigError::Semantic { message, .. }) if message.contains("active project"))
-        );
-    }
-
-    #[test]
-    fn startup_restore_does_not_activate_empty_project() {
-        let path =
-            std::env::temp_dir().join(format!("mackes-startup-{}-empty.json5", std::process::id()));
-        std::fs::write(
-            &path,
-            "{ schema_version: 1, settings: { active_project: 'empty' }, endpoints: [], projects: [{ id: 'empty', scenes: [] }], profiles: [] }",
-        )
-        .expect("write state");
-        let result = startup_restore(&path).expect("valid state");
-        let _ = std::fs::remove_file(&path);
-        assert!(!result.should_activate);
-        assert_eq!(result.activation_scene(), None);
-        assert_eq!(result.unsafe_actions_blocked, 0);
-    }
-
-    #[cfg(target_os = "linux")]
-    #[test]
-    fn route_json_replacement_is_bounded_and_atomic() {
-        let path = std::env::temp_dir().join(format!(
-            "mackes-routes-{}-{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .expect("clock")
-                .as_nanos()
-        ));
-        let daemon = Daemon::bind(&path).expect("daemon");
-        daemon
-            .replace_routes_json(
-                br#"[{"source":1,"destination":2,"destination_parameter":"Mix","channel":1,"class":"ControlChange","enabled":false,"priority":9,"curve":"square","allow_cycle":true,"predicates":[{"NumberRange":{"minimum":10,"maximum":20}}]}]"#,
-                4,
-                8,
-            )
-            .expect("routes");
-        assert_eq!(daemon.route_generation(), Some(4));
-        assert_eq!(daemon.router.routes().len(), 1);
-        let route = &daemon.router.routes()[0];
-        assert!(!route.enabled);
-        assert_eq!(route.priority, 9);
-        assert_eq!(route.curve, mackes_midi_engine::Curve::Square);
-        assert_eq!(route.destination_parameter.as_deref(), Some("Mix"));
-        assert!(route.allow_cycle);
-        assert_eq!(route.predicates.len(), 1);
-        assert!(daemon.replace_routes_json(br#"[{"source":1,"destination":1}]"#, 5, 8).is_err());
-        assert_eq!(daemon.route_generation(), Some(4));
-        assert!(daemon
-            .replace_routes_json(br#"[{"source":1,"destination":2,"class":"Note"}]"#, 4, 8,)
-            .is_err());
-        assert_eq!(daemon.route_generation(), Some(4));
-        drop(daemon);
-        let _ = fs::remove_file(path);
-    }
-
-    #[cfg(target_os = "linux")]
-    #[test]
-    fn route_mutation_policy_denies_under_performance_lock_and_audits() {
-        let path =
-            std::env::temp_dir().join(format!("mackes-route-policy-{}.sock", std::process::id()));
-        let mut daemon = Daemon::bind(&path).expect("daemon");
-        daemon.safety.set_performance_lock(true);
-
-        assert_eq!(
-            daemon.authorize_route_mutation("route_replace"),
-            Err("route mutation denied by performance lock")
-        );
-        assert_eq!(daemon.audit.newest_first().count(), 1);
-        assert_eq!(
-            daemon.audit.newest_first().next().map(|record| record.action_id.as_str()),
-            Some("route_replace")
-        );
-        let snapshot = serde_json::from_str::<serde_json::Value>(&daemon.snapshot_response())
-            .expect("snapshot");
-        assert_eq!(snapshot["audit_count"], 1);
-        assert_eq!(snapshot["audit"][0]["action"], "route_replace");
-        let _ = std::fs::remove_file(path);
-    }
-
-    #[test]
-    fn daemon_device_control_send_is_counted_and_audited() {
-        let path =
-            std::env::temp_dir().join(format!("mackes-device-audit-{}.sock", std::process::id()));
-        let mut daemon = Daemon::bind(&path).expect("daemon");
-        assert_eq!(daemon.activity_counters().1, 0);
-        daemon.record_physical_send("eventide-out", "device-control:eventide.micropitch:Mix");
-        assert_eq!(daemon.activity_counters().1, 1);
-        let record = daemon.audit.newest_first().next().expect("audit record");
-        assert_eq!(record.action_id, "device-control:eventide.micropitch:Mix");
-        assert_eq!(record.target_alias, "eventide-out");
-        assert!(record.allowed);
-        let _ = std::fs::remove_file(path);
-    }
-
-    #[cfg(target_os = "linux")]
-    #[test]
-    fn configured_route_store_restores_after_daemon_rebind() {
-        let config =
-            std::env::temp_dir().join(format!("mackes-route-restore-{}.json5", std::process::id()));
-        let persisted = routes_path(&config);
-        fs::write(&persisted, br#"{"routes":[{"source":1,"destination":2,"class":"Note"}]}"#)
-            .expect("write route store");
-        let mut daemon = Daemon::bind(
-            std::env::temp_dir().join(format!("mackes-route-sock-{}", std::process::id())),
-        )
-        .expect("daemon");
-        daemon.set_config_path(&config);
-        assert_eq!(daemon.router.routes().len(), 1);
-        assert_eq!(daemon.route_generation(), Some(1));
-        let _ = fs::remove_file(persisted);
-    }
-
-    #[test]
-    fn configured_route_undo_record_restores_after_daemon_rebind() {
-        let socket =
-            std::env::temp_dir().join(format!("mackes-route-undo-{}.sock", std::process::id()));
-        let config =
-            std::env::temp_dir().join(format!("mackes-route-undo-{}.json5", std::process::id()));
-        let undo = routes_undo_path(&config);
-        fs::write(&config, "{}\n").expect("config");
-        fs::write(&undo, br#"[{"source":3,"destination":4,"class":"Note"}]"#).expect("undo record");
-        let mut daemon = Daemon::bind(&socket).expect("daemon");
-        daemon.set_config_path(&config);
-        assert!(daemon.route_undo.is_some());
-        assert_eq!(
-            daemon.route_undo.as_ref().and_then(serde_json::Value::as_array).map(Vec::len),
-            Some(1)
-        );
-        let _ = fs::remove_file(socket);
-        let _ = fs::remove_file(config);
-        let _ = fs::remove_file(undo);
-    }
-}
+mod tests;

@@ -12,7 +12,7 @@
 | Target release | v1.0 |
 | Primary platform | Fedora Linux 44, x86_64 |
 | Language | Rust |
-| Last updated | 2026-08-31 |
+| Last updated | 2026-09-02 |
 | Overall status | `IN_PROGRESS` (software release scope; post-release qualification tracked in §6.1) |
 | Canonical file | `WORKLIST.md` |
 
@@ -3406,9 +3406,9 @@ events by volatile ALSA source address and deliver each event only to the adapte
 subscription. This prevents cross-device attribution and queue loss when multiple inputs share the
 daemon client; strict engine Clippy and focused engine/daemon tests pass.
 
-#### [ ] W085 — Nonblocking ALSA event reader and MIDI 1.0 decoder
+#### [x] W085 — Nonblocking ALSA event reader and MIDI 1.0 decoder
 
-- **Status:** `IN_PROGRESS`
+- **Status:** `DONE`
 - **Owner:** Luna
 - **Depends on:** W084
 - **Parallel with:** daemon-independent fixture work only.
@@ -3437,9 +3437,18 @@ buttons, and 8 faders. Physical CC13 now resolves to `knob-r1-c1`; the installed
 from `AwaitControl` to `ChooseDevice` with `has_draft=true`. Forty-one daemon tests and strict
 Clippy pass.
 
-#### [ ] W086 — ALSA announcement, hot-plug, reconnect, and stable identity supervisor
+**Closure:** 2026-09-01 — `NativeAlsaReader` is the frozen decoder/counter contract. It drains a
+configured batch, projects timestamps and a monotonic sequence, maps subscribed ALSA addresses to
+W083 stable IDs, rejects spoofed sources, and counts malformed/unsupported/overflow events without
+routing. Golden Mk2 Device note 105, arrows CC 104–107, knob/fader, velocity-zero, bounds, mixed
+order, fragmented/maximum/oversized SysEx, and saturation/recovery tests pass. Domain `from_wire`
+now decodes supported system-common and realtime messages. Live `AlsaInputCapture` ingest uses the
+same reader. An ignored `snd-seq-dummy` ingress test is present. Daemon wiring remains W087;
+physical 100-pair/reconnect qualification remains W088.
 
-- **Status:** `NOT_STARTED`
+#### [x] W086 — ALSA announcement, hot-plug, reconnect, and stable identity supervisor
+
+- **Status:** `DONE`
 - **Owner:** Luna
 - **Depends on:** W085
 - **Parallel with:** W087 fixture preparation after W085 contracts freeze.
@@ -3463,9 +3472,17 @@ without opening additional clients or routing from the reader. Workspace checks,
 and strict engine/daemon Clippy pass. Changed-address identity recovery and physical reconnect
 qualification remain open.
 
-#### [ ] W087 — Daemon cutover to native ALSA and callback-input removal
+**Closure:** 2026-09-01 — `NativeAlsaSupervisor` reconciles fake announcement streams using
+direction, normalized client name, port name, and configured port index. Client-number changes
+restore the same stable ID; disconnects keep the desired endpoint offline; duplicate Launch
+Controls and permission failures fail closed; input-only return does not request LED replay;
+output return emits one LED-resync intent; storms coalesce; stale exits for prior addresses are
+ignored; daemon restart remembers identities without volatile numbers. Engine tests and strict
+Clippy pass. Physical USB reconnect remains W088.
 
-- **Status:** `IN_PROGRESS`
+#### [x] W087 — Daemon cutover to native ALSA and callback-input removal
+
+- **Status:** `DONE`
 - **Owner:** Luna
 - **Depends on:** W086
 - **Parallel with:** TUI presentation work consuming frozen snapshots.
@@ -3499,9 +3516,25 @@ without startup `Device or resource busy` failures by treating an already-existi
 subscription as idempotent. The daemon-only Device capture window recorded no new press, so the
 daemon counter/state transition still requires one captured physical action.
 
+**Evidence update:** 2026-09-01 — daemon now owns a `NativeAlsaSupervisor`, drains ALSA lifecycle
+announcements into it on each poll, degrades health on duplicate/permission failures, and requests
+LED replay only after a matching output returns. Snapshots publish `native_backend`,
+`native_led_resync`, and `native_failure`. Hermetic tests prove Device press starts Learn once,
+velocity-zero release does not restart, knob capture advances to `ChooseDevice`, Right arrow
+enters `ChoosePreset`, and reconnect preserves the session. `pump_input` is documented as midir
+rollback only. Physical install/aseqdump parity remains W088.
+
+**Closure:** 2026-09-01 — production Linux input is native ALSA: one supervisor, bounded poll,
+Device/arrows/knob assignment dispatch, lifecycle health, and `alsa-seq` snapshot backend.
+Hermetic coverage now also includes ordinary routing while Idle, wrong-channel Device rejection,
+channel-pressure ignore, snapshot continuity, permission-denied degradation, and documented
+mutually exclusive `midir-rollback`. Input provisioning remembers stable hardware identity.
+Physical 100-pair/`aseqdump` agreement remains W088.
+
 #### [ ] W088 — Native ALSA hardware qualification, rollback, and release closure
 
-- **Status:** `NOT_STARTED`
+- **Status:** `IN_PROGRESS`
+- **Start date:** 2026-09-02
 - **Owner:** Luna
 - **Depends on:** W087
 - **Parallel with:** none for final qualification.
@@ -3522,9 +3555,17 @@ hardware inputs share one daemon-owned nonblocking ALSA Sequencer client and its
 adapters now hold synchronized views of that client rather than opening one client per source.
 Workspace all-feature tests, strict daemon Clippy, worklist validation, and diff checks pass.
 
-#### [ ] W089 — Hierarchical Learn catalog
+**Work log:** 2026-09-02 — Luna — `NOT_STARTED` → `IN_PROGRESS`; claimed the Mk2 physical
+walkthrough. Clean service restart is `ActiveState=active`, `User=mackes`,
+`Group=mackes-control`, `SupplementaryGroups=audio`, `native_backend=alsa-seq`,
+`health=ready`, `registered_inputs=7`, assignment `Idle`, received `0`. USB `1235:0061` is
+present as ALSA client `24`; daemon ingress `130:0` is the sole subscriber of `24:0`. Device
+entry, capture, arrows, commit/LED, 100-pair integrity, restart, USB reconnect, simultaneous
+`aseqdump`, and duplicate-name fail-closed remain.
 
-- **Status:** `IN_PROGRESS`
+#### [x] W089 — Hierarchical Learn catalog
+
+- **Status:** `DONE`
 - **Owner:** Luna
 - **Depends on:** W076, W077, W085
 - **Objective:** make Learn present a deterministic catalog of Device → Preset (when available) → Effect → Type → Parameter.
@@ -3561,6 +3602,16 @@ checks and strict TUI/CLI Clippy pass.
 catalog level (Device, Preset, Effect, Type, and Parameter), with bounded markers and explicit
 empty states. Workspace checks and strict TUI Clippy pass.
 
+**Evidence update:** 2026-09-01 — catalog rendering now lives in `mackes-tui`
+(`assignment_catalog_lines`) so every Learn level shows breadcrumb, `LEVEL`/`COUNT`/`SELECTED`,
+and a bounded `>` marker; Eventide empty catalogs still render `PRESETS NONE`. Back from Effect
+returns to Preset instead of skipping to Device. Tests:
+`catalog_renders_every_level_with_count_and_selection`,
+`catalog_shows_presets_none_for_eventide`,
+`assignment_session_has_one_bounded_hardware_keyboard_path`,
+`assignment_frames_are_bounded_at_release_viewports`. `cargo fmt --check`, workspace tests, and
+strict Clippy pass. Physical Learn walkthrough remains W092.
+
 #### [ ] W090 — Preset-to-button assignment
 
 - **Status:** `IN_PROGRESS`
@@ -3583,6 +3634,17 @@ to source number zero. Profile catalog regression and strict profile/daemon Clip
 endpoint to the originating runtime event when using the controller-owned source identity. This
 allows native ALSA button/knob mappings to dispatch without accepting unrelated endpoint IDs;
 workspace checks, daemon dispatch regression, and strict Clippy pass.
+
+**Evidence update:** 2026-09-02 — daemon-owned catalog commits now persist button preset mappings
+with Factory 1 channel 8 and a non-wildcard source endpoint; knobs/faders still fail closed on
+`pcm70_reflex:*`. Tests: `channel_button_can_commit_reflex_preset`,
+`knob_and_fader_cannot_commit_reflex_preset`,
+`daemon_catalog_snapshot_reconstructs_learn_and_commits_once`. Physical button/SysEx qualification
+remains W092.
+
+**Evidence update:** 2026-09-02 — `button_preset_mapping_survives_reload_and_knob_preset_is_stripped`
+proves atomic persist through `set_config_path` and strips incompatible knob-preset records on
+reload. Duplicate destinations still enter ConfirmReplace. Physical SysEx remains W092.
 
 #### [ ] W091 — Preset parameter projection and LED state
 
@@ -3664,6 +3726,14 @@ enabled mapped Reflex parameters as normalized controller events on Launch Contr
 The projection is bounded, profile-owned, and isolated from mapping-store borrows; workspace checks
 and strict daemon Clippy pass. Physical feedback and LED qualification remain open.
 
+**Evidence update:** 2026-09-02 — daemon owns a mapping-derived LED surface on Factory Template 1.
+Unique Mk2 MIDI output matching replaced name fan-out and template `8`; HUI is ignored; duplicates
+fail closed; startup restore no longer reads template settings; reconnect/replay and a monotonic
+tick emit coalesced Factory 1 SysEx; Learn is yellow; Lexicon/Eventide owner colors and two-pulse
+result overlays are unit-tested with a fake clock; fader columns use the documented button-LED
+proxy with button-assignment precedence; snapshot/TUI expose attempted/sent/coalesced/failed and
+last error. Physical Mk2 matrix and preset-load appearance remain open.
+
 #### [ ] W092 — Catalog and preset end-to-end qualification
 
 - **Status:** `NOT_STARTED`
@@ -3734,6 +3804,13 @@ and full release-gate enforcement remain W093/W094 work.
 migration for legacy stable IDs, preserving destinations while translating known User 1
 tuples to Factory 1 channel/kind/number values and rejecting ambiguous records. Focused
 config migration test and strict config Clippy pass.
+
+**Evidence update:** 2026-09-02 — software contract freeze: `LAUNCH_CONTROL_MK2_FACTORY1_SLOT = 1`
+is the TUI readiness slot; every Factory 1 press/release tuple is covered by
+`mk2_factory1_every_control_press_resolves_and_release_is_rejected`; knob/button/fader number
+lists match the release manifest; User 1 operator docs are migration history only; release-note
+rollback no longer instructs a User 1 Components workflow. Physical walkthrough of all 56
+controls remains W088/W092. W097 may proceed against this frozen table.
 
 #### [x] W094 — Make controller artifact readiness a hard release gate
 
@@ -3856,9 +3933,16 @@ midir backend.
 and strict operator Clippy pass with no `midir` feature in the app dependency tree. This proves
 the operator binary cannot compile the physical backend; daemon IPC remains its only hardware path.
 
+**Evidence update:** 2026-09-02 — `apply_device_control` is the daemon-owned write path. Tests
+`device_control_requires_confirmation_and_registered_destination` and
+`daemon_device_control_send_is_counted_and_audited` prove confirmation denial, unregistered
+destination fail-closed, and no counter/audit increment on refusal. A successful physical
+Reflex/Eventide send remains required before W095 `DONE`.
+
 #### [ ] W096 — Establish one authoritative Learn catalog and cursor state
 
-- **Status:** `READY`
+- **Status:** `IN_PROGRESS`
+- **Start date:** 2026-09-02
 - **Owner:** Luna
 - **Depends on:** W089, W090
 - **Parallel with:** W095 after typed IPC fields are agreed.
@@ -3945,9 +4029,16 @@ the operator binary cannot compile the physical backend; daemon IPC remains its 
 - **Commands/evidence:** IPC golden fixtures, daemon/TUI reducer tests, hermetic end-to-end trace,
   strict Clippy, release viewport snapshots, and physical Mk2 catalog walkthrough.
 
+**Work log:** 2026-09-02 — Luna — `READY` → `IN_PROGRESS`; daemon snapshots now own catalog rows,
+per-level cursors, selected IDs, captured role/channel/number, and commit payloads. Keyboard and
+Mk2 arrows send the same typed actions. Persistence auto-reaches `Succeeded`. Production input uses
+the 250 ms assignable-control disambiguation window and 750 ms Device hold-to-cancel. Remaining:
+LED outcome binding, 749/750 boundary unit coverage on the poll path, and physical walkthrough.
+
 #### [ ] W097 — Modularize the implementation tree and reconcile architecture documentation
 
-- **Status:** `READY`
+- **Status:** `IN_PROGRESS`
+- **Start date:** 2026-09-02
 - **Owner:** Luna
 - **Depends on:** W093 contract freeze
 - **Parallel with:** W094–W096 only when file ownership is disjoint.
@@ -4003,6 +4094,13 @@ same API-first approach.
 and Eventide module extraction: repository policy (including the new dependency/size gate), strict
 artifact checks, workspace tests and Clippy, routing benchmark, hermetic integration, installer
 smoke, release archive checksum, and preflight all completed successfully.
+
+**Work log:** 2026-09-02 — Luna — `READY` → `IN_PROGRESS`; extracted `lexicon_reflex`, crate
+`tests.rs` modules, `midi-engine` `rtp`, TUI `render`, and operator `cli`/`interactive` without
+changing public crate APIs. Architecture ceilings were lowered to the post-extraction roots
+(profiles/engine 3100, TUI 4200, daemon 3600, operator main 800). README now names native ALSA
+as the production MIDI path. Remaining: further TUI/daemon splits, canonical-tree clone check,
+and W097 acceptance gate.
 
 #### [ ] W098 — Architecture-correction release closure
 
@@ -4901,7 +4999,6 @@ tests, or code presence alone is not release completion.
 | 2026-08-30 | WORKLIST/W072–W080 | operator/codex | approved TUI redesign → governed Luna workstream | Added the task-oriented five-section shell, hardware-first `move control → device → effect → parameter` workflow, stable non-overlapping Novation identities, profile effect hierarchy, durable parameter mappings, daemon evaluator, mapping browser/Undo, four-part visual polish, legacy rehome, migration, and software release-gate packets. W072 and W076 are READY; downstream items are dependency-gated. |
 | 2026-08-30 | WORKLIST/W072–W082 | operator/codex | controller-driven assignment specification → governed Luna workstream | Assigned the full redesign stream to Luna; replaced Map Controls-only capture with short Device entry from any screen; specified 750 ms cancel, 250 ms source disambiguation, controller/keyboard navigation parity, exact large-distance screens, atomic replacement, interruption recovery, official Components User 1 artifact/onboarding, and layered fake-clock-testable LED feedback. Added W081/W082 and extended W076/W077/W080, dependency waves, proposal, and release acceptance evidence. |
 | 2026-08-31 | WORKLIST/W083–W088 | operator/codex | native ALSA correction → governed Luna workstream | Recorded the `aseqdump`-visible/daemon-missing Launch Control Device defect and added an implementation-ready native ALSA Sequencer migration: architecture contract, client/ports/subscriptions, bounded decoder, announcement/reconnect supervisor, daemon cutover, least-privilege deployment, rollback, and physical Mk2 qualification. W083 is READY; downstream packets remain dependency-gated. |
-midir backend.
 
 **Evidence update:** 2026-09-01 — retired M-VAVE from the active platform catalog and daemon
 DeviceControl path. Built-in profiles now expose only supported Reflex and Eventide devices;
@@ -4921,3 +5018,8 @@ Clippy and all-feature check pass; the socket regression remains covered by the 
 **Evidence update:** 2026-09-01 — the ownership policy now also rejects `midir-backend` in the
 operator Cargo manifest, preventing the physical backend from being restored through dependency
 features as well as source calls.
+
+| 2026-09-01 | W089 | Luna | `IN_PROGRESS` → `DONE` | Moved Learn catalog rendering into `mackes-tui`, covered Device/Preset/Effect/Type/Parameter including Eventide `PRESETS NONE`, and stopped Effect Back from skipping Preset. Workspace fmt/tests/Clippy pass. |
+| 2026-09-02 | W088 | Luna | `NOT_STARTED` → `IN_PROGRESS` | Claimed Mk2 physical walkthrough. Clean restart: `health=ready`, `native_backend=alsa-seq`, 7 native inputs, assignment Idle, USB `1235:0061` ALSA client 24 subscribed only by daemon `130:0`. |
+| 2026-09-02 | W088 | Luna | physical walkthrough | Operator-driven: Device Learn, button-r1-c1 and knob-r1-c1 capture, four Right catalog steps, fifth Right no commit, USB reconnect preserved Learn and input `24:0`→`130:0` (output `131` did not resubscribe), Mute 100 press/release pairs received 111→311 dropped 0. |
+| 2026-09-02 | W090/W093/W095/W096 | Luna | software blockers advanced | Frozen Factory 1 slot/layout/manifest/readiness; button preset persist/reload and knob-preset strip; DeviceControl confirmation/audit fail-closed; daemon-owned Learn catalog with 250 ms/750 ms input windows. Physical Mk2 and LED remaining. |

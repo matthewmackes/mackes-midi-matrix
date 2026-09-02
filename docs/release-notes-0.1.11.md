@@ -19,7 +19,7 @@ the parity work is completed.
 
 ## Rollback
 
-Keep the previous configuration and reviewed Components artifact before upgrading.
+Keep the previous configuration and Factory Template 1 contract before upgrading.
 To roll back, stop the daemon, restore the prior configuration backup, reinstall
-the previous package, and reconnect the controller. Do not switch away from User 1
-or overwrite the factory templates during recovery.
+the previous package, and reconnect the controller. Do not overwrite factory
+templates during recovery.

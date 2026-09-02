@@ -680,6 +680,86 @@ pub struct AssignmentSession {
     /// Per-level cursors, persisted in the daemon snapshot so views cannot leak selection.
     #[serde(default)]
     pub cursors: AssignmentCursors,
+    /// Authoritative Learn catalog reconstructed by any renderer from this snapshot alone.
+    #[serde(default)]
+    pub catalog: AssignmentCatalog,
+}
+
+/// One bounded Learn catalog row.
+#[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
+pub struct AssignmentCatalogEntry {
+    /// Stable identity used by commits and filtering.
+    pub id: String,
+    /// Operator-visible label.
+    pub label: String,
+    /// Optional parent identity (effect id for parameters).
+    #[serde(default)]
+    pub group: Option<String>,
+}
+
+/// Daemon-owned Learn catalog and captured source/destination identities.
+#[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
+pub struct AssignmentCatalog {
+    /// Visible breadcrumb for the current level.
+    #[serde(default)]
+    pub breadcrumb: String,
+    /// Connected/enabled device profiles.
+    #[serde(default)]
+    pub devices: Vec<AssignmentCatalogEntry>,
+    /// Preset rows, including an explicit NONE choice when the profile has none.
+    #[serde(default)]
+    pub presets: Vec<AssignmentCatalogEntry>,
+    /// Effect blocks for the selected device.
+    #[serde(default)]
+    pub effects: Vec<AssignmentCatalogEntry>,
+    /// Parameter types/groups for the selected effect.
+    #[serde(default)]
+    pub types: Vec<AssignmentCatalogEntry>,
+    /// Role-filtered parameters for the selected type.
+    #[serde(default)]
+    pub parameters: Vec<AssignmentCatalogEntry>,
+    /// Selected device profile id.
+    #[serde(default)]
+    pub selected_device: Option<String>,
+    /// Selected preset id, or `NONE`.
+    #[serde(default)]
+    pub selected_preset: Option<String>,
+    /// Selected effect id.
+    #[serde(default)]
+    pub selected_effect: Option<String>,
+    /// Selected type/group label.
+    #[serde(default)]
+    pub selected_type: Option<String>,
+    /// Selected parameter id.
+    #[serde(default)]
+    pub selected_parameter: Option<String>,
+    /// Captured assignable physical control.
+    #[serde(default)]
+    pub captured_control_id: Option<String>,
+    /// Captured physical role (`Knob`, `Fader`, `ChannelButton`).
+    #[serde(default)]
+    pub captured_role: Option<String>,
+    /// Stable source endpoint identity, never a wildcard.
+    #[serde(default)]
+    pub source_endpoint: Option<String>,
+    /// Zero-based captured MIDI channel.
+    #[serde(default)]
+    pub source_channel: Option<u8>,
+    /// Captured controller or note number.
+    #[serde(default)]
+    pub source_number: Option<u8>,
+    /// Stable destination output endpoint identity.
+    #[serde(default)]
+    pub destination_endpoint: Option<String>,
+    /// Last assignment action that was accepted or rejected.
+    #[serde(default)]
+    pub pending_action: Option<String>,
+    /// Terminal result (`Succeeded`/`Failed`) when persistence completes.
+    #[serde(default)]
+    pub last_result: Option<String>,
+    /// Persistent visible rejection or failure reason.
+    #[serde(default)]
+    pub last_error: Option<String>,
 }
 
 /// Bounded cursor positions for each assignment catalog level.
@@ -760,6 +840,7 @@ impl AssignmentSession {
             has_draft: false,
             interrupted_phase: None,
             cursors: AssignmentCursors::default(),
+            catalog: AssignmentCatalog::default(),
         }
     }
 
@@ -801,11 +882,11 @@ impl AssignmentSession {
         self.phase = match (self.phase, action) {
             (AssignmentPhase::Idle, AssignmentAction::Start) => AssignmentPhase::AwaitControl,
             (AssignmentPhase::AwaitControl, AssignmentAction::ControlCaptured)
-            | (
-                AssignmentPhase::ChooseEffect | AssignmentPhase::ChoosePreset,
-                AssignmentAction::Back,
-            ) => AssignmentPhase::ChooseDevice,
-            (AssignmentPhase::ChooseDevice, AssignmentAction::Enter) => {
+            | (AssignmentPhase::ChoosePreset, AssignmentAction::Back) => {
+                AssignmentPhase::ChooseDevice
+            }
+            (AssignmentPhase::ChooseEffect, AssignmentAction::Back)
+            | (AssignmentPhase::ChooseDevice, AssignmentAction::Enter) => {
                 AssignmentPhase::ChoosePreset
             }
             (AssignmentPhase::ChoosePreset, AssignmentAction::Enter) => {
@@ -823,7 +904,10 @@ impl AssignmentSession {
             | (AssignmentPhase::Interrupted, AssignmentAction::Resume) => {
                 self.interrupted_phase.take().unwrap_or(AssignmentPhase::ChooseParameter)
             }
-            (AssignmentPhase::ChooseParameter, AssignmentAction::Commit)
+            (
+                AssignmentPhase::ChooseParameter | AssignmentPhase::ChoosePreset,
+                AssignmentAction::Commit,
+            )
             | (AssignmentPhase::ConfirmReplace, AssignmentAction::ConfirmReplace) => {
                 AssignmentPhase::Committing
             }
@@ -835,12 +919,14 @@ impl AssignmentSession {
                 self.has_draft = false;
                 AssignmentPhase::Idle
             }
-            (phase, AssignmentAction::Up) if self.index > 0 => {
-                self.set_active_cursor(self.index - 1);
+            (phase, AssignmentAction::Up) if self.active_cursor() > 0 => {
+                self.set_active_cursor(self.active_cursor() - 1);
                 phase
             }
-            (phase, AssignmentAction::Down) if self.total > 0 && self.index + 1 < self.total => {
-                self.set_active_cursor(self.index + 1);
+            (phase, AssignmentAction::Down)
+                if self.total > 0 && self.active_cursor() + 1 < self.total =>
+            {
+                self.set_active_cursor(self.active_cursor() + 1);
                 phase
             }
             (phase, AssignmentAction::Cancel) if phase != AssignmentPhase::Idle => {
@@ -1744,6 +1830,8 @@ mod tests {
         assert!(session.apply(AssignmentAction::Enter));
         assert_eq!(session.phase, AssignmentPhase::ChooseEffect);
         assert!(session.apply(AssignmentAction::Back));
+        assert_eq!(session.phase, AssignmentPhase::ChoosePreset);
+        assert!(session.apply(AssignmentAction::Back));
         assert_eq!(session.phase, AssignmentPhase::ChooseDevice);
         assert!(session.apply(AssignmentAction::Enter));
         assert!(session.apply(AssignmentAction::Enter));
@@ -1830,6 +1918,7 @@ mod tests {
             serde_json::from_str(&encoded).expect("cursor state restores");
         assert_eq!(restored.cursors.device, 2);
         assert_eq!(restored.cursors.effect, 1);
+        assert!(restored.catalog.devices.is_empty());
     }
 
     #[test]

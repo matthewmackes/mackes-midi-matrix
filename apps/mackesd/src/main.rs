@@ -196,11 +196,9 @@ fn main() {
         }) {
             if let Err(error) = daemon.provision_output(&endpoint.id) {
                 eprintln!("mackes-midi-matrixd: output unavailable {}: {error}", endpoint.name);
-            } else if endpoint.name.contains("Launch Control XL") {
-                clear_launch_control_led_banks(&mut daemon, endpoint);
-                restore_launch_control_leds(&mut daemon, endpoint, &config);
             }
         }
+        daemon.replay_controller_leds();
     }
     let daemon_uid = std::process::Command::new("id")
         .args(["-u", "mackes"])
@@ -264,76 +262,6 @@ fn main() {
         }
         if daemon.health() == mackesd::Health::Stopping {
             break;
-        }
-    }
-}
-
-fn restore_launch_control_leds(
-    daemon: &mut mackesd::Daemon,
-    endpoint: &mackes_midi_engine::EndpointInfo,
-    config_path: &std::path::Path,
-) {
-    let Some(endpoint_id) = mackes_midi_engine::numeric_endpoint_id(&endpoint.id) else { return };
-    let Ok(document) = mackes_config::load(config_path) else { return };
-    let Some(template) = document.settings.launch_control_template else { return };
-    for assignment in template.assignments {
-        if assignment.requires_review() || assignment.index >= 48 {
-            continue;
-        }
-        let color = match assignment.destination.as_deref() {
-            Some(destination) if destination.to_ascii_lowercase().contains("lexicon") => {
-                mackes_profiles::LedColor::Amber
-            }
-            Some(destination) if destination.to_ascii_lowercase().contains("eventide") => {
-                mackes_profiles::LedColor::Red
-            }
-            _ => mackes_profiles::LedColor::Green,
-        };
-        let state = mackes_profiles::LedState::new(color, 127, false);
-        let Some(bytes) = mackes_profiles::encode_launch_control_feedback(
-            template.template,
-            assignment.index,
-            state,
-        ) else {
-            continue;
-        };
-        let Ok(message) = mackes_domain::MidiMessage::from_wire(&bytes) else {
-            continue;
-        };
-        daemon.send_event_to_endpoint(
-            endpoint_id,
-            mackes_domain::MidiEvent {
-                timestamp: mackes_domain::TimestampNanos::new(0),
-                sequence: 0,
-                endpoint: endpoint_id,
-                message,
-            },
-        );
-    }
-}
-
-fn clear_launch_control_led_banks(
-    daemon: &mut mackesd::Daemon,
-    endpoint: &mackes_midi_engine::EndpointInfo,
-) {
-    let Some(endpoint_id) = mackes_midi_engine::numeric_endpoint_id(&endpoint.id) else {
-        return;
-    };
-    for template in [0_u8, 8_u8] {
-        for index in 0..48_u8 {
-            let Some(bytes) = mackes_profiles::encode_launch_control_led(template, index, 0) else {
-                continue;
-            };
-            let Ok(message) = mackes_domain::MidiMessage::from_wire(&bytes) else {
-                continue;
-            };
-            let event = mackes_domain::MidiEvent {
-                timestamp: mackes_domain::TimestampNanos::new(0),
-                sequence: 0,
-                endpoint: endpoint_id,
-                message,
-            };
-            daemon.send_event_to_endpoint(endpoint_id, event);
         }
     }
 }

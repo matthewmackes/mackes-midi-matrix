@@ -126,4 +126,7 @@ and native subscriptions are reconciled by the daemon.
 
 For a failed native migration, restore the previously installed daemon binary from the retained
 release artifact, restart the service, and confirm `health=ready` plus the expected input count.
-The rollback is software-only and does not reset the controller or overwrite processor presets.
+Snapshots report `native_backend` as `alsa-seq` for the production Linux path or
+`midir-rollback` only when the daemon is built without `alsa-seq-backend`; those backends are
+mutually exclusive for hardware input. The rollback is software-only and does not reset the
+controller or overwrite processor presets.

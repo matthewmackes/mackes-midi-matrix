@@ -30,7 +30,7 @@ The Cargo workspace contains two applications and shared crates:
 | `crates/domain` | Shared domain types and contracts |
 | `crates/config` | JSON5 loading, validation, and hashing |
 | `crates/ipc` | Local daemon/client communication |
-| `crates/midi-engine` | MIDI routing abstractions and optional `midir` backend |
+| `crates/midi-engine` | Routing, native ALSA production adapters, optional midir rollback |
 | `crates/profiles` | Device profile loading and behavior contracts |
 | `crates/scene-engine` | Scene state and recall logic |
 | `crates/tui` | Reusable terminal UI components |
@@ -43,7 +43,7 @@ See `WORKLIST.md` and `docs/decisions/` for governing decisions and contracts.
 - **Language:** Rust, edition 2021
 - **Build:** Cargo; pinned development toolchain Rust 1.97.1; crate MSRV Rust 1.85
 - **Platform:** Fedora Linux 44, x86_64
-- **MIDI:** `midir`, ALSA utilities, and virtual MIDI ports for Linux testing
+- **MIDI:** native ALSA Sequencer on Fedora (daemon-owned); optional midir rollback and virtual ports for tests
 - **TUI:** `ratatui` and `crossterm`
 - **Data:** Serde, JSON/JSON5, and SHA-256 via `sha2`
 - **IPC/Unix integration:** `nix` and local Unix socket contracts
