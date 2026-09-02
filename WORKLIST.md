@@ -3612,9 +3612,9 @@ returns to Preset instead of skipping to Device. Tests:
 `assignment_frames_are_bounded_at_release_viewports`. `cargo fmt --check`, workspace tests, and
 strict Clippy pass. Physical Learn walkthrough remains W092.
 
-#### [ ] W090 — Preset-to-button assignment
+#### [x] W090 — Preset-to-button assignment
 
-- **Status:** `IN_PROGRESS`
+- **Status:** `DONE`
 - **Owner:** Luna
 - **Depends on:** W089
 - **Objective:** allow presets to be assigned to Novation buttons while continuous parameters remain assignable to knobs/faders.
@@ -3645,6 +3645,13 @@ remains W092.
 **Evidence update:** 2026-09-02 — `button_preset_mapping_survives_reload_and_knob_preset_is_stripped`
 proves atomic persist through `set_config_path` and strips incompatible knob-preset records on
 reload. Duplicate destinations still enter ConfirmReplace. Physical SysEx remains W092.
+
+**Closure:** 2026-09-02 — the daemon-owned commit path proves channel-button preset persistence,
+restart reload, and atomic conflict behavior in
+`channel_button_can_commit_reflex_preset`, `knob_and_fader_cannot_commit_reflex_preset`,
+`button_preset_mapping_survives_reload_and_knob_preset_is_stripped`, and
+`daemon_catalog_snapshot_reconstructs_learn_and_commits_once`. Physical controller/SysEx
+appearance qualification is explicitly owned by W092, not this software contract.
 
 #### [ ] W091 — Preset parameter projection and LED state
 
