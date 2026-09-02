@@ -63,6 +63,9 @@ install -m 0755 "$root_dir/scripts/mackes-midi-matrix-local" "$bin_dir/mackes-mi
 install -m 0755 "$root_dir/scripts/mackes-midi-matrix-local" "$bin_dir/mackes-midi-matrix-local"
 install -m 0755 "$root_dir/target/release/mackes-midi-matrixd" "$libexec_dir/mackes-midi-matrixd"
 install -m 0644 "$root_dir/packaging/mackes.service" /etc/systemd/system/mackes-midi-matrix.service
+if [[ ! -e "$config_dir/config.json5" ]]; then
+  install -m 0640 "$root_dir/packaging/default-config.json5" "$config_dir/config.json5"
+fi
 # The daemon atomically persists learned mappings and scenes in the configured
 # project document, so its service account must own the configuration tree.
 # The directory remains inaccessible to non-members through mode 0750.

@@ -43,6 +43,8 @@ install -m 0755 "$root_dir/scripts/install-fedora.sh" \
   "$staging/$bundle_name/scripts/"
 install -m 0644 "$root_dir/packaging/mackes.service" \
   "$staging/$bundle_name/packaging/mackes.service"
+install -m 0644 "$root_dir/packaging/default-config.json5" \
+  "$staging/$bundle_name/packaging/default-config.json5"
 install -m 0644 "$root_dir/README.md" "$root_dir/LICENSE" "$root_dir/Cargo.lock" \
   "$staging/$bundle_name/"
 install -m 0644 "$root_dir/docs/installation-fedora.md" \
