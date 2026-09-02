@@ -1,4 +1,5 @@
 //! Daemon-backed operator CLI helpers.
+#![allow(clippy::redundant_pub_crate)]
 
 pub(crate) fn reflex_pcm70_preset(
     preset_id: &str,

@@ -1,11 +1,19 @@
 //! MACKES operator entry point.
 
-mod cli;
-mod interactive;
+pub(crate) mod cli;
+pub(crate) mod interactive;
 
-use cli::*;
+use cli::{
+    apply_routes_cli, backup_entries, backup_status_label, daemon_command, daemon_request,
+    daemon_status, discovered_endpoints, navigate_scene_cli, print_daemon_command,
+    print_default_provider, print_effects_assignments, print_effects_demo, print_effects_faceplate,
+    print_effects_plan, print_learn, reflex_pcm70_preset, restore_cli, scene_action_add_cli,
+    scene_action_remove_cli, scene_actions_cli, scene_plan_cli, send_device_control_cli,
+    send_sysex_cli, set_default_provider_cli,
+};
 use interactive::run_tui;
 
+#[allow(clippy::too_many_lines)]
 fn main() {
     use owo_colors::OwoColorize;
 

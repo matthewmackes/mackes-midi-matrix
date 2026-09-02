@@ -1,6 +1,11 @@
 //! Interactive operator TUI session.
+#![allow(clippy::redundant_pub_crate)]
 
-use crate::cli::*;
+use crate::cli::{
+    daemon_request, dispatch_ui_command, endpoint_pair_for_new_route, first_output_endpoint,
+    mapping_result_health, mapping_store_request, poll_learn_capture, remember_mapping_undo,
+    save_learned_mapping, save_routes, save_setlists, synchronize_events, synchronize_snapshot,
+};
 
 #[allow(clippy::too_many_lines)]
 pub(crate) fn run_tui() -> Result<(), String> {

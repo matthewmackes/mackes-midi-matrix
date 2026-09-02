@@ -1,9 +1,7 @@
 //! Characterization tests for public crate behavior.
 
 use super::*;
-use mackes_domain::{
-    FourteenBit, MidiChannel, MidiMessage, SystemCommonMessage, TimestampNanos,
-};
+use mackes_domain::{FourteenBit, MidiChannel, MidiMessage, SystemCommonMessage, TimestampNanos};
 
 #[test]
 fn virtual_endpoint_preserves_output_order() {

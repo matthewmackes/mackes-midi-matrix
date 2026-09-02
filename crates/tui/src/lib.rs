@@ -4103,8 +4103,9 @@ impl DashboardState {
     }
 }
 
-mod render;
-pub use render::*;
+pub mod render;
+use render::{clamp_lines, destination_profile_for_name};
+pub use render::{draw_task_shell_with_content, launch_control_template_from_config};
 
 #[cfg(test)]
 mod tests;

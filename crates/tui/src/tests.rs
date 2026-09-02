@@ -1,5 +1,6 @@
 //! Characterization tests for public crate behavior.
 
+use super::render::*;
 use super::*;
 use ratatui::{backend::TestBackend, Terminal};
 

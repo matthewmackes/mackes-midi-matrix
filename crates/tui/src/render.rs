@@ -1,6 +1,14 @@
 //! Ratatui draw adapters over authoritative TUI state.
 
-use super::*;
+use super::{
+    faceplate_state_marker, launch_control_index_label, mapping_browser_lines, AppSection,
+    BackupWorkspace, Block, Borders, ClientState, Color, Constraint, DashboardState,
+    DeviceWorkspace, DiagnosticsState, Direction, FaceplateControlState, Frame, Keymap,
+    LaunchControlMessageKind, LaunchControlTemplate, Layout, LearnPhase, LearnWorkspace, Line,
+    MappingDraft, Modifier, MonitorState, Paragraph, PhysicalDevice, RackShellLayout, Rect,
+    ReducerError, ReflexWorkspace, RoutingEditor, SetlistEditor, Span, StateEvent, StateSnapshot,
+    Style, TaskShellState, UiCommand, Viewport,
+};
 
 /// Draws the dashboard using the canonical state projection and a single
 /// bordered panel. Terminal setup and event polling remain the application's
@@ -794,7 +802,10 @@ pub(crate) fn mapping_chain_line(drafts: &[MappingDraft]) -> String {
         .join("  |  ")
 }
 
-pub(crate) fn destination_inventory_line(devices: &[PhysicalDevice], selected: Option<usize>) -> String {
+pub(crate) fn destination_inventory_line(
+    devices: &[PhysicalDevice],
+    selected: Option<usize>,
+) -> String {
     let destinations = devices
         .iter()
         .flat_map(|device| {
