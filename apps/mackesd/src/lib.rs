@@ -1321,6 +1321,30 @@ impl Daemon {
         })
     }
 
+    /// Resolves a profile-owned destination to its unique currently registered output.
+    ///
+    /// Early assignment records stored the profile ID before a concrete MIDI output was
+    /// available. Keep those durable records operational when their named hardware is
+    /// present, while refusing ambiguous or unrelated outputs.
+    fn output_endpoint_for_profile(&self, profile_id: &str) -> Option<mackes_domain::EndpointId> {
+        let needles: &[&str] = match profile_id {
+            "eventide.micropitch" => &["eventide", "micropitch"],
+            "lexicon.reflex" => &["lexicon", "reflex"],
+            _ => return None,
+        };
+        let matches = self
+            .outputs
+            .output_infos()
+            .into_iter()
+            .filter(|output| {
+                let name = output.name.to_ascii_lowercase();
+                needles.iter().any(|needle| name.contains(needle))
+            })
+            .filter_map(|output| mackes_midi_engine::numeric_endpoint_id(&output.id))
+            .collect::<Vec<_>>();
+        (matches.len() == 1).then(|| matches[0])
+    }
+
     /// Dispatches one event through the daemon-owned output registry.
     #[must_use]
     #[allow(clippy::too_many_lines)]
@@ -1359,9 +1383,20 @@ impl Daemon {
             } else {
                 continue;
             };
-            let Some(destination_endpoint) =
-                mackes_midi_engine::numeric_endpoint_id(&mapping.destination_endpoint)
-            else {
+            let configured_destination =
+                mackes_midi_engine::numeric_endpoint_id(&mapping.destination_endpoint);
+            let destination_endpoint = configured_destination
+                .filter(|endpoint| {
+                    self.outputs
+                        .output_ids()
+                        .iter()
+                        .any(|id| mackes_midi_engine::numeric_endpoint_id(id) == Some(*endpoint))
+                })
+                .or_else(|| self.output_endpoint_for_profile(&mapping.destination_profile))
+                // Preserve the configured endpoint for the normal disconnected-output
+                // accounting path below when no profile-owned output is available.
+                .or(configured_destination);
+            let Some(destination_endpoint) = destination_endpoint else {
                 continue;
             };
             let class = match mapping.source_kind.as_str() {
@@ -2464,6 +2499,8 @@ impl Daemon {
             "dropped": self.dropped_events,
             "registered_inputs": self.inputs.len(),
             "last_activity": self.last_activity,
+            "last_mapping_activity": self.last_mapping_activity,
+            "control_mappings": self.mapping_store.active,
             "activation_result": self.activation_result.as_deref(),
             "assignment_session": self.assignment_session,
             "last_sequence": self.state_sequence,

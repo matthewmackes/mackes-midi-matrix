@@ -607,6 +607,54 @@ fn mapping_activity_reports_disconnected_destination_without_fallback() {
 }
 
 #[test]
+fn profile_destination_mapping_dispatches_to_the_unique_eventide_output() {
+    let socket =
+        std::env::temp_dir().join(format!("mackes-eventide-map-{}.sock", std::process::id()));
+    let mut daemon = Daemon::bind(&socket).expect("daemon");
+    daemon
+        .register_output(Box::new(mackes_midi_engine::VirtualEndpoint::new(
+            "eventide-out",
+            "MicroPitch Pedal",
+            mackes_midi_engine::EndpointDirection::Output,
+        )))
+        .expect("register eventide output");
+    daemon.mapping_store.active.push(mackes_config::ControlMapping {
+        id: "eventide-map".into(),
+        controller_profile: "launch-control-xl-mk2".into(),
+        physical_control_id: "knob-r3-c8".into(),
+        source_endpoint: "launch-input".into(),
+        source_kind: "cc".into(),
+        source_channel: 8,
+        source_number: 56,
+        destination_endpoint: "eventide.micropitch".into(),
+        destination_profile: "eventide.micropitch".into(),
+        destination_effect: "modulation".into(),
+        destination_parameter: "control-1".into(),
+        behavior: mackes_config::MappingBehavior {
+            source_range: (0, 127),
+            destination_range: (0, 127),
+            invert: false,
+            curve: "linear".into(),
+        },
+        enabled: true,
+        profile_version: 1,
+    });
+    let event = mackes_domain::MidiEvent {
+        timestamp: mackes_domain::TimestampNanos::new(1),
+        sequence: 1,
+        endpoint: mackes_midi_engine::numeric_endpoint_id("launch-input").expect("source"),
+        message: mackes_domain::MidiMessage::ControlChange {
+            channel: mackes_domain::MidiChannel::new(9).expect("channel"),
+            controller: mackes_domain::SevenBit::new(56).expect("controller"),
+            value: mackes_domain::SevenBit::new(64).expect("value"),
+        },
+    };
+    assert_eq!(daemon.dispatch_registered(&event), (1, 0));
+    assert_eq!(daemon.last_mapping_activity.as_ref().expect("activity")["outcome"], "sent");
+    let _ = fs::remove_file(socket);
+}
+
+#[test]
 fn factory1_device_press_is_reserved_for_assignment_start() {
     let event = mackes_domain::MidiEvent {
         timestamp: mackes_domain::TimestampNanos::new(1),
