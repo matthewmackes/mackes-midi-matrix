@@ -226,10 +226,20 @@ walkthrough. Physical session stopped at operator `done`; no Eventide/Reflex wri
 Controller commit/LED result, daemon output resubscribe after USB reconnect, restart mapping
 survival, duplicate-name fail-closed, and physical Reflex/Eventide send remain.
 
+2026-09-02 — a clean `systemctl restart mackes-midi-matrix.service` produced a new active
+daemon (`MainPID=1084815`) running as `mackes:mackes-control` with supplementary group `audio`.
+After bounded startup, `/run/mackes-midi-matrix/control.sock` was recreated as
+`mackes:mackes-control 0660`; the native subscription graph restored all seven source ports to
+the single daemon ingress `130:0`, including `24:0` (Mk2), and daemon-owned output `131:0`
+reconnected to `24:0`. This closes the clean-service-start and subscription-restoration portions
+of W088 without claiming an operator control/LED outcome.
+
 ## LED contract (software; physical still open)
 
-W091 software owner is the daemon LED surface. Runtime feedback uses Factory Template 1
-(`template` byte `1`) only. Writes require exactly one Launch Control XL Mk2 MIDI output;
+W091 software owner is the daemon LED surface. Runtime feedback uses the operator-facing
+Factory Template 1 only. Its documented LED `SysEx` wire byte is `8` (Factory bank offset), while
+the human-facing Factory slot remains `1`; these are separate values and must never be conflated.
+Writes require exactly one Launch Control XL Mk2 MIDI output;
 HUI endpoints are ignored; two MIDI endpoints fail closed with a snapshot `led.last_error`.
 Base colors come from persisted mappings: unmapped OFF, Lexicon amber, Eventide red, other
 owners green. Learn capture is yellow. Successful persist uses two 400 ms green pulses, then
