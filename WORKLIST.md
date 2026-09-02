@@ -4035,9 +4035,9 @@ Mk2 arrows send the same typed actions. Persistence auto-reaches `Succeeded`. Pr
 the 250 ms assignable-control disambiguation window and 750 ms Device hold-to-cancel. Remaining:
 LED outcome binding, 749/750 boundary unit coverage on the poll path, and physical walkthrough.
 
-#### [ ] W097 — Modularize the implementation tree and reconcile architecture documentation
+#### [x] W097 — Modularize the implementation tree and reconcile architecture documentation
 
-- **Status:** `IN_PROGRESS`
+- **Status:** `DONE`
 - **Start date:** 2026-09-02
 - **Owner:** Luna
 - **Depends on:** W093 contract freeze
@@ -4101,6 +4101,14 @@ changing public crate APIs. Architecture ceilings were lowered to the post-extra
 (profiles/engine 3100, TUI 4200, daemon 3600, operator main 800). README now names native ALSA
 as the production MIDI path. Remaining: further TUI/daemon splits, canonical-tree clone check,
 and W097 acceptance gate.
+
+**Closure:** 2026-09-02 — `9b1c732` completes the extracted-module visibility and lint boundary.
+`python3 scripts/check-architecture.py`, `python3 scripts/check-worklist.py`, strict workspace
+Clippy, and `cargo test --workspace --all-features` pass. A fresh local clone of `9b1c732` also
+passed the architecture/worklist checks and all-feature workspace tests; its independently built
+`0.1.11` package checksum verified, and archive inventory contains both binaries, the Factory 1
+contract, installer, service unit, release notes, and provenance. Core files remain below the
+reviewed ceilings and the daemon-only physical-I/O boundary is mechanically checked.
 
 #### [ ] W098 — Architecture-correction release closure
 
