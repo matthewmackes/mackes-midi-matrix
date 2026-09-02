@@ -2580,14 +2580,22 @@ impl Daemon {
             mackes_ipc::ActorClass::LocalTui
         };
         let command = classify_command(&request);
+        // The command is classified from the framed envelope, but every handler
+        // operates on its typed JSON payload. Keeping that boundary here prevents
+        // local CLI writes from silently losing confirmation or destination fields.
+        let request_payload = serde_json::from_slice::<serde_json::Value>(&request)
+            .ok()
+            .and_then(|envelope| envelope.get("payload").cloned())
+            .and_then(|payload| serde_json::to_vec(&payload).ok())
+            .unwrap_or_else(|| request.clone());
         let response = if command
             .is_some_and(|command| authorize(command, actor) == Authorization::Allowed)
         {
             self.health = health_after_authorized_command(self.health, command);
             self.generation = self.generation.saturating_add(1);
             if command == Some(Command::Configuration) {
-                let value =
-                    serde_json::from_slice::<serde_json::Value>(&request).unwrap_or_default();
+                let value = serde_json::from_slice::<serde_json::Value>(&request_payload)
+                    .unwrap_or_default();
                 if value.get("setlists").is_some() || value.get("learned_mappings").is_some() {
                     let Some(path) = self.config_path.clone() else {
                         return stream.write_all(
@@ -2641,7 +2649,7 @@ impl Daemon {
                 }
             }
             if command == Some(Command::Routes) {
-                if let Ok(value) = serde_json::from_slice::<serde_json::Value>(&request) {
+                if let Ok(value) = serde_json::from_slice::<serde_json::Value>(&request_payload) {
                     if value.get("action").and_then(serde_json::Value::as_str) == Some("undo") {
                         if let Some(expected) =
                             value.get("route_generation").and_then(serde_json::Value::as_u64)
@@ -2771,8 +2779,8 @@ impl Daemon {
                 }
             }
             if command == Some(Command::Learn) {
-                let value =
-                    serde_json::from_slice::<serde_json::Value>(&request).unwrap_or_default();
+                let value = serde_json::from_slice::<serde_json::Value>(&request_payload)
+                    .unwrap_or_default();
                 if value.get("action").and_then(serde_json::Value::as_str) == Some("live_test") {
                     if value.as_object().is_none_or(|object| {
                         object.keys().any(|key| {
@@ -2882,8 +2890,8 @@ impl Daemon {
                     .write_all(b"{\"ok\":false,\"error\":\"learn endpoint is required\"}\n");
             }
             if command == Some(Command::Scenes) {
-                let value =
-                    serde_json::from_slice::<serde_json::Value>(&request).unwrap_or_default();
+                let value = serde_json::from_slice::<serde_json::Value>(&request_payload)
+                    .unwrap_or_default();
                 if let Some(scene) = value.get("scene").and_then(serde_json::Value::as_str) {
                     if let Err(error) = self.select_scene(scene) {
                         return stream.write_all(
@@ -2897,8 +2905,8 @@ impl Daemon {
                 }
             }
             if command == Some(Command::UnsafeMode) {
-                let value =
-                    serde_json::from_slice::<serde_json::Value>(&request).unwrap_or_default();
+                let value = serde_json::from_slice::<serde_json::Value>(&request_payload)
+                    .unwrap_or_default();
                 if value.get("confirm").and_then(serde_json::Value::as_bool) != Some(true) {
                     return stream.write_all(
                         b"{\"ok\":false,\"error\":\"unsafe mode requires confirmation\"}\n",
@@ -2914,8 +2922,8 @@ impl Daemon {
                 );
             }
             if command == Some(Command::DeviceQuery) {
-                let value =
-                    serde_json::from_slice::<serde_json::Value>(&request).unwrap_or_default();
+                let value = serde_json::from_slice::<serde_json::Value>(&request_payload)
+                    .unwrap_or_default();
                 if let Some(profile_id) =
                     value.get("profile_id").and_then(serde_json::Value::as_str)
                 {
@@ -3019,8 +3027,8 @@ impl Daemon {
                 }
             }
             if command == Some(Command::DeviceControl) {
-                let value =
-                    serde_json::from_slice::<serde_json::Value>(&request).unwrap_or_default();
+                let value = serde_json::from_slice::<serde_json::Value>(&request_payload)
+                    .unwrap_or_default();
                 return match self.apply_device_control(&value) {
                     Ok(payload) => stream.write_all(
                         format!(
