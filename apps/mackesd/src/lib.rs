@@ -3357,12 +3357,22 @@ impl Daemon {
     /// Sets the daemon-owned configuration path for authorized persistence.
     pub fn set_config_path(&mut self, path: impl Into<std::path::PathBuf>) {
         let path = path.into();
-        if let Ok(document) = mackes_config::load(&path) {
-            if let Ok(store) = mackes_config::ControlMappingStore::from_document(&document) {
-                self.mapping_store = store;
-                self.mapping_store.active.retain(assignment_commit::mapping_role_compatible);
-                self.assignment_session.has_draft = !self.mapping_store.drafts.is_empty();
-            }
+        match mackes_config::load(&path) {
+            Ok(document) => match mackes_config::ControlMappingStore::from_document(&document) {
+                Ok(store) => {
+                    self.mapping_store = store;
+                    self.mapping_store.active.retain(assignment_commit::mapping_role_compatible);
+                    self.assignment_session.has_draft = !self.mapping_store.drafts.is_empty();
+                }
+                Err(error) => eprint!(
+                    "{}",
+                    structured_log_line("error", "control_mapping_restore_rejected", &error)
+                ),
+            },
+            Err(error) => eprint!(
+                "{}",
+                structured_log_line("error", "control_mapping_restore_failed", &error.to_string())
+            ),
         }
         if let Ok(bytes) = std::fs::read(routes_undo_path(&path)) {
             self.route_undo = serde_json::from_slice(&bytes).ok();
