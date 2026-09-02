@@ -1735,21 +1735,9 @@ impl Daemon {
                 processed += 1;
                 continue;
             }
-            if self
-                .assignment_device_down_at
-                .is_some_and(|started| started.elapsed() >= Duration::from_millis(750))
-                && self.assignment_session.phase != mackes_ipc::AssignmentPhase::Idle
-            {
-                let _ = self.apply_assignment_request(mackes_ipc::AssignmentRequest {
-                    generation: self.assignment_generation,
-                    action: mackes_ipc::AssignmentAction::Cancel,
-                    physical_control_id: None,
-                    destination_profile: None,
-                    destination_effect: None,
-                    destination_parameter: None,
-                });
-                self.assignment_device_down_at = None;
-            }
+            // A delayed or dropped Device release must never turn the next
+            // unrelated controller event into a cancellation. Hold-to-cancel
+            // is decided only by the matching physical Device release above.
             if self.assignment_session.phase != mackes_ipc::AssignmentPhase::Idle
                 && self.assignment_session.phase != mackes_ipc::AssignmentPhase::AwaitControl
             {
