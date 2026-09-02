@@ -3878,9 +3878,9 @@ contract inclusion: repository/ownership policy, strict positive and negative ar
 dependency audit,  workspace tests, strict Clippy, benchmark, hermetic integration, installer
 smoke, release checksum, and preflight.
 
-#### [ ] W095 — Enforce daemon-only physical MIDI ownership
+#### [x] W095 — Enforce daemon-only physical MIDI ownership
 
-- **Status:** `IN_PROGRESS`
+- **Status:** `DONE`
 - **Start date:** 2026-09-01
 - **Owner:** Luna
 - **Depends on:** W087
@@ -3945,6 +3945,13 @@ the operator binary cannot compile the physical backend; daemon IPC remains its 
 `daemon_device_control_send_is_counted_and_audited` prove confirmation denial, unregistered
 destination fail-closed, and no counter/audit increment on refusal. A successful physical
 Reflex/Eventide send remains required before W095 `DONE`.
+
+**Closure:** 2026-09-02 — installed `4e7791a` after correcting daemon IPC payload extraction.
+The operator binary queried the daemon-owned Eventide catalog and sent documented Expression
+Pedal CC4 value 64 to exactly `midir-out-c0d934e6c08c6a1a`; daemon response was bytes
+`[176,4,64]`, `sent=1`, and its local-IPC audit recorded the allowed target/action. Installed and
+build daemon SHA-256 values match. This proves the production daemon owns the physical write,
+serialization, audit, counter, and exact endpoint.
 
 #### [ ] W096 — Establish one authoritative Learn catalog and cursor state
 

@@ -234,6 +234,12 @@ the single daemon ingress `130:0`, including `24:0` (Mk2), and daemon-owned outp
 reconnected to `24:0`. This closes the clean-service-start and subscription-restoration portions
 of W088 without claiming an operator control/LED outcome.
 
+2026-09-02 — after installing `4e7791a`, the local CLI queried the daemon-owned Eventide profile
+and transmitted the documented, reversible Expression Pedal operation to exact endpoint
+`midir-out-c0d934e6c08c6a1a`. Daemon accepted `[176,4,64]` (channel 1, CC4, value 64), incremented
+`sent` to 1, and recorded an allowed `local-ipc` audit entry. The initial rejected shorthand
+label exposed and then verified the IPC payload-boundary correction; no client MIDI port was opened.
+
 ## LED contract (software; physical still open)
 
 W091 software owner is the daemon LED surface. Runtime feedback uses the operator-facing
