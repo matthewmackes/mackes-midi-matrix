@@ -552,6 +552,14 @@ fn owner_state(profile: &str) -> LedState {
     LedState::new(owner_led_color(profile), 127, false)
 }
 
+fn owner_state_for_control(profile: &str, role: PhysicalControlRole) -> LedState {
+    if profile.eq_ignore_ascii_case("lexicon.reflex") && role == PhysicalControlRole::ChannelButton
+    {
+        return LedState::new(LedColor::Green, 127, false);
+    }
+    owner_state(profile)
+}
+
 fn owner_state_for(mappings: &ControlMappingStore, control_id: &str) -> LedState {
     mappings.active.iter().find(|mapping| mapping.physical_control_id == control_id).map_or_else(
         || LedState::new(LedColor::Off, 0, false),
@@ -602,7 +610,8 @@ fn compose_desired(
             continue;
         };
         if let Some(index) = control.feedback_address {
-            desired.insert(index, owner_state(&mapping.destination_profile));
+            desired
+                .insert(index, owner_state_for_control(&mapping.destination_profile, control.role));
             claimed.insert(index);
         }
     }
@@ -621,7 +630,7 @@ fn compose_desired(
         let Some((upper, lower)) = fader_column_led_proxy(control.column.saturating_sub(1)) else {
             continue;
         };
-        let color = owner_state(&mapping.destination_profile);
+        let color = owner_state_for_control(&mapping.destination_profile, control.role);
         if claimed.insert(upper) {
             desired.insert(upper, color);
         }
@@ -757,6 +766,21 @@ mod tests {
         assert_eq!(desired.get(&32).map(|state| state.color), Some(LedColor::Amber));
         assert_eq!(desired.get(&33).map(|state| state.color), Some(LedColor::Amber));
         assert_eq!(desired.get(&1).map(|state| state.color), Some(LedColor::Off));
+    }
+
+    #[test]
+    fn lexicon_effect_buttons_turn_green_when_assigned() {
+        let mut store = ControlMappingStore::default();
+        store.active.push(mapping("button-r1-c1", "lexicon.reflex"));
+        let desired = compose_desired(
+            &store,
+            &AssignmentSession::new("live"),
+            None,
+            LedFeedbackScheduler::new(off()),
+            0,
+            0,
+        );
+        assert_eq!(desired.get(&24).map(|state| state.color), Some(LedColor::Green));
     }
 
     #[test]
