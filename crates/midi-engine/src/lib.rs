@@ -464,6 +464,32 @@ impl AlsaSequencerClient {
         Ok(None)
     }
 
+    /// Reads the next pending MIDI event while preserving its physical source.
+    ///
+    /// Shared-client capture adapters use this path because whichever adapter
+    /// polls first owns the client queue drain for that cycle.
+    ///
+    /// # Errors
+    ///
+    /// Returns an ALSA read or source-address conversion error.
+    pub fn read_wire_event(&mut self) -> Result<Option<(AlsaSequencerAddress, Vec<u8>)>, String> {
+        if let Some(pending) = self.pending_wire.pop_front() {
+            return Ok(Some(pending));
+        }
+        let mut input = self.seq.input();
+        loop {
+            if input.event_input_pending(true).map_err(|error| error.to_string())? == 0 {
+                return Ok(None);
+            }
+            let event = input.event_input().map_err(|error| error.to_string())?;
+            let Some(bytes) = alsa_event_to_wire(&event)? else { continue };
+            let source = event.get_source();
+            let client = u8::try_from(source.client).map_err(|_| "invalid ALSA source client")?;
+            let port = u8::try_from(source.port).map_err(|_| "invalid ALSA source port")?;
+            return Ok(Some((AlsaSequencerAddress::new(client, port), bytes)));
+        }
+    }
+
     /// Reads bounded ALSA client/port lifecycle notifications.
     #[must_use]
     pub fn read_lifecycle_events(
@@ -520,7 +546,6 @@ impl AlsaSequencerClient {
 pub struct AlsaInputCapture {
     info: EndpointInfo,
     client: Arc<Mutex<AlsaSequencerClient>>,
-    source: AlsaSequencerAddress,
     reader: NativeAlsaReader,
     decoded: VecDeque<MidiEvent>,
 }
@@ -592,7 +617,6 @@ impl AlsaInputCapture {
                 direction: EndpointDirection::Input,
             },
             client: Arc::clone(client),
-            source: source.address,
             reader,
             decoded: VecDeque::new(),
         })
@@ -619,14 +643,10 @@ impl MidiInputAdapter for AlsaInputCapture {
                 .and_then(|duration| u64::try_from(duration.as_nanos()).ok())?;
             let mut client = self.client.lock().ok()?;
             for _ in 0..self.reader.batch_limit() {
-                let Some(bytes) = client.read_wire_event_for(self.source).ok()? else {
+                let Some((source, bytes)) = client.read_wire_event().ok()? else {
                     break;
                 };
-                self.reader.ingest(NativeAlsaPending {
-                    source: self.source,
-                    timestamp_ns: timestamp,
-                    bytes,
-                });
+                self.reader.ingest(NativeAlsaPending { source, timestamp_ns: timestamp, bytes });
             }
             drop(client);
             self.decoded.extend(self.reader.drain());
