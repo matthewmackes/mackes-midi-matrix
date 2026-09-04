@@ -799,6 +799,9 @@ mod tests {
     fn lexicon_effect_buttons_turn_green_when_assigned() {
         let mut store = ControlMappingStore::default();
         store.active.push(mapping("button-r1-c1", "lexicon.reflex"));
+        store.active.push(mapping("button-r1-c2", "lexicon.reflex"));
+        store.active[0].destination_parameter = "reflex.algorithm-1".into();
+        store.active[1].destination_parameter = "reflex.algorithm-2".into();
         let desired = compose_desired(
             &store,
             &AssignmentSession::new("live"),
@@ -808,7 +811,19 @@ mod tests {
             0,
             None,
         );
-        assert_eq!(desired.get(&24).map(|state| state.color), Some(LedColor::Green));
+        assert_eq!(desired.get(&24).map(|state| state.color), Some(LedColor::Amber));
+        assert_eq!(desired.get(&25).map(|state| state.color), Some(LedColor::Amber));
+        let desired = compose_desired(
+            &store,
+            &AssignmentSession::new("live"),
+            None,
+            LedFeedbackScheduler::new(off()),
+            0,
+            0,
+            Some(2),
+        );
+        assert_eq!(desired.get(&24).map(|state| state.color), Some(LedColor::Amber));
+        assert_eq!(desired.get(&25).map(|state| state.color), Some(LedColor::Green));
     }
 
     #[test]
