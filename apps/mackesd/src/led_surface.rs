@@ -90,6 +90,7 @@ pub struct LedSurface {
     knob_activity: BTreeMap<String, u64>,
     backend_confirmation: Option<BackendConfirmation>,
     backend_states: BTreeMap<String, bool>,
+    active_lexicon_algorithm: Option<u8>,
     diagnostics: LedDiagnostics,
 }
 
@@ -107,12 +108,18 @@ impl Default for LedSurface {
             knob_activity: BTreeMap::new(),
             backend_confirmation: None,
             backend_states: BTreeMap::new(),
+            active_lexicon_algorithm: None,
             diagnostics: LedDiagnostics::new(),
         }
     }
 }
 
 impl LedSurface {
+    /// Records the last Lexicon algorithm selection delivered by the daemon.
+    pub fn set_active_lexicon_algorithm(&mut self, algorithm: u8) {
+        self.active_lexicon_algorithm = Some(algorithm);
+        self.request_full_resync();
+    }
     /// Forces a complete replay of desired state on the next flush.
     pub fn request_full_resync(&mut self) {
         self.coalescer.request_full_resync();
@@ -278,6 +285,7 @@ impl LedSurface {
             self.scheduler,
             now_ms,
             self.result_started_ms,
+            self.active_lexicon_algorithm,
         );
         if let Some(started) = self.reconnect_show_started_ms {
             let elapsed = now_ms.saturating_sub(started);
@@ -596,6 +604,7 @@ fn compose_desired(
     scheduler: LedFeedbackScheduler,
     now_ms: u64,
     result_started_ms: u64,
+    active_lexicon_algorithm: Option<u8>,
 ) -> BTreeMap<u8, LedState> {
     let mut desired: BTreeMap<u8, LedState> = (0..48).map(|index| (index, off())).collect();
     let catalog = launch_control_physical_catalog();
@@ -610,8 +619,22 @@ fn compose_desired(
             continue;
         };
         if let Some(index) = control.feedback_address {
-            desired
-                .insert(index, owner_state_for_control(&mapping.destination_profile, control.role));
+            let state = if mapping.destination_profile == "lexicon.reflex"
+                && control.role == PhysicalControlRole::ChannelButton
+            {
+                let algorithm = mapping
+                    .destination_parameter
+                    .strip_prefix("reflex.algorithm-")
+                    .and_then(|value| value.parse::<u8>().ok());
+                if algorithm == active_lexicon_algorithm {
+                    LedState::new(LedColor::Green, 127, false)
+                } else {
+                    LedState::new(LedColor::Amber, 127, false)
+                }
+            } else {
+                owner_state_for_control(&mapping.destination_profile, control.role)
+            };
+            desired.insert(index, state);
             claimed.insert(index);
         }
     }
@@ -759,7 +782,7 @@ mod tests {
         store.active.push(mapping("fader-2", "lexicon.reflex"));
         let session = AssignmentSession::new("live");
         let scheduler = LedFeedbackScheduler::new(off());
-        let desired = compose_desired(&store, &session, None, scheduler, 0, 0);
+        let desired = compose_desired(&store, &session, None, scheduler, 0, 0, None);
         assert_eq!(desired.get(&0).map(|state| state.color), Some(LedColor::Amber));
         assert_eq!(desired.get(&25).map(|state| state.color), Some(LedColor::Red));
         assert_eq!(desired.get(&24).map(|state| state.color), Some(LedColor::Amber));
@@ -779,6 +802,7 @@ mod tests {
             LedFeedbackScheduler::new(off()),
             0,
             0,
+            None,
         );
         assert_eq!(desired.get(&24).map(|state| state.color), Some(LedColor::Green));
     }
@@ -797,7 +821,7 @@ mod tests {
         store.active.push(mapping("button-r1-c1", "eventide.micropitch"));
         let session = AssignmentSession::new("live");
         let desired =
-            compose_desired(&store, &session, None, LedFeedbackScheduler::new(off()), 0, 0);
+            compose_desired(&store, &session, None, LedFeedbackScheduler::new(off()), 0, 0, None);
         let catalog = launch_control_physical_catalog();
         for assignment in mackes_profiles::eventide_controller_assignments()
             .into_iter()
@@ -919,39 +943,39 @@ mod tests {
         session.phase = AssignmentPhase::ChooseParameter;
         let mut scheduler = LedFeedbackScheduler::new(owner_state("lexicon.reflex"));
         scheduler.assignment = Some(LedState::new(LedColor::Yellow, 127, true));
-        let desired = compose_desired(&store, &session, Some("knob-r1-c1"), scheduler, 0, 0);
+        let desired = compose_desired(&store, &session, Some("knob-r1-c1"), scheduler, 0, 0, None);
         assert_eq!(desired.get(&0).map(|state| state.color), Some(LedColor::Yellow));
         assert_eq!(desired.get(&40).map(|state| state.color), Some(LedColor::Yellow));
         session.phase = AssignmentPhase::Succeeded;
         scheduler.assignment = None;
         scheduler.result = Some((true, 0));
         assert_eq!(
-            compose_desired(&store, &session, Some("knob-r1-c1"), scheduler, 0, 0)
+            compose_desired(&store, &session, Some("knob-r1-c1"), scheduler, 0, 0, None)
                 .get(&0)
                 .map(|state| state.color),
             Some(LedColor::Green)
         );
         assert_eq!(
-            compose_desired(&store, &session, Some("knob-r1-c1"), scheduler, 400, 0)
+            compose_desired(&store, &session, Some("knob-r1-c1"), scheduler, 400, 0, None)
                 .get(&0)
                 .map(|state| state.color),
             Some(LedColor::Off)
         );
         assert_eq!(
-            compose_desired(&store, &session, Some("knob-r1-c1"), scheduler, 800, 0)
+            compose_desired(&store, &session, Some("knob-r1-c1"), scheduler, 800, 0, None)
                 .get(&0)
                 .map(|state| state.color),
             Some(LedColor::Green)
         );
         assert_eq!(
-            compose_desired(&store, &session, Some("knob-r1-c1"), scheduler, 1_600, 0)
+            compose_desired(&store, &session, Some("knob-r1-c1"), scheduler, 1_600, 0, None)
                 .get(&0)
                 .map(|state| state.color),
             Some(LedColor::Amber)
         );
         scheduler.result = Some((false, 0));
         assert_eq!(
-            compose_desired(&store, &session, Some("knob-r1-c1"), scheduler, 0, 0)
+            compose_desired(&store, &session, Some("knob-r1-c1"), scheduler, 0, 0, None)
                 .get(&0)
                 .map(|state| state.color),
             Some(LedColor::Red)

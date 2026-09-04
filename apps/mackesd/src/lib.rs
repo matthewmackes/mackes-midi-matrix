@@ -1427,6 +1427,15 @@ impl Daemon {
                     self.led.finish_backend_confirmation(delivered);
                 }
                 if delivered {
+                    if mapping.destination_profile == "lexicon.reflex" {
+                        if let Some(algorithm) = mapping
+                            .destination_parameter
+                            .strip_prefix("reflex.algorithm-")
+                            .and_then(|value| value.parse::<u8>().ok())
+                        {
+                            self.led.set_active_lexicon_algorithm(algorithm);
+                        }
+                    }
                     if let Some(preset_id) =
                         mapping.destination_parameter.strip_prefix("pcm70_reflex:")
                     {
