@@ -1348,6 +1348,14 @@ impl Daemon {
                 Ok(_) => {}
                 Err(error) => self.led.set_lexicon_readback_error(error),
             }
+            if self.led.diagnostics().active_lexicon_algorithm.is_none()
+                && frame.len() == 65
+                && frame.get(0..5) == Some(&[0xF0, 0x06, 0x02, 0x00, 0x38])
+                && frame[64] == 0xF7
+                && mackes_profiles::lexicon_reflex::checksum(&frame[5..61]) == frame[63]
+            {
+                self.led.set_active_lexicon_algorithm(frame[6] | ((frame[5] & 1) << 7));
+            }
         }
         let stable_endpoint = self.inputs.stable_id_for_endpoint(event.endpoint);
         let routed = self.route_event(event);
@@ -1803,6 +1811,14 @@ impl Daemon {
                             self.led.set_active_lexicon_algorithm(algorithm);
                         }
                     }
+                }
+                if self.led.diagnostics().active_lexicon_algorithm.is_none()
+                    && frame.len() == 65
+                    && frame.get(0..5) == Some(&[0xF0, 0x06, 0x02, 0x00, 0x38])
+                    && frame[64] == 0xF7
+                    && mackes_profiles::lexicon_reflex::checksum(&frame[5..61]) == frame[63]
+                {
+                    self.led.set_active_lexicon_algorithm(frame[6] | ((frame[5] & 1) << 7));
                 }
             }
             if Self::launch_control_factory1_layout_id(&event).is_some() {
