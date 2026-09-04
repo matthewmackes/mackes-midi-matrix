@@ -224,6 +224,8 @@ pub struct Daemon {
     config_path: Option<std::path::PathBuf>,
     mapping_store: mackes_config::ControlMappingStore,
     button_toggle_state: std::collections::HashMap<String, (bool, bool)>,
+    lexicon_active_algorithm: Option<u8>,
+    lexicon_readback_error: Option<String>,
     assignment_generation: u64,
     assignment_session: mackes_ipc::AssignmentSession,
     led: led_surface::LedSurface,
@@ -559,6 +561,8 @@ impl Daemon {
             config_path: None,
             mapping_store: mackes_config::ControlMappingStore::default(),
             button_toggle_state: std::collections::HashMap::new(),
+            lexicon_active_algorithm: None,
+            lexicon_readback_error: None,
             assignment_generation: 0,
             assignment_session: mackes_ipc::AssignmentSession::new("live"),
             led: led_surface::LedSurface::default(),
@@ -922,6 +926,18 @@ impl Daemon {
             return;
         };
         let _ = self.outputs.send_direct(&destination, &[0xF0, 0x06, 0x02, 0x30, 0x60, 0x00, 0xF7]);
+    }
+
+    fn confirm_lexicon_algorithm(&mut self, algorithm: u8) {
+        self.lexicon_active_algorithm = Some(algorithm);
+        self.lexicon_readback_error = None;
+        self.led.set_active_lexicon_algorithm(algorithm);
+    }
+
+    fn reject_lexicon_readback(&mut self, error: impl Into<String>) {
+        let error = error.into();
+        self.lexicon_readback_error = Some(error.clone());
+        self.led.set_lexicon_readback_error(error);
     }
 
     /// Advances LED overlays at an explicit fake-clock instant.
@@ -1339,22 +1355,20 @@ impl Daemon {
                         .ok()
                         .and_then(|setup| setup.algorithm())
                     {
-                        Some(algorithm) => self.led.set_active_lexicon_algorithm(algorithm),
-                        None => self
-                            .led
-                            .set_lexicon_readback_error("active setup has invalid algorithm"),
+                        Some(algorithm) => self.confirm_lexicon_algorithm(algorithm),
+                        None => self.reject_lexicon_readback("active setup has invalid algorithm"),
                     }
                 }
                 Ok(_) => {}
-                Err(error) => self.led.set_lexicon_readback_error(error),
+                Err(error) => self.reject_lexicon_readback(error),
             }
-            if self.led.diagnostics().active_lexicon_algorithm.is_none()
+            if self.lexicon_active_algorithm.is_none()
                 && frame.len() == 65
                 && frame.get(0..5) == Some(&[0xF0, 0x06, 0x02, 0x00, 0x38])
                 && frame[64] == 0xF7
                 && mackes_profiles::lexicon_reflex::checksum(&frame[5..61]) == frame[63]
             {
-                self.led.set_active_lexicon_algorithm(frame[6] | ((frame[5] & 1) << 7));
+                self.confirm_lexicon_algorithm(frame[6] | ((frame[5] & 1) << 7));
             }
         }
         let stable_endpoint = self.inputs.stable_id_for_endpoint(event.endpoint);
@@ -1474,7 +1488,7 @@ impl Daemon {
                             .strip_prefix("reflex.algorithm-")
                             .and_then(|value| value.parse::<u8>().ok())
                         {
-                            self.led.set_active_lexicon_algorithm(algorithm);
+                            self.confirm_lexicon_algorithm(algorithm);
                         }
                     }
                     if let Some(preset_id) =
@@ -1808,17 +1822,17 @@ impl Daemon {
                 {
                     if let Ok(setup) = mackes_profiles::lexicon_reflex::ReflexSetup::new(&setup) {
                         if let Some(algorithm) = setup.algorithm() {
-                            self.led.set_active_lexicon_algorithm(algorithm);
+                            self.confirm_lexicon_algorithm(algorithm);
                         }
                     }
                 }
-                if self.led.diagnostics().active_lexicon_algorithm.is_none()
+                if self.lexicon_active_algorithm.is_none()
                     && frame.len() == 65
                     && frame.get(0..5) == Some(&[0xF0, 0x06, 0x02, 0x00, 0x38])
                     && frame[64] == 0xF7
                     && mackes_profiles::lexicon_reflex::checksum(&frame[5..61]) == frame[63]
                 {
-                    self.led.set_active_lexicon_algorithm(frame[6] | ((frame[5] & 1) << 7));
+                    self.confirm_lexicon_algorithm(frame[6] | ((frame[5] & 1) << 7));
                 }
             }
             if Self::launch_control_factory1_layout_id(&event).is_some() {
@@ -2639,8 +2653,8 @@ impl Daemon {
                 "pending_deadline_ms": self.led.diagnostics().pending_deadline_ms,
                 "backend_confirmation": self.led.diagnostics().backend_confirmation,
                 "backend_state": self.led.diagnostics().backend_state,
-                "active_lexicon_algorithm": self.led.diagnostics().active_lexicon_algorithm,
-                "lexicon_readback_error": self.led.diagnostics().lexicon_readback_error,
+                "active_lexicon_algorithm": self.lexicon_active_algorithm,
+                "lexicon_readback_error": self.lexicon_readback_error,
             },
             "health": match self.health {
                 Health::Starting => "starting",
