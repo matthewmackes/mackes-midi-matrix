@@ -2171,7 +2171,7 @@ impl Daemon {
     #[must_use]
     pub fn pump_registered_inputs(&mut self) -> Vec<(usize, usize)> {
         let events = self.inputs.poll_once();
-        events.iter().map(|event| self.outputs.dispatch(&self.router, event)).collect()
+        events.iter().map(|event| self.dispatch_registered(event)).collect()
     }
 
     /// Returns the active route generation, if the store lock is healthy.
