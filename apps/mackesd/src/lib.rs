@@ -2639,6 +2639,8 @@ impl Daemon {
                 "pending_deadline_ms": self.led.diagnostics().pending_deadline_ms,
                 "backend_confirmation": self.led.diagnostics().backend_confirmation,
                 "backend_state": self.led.diagnostics().backend_state,
+                "active_lexicon_algorithm": self.led.diagnostics().active_lexicon_algorithm,
+                "lexicon_readback_error": self.led.diagnostics().lexicon_readback_error,
             },
             "health": match self.health {
                 Health::Starting => "starting",
