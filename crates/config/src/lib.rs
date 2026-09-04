@@ -1821,6 +1821,31 @@ pub fn validate(document: &ConfigDocument) -> Result<(), String> {
             return Err("control mapping identity or provenance is invalid or duplicated".into());
         }
         mapping.behavior.validate()?;
+        if mapping.controller_profile == "launch-control-xl-mk2" && mapping.enabled {
+            let control = mackes_profiles::launch_control_mk2_factory1_layout()
+                .into_iter()
+                .find(|control| control.physical_control_id == mapping.physical_control_id)
+                .ok_or("Launch Control mapping references an unknown Factory 1 control")?;
+            let expected_kind = match control.source_kind {
+                mackes_profiles::LaunchControlSourceKind::ControlChange => "cc",
+                mackes_profiles::LaunchControlSourceKind::Note => "note",
+            };
+            if mapping.source_channel != control.channel
+                || mapping.source_kind != expected_kind
+                || mapping.source_number != control.source_number
+            {
+                return Err(format!(
+                    "Launch Control Factory 1 tuple mismatch for '{}': expected channel {}, {} {}, got channel {}, {} {}",
+                    mapping.physical_control_id,
+                    control.channel,
+                    expected_kind,
+                    control.source_number,
+                    mapping.source_channel,
+                    mapping.source_kind,
+                    mapping.source_number
+                ));
+            }
+        }
     }
     for draft in &document.control_mapping_drafts {
         if draft.id.trim().is_empty()
@@ -2629,6 +2654,41 @@ mod tests {
         assert!(store.undo(1).is_ok());
         assert!(store.active.is_empty());
         assert!(!store.undo_available());
+    }
+
+    #[test]
+    fn enabled_factory1_mapping_must_match_canonical_physical_tuple() {
+        let mapping = ControlMapping {
+            id: "factory1-button".into(),
+            controller_profile: "launch-control-xl-mk2".into(),
+            physical_control_id: "button-r2-c5".into(),
+            source_endpoint: "controller".into(),
+            source_kind: "note".into(),
+            source_channel: 8,
+            destination_channel: Some(0),
+            source_number: 89,
+            destination_endpoint: "lexicon".into(),
+            destination_profile: "lexicon.reflex".into(),
+            destination_effect: "algorithm-5".into(),
+            destination_parameter: "reflex.algorithm-5".into(),
+            behavior: MappingBehavior {
+                source_range: (0, 127),
+                destination_range: (0, 127),
+                invert: false,
+                curve: "linear".into(),
+            },
+            enabled: true,
+            profile_version: 1,
+        };
+        let mut valid = document();
+        valid.control_mappings.push(mapping.clone());
+        assert!(validate(&valid).is_ok());
+
+        let mut invalid = document();
+        invalid.control_mappings.push(ControlMapping { source_number: 61, ..mapping });
+        assert!(validate(&invalid)
+            .expect_err("stale tuple must fail")
+            .contains("Factory 1 tuple mismatch"));
     }
 
     #[test]

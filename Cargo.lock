@@ -696,6 +696,7 @@ version = "0.1.11"
 dependencies = [
  "json5",
  "mackes-domain",
+ "mackes-profiles",
  "serde",
  "serde_json",
  "sha2",
