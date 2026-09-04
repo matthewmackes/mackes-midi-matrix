@@ -2,6 +2,68 @@
 
 use super::{CapabilityDefinition, ControlDefinition, ControlTransport, DeviceProfile, EffectType};
 
+/// One deterministic Eventide controller-layout assignment.
+#[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct EventideControllerAssignment {
+    /// Stable Launch Control physical identity.
+    pub physical_control_id: String,
+    /// Eventide profile-owned control identity, when supported.
+    pub parameter_id: Option<String>,
+    /// Human-readable assignment label.
+    pub label: String,
+    /// Explicit reason when the physical control is intentionally unused.
+    pub unsupported_reason: Option<String>,
+}
+
+/// Returns the approved row-2/row-3 Eventide layout without inventing MIDI.
+#[must_use]
+pub fn eventide_controller_assignments() -> Vec<EventideControllerAssignment> {
+    let controls = profile()
+        .controls
+        .iter()
+        .enumerate()
+        .filter(|(_, control)| control.cc.is_some())
+        .map(|(index, control)| (index, control.label.clone()))
+        .collect::<Vec<_>>();
+    let mut assignments = controls
+        .iter()
+        .enumerate()
+        .map(|(index, (control_index, label))| EventideControllerAssignment {
+            physical_control_id: if index < 8 {
+                format!("knob-r2-c{}", index + 1)
+            } else {
+                format!("knob-r3-c{}", index - 7)
+            },
+            parameter_id: Some(format!("control-{control_index}")),
+            label: label.clone(),
+            unsupported_reason: None,
+        })
+        .collect::<Vec<_>>();
+    if let Some(mix) = assignments.iter().find(|assignment| assignment.label == "Mix").cloned() {
+        assignments.push(EventideControllerAssignment {
+            physical_control_id: "fader-1".into(),
+            parameter_id: mix.parameter_id,
+            label: "Mix (master)".into(),
+            unsupported_reason: None,
+        });
+    }
+    assignments.push(EventideControllerAssignment {
+        physical_control_id: "button-r1-c1".into(),
+        parameter_id: Some("control-2".into()),
+        label: "ACTIVE/BYPASS".into(),
+        unsupported_reason: None,
+    });
+    assignments.push(EventideControllerAssignment {
+        physical_control_id: "button-r2-c1".into(),
+        parameter_id: None,
+        label: "Delay bypass".into(),
+        unsupported_reason: Some(
+            "Eventide documents no independent delay-bypass MIDI control".into(),
+        ),
+    });
+    assignments
+}
+
 fn cc_control(label: &str, cc: u8) -> ControlDefinition {
     ControlDefinition {
         label: label.into(),

@@ -896,6 +896,9 @@ impl AssignmentSession {
             (AssignmentPhase::ChooseParameter, AssignmentAction::Back) => {
                 AssignmentPhase::ChooseType
             }
+            (AssignmentPhase::ConfirmReplace, AssignmentAction::Back) => {
+                AssignmentPhase::ChooseParameter
+            }
             (AssignmentPhase::ChooseDevice, AssignmentAction::Back) => {
                 AssignmentPhase::AwaitControl
             }
@@ -1849,6 +1852,16 @@ mod tests {
         assert!(session.apply(AssignmentAction::Cancel));
         assert_eq!(session.phase, AssignmentPhase::Idle);
         assert_eq!(session.phase, AssignmentPhase::Idle);
+    }
+
+    #[test]
+    fn replacement_back_returns_to_parameter_selection() {
+        let mut session = AssignmentSession::new("live");
+        session.phase = AssignmentPhase::ConfirmReplace;
+        session.index = 3;
+        assert!(session.apply(AssignmentAction::Back));
+        assert_eq!(session.phase, AssignmentPhase::ChooseParameter);
+        assert_eq!(session.index, 3);
     }
 
     #[test]

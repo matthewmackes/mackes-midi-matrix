@@ -897,6 +897,18 @@ impl ReflexSetup {
     pub fn algorithm(&self) -> Option<u8> {
         (1..=8).contains(&self.0[0]).then_some(self.0[0])
     }
+    /// Selects one of the eight documented DSP algorithms.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the algorithm is outside 1–8.
+    pub fn set_algorithm(&mut self, algorithm: u8) -> Result<(), &'static str> {
+        if !(1..=8).contains(&algorithm) {
+            return Err("Reflex algorithm is out of range");
+        }
+        self.0[0] = algorithm;
+        Ok(())
+    }
     /// Returns the raw 16-byte setup name field.
     #[must_use]
     pub fn name_bytes(&self) -> &[u8] {
@@ -1016,11 +1028,54 @@ pub const fn pcm70_translations() -> &'static [Pcm70Translation; 5] {
     &PCM70_TRANSLATIONS
 }
 
-fn normalized_parameter(metadata: ParameterMetadata, normalized: u8) -> u16 {
+/// Encodes an active-setup `SysEx` selection for any documented algorithm.
+///
+/// # Errors
+///
+/// Returns an error when the algorithm or channel is outside the documented range.
+pub fn encode_algorithm_selection(algorithm: u8, channel: u8) -> Result<Vec<u8>, &'static str> {
+    if !(1..=8).contains(&algorithm) {
+        return Err("Reflex algorithm is out of range");
+    }
+    if let Some(translation) =
+        PCM70_TRANSLATIONS.iter().find(|translation| translation.reflex_algorithm == algorithm)
+    {
+        return encode_pcm70_translation(translation.id, channel);
+    }
+    let mut raw = [0_u8; SETUP_RAW_BYTES];
+    raw[0] = algorithm;
+    let mut setup = ReflexSetup::new(&raw)?;
+    let name = algorithms()
+        .iter()
+        .find(|item| item.number == algorithm)
+        .map(|item| item.name)
+        .ok_or("Reflex algorithm is out of range")?;
+    setup.set_name(name.as_bytes())?;
+    for parameter in parameters(algorithm) {
+        setup.set_parameter(parameter.number, parameter.min)?;
+    }
+    encode_active_setup_frame(channel, setup.as_bytes())
+}
+
+const fn parameter_step(algorithm: u8, number: u8) -> u16 {
+    match (algorithm, number) {
+        (1 | 2, 0 | 4) | (3 | 8, 8) | (8, 3 | 9) => 0x0400,
+        (1 | 2, 3) | (3, 5) => 0x0800,
+        (1 | 2, 5) => 0x0100,
+        (1 | 2, 6 | 8 | 9) | (3, 3 | 4 | 6 | 7) | (8, 4..=6) => 0x0080,
+        _ => 0x0040,
+    }
+}
+
+fn normalized_parameter(algorithm: u8, metadata: ParameterMetadata, normalized: u8) -> u16 {
     let span = u32::from(metadata.max - metadata.min);
-    metadata.min
-        + u16::try_from((span * u32::from(normalized)) / 127)
-            .expect("normalized Reflex parameter span fits u16")
+    let target = u16::try_from((span * u32::from(normalized)) / 127)
+        .expect("normalized Reflex parameter span fits u16");
+    let step = parameter_step(algorithm, metadata.number);
+    metadata
+        .min
+        .saturating_add(((target.saturating_add(step / 2)) / step).saturating_mul(step))
+        .min(metadata.max)
 }
 
 /// Builds a validated Reflex setup for a named PCM70 translation.
@@ -1040,7 +1095,11 @@ pub fn translate_pcm70(id: &str) -> Result<ReflexSetup, &'static str> {
     for parameter in parameters(translation.reflex_algorithm) {
         setup.set_parameter(
             parameter.number,
-            normalized_parameter(*parameter, translation.normalized[usize::from(parameter.number)]),
+            normalized_parameter(
+                translation.reflex_algorithm,
+                *parameter,
+                translation.normalized[usize::from(parameter.number)],
+            ),
         )?;
     }
     Ok(setup)

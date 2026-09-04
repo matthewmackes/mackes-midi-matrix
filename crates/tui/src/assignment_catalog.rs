@@ -13,6 +13,31 @@ pub fn assignment_catalog_lines(
     if wizard.session.phase == mackes_ipc::AssignmentPhase::Idle {
         return lines;
     }
+    let step = match wizard.session.phase {
+        mackes_ipc::AssignmentPhase::ChooseDevice => 2,
+        mackes_ipc::AssignmentPhase::ChooseEffect => 3,
+        mackes_ipc::AssignmentPhase::ChooseParameter => 4,
+        mackes_ipc::AssignmentPhase::ConfirmReplace
+        | mackes_ipc::AssignmentPhase::Committing
+        | mackes_ipc::AssignmentPhase::Succeeded
+        | mackes_ipc::AssignmentPhase::Failed => 5,
+        _ => 1,
+    };
+    let lcd = vec![
+        format!("DEVICE  {step}/5"),
+        match wizard.session.phase {
+            mackes_ipc::AssignmentPhase::AwaitControl => "MOVE CONTROL".into(),
+            mackes_ipc::AssignmentPhase::ChooseDevice => "CHOOSE DEVICE".into(),
+            mackes_ipc::AssignmentPhase::ChooseEffect => "CHOOSE EFFECT".into(),
+            mackes_ipc::AssignmentPhase::ChooseParameter => "CHOOSE PARAM".into(),
+            mackes_ipc::AssignmentPhase::ConfirmReplace => "REPLACE? ENTER".into(),
+            mackes_ipc::AssignmentPhase::Committing => "SAVING...".into(),
+            mackes_ipc::AssignmentPhase::Succeeded => "ASSIGNED".into(),
+            mackes_ipc::AssignmentPhase::Failed => "FAILED / RETRY".into(),
+            _ => "BACK / CANCEL".into(),
+        },
+    ];
+    lines.splice(0..0, lcd);
     lines.push("CATALOG  Device > Preset > Effect > Type > Parameter".into());
     lines.push(format!(
         "LEVEL    {}  COUNT {}",

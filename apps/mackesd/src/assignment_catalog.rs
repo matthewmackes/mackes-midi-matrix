@@ -12,7 +12,7 @@ pub fn refresh(session: &mut AssignmentSession, profile_ids: &[String]) {
     let control_id = session.catalog.captured_control_id.clone();
     let role = captured_role(control_id.as_deref());
     let source_role = match role {
-        Some(PhysicalControlRole::ChannelButton) => SourceRole::ButtonAction,
+        Some(PhysicalControlRole::ChannelButton) => SourceRole::ButtonToggle,
         _ => SourceRole::Continuous,
     };
     let devices = profile_ids

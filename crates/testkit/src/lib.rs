@@ -100,6 +100,7 @@ mod tests {
             source_endpoint: "controller".into(),
             source_kind: "cc".into(),
             source_channel: 0,
+            destination_channel: None,
             source_number: 21,
             destination_endpoint: "processor".into(),
             destination_profile: "lexicon.reflex".into(),

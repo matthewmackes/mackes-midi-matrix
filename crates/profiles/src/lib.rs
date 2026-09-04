@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::{fs, path::Path};
 
 mod eventide_micropitch;
+pub use eventide_micropitch::{eventide_controller_assignments, EventideControllerAssignment};
 
 /// Hardcoded Lexicon Reflex Rev. 1 protocol constants.
 pub mod lexicon_reflex;
@@ -1864,10 +1865,12 @@ pub fn destination_parameters(profile: &DeviceProfile) -> Vec<DestinationParamet
         .collect()
 }
 
-const fn source_role(control: &ControlDefinition) -> SourceRole {
+fn source_role(control: &ControlDefinition) -> SourceRole {
     if control.program.is_some() && control.cc.is_none() {
         SourceRole::ButtonAction
-    } else if control.range.0 == 0 && control.range.1 == 1 {
+    } else if control.label.eq_ignore_ascii_case("ACTIVE/BYPASS")
+        || (control.range.0 == 0 && control.range.1 == 1)
+    {
         SourceRole::ButtonToggle
     } else if control.range.0 == control.range.1 && control.operation.is_some() {
         SourceRole::ButtonAction
@@ -2626,6 +2629,13 @@ impl DeviceProfile {
         value: u16,
     ) -> Result<Vec<u8>, &'static str> {
         if self.id == "lexicon.reflex" {
+            if let Some(algorithm) = parameter_id.strip_prefix("reflex.algorithm-") {
+                let algorithm = algorithm.parse::<u8>().map_err(|_| "invalid Reflex algorithm")?;
+                return lexicon_reflex::encode_algorithm_selection(
+                    algorithm,
+                    channel.saturating_sub(1),
+                );
+            }
             if let Some(preset) = parameter_id.strip_prefix("pcm70_reflex:") {
                 return lexicon_reflex::encode_pcm70_translation(preset, channel.saturating_sub(1));
             }

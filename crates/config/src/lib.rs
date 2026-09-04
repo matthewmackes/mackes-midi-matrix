@@ -96,6 +96,9 @@ pub struct ControlMapping {
     pub source_kind: String,
     /// Zero-based source channel.
     pub source_channel: u8,
+    /// Optional zero-based destination device channel; defaults to channel 1.
+    #[serde(default)]
+    pub destination_channel: Option<u8>,
     /// Source MIDI controller/note number.
     pub source_number: u8,
     /// Exact destination output endpoint identity.
@@ -369,6 +372,7 @@ fn validate_mapping(mapping: &ControlMapping) -> Result<(), &'static str> {
         || mapping.source_endpoint.trim().is_empty()
         || mapping.source_kind.trim().is_empty()
         || mapping.source_channel > 15
+        || mapping.destination_channel.is_some_and(|channel| channel > 15)
         || mapping.source_number > 127
         || mapping.destination_endpoint.trim().is_empty()
         || mapping.destination_profile.trim().is_empty()
@@ -1515,6 +1519,9 @@ pub struct ProfileRef {
     pub id: String,
     /// Profile version.
     pub version: u32,
+    /// Endpoint alias for an explicitly attached generic MIDI interface port.
+    #[serde(default)]
+    pub endpoint_alias: Option<String>,
 }
 
 /// Actionable configuration failure.
@@ -1647,6 +1654,19 @@ pub fn validate(document: &ConfigDocument) -> Result<(), String> {
     unique(document.projects.iter().map(|entry| entry.id.as_str()), "project")?;
     unique(document.profiles.iter().map(|entry| entry.id.as_str()), "profile")?;
     unique(document.setlists.iter().map(|entry| entry.id.as_str()), "setlist")?;
+    for profile in &document.profiles {
+        if profile.id.trim().is_empty() || profile.version == 0 {
+            return Err("profile identity and version must be valid".into());
+        }
+        if let Some(alias) = profile.endpoint_alias.as_deref() {
+            if !document.endpoints.iter().any(|endpoint| endpoint.id == alias) {
+                return Err(format!(
+                    "profile '{}' references unknown endpoint '{alias}'",
+                    profile.id
+                ));
+            }
+        }
+    }
     for project in &document.projects {
         unique(project.scenes.iter().map(|entry| entry.id.as_str()), "scene")?;
         if project.scenes.iter().any(|scene| scene.id.trim().is_empty()) {
@@ -1790,6 +1810,7 @@ pub fn validate(document: &ConfigDocument) -> Result<(), String> {
             || mapping.source_endpoint.trim().is_empty()
             || mapping.source_kind.trim().is_empty()
             || mapping.source_channel > 15
+            || mapping.destination_channel.is_some_and(|channel| channel > 15)
             || mapping.source_number > 127
             || mapping.destination_endpoint.trim().is_empty()
             || mapping.destination_profile.trim().is_empty()
@@ -2040,6 +2061,28 @@ mod tests {
             control_mappings: vec![],
             control_mapping_drafts: vec![],
         }
+    }
+
+    #[test]
+    fn profile_endpoint_binding_requires_a_declared_alias() {
+        let mut value = document();
+        value.profiles.push(ProfileRef {
+            id: "lexicon.reflex".into(),
+            version: 1,
+            endpoint_alias: Some("reflex-port".into()),
+        });
+        assert!(validate(&value).unwrap_err().contains("unknown endpoint"));
+        value.endpoints.push(EndpointAlias {
+            id: "reflex-port".into(),
+            name: Some("MidiSport 4x4 MIDI 4".into()),
+            vendor_id: None,
+            product_id: None,
+            serial: None,
+        });
+        assert!(validate(&value).is_ok());
+        let encoded = serde_json::to_string(&value).expect("encode");
+        let decoded: ConfigDocument = serde_json::from_str(&encoded).expect("decode");
+        assert_eq!(decoded.profiles[0].endpoint_alias.as_deref(), Some("reflex-port"));
     }
 
     #[test]
@@ -2561,6 +2604,7 @@ mod tests {
             source_endpoint: "input".into(),
             source_kind: "cc".into(),
             source_channel: 0,
+            destination_channel: None,
             source_number: 21,
             destination_endpoint: "2".into(),
             destination_profile: "eventide.micropitch".into(),
@@ -2596,6 +2640,7 @@ mod tests {
             source_endpoint: "input".into(),
             source_kind: "cc".into(),
             source_channel: 0,
+            destination_channel: None,
             source_number: 21,
             destination_endpoint: "2".into(),
             destination_profile: "eventide.micropitch".into(),
@@ -2666,6 +2711,7 @@ mod tests {
             source_endpoint: "input-1".into(),
             source_kind: "cc".into(),
             source_channel: 0,
+            destination_channel: None,
             source_number: 1,
             destination_endpoint: "output-1".into(),
             destination_profile: "eventide.micropitch".into(),
@@ -2701,6 +2747,7 @@ mod tests {
             source_endpoint: "input".into(),
             source_kind: "cc".into(),
             source_channel: 0,
+            destination_channel: None,
             source_number: 1,
             destination_endpoint: "2".into(),
             destination_profile: "device".into(),
@@ -2739,6 +2786,7 @@ mod tests {
             source_endpoint: "input".into(),
             source_kind: "cc".into(),
             source_channel: 0,
+            destination_channel: None,
             source_number: 1,
             destination_endpoint: "output".into(),
             destination_profile: "profile".into(),

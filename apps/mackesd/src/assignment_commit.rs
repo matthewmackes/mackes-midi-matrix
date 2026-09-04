@@ -53,6 +53,7 @@ pub fn mapping_from_request(
             "cc".into()
         },
         source_channel,
+        destination_channel: None,
         source_number,
         destination_endpoint,
         destination_profile: request
@@ -145,6 +146,18 @@ mod tests {
     }
 
     #[test]
+    fn button_can_commit_eventide_active_bypass_toggle() {
+        let mut request = request("button-r1-c2", "control-3");
+        request.destination_profile = Some("eventide.micropitch".into());
+        request.destination_effect = Some("modulation".into());
+        let mapping = mapping_from_request(&request, &catalog()).expect("ok");
+        assert_eq!(mapping.source_kind, "note");
+        assert_eq!(mapping.destination_profile, "eventide.micropitch");
+        assert_eq!(mapping.destination_parameter, "control-3");
+        assert!(mapping_role_compatible(&mapping));
+    }
+
+    #[test]
     fn persisted_knob_preset_mapping_is_rejected_on_reload() {
         let mapping = mackes_config::ControlMapping {
             id: "bad-preset".into(),
@@ -153,6 +166,7 @@ mod tests {
             source_endpoint: "controller".into(),
             source_kind: "cc".into(),
             source_channel: 0,
+            destination_channel: None,
             source_number: 13,
             destination_endpoint: "processor".into(),
             destination_profile: "lexicon.reflex".into(),

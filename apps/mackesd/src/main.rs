@@ -198,6 +198,39 @@ fn main() {
                 eprintln!("mackes-midi-matrixd: output unavailable {}: {error}", endpoint.name);
             }
         }
+        if let Ok(document) = mackes_config::load(&config) {
+            let mut bindings = Vec::new();
+            for profile in &document.profiles {
+                let Some(alias_id) = profile.endpoint_alias.as_deref() else { continue };
+                let Some(pattern) = document
+                    .endpoints
+                    .iter()
+                    .find(|alias| alias.id == alias_id)
+                    .and_then(|alias| alias.name.as_deref())
+                else {
+                    continue;
+                };
+                let matches = endpoints
+                    .iter()
+                    .filter(|endpoint| {
+                        endpoint.direction == mackes_midi_engine::EndpointDirection::Output
+                            && endpoint.name.contains(pattern)
+                    })
+                    .collect::<Vec<_>>();
+                if matches.len() == 1 {
+                    bindings.push((profile.id.clone(), matches[0].id.clone()));
+                } else {
+                    eprintln!(
+                        "mackes-midi-matrixd: profile binding {} matched {} outputs",
+                        profile.id,
+                        matches.len()
+                    );
+                }
+            }
+            if let Err(error) = daemon.set_profile_bindings(bindings) {
+                eprintln!("mackes-midi-matrixd: {error}");
+            }
+        }
         daemon.replay_controller_leds();
     }
     let daemon_uid = std::process::Command::new("id")

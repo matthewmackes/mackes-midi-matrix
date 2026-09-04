@@ -18,6 +18,20 @@ const FACTORY1_LED_TEMPLATE: u8 = 8;
 
 const LED_SEND_ATTEMPTS: u8 = 3;
 const LED_FLUSH_LIMIT: usize = 48;
+const IDLE_SLEEP_AFTER_MS: u64 = 5 * 60 * 1_000;
+const IDLE_SWEEP_STEP_MS: u64 = 600;
+const RECONNECT_SHOW_MS: u64 = 12_000;
+const ARROW_MIN_VISIBLE_MS: u64 = 120;
+const CONFIRMATION_MIN_VISIBLE_MS: u64 = 1_200;
+const KNOB_ACTIVITY_VISIBLE_MS: u64 = 180;
+
+#[derive(Clone, Debug)]
+struct BackendConfirmation {
+    control_id: String,
+    active: bool,
+    started_ms: u64,
+    delivered: Option<bool>,
+}
 
 /// Counters and identity published on the daemon snapshot.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -38,6 +52,10 @@ pub struct LedDiagnostics {
     pub template: u8,
     /// Milliseconds until the next result-overlay deadline.
     pub pending_deadline_ms: Option<u64>,
+    /// Current backend-control delivery state.
+    pub backend_confirmation: Option<String>,
+    /// Last successfully delivered logical backend state.
+    pub backend_state: Option<String>,
 }
 
 impl LedDiagnostics {
@@ -51,6 +69,8 @@ impl LedDiagnostics {
             target_id: None,
             template: FACTORY1_LED_TEMPLATE,
             pending_deadline_ms: None,
+            backend_confirmation: None,
+            backend_state: None,
         }
     }
 }
@@ -62,6 +82,14 @@ pub struct LedSurface {
     pub scheduler: LedFeedbackScheduler,
     coalescer: LedCoalescer,
     result_started_ms: u64,
+    last_touch_ms: u64,
+    sleep_active: bool,
+    reconnect_show_started_ms: Option<u64>,
+    template_reselect_pending: bool,
+    arrow_states: BTreeMap<u8, (bool, u64)>,
+    knob_activity: BTreeMap<String, u64>,
+    backend_confirmation: Option<BackendConfirmation>,
+    backend_states: BTreeMap<String, bool>,
     diagnostics: LedDiagnostics,
 }
 
@@ -71,6 +99,14 @@ impl Default for LedSurface {
             scheduler: LedFeedbackScheduler::new(LedState::new(LedColor::Off, 0, false)),
             coalescer: LedCoalescer::default(),
             result_started_ms: 0,
+            last_touch_ms: 0,
+            sleep_active: false,
+            reconnect_show_started_ms: None,
+            template_reselect_pending: false,
+            arrow_states: BTreeMap::new(),
+            knob_activity: BTreeMap::new(),
+            backend_confirmation: None,
+            backend_states: BTreeMap::new(),
             diagnostics: LedDiagnostics::new(),
         }
     }
@@ -80,6 +116,109 @@ impl LedSurface {
     /// Forces a complete replay of desired state on the next flush.
     pub fn request_full_resync(&mut self) {
         self.coalescer.request_full_resync();
+    }
+
+    /// Records controller activity and immediately wakes the normal LED surface.
+    pub fn record_touch(&mut self, now_ms: u64) {
+        self.last_touch_ms = now_ms;
+        if self.sleep_active {
+            self.sleep_active = false;
+            self.request_full_resync();
+        }
+    }
+
+    /// Mirrors the four navigation buttons in green for exactly as long as held.
+    pub fn record_arrow(&mut self, control_id: &str, pressed: bool, now_ms: u64) {
+        let index = match control_id {
+            "utility-5" => 44,
+            "utility-6" => 45,
+            "utility-7" => 46,
+            "utility-8" => 47,
+            _ => return,
+        };
+        if pressed {
+            self.arrow_states.insert(index, (true, now_ms.saturating_add(ARROW_MIN_VISIBLE_MS)));
+        } else if let Some(state) = self.arrow_states.get_mut(&index) {
+            state.0 = false;
+        }
+        self.request_full_resync();
+    }
+
+    /// Blinks a mapped knob green while its value is moving.
+    pub fn record_knob_activity(&mut self, control_id: &str, now_ms: u64) {
+        if control_id.starts_with("knob-") {
+            self.knob_activity
+                .insert(control_id.into(), now_ms.saturating_add(KNOB_ACTIVITY_VISIBLE_MS));
+            self.request_full_resync();
+        }
+    }
+
+    /// Starts visible feedback before a mapped backend write is attempted.
+    pub fn begin_backend_confirmation(&mut self, control_id: &str, active: bool, now_ms: u64) {
+        self.backend_confirmation = Some(BackendConfirmation {
+            control_id: control_id.into(),
+            active,
+            started_ms: now_ms,
+            delivered: None,
+        });
+        self.diagnostics.backend_confirmation = Some("pending".into());
+        self.request_full_resync();
+    }
+
+    /// Records whether the mapped backend write completed successfully.
+    pub fn finish_backend_confirmation(&mut self, delivered: bool) {
+        if let Some(confirmation) = self.backend_confirmation.as_mut() {
+            confirmation.delivered = Some(delivered);
+            if delivered {
+                self.backend_states.insert(confirmation.control_id.clone(), confirmation.active);
+                self.diagnostics.backend_state =
+                    Some(if confirmation.active { "active" } else { "bypassed" }.into());
+            }
+        }
+        self.diagnostics.backend_confirmation =
+            Some(if delivered { "delivered_unconfirmed" } else { "failed" }.into());
+        self.request_full_resync();
+    }
+
+    fn apply_backend_state(&self, desired: &mut BTreeMap<u8, LedState>, now_ms: u64) {
+        let catalog = launch_control_physical_catalog();
+        let led_index = |control_id: &str| {
+            catalog
+                .iter()
+                .find(|control| control.id.as_str() == control_id)
+                .and_then(|control| control.feedback_address)
+        };
+        for (control_id, active) in &self.backend_states {
+            if let Some(index) = led_index(control_id) {
+                desired.insert(
+                    index,
+                    LedState::new(
+                        if *active { LedColor::Green } else { LedColor::Red },
+                        127,
+                        false,
+                    ),
+                );
+            }
+        }
+        if let Some(confirmation) = &self.backend_confirmation {
+            let complete = confirmation.delivered == Some(true)
+                && now_ms.saturating_sub(confirmation.started_ms) >= CONFIRMATION_MIN_VISIBLE_MS;
+            if let Some(index) = led_index(&confirmation.control_id) {
+                let color = if confirmation.delivered == Some(false) || !confirmation.active {
+                    LedColor::Red
+                } else {
+                    LedColor::Green
+                };
+                desired.insert(index, LedState::new(color, 127, !complete));
+            }
+        }
+    }
+
+    /// Starts the bounded reconnect celebration; normal mapping state resumes afterward.
+    pub fn start_reconnect_show(&mut self, now_ms: u64) {
+        self.reconnect_show_started_ms = Some(now_ms);
+        self.template_reselect_pending = true;
+        self.request_full_resync();
     }
 
     /// Snapshot diagnostics for IPC/TUI status.
@@ -132,7 +271,7 @@ impl LedSurface {
         performance_locked: bool,
     ) {
         self.sync_session(session, captured, mappings, now_ms);
-        let desired = compose_desired(
+        let mut desired = compose_desired(
             mappings,
             session,
             captured,
@@ -140,6 +279,49 @@ impl LedSurface {
             now_ms,
             self.result_started_ms,
         );
+        if let Some(started) = self.reconnect_show_started_ms {
+            let elapsed = now_ms.saturating_sub(started);
+            if elapsed < RECONNECT_SHOW_MS && session.phase == AssignmentPhase::Idle {
+                apply_reconnect_show(&mut desired, elapsed);
+            } else {
+                self.reconnect_show_started_ms = None;
+                self.request_full_resync();
+            }
+        }
+        // Preserve quick taps long enough to survive a batched press/release pair.
+        self.arrow_states.retain(|_, (held, until)| *held || now_ms < *until);
+        for index in self.arrow_states.keys() {
+            desired.insert(*index, LedState::new(LedColor::Green, 127, false));
+        }
+        self.knob_activity.retain(|_, until| now_ms < *until);
+        let catalog = launch_control_physical_catalog();
+        for control_id in self.knob_activity.keys() {
+            if let Some(index) = catalog
+                .iter()
+                .find(|control| control.id.as_str() == control_id)
+                .and_then(|control| control.feedback_address)
+            {
+                desired.insert(index, LedState::new(LedColor::Green, 127, true));
+            }
+        }
+        self.apply_backend_state(&mut desired, now_ms);
+        let should_sleep = session.phase == AssignmentPhase::Idle
+            && now_ms.saturating_sub(self.last_touch_ms) >= IDLE_SLEEP_AFTER_MS;
+        if should_sleep {
+            if !self.sleep_active {
+                self.sleep_active = true;
+                self.request_full_resync();
+            }
+            for state in desired.values_mut() {
+                *state = off();
+            }
+            let elapsed = now_ms.saturating_sub(self.last_touch_ms + IDLE_SLEEP_AFTER_MS);
+            let index = u8::try_from((elapsed / IDLE_SWEEP_STEP_MS) % 48).unwrap_or(0);
+            desired.insert(index, LedState::new(LedColor::Red, 127, false));
+        } else if self.sleep_active {
+            self.sleep_active = false;
+            self.request_full_resync();
+        }
         for (index, state) in &desired {
             self.coalescer.set_desired(*index, *state);
         }
@@ -158,6 +340,21 @@ impl LedSurface {
             }
         };
         self.diagnostics.target_id = Some(selected.1);
+        if self.template_reselect_pending {
+            if let Some(bytes) = mackes_profiles::encode_launch_control_template(8) {
+                if let Ok(message) = MidiMessage::from_wire(&bytes) {
+                    let event = MidiEvent {
+                        timestamp: TimestampNanos::new(0),
+                        sequence: 0,
+                        endpoint: selected.0,
+                        message,
+                    };
+                    if outputs.send_to_endpoint(selected.0, event).is_ok() {
+                        self.template_reselect_pending = false;
+                    }
+                }
+            }
+        }
         let pending_len = self.coalescer.pending_len();
         self.diagnostics.coalesced = self
             .diagnostics
@@ -207,6 +404,84 @@ impl LedSurface {
         self.diagnostics.last_error = Some(error.into());
     }
 }
+
+fn apply_reconnect_show(desired: &mut BTreeMap<u8, LedState>, elapsed_ms: u64) {
+    for state in desired.values_mut() {
+        *state = off();
+    }
+    let phase = elapsed_ms / 1_500;
+    match phase {
+        0 => {
+            let step = usize::try_from(elapsed_ms / 100).unwrap_or(0).min(14);
+            for row in 0..6 {
+                let left = row * 8 + step.min(7);
+                let right = row * 8 + 7 - step.min(7);
+                desired.insert(
+                    u8::try_from(left).unwrap_or(0),
+                    LedState::new(LedColor::Red, 127, false),
+                );
+                desired.insert(
+                    u8::try_from(right).unwrap_or(0),
+                    LedState::new(LedColor::Red, 127, false),
+                );
+            }
+        }
+        1 => {
+            let step = usize::try_from((elapsed_ms - 1_500) / 150).unwrap_or(0).min(10);
+            for row in 0..3 {
+                for col in 0..=step.min(7) {
+                    desired.insert(
+                        u8::try_from(row * 8 + col).unwrap_or(0),
+                        LedState::new(LedColor::Yellow, 127, false),
+                    );
+                }
+            }
+        }
+        2 | 3 => {
+            let count = usize::try_from((elapsed_ms - 3_000) / 180).unwrap_or(0).min(16);
+            for index in 24..(24 + count) {
+                desired.insert(
+                    u8::try_from(index).unwrap_or(0),
+                    LedState::new(LedColor::Green, 127, false),
+                );
+            }
+        }
+        4..=7 => {
+            let digit = usize::try_from((elapsed_ms - 6_000) / 1_000).unwrap_or(0).min(5);
+            let glyph = COUNTDOWN_GLYPHS[5 - digit];
+            for (row, bits) in glyph.iter().enumerate() {
+                for col in 0..3 {
+                    if bits & (1 << (4 - col)) != 0 {
+                        let index = row * 8 + col + 2;
+                        desired.insert(
+                            u8::try_from(index).unwrap_or(0),
+                            LedState::new(
+                                if digit == 5 { LedColor::Green } else { LedColor::Yellow },
+                                127,
+                                false,
+                            ),
+                        );
+                    }
+                }
+            }
+        }
+        _ => {
+            for index in 0..48 {
+                desired.insert(index, LedState::new(LedColor::Green, 127, false));
+            }
+        }
+    }
+}
+
+/// Five-row, three-column-friendly glyphs rendered on the top three knob rows.
+const COUNTDOWN_GLYPHS: [[u8; 3]; 6] = [
+    [0b111, 0b100, 0b111], // 0
+    [0b010, 0b110, 0b010], // 1
+    [0b110, 0b010, 0b111], // 2
+    [0b110, 0b010, 0b110], // 3
+    [0b101, 0b111, 0b001], // 4
+    [0b111, 0b110, 0b110], // 5
+];
 
 /// Selects the single Launch Control XL Mk2 MIDI output, refusing HUI and duplicates.
 pub fn unique_launch_control_midi_output<'a>(
@@ -397,6 +672,7 @@ mod tests {
             source_endpoint: "controller".into(),
             source_kind: "cc".into(),
             source_channel: 8,
+            destination_channel: None,
             source_number: 13,
             destination_endpoint: "processor".into(),
             destination_profile: profile.into(),
@@ -484,6 +760,45 @@ mod tests {
     }
 
     #[test]
+    fn eventide_requested_controls_have_explicit_led_policy() {
+        let mut store = ControlMappingStore::default();
+        for assignment in mackes_profiles::eventide_controller_assignments() {
+            if assignment.parameter_id.is_some()
+                && assignment.physical_control_id.starts_with("knob-r")
+            {
+                store.active.push(mapping(&assignment.physical_control_id, "eventide.micropitch"));
+            }
+        }
+        store.active.push(mapping("fader-1", "eventide.micropitch"));
+        store.active.push(mapping("button-r1-c1", "eventide.micropitch"));
+        let session = AssignmentSession::new("live");
+        let desired =
+            compose_desired(&store, &session, None, LedFeedbackScheduler::new(off()), 0, 0);
+        let catalog = launch_control_physical_catalog();
+        for assignment in mackes_profiles::eventide_controller_assignments()
+            .into_iter()
+            .filter(|assignment| assignment.physical_control_id.starts_with("knob-r"))
+        {
+            let index = catalog
+                .iter()
+                .find(|control| control.id.as_str() == assignment.physical_control_id)
+                .and_then(|control| control.feedback_address)
+                .expect("Eventide knob LED address");
+            assert_eq!(desired.get(&index).map(|state| state.color), Some(LedColor::Red));
+        }
+        assert_eq!(
+            desired.get(&24).map(|state| state.color),
+            Some(LedColor::Red),
+            "Slider 1 Button 1 is the Eventide bypass indicator"
+        );
+        assert_eq!(
+            desired.get(&32).map(|state| state.color),
+            Some(LedColor::Red),
+            "Slider 1 Button 2 shows the fader Mix proxy, not an unsupported Delay bypass"
+        );
+    }
+
+    #[test]
     fn flush_sends_factory1_sysex_and_coalesces_unchanged_frames() {
         let mut outputs = OutputRegistry::new(4);
         let (adapter, _) = recording("xl-midi", "Launch Control XL MIDI 1");
@@ -500,6 +815,59 @@ mod tests {
         assert_eq!(surface.diagnostics.sent, first_sent);
         assert!(surface.diagnostics.coalesced > 0);
         assert_eq!(surface.coalescer.desired(0).map(|state| state.color), Some(LedColor::Amber));
+    }
+
+    #[test]
+    fn arrow_led_is_green_only_while_pressed() {
+        let mut outputs = OutputRegistry::new(4);
+        outputs
+            .insert(Box::new(recording("xl-midi", "Launch Control XL MIDI 1").0))
+            .expect("output");
+        let mut surface = LedSurface::default();
+        let store = ControlMappingStore::default();
+        let session = AssignmentSession::new("live");
+
+        surface.record_arrow("utility-8", true, 0);
+        surface.flush(0, &store, &session, None, &mut outputs, false);
+        assert_eq!(surface.coalescer.desired(47).map(|state| state.color), Some(LedColor::Green));
+
+        surface.record_arrow("utility-8", false, 1);
+        surface.flush(1, &store, &session, None, &mut outputs, false);
+        assert_eq!(surface.coalescer.desired(47).map(|state| state.color), Some(LedColor::Green));
+        surface.flush(120, &store, &session, None, &mut outputs, false);
+        assert_eq!(surface.coalescer.desired(47).map(|state| state.color), Some(LedColor::Off));
+    }
+
+    #[test]
+    fn backend_button_blinks_until_delivery_is_complete() {
+        let mut outputs = OutputRegistry::new(4);
+        outputs
+            .insert(Box::new(recording("xl-midi", "Launch Control XL MIDI 1").0))
+            .expect("output");
+        let mut surface = LedSurface::default();
+        let mut store = ControlMappingStore::default();
+        store.active.push(mapping("button-r1-c1", "eventide.micropitch"));
+        let session = AssignmentSession::new("live");
+
+        surface.begin_backend_confirmation("button-r1-c1", false, 0);
+        surface.flush(0, &store, &session, None, &mut outputs, false);
+        assert_eq!(surface.coalescer.desired(24).map(|state| state.blink), Some(true));
+        surface.finish_backend_confirmation(true);
+        surface.flush(1_199, &store, &session, None, &mut outputs, false);
+        assert_eq!(surface.coalescer.desired(24).map(|state| state.blink), Some(true));
+        surface.flush(1_200, &store, &session, None, &mut outputs, false);
+        assert_eq!(surface.coalescer.desired(24).map(|state| state.blink), Some(false));
+        assert_eq!(surface.coalescer.desired(24).map(|state| state.color), Some(LedColor::Red));
+        assert_eq!(
+            surface.diagnostics.backend_confirmation.as_deref(),
+            Some("delivered_unconfirmed")
+        );
+
+        surface.begin_backend_confirmation("button-r1-c1", true, 500);
+        surface.finish_backend_confirmation(false);
+        surface.flush(1_000, &store, &session, None, &mut outputs, false);
+        assert_eq!(surface.coalescer.desired(24).map(|state| state.blink), Some(true));
+        assert_eq!(surface.diagnostics.backend_confirmation.as_deref(), Some("failed"));
     }
 
     #[test]
@@ -564,5 +932,44 @@ mod tests {
                 .map(|state| state.color),
             Some(LedColor::Red)
         );
+    }
+
+    #[test]
+    fn five_minute_idle_sweep_wakes_and_restores_mapping_colors() {
+        let mut outputs = OutputRegistry::new(4);
+        let (adapter, _) = recording("xl-midi", "Launch Control XL MIDI 1");
+        outputs.insert(Box::new(adapter)).expect("output");
+        let mut surface = LedSurface::default();
+        let mut store = ControlMappingStore::default();
+        store.active.push(mapping("knob-r1-c1", "lexicon.reflex"));
+        let session = AssignmentSession::new("live");
+
+        surface.flush(IDLE_SLEEP_AFTER_MS - 1, &store, &session, None, &mut outputs, false);
+        assert_eq!(surface.coalescer.desired(0).map(|state| state.color), Some(LedColor::Amber));
+
+        surface.flush(
+            IDLE_SLEEP_AFTER_MS + IDLE_SWEEP_STEP_MS,
+            &store,
+            &session,
+            None,
+            &mut outputs,
+            false,
+        );
+        assert!(surface.sleep_active);
+        assert_eq!(surface.coalescer.desired(0).map(|state| state.color), Some(LedColor::Off));
+        assert_eq!(surface.coalescer.desired(1).map(|state| state.color), Some(LedColor::Red));
+
+        surface.record_touch(IDLE_SLEEP_AFTER_MS + IDLE_SWEEP_STEP_MS + 1);
+        surface.flush(
+            IDLE_SLEEP_AFTER_MS + IDLE_SWEEP_STEP_MS + 1,
+            &store,
+            &session,
+            None,
+            &mut outputs,
+            false,
+        );
+        assert!(!surface.sleep_active);
+        assert_eq!(surface.coalescer.desired(0).map(|state| state.color), Some(LedColor::Amber));
+        assert_eq!(surface.coalescer.desired(1).map(|state| state.color), Some(LedColor::Off));
     }
 }

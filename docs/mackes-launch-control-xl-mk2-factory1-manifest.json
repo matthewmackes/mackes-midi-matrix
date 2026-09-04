@@ -4,7 +4,7 @@
   "target_model": "Novation Launch Control XL",
   "target_generation": "Mk2",
   "template_slot": 1,
-  "installation": "Select Factory Template 1 on the controller; MACKES does not write template definitions.",
+  "installation": "No factory-reset operation exists for the Launch Control XL Mk1/Mk2. For a dependable untouched starting point, hold FACTORY, press bottom-row pad 1, then release FACTORY. This selects the firmware-supplied Factory Template 1; MACKES does not write template definitions or User templates.",
   "midi_channel": 8,
   "assignable_inventory": {
     "knobs": {"count": 24, "physical_id_pattern": "knob-r{row}-c{column}", "midi_kind": "cc", "numbers": [13,14,15,16,17,18,19,20,29,30,31,32,33,34,35,36,49,50,51,52,53,54,55,56]},

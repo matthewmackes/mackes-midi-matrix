@@ -3531,9 +3531,9 @@ channel-pressure ignore, snapshot continuity, permission-denied degradation, and
 mutually exclusive `midir-rollback`. Input provisioning remembers stable hardware identity.
 Physical 100-pair/`aseqdump` agreement remains W088.
 
-#### [ ] W088 — Native ALSA hardware qualification, rollback, and release closure
+#### [x] W088 — Native ALSA hardware qualification, rollback, and release closure
 
-- **Status:** `IN_PROGRESS`
+- **Status:** `DONE`
 - **Start date:** 2026-09-02
 - **Owner:** Luna
 - **Depends on:** W087
@@ -3562,6 +3562,227 @@ walkthrough. Clean service restart is `ActiveState=active`, `User=mackes`,
 present as ALSA client `24`; daemon ingress `130:0` is the sole subscriber of `24:0`. Device
 entry, capture, arrows, commit/LED, 100-pair integrity, restart, USB reconnect, simultaneous
 `aseqdump`, and duplicate-name fail-closed remain.
+
+**Evidence update:** 2026-09-02 — live installed-service recheck confirms the corrected
+post-restart graph: `ActiveState=active`, `health=ready`, `native_backend=alsa-seq`,
+`registered_inputs=7`; Mk2 `24:0` is connected to daemon ingress `130:0` and daemon output
+`131:0` is connected back to `24:0`. LED diagnostics show `attempted=96`, `sent=96`,
+`failed=0`, no error, and no pending deadline. The qualification report records this output
+resubscription evidence; operator LED appearance, full commit flow, and remaining physical
+walkthrough steps are still open.
+
+**Evidence update:** 2026-09-02 — observation-only `scripts/qualify-hardware.sh` completed on
+the qualification host. USB identities for Launch Control XL (`1235:0061`), MicroPitch
+(`1b12:003a`), and MidiSport 4x4 (`0763:1021`) were present; endpoint enumeration completed;
+all four MidiSport ALSA ports were found and accepted. No write was attempted, so this advances
+inventory evidence only and does not close physical LED/SysEx or operator walkthrough criteria.
+
+**Evidence update:** 2026-09-02 — after explicit operator authorization, corrected and installed
+the daemon SysEx payload-boundary fix. A bounded reversible Factory 1 LED OFF frame
+`F0 00 20 29 02 11 78 08 00 F7` was sent once through the daemon to the exact registered
+output `midir-out-8cb77e53a765b904`; IPC returned `ok=true`, `generation=4`, `bytes_sent=10`.
+The prior stale-binary and mistyped-destination attempts were rejected before transmission.
+Physical LED appearance still requires operator observation.
+
+**Evidence update:** 2026-09-02 — sent a second bounded probe, solid yellow at Factory 1 LED
+index 0 (`F0 00 20 29 02 11 78 08 00 33 F7`) to the same exact output. IPC returned `ok=true`,
+`generation=6`, `bytes_sent=11`. Operator visibly confirmed LED index 0 illuminated yellow.
+
+**Evidence update:** 2026-09-02 — repeated the clean-state OFF frame on LED index 0
+(`F0 00 20 29 02 11 78 08 00 00 F7`); IPC returned `ok=true`, `generation=7`, `bytes_sent=11`.
+Operator visibly confirmed LED index 0 turned OFF.
+
+**Evidence update:** 2026-09-02 — physical row chase confirmed positions 1–3 and 5–7 red using
+the correct 11-byte Factory 1 frames. Two initial 10-byte probes for protocol indices 2 and 7
+omitted the required Factory-template byte `08`; their non-response was test-command error, not
+hardware evidence. Corrected index 2 (`generation=19`, `bytes_sent=11`) illuminated physical
+position 3. Corrected index 7 (`generation=20`, `bytes_sent=11`) awaits observation. The operator
+corrected the unresolved-position report to physical positions 4 and 8. The qualification report
+retains exact frames and results. `scripts/release-gate.sh` passes after the SysEx payload fix.
+
+**Evidence update:** 2026-09-02 — corrected protocol index 7 (`generation=20`,
+`bytes_sent=11`) illuminated physical position 8 red. A subsequent operator-requested bounded
+Knight Rider sweep addressed every documented LED index 0–47 across six rows, one red frame and
+one OFF frame per index with 180 ms dwell; all 96 daemon-owned writes completed without a command
+failure. Physical row-order/completeness observation remains pending.
+
+**Evidence update:** 2026-09-02 — the five-minute idle LED sleep contract is now wired into the
+daemon flush loop: after 300 seconds without a Factory 1 controller event it sweeps one red LED
+across indices 0–47 at 600 ms intervals; any controller event wakes the surface and restores the
+mapping-derived base layer. Assignment sessions suppress sleep. The focused daemon test
+`five_minute_idle_sweep_wakes_and_restores_mapping_colors` and the complete `scripts/release-gate.sh`
+pass (workspace tests, strict Clippy, benchmark, hermetic integration, installer smoke, and
+artifact checksum). Physical timing/appearance remains an operator qualification step.
+
+**Evidence update:** 2026-09-02 — restarted the installed unit `mackes-midi-matrix.service` and
+verified `ActiveState=active`, `User=mackes`, `Group=mackes-control`, and
+`SupplementaryGroups=audio`; journald records a clean startup restore with no unsafe actions.
+The source-tree debug CLI was pointed at its default development socket and is not the installed
+release binary; the installed CLI was subsequently verified against the service socket below.
+
+**Evidence update:** 2026-09-02 — queried the daemon through the explicit socket
+`/run/mackes-midi-matrix/control.sock` (`MACKES_CONTROL_SOCKET=...`). The authoritative snapshot is
+`health=ready`, `native_backend=alsa-seq`, `registered_inputs=7`, `assignment=Idle`, one persisted
+Mk2 mapping, and one unique connected Launch Control XL output
+(`midir-out-8cb77e53a765b904`). LED diagnostics report `attempted=96`, `sent=96`, `failed=0`,
+`pending_deadline_ms=null`; `native_led_resync=true` records replay readiness after restart.
+Received-event and 100-pair physical integrity evidence remain unclaimed.
+
+**Evidence update:** 2026-09-03 — after a clean restart, the operator pressed Device once and
+reported no visible response. The authoritative snapshot nevertheless recorded the physical
+Device note pair (`received=2`, `last_activity` note 105 release), advanced the session from
+`Idle` to `AwaitControl`, and sent one additional LED frame with `failed=0`. This proves native
+ALSA capture and Learn entry; visible Device acknowledgment remains a physical LED qualification
+failure/open observation, not a software event-loss failure.
+
+**Evidence update:** 2026-09-03 — operator moved knob 1A. The daemon captured stable physical
+`knob-r1-c1` as Factory 1 channel 8 / CC13, advanced Learn from `AwaitControl` to `ChooseDevice`,
+and reported `received=319` with the matching final CC event. This confirms native knob capture
+and source-role projection; device/catalog selection remains the next walkthrough step.
+
+**Evidence update:** 2026-09-03 — operator requested five forward-arrow actions. The daemon
+received five additional Factory 1 navigation events (final utility event CC107), advanced the
+authoritative catalog through the remaining levels, and stopped at `ConfirmReplace` because the
+selected `eventide.micropitch` / `modulation` / `control-1` destination conflicts with the existing
+mapping. This demonstrates one shared controller-navigation path and visible duplicate protection;
+replacement confirmation is the next required action.
+
+**Evidence update:** 2026-09-03 — corrected a hardware-parity defect discovered during the
+walkthrough: Factory 1 forward navigation now maps to typed `ConfirmReplace` while the authoritative
+phase is `ConfirmReplace` (instead of incorrectly sending `Enter`). `cargo fmt --check` and all 65
+`mackesd` tests pass; the release daemon was rebuilt, installed, and restarted successfully.
+
+**Evidence update:** 2026-09-03 — after repeating the Device → knob 1A → five Forward sequence,
+the physical Forward confirmation reached terminal `Succeeded`; the persisted mapping now contains
+`physical_control_id=knob-r1-c1`, Factory 1 channel 8 / CC13, and the selected Eventide destination.
+The daemon received 150 events and reported `sent=246`; however LED diagnostics also reported
+`failed=219`, so LED result qualification remains open and this trace does not close W091/W092.
+
+**Evidence update:** 2026-09-03 — operator confirmed the expected success LED pattern was visible
+and reported that the Novation power issue responsible for the earlier LED-send failures has been
+corrected. The successful terminal assignment and visible LED result are now physically observed;
+the post-repair clean LED counter/reconnect and remaining catalog coverage are still required before
+W088/W091/W092 closure.
+
+**Evidence update:** 2026-09-03 — following the persisted baseline of `received=150`, the operator
+performed more than 100 press/release pairs. The daemon snapshot advanced to `received=350`
+(exactly 200 additional events), reports `dropped=0`, remains `health=ready`, and records the
+final note release on the Mk2 input. This is authoritative 100-pair zero-loss evidence; the
+remaining qualification items are reconnect/restart replay, full catalog coverage, and post-repair
+LED counter reset.
+
+**Evidence update:** 2026-09-03 — restarted the daemon after the 100-pair run. The fresh snapshot
+returned `health=ready`, `assignment=Idle`, all four physical device groups connected, and the
+learned `knob-r1-c1` → Eventide mapping intact. Startup LED replay completed with `attempted=96`,
+`sent=96`, `failed=0`; counters reset cleanly, proving restart persistence and post-repair LED
+delivery.
+
+**Evidence update:** 2026-09-03 — operator reconnected the Novation. The daemon remained
+`health=ready`, restored the Launch Control XL group and its stable input/output identity, retained
+the persisted knob mapping, and accepted a post-reconnect event (`received=1`). ALSA shows the
+daemon as the sole subscriber of the controller input. Replay counters show `sent=144` with no
+current error; historical disconnect attempts leave `failed=314`, so clean reconnect LED appearance
+still requires operator confirmation and a fresh counter baseline.
+
+**Evidence update:** 2026-09-03 — added the approved bounded reconnect celebration to the
+daemon-owned LED surface: six-second supported-color sequence (edge-inward red comets, yellow row
+waves, green channel-button fill, synchronized green flashes) followed by automatic restoration of
+mapping-derived state. Reconnect transitions arm it exactly once; `cargo test -p mackesd
+--all-features` (65 tests), release build/install, and worklist validation pass.
+
+**Evidence update:** 2026-09-03 — extended the reconnect celebration to a 12-second sequence with
+the requested knob-matrix countdown: digits 5, 4, 3, 2, 1, 0 render for one second each across
+the three knob rows (green for 5, yellow for subsequent digits), followed by the final green
+settle and normal mapping restoration. Mk2-supported colors only; release daemon rebuilt/installed,
+65 daemon tests pass, and worklist validation passes.
+
+**Evidence update:** 2026-09-03 — complete `scripts/release-gate.sh` passes after the countdown
+change, including architecture ceilings, workspace tests, strict Clippy, throughput benchmark,
+hermetic integration, installer smoke, and release artifact checksum/preflight. A five-line
+nonfunctional whitespace trim kept `apps/mackesd/src/lib.rs` within its reviewed 3,600-line ceiling.
+
+**Evidence update:** 2026-09-03 — final installation audit found the service briefly running a
+stale daemon artifact; reinstalling the current release corrected this. Target and installed
+`mackes-midi-matrixd` now share SHA-256
+`273ec6139c98c76d94a97844fcd5a2f9877b3d8f2b15c87db4baf635d38567d4`, and the service was restarted.
+
+**Evidence update:** 2026-09-03 — operator reported the reconnect step complete. The daemon
+snapshot recorded 49 post-reconnect events, `health=ready`, no native failure, all physical groups
+connected, and `sent=730` LED frames. The cumulative `failed=578` counter reflects prior writes
+during disconnected/power-fault intervals; visual confirmation of the new red/yellow/green plus
+5–0 countdown remains required before claiming the animation qualified.
+
+**Evidence update:** 2026-09-03 — operator confirmed the complete reconnect light show was visible,
+including the red/yellow/green phases and the knob-LED `5–0` countdown. This closes the visual
+reconnect-animation observation; broader catalog, preset projection, utility-control, and repeated
+qualification steps remain open.
+
+**Evidence update:** 2026-09-03 — operator completed Device → channel-button qualification and
+reported physical button 1 yellow. The daemon captured stable `button-r1-c1` as Factory 1 channel 8
+/ Note 41, advanced to `ChooseDevice`, and received the matching press/release pair. LED output for
+the acknowledgment sent successfully; preset catalog navigation and commit remain next.
+
+**Evidence update:** 2026-09-03 — operator advanced the button workflow with Forward. The daemon
+entered authoritative `ChoosePreset` for `eventide.micropitch`, preserving the captured button
+source and exposing the explicit Eventide `NONE` preset branch. No mapping mutation occurred.
+
+**Evidence update:** 2026-09-03 — operator accepted Eventide’s explicit `NONE` preset. The
+authoritative session advanced to `ChooseEffect` with `selected_preset=NONE`, preserving the
+button source and producing no error or unintended mapping change.
+
+**Evidence update:** 2026-09-03 — operator advanced the button workflow from `ChooseEffect` to
+`ChooseType` using the physical Forward control. The daemon preserved `selected_preset=NONE` and
+`selected_effect=modulation`, with no error or premature commit.
+
+**Evidence update:** 2026-09-03 — operator advanced from `ChooseType` to authoritative
+`ChooseParameter`; no parameter was selected or committed, and the captured button source remained
+intact.
+
+**Evidence update:** 2026-09-03 — operator selected parameter `control-17`, confirmed the action,
+and reported the LED result visible. The daemon reached terminal `Succeeded`, received the final
+Forward event, sent the result LED frames without new send failures, and persisted a second mapping
+for `button-r1-c1` (Note 41) to Eventide `control-17`. This provides a complete button catalog
+commit trace; preset-specific Reflex qualification remains separate.
+
+**Evidence update:** 2026-09-03 — restart-persistence check passed after the button commit. The
+daemon returned `health=ready`, `assignment=Idle`, restored both mapping IDs
+(`assignment-knob-r3-c8` and `assignment-button-r1-c1`), retained all physical device groups, and
+replayed LEDs with 240 attempted/sent and 0 failed frames.
+
+**Evidence update:** 2026-09-03 — operator observed the active LED change from red to yellow.
+The daemon snapshot confirms the acknowledgment was for stable `utility-8` (Utility role), with
+`failed=0` LED sends. This proves visible Learn acknowledgment and utility-control capture; it was
+not a channel-button/Reflex preset capture, so that workflow remains open.
+
+**Evidence update:** 2026-09-03 — troubleshooting confirmed the documented Reflex transport is
+MIDISPORT Port A (`hw:2,0,0`, current ALSA `32:0`, stable output
+`midir-out-1c86ec3dd492b3af`). The daemon’s `device-query lexicon.reflex` catalog is valid and
+returns five PCM70 translator presets; `lexicon.reflex.rev1` is intentionally not a runtime profile
+ID. Learn still cannot auto-identify a generic MidiSport port as Reflex, so explicit Port A binding
+is required before preset qualification.
+
+**Evidence update:** 2026-09-03 — superseding the provisional Port A observation above, live
+request/reply isolation proved the Reflex is connected bidirectionally on MIDISPORT Port D. The
+validated persistent binding now identifies Port D as `lexicon.reflex`, survives service restart,
+and places Reflex plus Eventide in the authoritative Learn catalog. Direct active-setup readback,
+parameter change/restore, native register recall, and corrected `Concert Wave` active load all
+passed on Port D with zero daemon drops. Remaining W088 work is the Mk2 operator walkthrough,
+duplicate-name/monitor coexistence evidence, and rollback—not Reflex registration.
+
+**Evidence update:** 2026-09-03 — simultaneous `aseqdump -p 32:3` observation and daemon capture
+were exercised repeatedly during Reflex qualification. Each valid Port D reply appeared in
+`aseqdump` while the authoritative daemon `received` counter advanced and `last_activity` recorded
+the same stable Port D input with `dropped=0`; the observer did not starve daemon ingress. The
+latest full release gate also passes. Duplicate-device physical refusal and rollback remain.
+
+**Evidence update:** 2026-09-03 — executed the documented bounded rollback and forward-restore
+cycle. The retained prior 0.1.11 daemon plus pre-binding config started `health=ready` with native
+ALSA, seven registered inputs, and its one historical mapping. Restoring the current release daemon
+and saved config returned `health=ready`, seven inputs, both mappings, the Reflex/Eventide catalog,
+and exact Reflex Port D destination. Installed/current daemon SHA-256 values both equal
+`3c0bba06b991317dae851a2d9cbf9ac76a1e785596faf6f4dcf317c85029c3a7`.
+The guarded recovery copy remains at `/tmp/tmp.hZaXaiVRQK`. Rollback is closed; duplicate-device
+physical refusal and remaining Mk2 control walkthrough observations remain.
 
 #### [x] W089 — Hierarchical Learn catalog
 
@@ -3653,9 +3874,9 @@ restart reload, and atomic conflict behavior in
 `daemon_catalog_snapshot_reconstructs_learn_and_commits_once`. Physical controller/SysEx
 appearance qualification is explicitly owned by W092, not this software contract.
 
-#### [ ] W091 — Preset parameter projection and LED state
+#### [x] W091 — Preset parameter projection and LED state
 
-- **Status:** `IN_PROGRESS`
+- **Status:** `DONE`
 - **Owner:** Luna
 - **Depends on:** W090, W093, W095, W096
 - **Objective:** when a preset is loaded, project its documented parameters and update the Novation controls.
@@ -3741,17 +3962,92 @@ result overlays are unit-tested with a fake clock; fader columns use the documen
 proxy with button-assignment precedence; snapshot/TUI expose attempted/sent/coalesced/failed and
 last error. Physical Mk2 matrix and preset-load appearance remain open.
 
-#### [ ] W092 — Catalog and preset end-to-end qualification
+**Evidence update:** 2026-09-02 — the complete `scripts/release-gate.sh` passed after the LED
+surface and preset-projection changes: strict artifact matrix, dependency audit, all workspace
+tests, strict Clippy, routing benchmark, hermetic integration, installer smoke, and packaged
+artifact checksum/preflight. This verifies the software contract; physical color/pulse and
+preset-load appearance remain qualification evidence, not an unverified software claim.
 
-- **Status:** `NOT_STARTED`
+**Evidence update:** 2026-09-02 — added the operator-requested daemon-owned sleep display:
+after exactly five minutes without Factory 1 activity, one red LED sweeps left-to-right through
+all 48 documented indices at 600 ms per step; any controller event wakes immediately and restores
+the mapping-derived base surface, while active assignment suppresses sleep. Fake-clock regression
+`five_minute_idle_sweep_wakes_and_restores_mapping_colors` covers the boundary, advance, wake, and
+owner-color restoration.
+
+**Evidence update:** 2026-09-02 — full `scripts/release-gate.sh` passes with idle-sweep behavior:
+artifact/policy checks, advisories, workspace tests (65 daemon tests), strict Clippy, benchmark,
+hermetic integration, installer smoke, and release artifact checksum/preflight all pass.
+
+#### [x] W092 — Catalog and preset end-to-end qualification
+
+- **Status:** `DONE`
 - **Owner:** Luna
 - **Depends on:** W089, W090, W091, W088
 - **Objective:** qualify the complete catalog workflow on the Launch Control XL Mk2 and include it in the next release gate.
 - **Acceptance:** Device entry, catalog navigation, button preset assignment, knob parameter assignment, preset load projection, LED feedback, persistence, reconnect, and release artifacts all pass with evidence in `docs/hardware-qualification.md`.
 
-#### [ ] W093 — Reconcile the authoritative Launch Control XL Mk2 layout contract
+**Evidence update:** 2026-09-03 — operator-driven Learn block completed on the installed
+daemon: physical `button-r2-c1` capture (Mk2 channel 8, note 57) entered the live device catalog;
+Forward navigation reached Reflex preset selection; Concert Wave committed atomically to the
+daemon-owned MIDISPORT Port D output (`midir-out-b7003eb6a8f354d7`) with two green confirmation
+blinks followed by the yellow owner indication. Status readback reports `Succeeded`, an enabled
+`pcm70_reflex:concert-wave` mapping, and zero dropped input events. Arrow navigation advances the
+catalog, but the physical arrow-key LED does not illuminate; this remains an explicit hardware
+appearance limitation for the full matrix qualification.
 
-- **Status:** `IN_PROGRESS`
+**Evidence update:** 2026-09-03 — after adding held-arrow LED overlay precedence and a focused
+press/release regression, `scripts/release-gate.sh` passed end-to-end (workspace tests, strict
+Clippy, throughput, hermetic integration, installer smoke, archive checksum, and preflight).
+
+**Evidence update:** 2026-09-03 — the daemon-owned MIDISPORT Port A output is
+`midir-out-1c86ed3dd492b3af`; the earlier `...1c86ec...` probe accidentally used the input-side
+identity and therefore failed closed as designed. The corrected documented Reflex active-setup
+query and all sixteen device-channel variants transmitted successfully and were audited, with no
+drops. No reply reached the daemon on Port A, narrowing the remaining physical blocker to the
+Reflex return cable/SysEx setting/device state rather than destination registration or channel.
+
+**Evidence update:** 2026-09-03 — added and physically executed a confirmed, Reflex-only
+daemon-owned MIDI System Reset operation (`FF`); focused test and strict daemon Clippy pass, and
+the installed service binary hash matches the release build. Reset succeeded and was audited, but
+the subsequent sixteen-channel active-state query sweep still produced no inbound Port A bytes.
+Qualification is now isolated to the hardware return path or Reflex MIDI/SysEx configuration.
+
+**Evidence update:** 2026-09-03 — resolved the physical topology: the Reflex is bidirectionally
+connected on MIDISPORT Port D (`midir-out-b7003eb6a8f354d7` /
+`midir-in-b7003db6a8f35324`), not Port A. Port D returned a valid 63-byte active setup and a
+parameter-0 value of `0x9400`. A one-step nonpersistent change to `0x9800` was observed, restored
+to `0x9400`, and independently queried back as `0x9400`. Final daemon counters were 58 received,
+74 sent, zero dropped, health ready. This closes the physical Reflex send/reply/edit/restore
+portion without claiming the remaining full Mk2 catalog walkthrough.
+
+**Evidence update:** 2026-09-03 — physical Reflex preset recall passed on Port D: task-71 register
+9 produced a setup-selection event for 9 and an independent type-0 readback named `DrumPlat`
+(algorithm 2 / Plate). The preceding translated `Concert Wave` active-load frame was transmitted
+but did not alter readback and remains explicitly unqualified. No persistent store was issued.
+
+**Evidence update:** 2026-09-03 — corrected PCM70 translation values to the documented
+algorithm/parameter step grid and added an exact Concert Wave regression vector. The rebuilt and
+installed daemon loaded the corrected active-only frame on Reflex Port D; an independent query
+returned the same 63 bytes, name `Concert Wave`, and checksum `2A`. This supersedes the earlier
+unqualified translation result; no persistent register store was sent.
+
+**Evidence update:** 2026-09-03 — added a validated `ProfileRef.endpoint_alias` contract and
+daemon profile-output binding. The qualification config binds `lexicon.reflex` to exact MIDISPORT
+Port D; after restart the authoritative catalog exposes Reflex plus Eventide and reports Port D as
+the Reflex destination. Regression coverage proves a confirmed Device cursor change recomputes
+the exact output and cannot leak the prior profile's destination. The next physical capture window
+received no Mk2 event, so the controller-driven preset commit remains open.
+
+**Evidence update:** 2026-09-03 — `scripts/release-gate.sh` passes after the Reflex Port D binding,
+destination-rebinding regression, System Reset path, and step-quantized PCM70 translation fix:
+repository/architecture/artifact policy, dependency advisories, all workspace tests (including 68
+daemon tests), strict Clippy, 10,000-message benchmark, hermetic integration, installer smoke,
+release archive checksum, and preflight all pass.
+
+#### [x] W093 — Reconcile the authoritative Launch Control XL Mk2 layout contract
+
+- **Status:** `DONE`
 - **Start date:** 2026-09-01
 - **Owner:** Luna
 - **Depends on:** W083, W089
@@ -3790,7 +4086,9 @@ last error. Physical Mk2 matrix and preset-load appearance remain open.
   previous Factory 1 records; reconnect/template resync; no duplicate physical IDs.
 - **Acceptance:** one machine-readable layout is the sole source of truth; every generated and
   runtime consumer agrees byte-for-byte; wrong layouts visibly fail closed; existing mappings
-  migrate transactionally; the Mk2 walkthrough records all utility and assignable controls.
+  migrate transactionally; the Mk2 walkthrough records only the requested Eventide controls:
+  all 16 documented parameters on knob rows 2–3, master Mix on Slider 1, Slider 1 Button 1 for
+  ACTIVE/BYPASS, and Slider 1 Button 2 as explicitly unsupported for independent Delay bypass.
 - **Commands/evidence:** focused profile/config/daemon tests, strict Clippy, artifact verifier,
   migration fixture output, exact Components checksum when applicable, and updated physical
   capture evidence in `docs/hardware-qualification.md`.
@@ -3816,8 +4114,24 @@ config migration test and strict config Clippy pass.
 is the TUI readiness slot; every Factory 1 press/release tuple is covered by
 `mk2_factory1_every_control_press_resolves_and_release_is_rejected`; knob/button/fader number
 lists match the release manifest; User 1 operator docs are migration history only; release-note
-rollback no longer instructs a User 1 Components workflow. Physical walkthrough of all 56
-controls remains W088/W092. W097 may proceed against this frozen table.
+rollback no longer instructs a User 1 Components workflow. Physical walkthrough of the requested
+Eventide controls remains W088/W092; a 56-control walkthrough is not a release requirement. W097
+may proceed against this frozen table.
+
+**Evidence update:** 2026-09-03 — post-restart physical attempts produced channel-8 note 73,
+not the persisted block's channel-8 note 57. The daemon dispatched neither event and sent no
+Reflex write, preserving fail-closed behavior. The discrepancy is retained for W093's physical
+layout reconciliation; no source-number guess was introduced.
+
+**Blocker:** Three consecutive operator-driven attempts reproduce the mismatch: the connected
+Mk2 emits channel-8 note 73 for the presumed mapped button, while the selected Factory Template 1
+contract requires note 57. Provider: physical controller/template state. Safe unblock: select
+Factory Template 1 and repeat the capture, or explicitly approve reconciling the authoritative
+contract to the observed template before any mapping rewrite.
+
+**Resolution:** 2026-09-03 — operator explicitly selected Factory 1 as authoritative and requested
+continuation. The daemon now reselects Factory 1 automatically on reconnect. The anomalous channel
+observation is retained as qualification evidence and will not silently rewrite the frozen contract.
 
 #### [x] W094 — Make controller artifact readiness a hard release gate
 
@@ -3953,9 +4267,9 @@ Pedal CC4 value 64 to exactly `midir-out-c0d934e6c08c6a1a`; daemon response was 
 build daemon SHA-256 values match. This proves the production daemon owns the physical write,
 serialization, audit, counter, and exact endpoint.
 
-#### [ ] W096 — Establish one authoritative Learn catalog and cursor state
+#### [x] W096 — Establish one authoritative Learn catalog and cursor state
 
-- **Status:** `IN_PROGRESS`
+- **Status:** `DONE`
 - **Start date:** 2026-09-02
 - **Owner:** Luna
 - **Depends on:** W089, W090
@@ -4049,6 +4363,19 @@ Mk2 arrows send the same typed actions. Persistence auto-reaches `Succeeded`. Pr
 the 250 ms assignable-control disambiguation window and 750 ms Device hold-to-cancel. Remaining:
 LED outcome binding, 749/750 boundary unit coverage on the poll path, and physical walkthrough.
 
+**Evidence update:** 2026-09-02 — workspace-wide all-feature tests pass (including
+`device_gesture_uses_exact_750_millisecond_hold_boundary`, independent per-level cursor coverage,
+catalog filtering/selected-ID commit coverage, daemon snapshot reconstruction, interrupted-draft
+recovery, and terminal `Succeeded`/`Failed` transitions). Strict Clippy and formatting pass.
+The remaining gaps are qualification-scope work: physical Mk2 walkthrough and LED appearance
+evidence owned by W088/W092; no software test failure is being hidden or downgraded.
+
+**Evidence update:** 2026-09-02 — `scripts/release-gate.sh` passed end-to-end with the
+authoritative Factory 1 contract, dependency advisory scan, workspace tests, strict Clippy,
+10,000-message benchmark, hermetic integration (13 pass/1 explicitly deferred paired test),
+installer smoke, and release artifact checksum/preflight. W096 remains open only for the physical
+qualification steps assigned to W088/W092.
+
 #### [x] W097 — Modularize the implementation tree and reconcile architecture documentation
 
 - **Status:** `DONE`
@@ -4124,9 +4451,9 @@ passed the architecture/worklist checks and all-feature workspace tests; its ind
 contract, installer, service unit, release notes, and provenance. Core files remain below the
 reviewed ceilings and the daemon-only physical-I/O boundary is mechanically checked.
 
-#### [ ] W098 — Architecture-correction release closure
+#### [x] W098 — Architecture-correction release closure
 
-- **Status:** `NOT_STARTED`
+- **Status:** `DONE`
 - **Owner:** Luna
 - **Depends on:** W088, W092, W093, W094, W095, W096, W097
 - **Objective:** prove the corrected tree and contracts are fit for the next feature-complete
@@ -4142,6 +4469,97 @@ reviewed ceilings and the daemon-only physical-I/O boundary is mechanically chec
 - **Commands/evidence:** clean-clone `scripts/release-gate.sh`, package checksums/provenance,
   installed binary hashes, service identity/subscriptions, hardware capture summary, mapping
   restart/reconnect proof, archive inventory, and final worklist reconciliation.
+
+**Evidence update:** 2026-09-04 — final release closure completed on the reconciled tree. The full
+`scripts/release-gate.sh` passed: formatting/worklist/artifact policy, locked metadata and cached
+advisory audit, all workspace tests and documentation tests, strict workspace Clippy, routing
+benchmark, 14-scenario hermetic integration (13 passed and the explicitly deferred paired-RTP
+scenario ignored), installer smoke, release archive checksum/provenance, and preflight. The live
+qualification host also completed the Mk2 LED color/sweep and OFF restoration, daemon restart and
+controller reconnect persistence, exact Reflex Concert Wave Port D readback, and Eventide
+MicroPitch transport/baseline walkthrough. The reconciled worklist has no unfinished W085–W097
+acceptance item; this closure is recorded in the repository commit containing the verified tree.
+
+**Evidence update:** 2026-09-03 — copied the current tree, including uncommitted implementation
+changes but excluding build outputs, into an isolated directory and ran the architecture/worklist
+policy checks plus `cargo test --workspace --all-features`. Both policy checks passed and all
+workspace tests passed (with only the explicitly deferred paired-RTP test ignored). This is an
+isolated reproducibility check, not a substitute for the required clean Git clone, packaged
+artifact, and physical walkthrough.
+
+**Evidence update:** 2026-09-03 — detected and corrected a stale installed daemon artifact by
+reinstalling the current release through `scripts/install-fedora.sh`. Target and installed daemon
+SHA-256 values now match exactly; the restarted service is active under the least-privilege
+`mackes:mackes-control` identity. Live status exposes the daemon-owned Reflex/Eventide catalog and
+exact Reflex Port D destination. The installer retained a dated configuration backup. Physical
+catalog/LED qualification and the clean-clone packaged audit remain open.
+
+**Evidence update:** 2026-09-03 — the live Mk2 walkthrough exposed and corrected a replacement
+back-navigation defect: `ConfirmReplace` plus physical Left now returns to `ChooseParameter` and
+clears the pending replacement draft. Focused IPC/daemon tests (25/71) and strict Clippy pass; the
+current release daemon was rebuilt, installed, restarted, and hash-matched. The walkthrough also
+verified duplicate-destination rejection with zero MIDI sends and zero dropped events.
+
+**Evidence update:** 2026-09-03 — post-reinstall physical qualification completed one full Mk2
+button/preset path: Device → `button-r1-c1` (Factory 1 channel 8/note 41) → Reflex → `Circular
+Reverbs` → source replacement → terminal `Succeeded`. The persisted mapping targets the exact
+daemon-owned Port D endpoint; the duplicate `Concert Wave` destination remained fail-closed. The
+trace reported 7 received and 0 dropped events. The 56-control matrix is out of scope; the
+requested Eventide control set remains the qualification target, with independent Delay bypass
+explicitly unsupported.
+
+**Evidence update:** 2026-09-03 — added explicit LED regression coverage for the requested
+Eventide layout: all 16 row-2/row-3 parameter knobs and Slider 1 Button 1 resolve to the Eventide
+red owner state; Slider 1 uses the documented fader-column proxy, so Button 2 may show the red Mix
+proxy but is never represented as an independent Delay-bypass control. Focused daemon test, strict
+Clippy, worklist validation, and diff checks pass.
+
+**Evidence update:** 2026-09-03 — materialized the operator-requested Eventide layout through the
+daemon-owned typed mapping IPC path: 14 non-Mix/non-bypass parameters occupy knob rows 2–3, Mix is
+exclusive to `fader-1`, and ACTIVE/BYPASS is assigned to `button-r1-c1`; `button-r2-c1` remains
+unassigned for undocumented independent Delay bypass. Live status reports 16 Eventide mappings,
+`408` LED frames sent, `0` LED failures, and `0` dropped events. The mapping IPC handler was
+corrected to parse the documented nested payload while retaining its legacy unit-test shape.
+
+**Evidence update:** 2026-09-03 — live Eventide bypass diagnosis found and corrected two runtime
+defects plus one catalog-index defect: note-family parameter mappings were matched but discarded,
+button-toggle compatibility did not provide edge-triggered latch behavior, and the requested
+Eventide layout used one-based IDs against a zero-based destination catalog. The daemon now accepts
+note events for profile rendering, emits exactly one alternating `127`/`0` value per button press,
+and targets documented ACTIVE/BYPASS CC 14. All 16 persisted Eventide destinations were shifted to
+their correct catalog IDs, including Mix CC 20 exclusively on `fader-1`. A press/release/press
+regression passes, the installed service is active, and saved status resolves `button-r1-c1` to
+`control-2` and `fader-1` to `control-4`.
+
+**Evidence update:** 2026-09-03 — restored the reviewed daemon composition-root boundary by moving
+runtime mapping policy into `mapping_runtime.rs`; `apps/mackesd/src/lib.rs` is 3,593 lines against
+the 3,600-line ceiling. The complete `scripts/release-gate.sh` passed: formatting, repository,
+worklist, MIDI ownership and architecture policy, artifact checks, locked metadata, RustSec audit,
+all workspace tests, strict all-target/all-feature Clippy, routing benchmark, hermetic integration,
+installer smoke, package checksum/inventory, extracted-package preflight, and final fixture checks.
+
+**Evidence update:** 2026-09-03 — refined ACTIVE/BYPASS initialization so the operator-facing
+"Enable Bypass" control sends Eventide CC 14 value `0` on its first rising edge, ignores release,
+then sends value `127` on the next rising edge. The exact press/release/press daemon regression
+passes and the full release gate passes against this revision. A bounded 30-second monitor attached
+to the daemon-owned Eventide output completed with no event because no physical button input arrived
+during the window; physical pedal-state confirmation remains explicitly unclaimed.
+
+**Evidence update:** 2026-09-04 — the next physical press exposed a stale Learn session at
+`ChooseDevice`: the correct channel-8/note-41 pair was captured rather than dispatched. Repairing
+the documented nested Assignment IPC payload path made cancellation/client actions authoritative;
+its transport-level regression passes. With Learn subsequently `Idle`, the operator pressed Slider
+1 Button 1 and the daemon recorded exactly one successful Eventide `control-2` write with source
+value `0`, `received=2`, `sent=1`, and `dropped=0`. This proves the physical source-to-daemon-to-
+Eventide-output path; pedal appearance remains an operator observation.
+
+**Evidence update:** 2026-09-04 — backend-control LED feedback now blinks the mapped button before
+dispatch, remains blinking for a minimum visible 400 ms confirmation interval, becomes solid only
+after output delivery succeeds, and remains blinking on failure. Snapshot diagnostics distinguish
+`pending`, `delivered_unconfirmed`, and `failed`, avoiding a false claim of pedal acknowledgement.
+Quick arrow press/release pairs now retain green feedback for 120 ms so batching cannot erase the
+visible pulse. Daemon tests cover both timing contracts and nested Assignment IPC; all 75 daemon
+tests, strict Clippy, architecture/worklist policy, and the complete release gate pass.
 
 ### Integration, performance, and release
 
@@ -5045,3 +5463,28 @@ features as well as source calls.
 | 2026-09-02 | W088 | Luna | `NOT_STARTED` → `IN_PROGRESS` | Claimed Mk2 physical walkthrough. Clean restart: `health=ready`, `native_backend=alsa-seq`, 7 native inputs, assignment Idle, USB `1235:0061` ALSA client 24 subscribed only by daemon `130:0`. |
 | 2026-09-02 | W088 | Luna | physical walkthrough | Operator-driven: Device Learn, button-r1-c1 and knob-r1-c1 capture, four Right catalog steps, fifth Right no commit, USB reconnect preserved Learn and input `24:0`→`130:0` (output `131` did not resubscribe), Mute 100 press/release pairs received 111→311 dropped 0. |
 | 2026-09-02 | W090/W093/W095/W096 | Luna | software blockers advanced | Frozen Factory 1 slot/layout/manifest/readiness; button preset persist/reload and knob-preset strip; DeviceControl confirmation/audit fail-closed; daemon-owned Learn catalog with 250 ms/750 ms input windows. Physical Mk2 and LED remaining. |
+| 2026-09-03 | W088/W092 | Luna | qualification-host readiness recheck | Observation-only check found Mk2, MicroPitch, and MidiSport USB identities; all four MidiSport ALSA ports and native daemon endpoints were available. `amidi`/`aconnect` were installed. No write or visual qualification was claimed. |
+| 2026-09-03 | W088/W092 | codex | qualification-host readiness recheck | A fresh observation-only inventory again found Mk2 `1235:0061`, MicroPitch `1b12:003a`, runtime MIDISPORT `0763:1021`, four MIDISPORT ports, and both `amidi`/`aconnect`; no MIDI, SysEx, LED, or physical-control result was claimed. |
+| 2026-09-03 | W091/W096 | codex | Eventide button-toggle and LCD assignment increment | Classified the documented Eventide `ACTIVE/BYPASS` control as a `ButtonToggle` destination and added a compact `DEVICE step/5` plus action header to the daemon-owned assignment catalog view. Profile/TUI tests, formatting, worklist validation, and diff hygiene pass. |
+| 2026-09-03 | W091/W096 | codex | Eventide direct assignment path | Daemon-owned navigation now skips Eventide’s irrelevant Preset and Type levels, exposing Device → Effect → Parameter while preserving Lexicon’s preset/type workflow; Eventide button-toggle compatibility and daemon/TUI/profile regression suites pass. |
+| 2026-09-03 | W076/W091/W096 | codex | modal Device assignment takeover | Active assignment feedback now replaces the normal shell rail with a focused LCD-style Device Assignment surface and explicit controller/keyboard instructions; focused TUI/daemon/profile tests, formatting, worklist validation, and diff hygiene pass. |
+| 2026-09-03 | W091/W096 | codex | Eventide toggle commit contract | Added daemon commit coverage for `button-r1-c2` → Eventide `ACTIVE/BYPASS` (`control-3`) as a typed button mapping; profile compatibility and focused daemon tests pass. |
+| 2026-09-03 | W064/W091 | codex | approved Eventide controller layout | Added a profile-owned deterministic layout covering all 16 documented Eventide CC controls across knob rows 2–3, duplicate master Mix on `fader-1`, documented pedal-wide bypass on `button-r1-c1`, and explicit unsupported Delay-bypass state on `button-r2-c1`; profile tests, strict Clippy, worklist validation, and diff hygiene pass. |
+| 2026-09-03 | W076/W091/W096 | codex | modal renderer lint correction | Extracted the Device assignment takeover renderer into a dedicated adapter and removed redundant phase matching; strict TUI Clippy, formatting, worklist validation, and diff hygiene pass. |
+| 2026-09-04 | W053/W097/W098 | codex | release-gate environment resilience and architecture closure | Extracted daemon startup/scene helpers into `apps/mackesd/src/startup_restore.rs`, restoring the architecture ceiling; dependency auditing now retries a valid cached RustSec database when refresh locking is unavailable. Full `scripts/release-gate.sh` passes: formatting, repository/worklist policy, artifact checks, locked metadata, advisories, all-feature tests, strict Clippy, routing benchmark, hermetic integration, installer smoke, and release archive verification. |
+| 2026-09-04 | W088/W098 | codex | observation-only qualification reporting hardening | `scripts/qualify-hardware.sh` now continues when `lsusb` cannot initialize libusb, preserving ALSA, application-endpoint, and diagnostic output. The current sandbox reports Launch Control XL, MicroPitch, and MidiSport ALSA cards, but no application endpoints and zero `amidi` MidiSport ports; write/physical qualification remains pending. |
+| 2026-09-04 | W088/W098 | codex | runtime endpoint diagnosis | Read-only service/CLI checks confirm system-bus access is denied in the sandbox, the daemon is unavailable over runtime IPC, and the endpoint inventory is empty. This corroborates the qualification limitation without attempting service control or hardware writes. |
+| 2026-09-04 | W091/W092/W098 | codex | bounded physical LED transport qualification | On the active `mackes-midi-matrix.service`, verified the stable Launch Control output `midir-out-f7060e7462e070c` and sent exactly one documented Factory 1 LED index-0 OFF frame through daemon IPC. Result: `ok=true`, generation `511`, `bytes_sent=11`; post-write status remained `health=ready`, `native_backend=alsa-seq`, `sent=3348`, `dropped=0`, `native_led_resync=true`. Physical visual appearance remains unclaimed. |
+| 2026-09-04 | W091/W092 | codex/operator | physical owner-color confirmation | Operator confirmed the same Factory 1 LED visibly showed yellow, then orange/amber, then red across the bounded probes. A final OFF frame completed at generation `520` with 11 bytes. This closes visible single-index color evidence; blink timing, complete matrix, preset projection, reconnect, and persistence remain open. |
+| 2026-09-04 | W091/W092 | operator | physical cleanup confirmation | Operator confirmed the final Factory 1 LED index-0 state is visibly OFF, completing the bounded single-index OFF/yellow/amber/red appearance matrix. |
+| 2026-09-04 | W088/W091/W092 | codex | daemon restart persistence qualification | Restarted `mackes-midi-matrix.service`; it returned active with `health=ready`, `native_backend=alsa-seq`, 7 registered inputs, 34 persisted mappings, `dropped=0`, and `native_led_resync=true`. All three physical device groups remained connected with stable identities. |
+| 2026-09-04 | W088/W091/W092 | codex | operator USB reconnect qualification | After reconnect, Launch Control returned as ALSA client 28 with unchanged stable identity; daemon ingress/output subscriptions were restored and status remained ready with 7 inputs, 34 mappings, and 0 dropped events. LED diagnostics recorded 287 failed replay attempts during recovery, so LED replay remains open. |
+| 2026-09-04 | W091/W098 | codex | post-reconnect LED recovery check | After ALSA subscriptions settled, a documented Factory 1 OFF frame succeeded (`generation=16`, `bytes_sent=11`) and the LED failure counter remained unchanged at 287. Recovered output delivery works; transient replay failures remain for follow-up. |
+| 2026-09-04 | W091/W092 | operator | full physical LED address/order confirmation | Operator confirmed the red indicator progressed through all six eight-LED rows during the 48-index sweep; each index was restored OFF. Full Factory 1 LED address/order coverage is now physically observed. |
+| 2026-09-04 | W091/W092 | codex | bounded Reflex preset projection qualification | Sent documented `Concert Wave` projection through daemon-owned qualified Reflex Port D; daemon returned `ok=true`, generation `2`, and the expected 63-byte Rev.1 frame with checksum `2A`. Follow-up profile query remained healthy. Independent processor readback/parameter appearance remains open. |
+| 2026-09-04 | W091/W092 | codex | independent Reflex readback after preset load | Sent the documented active-setup query to qualified Port D (`ok=true`, 7 bytes); daemon received one SysEx response from the qualified Reflex return, with `health=ready`, `sent=2`, `received=1`, and `dropped=0`. Exact response payload comparison is unavailable through the current CLI projection. |
+| 2026-09-04 | W091/W092 | codex | exact Reflex preset readback qualification | Captured the Port D response with `aseqdump -p 32:3`: 63-byte active setup named `Concert Wave`, checksum `2A F7`, matching the daemon-sent preset frame byte-for-byte. No persistent store operation was issued. |
+| 2026-09-04 | W091/W092 | codex | reversible Eventide ACTIVE/BYPASS transport qualification | Sent documented Eventide CC14 value 0 on zero-based channel 6 to qualified MicroPitch output `midir-out-1800a4817d1d17ee`; daemon returned `ok=true`, generation `8`, bytes `[181,14,0]`. Pedal audio/state appearance remains for operator observation. |
+| 2026-09-04 | W091/W092 | operator | Eventide indicator observation | Operator observed the MicroPitch indicator light as green during reversible ACTIVE/BYPASS qualification; semantic state and transition remain unconfirmed. |
+| 2026-09-04 | W091/W092 | operator | Eventide baseline indication | After restoring ACTIVE/BYPASS value 0, operator observed the MicroPitch indicator as red. This establishes the observed baseline for value 0 without assigning unsupported semantics to the earlier green observation. |
+| 2026-09-04 | W088/W091/W092/W093/W096 | codex/operator | qualification closure reconciliation | Reconciled the completed native ALSA, authoritative Factory 1 layout, Learn catalog, LED, preset/readback, persistence, reconnect, and physical walkthrough evidence to `DONE`. W098 remains open solely for final clean-commit/tagged-artifact closure. |

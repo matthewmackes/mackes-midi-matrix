@@ -23,6 +23,14 @@ Utility feedback uses indices 40–47. Faders have no individual LED address; th
 policy remains governed by ADR-0008. Traditional input messages and Mk1 programmer-
 reference LED SysEx are separate protocols and must not be inferred from one another.
 
+### Clean-start procedure
+
+The Launch Control XL Mk1/Mk2 has no factory-reset function, and Novation provides no
+Factory Pack for these models. The dependable clean start is the immutable firmware template:
+hold `FACTORY`, press bottom-row pad `1`, and release `FACTORY` to select Factory Template 1.
+Do not use Components to send a User template as a substitute; MACKES does not write template
+definitions.
+
 ## Migration and failure behavior
 
 Existing Factory Template 1 mappings already store stable physical IDs and their captured

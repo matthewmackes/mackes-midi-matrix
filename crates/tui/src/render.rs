@@ -39,6 +39,14 @@ pub fn draw_task_shell_with_content(
     dashboard: &DashboardState,
     content: Option<&str>,
 ) {
+    // An active Device assignment is deliberately modal: the operator should
+    // never have to hunt through the task rail while the controller is waiting
+    // for a physical gesture. The daemon-projected feedback already contains
+    // the authoritative catalog; this view only presents it.
+    if !dashboard.assignment_feedback.is_empty() {
+        draw_assignment_takeover(frame, area, dashboard);
+        return;
+    }
     let vertical = Layout::default()
         .direction(Direction::Vertical)
         .constraints([Constraint::Length(2), Constraint::Min(3), Constraint::Length(1)])
@@ -133,6 +141,26 @@ pub fn draw_task_shell_with_content(
             popup,
         );
     }
+}
+
+fn draw_assignment_takeover(frame: &mut Frame<'_>, area: Rect, dashboard: &DashboardState) {
+    let mut lines = dashboard.assignment_feedback.clone();
+    lines.extend([
+        String::new(),
+        "↑↓ SELECT   ENTER NEXT   ← BACK   ESC CANCEL".into(),
+        "MOVE ONE CONTROL AT A TIME".into(),
+    ]);
+    let width = usize::from(area.width.saturating_sub(2));
+    let text = lines
+        .into_iter()
+        .map(|line| line.chars().take(width).collect::<String>())
+        .collect::<Vec<_>>()
+        .join("\n");
+    frame.render_widget(
+        Paragraph::new(text)
+            .block(Block::default().title("DEVICE ASSIGNMENT").borders(Borders::ALL)),
+        area,
+    );
 }
 
 pub(crate) const fn section_help(section: AppSection) -> &'static str {

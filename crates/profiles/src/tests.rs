@@ -188,6 +188,28 @@ fn eventide_micropitch_profile_includes_documented_controls() {
 }
 
 #[test]
+fn eventide_active_bypass_accepts_button_toggle_sources() {
+    let profile = eventide_micropitch_profile();
+    let choices = compatible_parameters(&profile, SourceRole::ButtonToggle, true);
+    let active = choices.iter().find(|choice| choice.parameter.label == "ACTIVE/BYPASS");
+    assert_eq!(active.map(|choice| choice.reason), Some(SupportReason::Compatible));
+}
+
+#[test]
+fn approved_eventide_controller_layout_covers_knobs_mix_and_safe_bypass() {
+    let assignments = eventide_controller_assignments();
+    assert_eq!(assignments.len(), 19);
+    assert_eq!(assignments[0].physical_control_id, "knob-r2-c1");
+    assert_eq!(assignments[7].physical_control_id, "knob-r2-c8");
+    assert_eq!(assignments[8].physical_control_id, "knob-r3-c1");
+    assert_eq!(assignments[15].physical_control_id, "knob-r3-c8");
+    assert_eq!(assignments[16].parameter_id.as_deref(), Some("control-4"));
+    assert_eq!(assignments[17].parameter_id.as_deref(), Some("control-2"));
+    assert!(assignments[18].parameter_id.is_none());
+    assert!(assignments[18].unsupported_reason.is_some());
+}
+
+#[test]
 fn destination_catalog_derives_exact_labels_categories_and_ranges() {
     let profile = eventide_micropitch_profile();
     let parameters = destination_parameters(&profile);
@@ -887,6 +909,15 @@ fn pcm70_catalog_translates_to_valid_named_reflex_setups_and_sysex() {
         .expect("controller projection");
     assert_eq!(controller_values.len(), projected.len());
     assert!(controller_values.iter().all(|(_, value)| *value <= 127));
+}
+
+#[test]
+fn pcm70_translation_values_are_on_reflex_wire_steps() {
+    let setup = lexicon_reflex::translate_pcm70("concert-wave").expect("translation");
+    assert_eq!(
+        (0..10).map(|number| setup.parameter(number).unwrap()).collect::<Vec<_>>(),
+        vec![0xB400, 0x9400, 0xB640, 0x8800, 0xBC00, 0xBF00, 0x8880, 0xB640, 0xA600, 0xB000]
+    );
 }
 
 #[test]

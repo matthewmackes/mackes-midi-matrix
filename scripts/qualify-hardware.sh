@@ -11,7 +11,9 @@ printf 'host=%s\n' "$(hostname)"
 printf 'kernel=%s\n' "$(uname -sr)"
 printf '\n[usb]\n'
 if command -v lsusb >/dev/null 2>&1; then
-  lsusb
+  if ! lsusb; then
+    printf 'lsusb unavailable (libusb inspection failed)\n'
+  fi
 else
   printf 'lsusb unavailable\n'
 fi

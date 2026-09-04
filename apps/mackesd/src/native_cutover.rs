@@ -187,7 +187,7 @@ fn native_routes_continue_and_unrelated_input_fails_closed() {
     assert_eq!(unmatched, 0);
     assert_eq!(daemon.assignment_session.phase, mackes_ipc::AssignmentPhase::Idle);
     daemon.deferred_inputs.push_back(event(MidiMessage::NoteOn {
-        channel: MidiChannel::new(1).expect("ch"),
+        channel: MidiChannel::new(2).expect("ch"),
         note: SevenBit::new(105).expect("note"),
         velocity: SevenBit::new(127).expect("velocity"),
     }));

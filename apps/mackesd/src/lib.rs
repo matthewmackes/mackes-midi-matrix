@@ -1,6 +1,6 @@
 //! Persistent daemon lifecycle and local command boundary.
 
-use mackes_config::{load, ConfigDocument, ConfigError};
+use mackes_config::ConfigError;
 use mackes_ipc::{authorize, AccessPolicy, Authorization, Command, LocalServer};
 use std::{
     collections::VecDeque,
@@ -10,6 +10,8 @@ use std::{
     sync::mpsc::{self, Receiver, Sender},
     time::{Duration, Instant},
 };
+
+mod mapping_runtime;
 
 /// Daemon health state.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -29,14 +31,6 @@ pub enum Health {
 pub fn structured_log_line(level: &str, event: &str, detail: &str) -> String {
     let bounded_detail: String = detail.chars().take(512).collect();
     serde_json::json!({"level": level, "event": event, "detail": bounded_detail}).to_string() + "\n"
-}
-
-const fn health_after_authorized_command(current: Health, command: Option<Command>) -> Health {
-    if matches!(command, Some(Command::Health)) {
-        current
-    } else {
-        Health::Ready
-    }
 }
 
 impl Health {
@@ -226,8 +220,10 @@ pub struct Daemon {
     scene_ids: Vec<String>,
     catalog: serde_json::Value,
     physical_devices: serde_json::Value,
+    profile_bindings: Vec<(String, String)>,
     config_path: Option<std::path::PathBuf>,
     mapping_store: mackes_config::ControlMappingStore,
+    button_toggle_state: std::collections::HashMap<String, (bool, bool)>,
     assignment_generation: u64,
     assignment_session: mackes_ipc::AssignmentSession,
     led: led_surface::LedSurface,
@@ -559,8 +555,10 @@ impl Daemon {
             scene_ids: Vec::new(),
             catalog: serde_json::json!({"projects": [], "setlists": []}),
             physical_devices: serde_json::json!([]),
+            profile_bindings: Vec::new(),
             config_path: None,
             mapping_store: mackes_config::ControlMappingStore::default(),
+            button_toggle_state: std::collections::HashMap::new(),
             assignment_generation: 0,
             assignment_session: mackes_ipc::AssignmentSession::new("live"),
             led: led_surface::LedSurface::default(),
@@ -848,24 +846,22 @@ impl Daemon {
         let output = mackes_midi_engine::MidirOutputAdapter::open_id(endpoint_id)?;
         self.register_output(Box::new(output)).map_err(str::to_owned)
     }
-
     /// Removes a previously registered output by stable identity.
     pub fn unregister_output(&mut self, id: &str) -> bool {
         self.outputs.remove(id)
     }
-
     /// Rebuilds controller LEDs from persisted mappings onto the unique Mk2 MIDI output.
     pub fn replay_controller_leds(&mut self) {
+        let now_ms = u64::try_from(self.safety_clock.elapsed().as_millis()).unwrap_or(u64::MAX);
+        self.led.start_reconnect_show(now_ms);
         self.led.request_full_resync();
         self.flush_controller_leds();
     }
-
     /// Advances the LED scheduler on the daemon monotonic clock and emits due frames.
     pub fn flush_controller_leds(&mut self) {
         let now_ms = u64::try_from(self.safety_clock.elapsed().as_millis()).unwrap_or(u64::MAX);
         self.flush_controller_leds_at(now_ms);
     }
-
     fn drop_launch_control_midi_outputs(&mut self) {
         let ids: Vec<String> = self
             .outputs
@@ -883,7 +879,6 @@ impl Daemon {
             self.outputs.remove(&id);
         }
     }
-
     fn reopen_launch_control_midi_output(&mut self) -> Result<(), String> {
         self.drop_launch_control_midi_outputs();
         let ports = mackes_midi_engine::enumerate_midir_ports()?;
@@ -966,6 +961,23 @@ impl Daemon {
         }
         if request.action == mackes_ipc::AssignmentAction::Enter {
             assignment_catalog::lock_active_selection(&mut self.assignment_session);
+            // Eventide exposes direct effect parameters; its profile has no
+            // preset/type selection in the controller assignment workflow.
+            // Keep this transition daemon-owned so keyboard and controller
+            // navigation produce the same authoritative trace.
+            if self.assignment_session.catalog.selected_device.as_deref()
+                == Some("eventide.micropitch")
+            {
+                match self.assignment_session.phase {
+                    mackes_ipc::AssignmentPhase::ChooseDevice => {
+                        self.assignment_session.phase = mackes_ipc::AssignmentPhase::ChoosePreset;
+                    }
+                    mackes_ipc::AssignmentPhase::ChooseEffect => {
+                        self.assignment_session.phase = mackes_ipc::AssignmentPhase::ChooseType;
+                    }
+                    _ => {}
+                }
+            }
             if assignment_catalog::continuous_preset_forbidden(&self.assignment_session) {
                 reason = Some("preset destinations require a channel button".into());
             } else if assignment_catalog::button_preset_ready(&self.assignment_session)
@@ -1142,6 +1154,9 @@ impl Daemon {
             }
             applied = self.assignment_session.apply(request.action);
             if applied {
+                if request.action == mackes_ipc::AssignmentAction::Back {
+                    self.assignment_pending_mapping = None;
+                }
                 if request.action == mackes_ipc::AssignmentAction::Interrupt {
                     if let (Some(path), Some(control)) =
                         (self.config_path.as_deref(), self.assignment_control_id.as_deref())
@@ -1234,27 +1249,6 @@ impl Daemon {
         }
     }
 
-    /// Returns the authoritative assignment LED state at a fake-clock instant.
-    #[must_use]
-    pub const fn assignment_led_state_at(&self, elapsed_ms: u64) -> mackes_profiles::LedState {
-        self.led.scheduler.state_at(elapsed_ms)
-    }
-
-    /// Returns the validated Mk1 `SysEx` frame for the current assignment LED state.
-    #[must_use]
-    pub fn assignment_led_frame_at(
-        &self,
-        template: u8,
-        index: u8,
-        elapsed_ms: u64,
-    ) -> Option<Vec<u8>> {
-        mackes_profiles::encode_launch_control_feedback(
-            template,
-            index,
-            self.assignment_led_state_at(elapsed_ms),
-        )
-    }
-
     fn project_reflex_preset_to_controller(&mut self, preset_id: &str) {
         let Ok(values) =
             mackes_profiles::lexicon_reflex::pcm70_translation_controller_values(preset_id)
@@ -1311,41 +1305,13 @@ impl Daemon {
         self.flush_controller_leds();
     }
 
-    fn experimental_mapping(mapping: &mackes_config::ControlMapping) -> bool {
-        mackes_profiles::builtin_profile(&mapping.destination_profile).is_some_and(|profile| {
-            mackes_profiles::destination_parameters(&profile)
-                .into_iter()
-                .find(|parameter| parameter.id == mapping.destination_parameter)
-                .and_then(|parameter| parameter.evidence)
-                == Some(mackes_profiles::EvidenceLevel::Experimental)
-        })
-    }
-
-    /// Resolves a profile-owned destination to its unique currently registered output.
-    ///
-    /// Early assignment records stored the profile ID before a concrete MIDI output was
-    /// available. Keep those durable records operational when their named hardware is
-    /// present, while refusing ambiguous or unrelated outputs.
+    /// Resolves a profile-owned destination to one unique registered output.
     fn output_endpoint_for_profile(&self, profile_id: &str) -> Option<mackes_domain::EndpointId> {
-        let needles: &[&str] = match profile_id {
-            "eventide.micropitch" => &["eventide", "micropitch"],
-            "lexicon.reflex" => &["lexicon", "reflex"],
-            _ => return None,
-        };
-        let matches = self
-            .outputs
-            .output_infos()
-            .into_iter()
-            .filter(|output| {
-                let name = output.name.to_ascii_lowercase();
-                needles.iter().any(|needle| name.contains(needle))
-            })
-            .filter_map(|output| mackes_midi_engine::numeric_endpoint_id(&output.id))
-            .collect::<Vec<_>>();
-        (matches.len() == 1).then(|| matches[0])
+        profile_bindings::output_endpoint(&self.outputs, &self.profile_bindings, profile_id)
     }
 
     /// Dispatches one event through the daemon-owned output registry.
+    /// Returns bounded aggregate MIDI activity counters.
     #[must_use]
     #[allow(clippy::too_many_lines)]
     pub fn dispatch_registered(&mut self, event: &mackes_domain::MidiEvent) -> (usize, usize) {
@@ -1365,7 +1331,7 @@ impl Daemon {
             let now =
                 u64::try_from(self.safety_clock.elapsed().as_nanos().min(u128::from(u64::MAX)))
                     .unwrap_or(u64::MAX);
-            if Self::experimental_mapping(&mapping) && !self.safety.unsafe_armed(now) {
+            if mapping_runtime::is_experimental(&mapping) && !self.safety.unsafe_armed(now) {
                 self.last_mapping_activity = Some(serde_json::json!({
                     "mapping_id": mapping.id,
                     "destination": mapping.destination_parameter,
@@ -1420,14 +1386,23 @@ impl Daemon {
                     _ => mackes_midi_engine::Curve::Linear,
                 },
             };
-            if let Some((mut mapped, value)) = parameter.evaluate_with_value(event) {
+            if let Some((mut mapped, input_value)) = parameter.evaluate_with_value(event) {
+                let Some(value) = mapping_runtime::destination_value(
+                    &mut self.button_toggle_state,
+                    &mapping,
+                    input_value,
+                ) else {
+                    continue;
+                };
                 let Some(profile) = mackes_profiles::builtin_profile(&mapping.destination_profile)
                 else {
                     continue;
                 };
+                let channel =
+                    mapping.destination_channel.map_or(1, |channel| channel.saturating_add(1));
                 let Ok(bytes) = profile.render_parameter_message(
                     &mapping.destination_parameter,
-                    mapping.source_channel.saturating_add(1),
+                    channel,
                     value,
                 ) else {
                     continue;
@@ -1436,7 +1411,22 @@ impl Daemon {
                     continue;
                 };
                 mapped.message = message;
-                if self.outputs.send_to_endpoint(destination_endpoint, mapped).is_ok() {
+                let confirms = mapping_runtime::needs_confirmation(&mapping);
+                if confirms {
+                    let now_ms =
+                        u64::try_from(self.safety_clock.elapsed().as_millis()).unwrap_or(u64::MAX);
+                    self.led.begin_backend_confirmation(
+                        &mapping.physical_control_id,
+                        value >= 64,
+                        now_ms,
+                    );
+                    self.flush_controller_leds_at(now_ms);
+                }
+                let delivered = self.outputs.send_to_endpoint(destination_endpoint, mapped).is_ok();
+                if confirms {
+                    self.led.finish_backend_confirmation(delivered);
+                }
+                if delivered {
                     if let Some(preset_id) =
                         mapping.destination_parameter.strip_prefix("pcm70_reflex:")
                     {
@@ -1447,7 +1437,9 @@ impl Daemon {
                         "mapping_id": mapping.id,
                         "destination": mapping.destination_parameter,
                         "outcome": "sent",
-                        "source_value": value
+                        "source_value": value,
+                        "wire_bytes": bytes,
+                        "destination_channel": channel
                     }));
                 } else {
                     unmatched += 1;
@@ -1456,7 +1448,9 @@ impl Daemon {
                         "destination": mapping.destination_parameter,
                         "outcome": "blocked",
                         "reason": "destination_disconnected",
-                        "source_value": value
+                        "source_value": value,
+                        "wire_bytes": bytes,
+                        "destination_channel": channel
                     }));
                 }
             }
@@ -1478,12 +1472,8 @@ impl Daemon {
         (sent, unmatched)
     }
 
-    /// Applies one daemon-owned `DeviceControl` request without a client-side MIDI open.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error when confirmation is missing, fields are incomplete, the profile cannot
-    /// render the control, or the destination output is not registered.
+    /// Applies a confirmed daemon-owned device control to a registered output.
+    #[allow(clippy::missing_errors_doc)]
     pub fn apply_device_control(&mut self, request: &serde_json::Value) -> Result<Vec<u8>, String> {
         if request.get("confirm").and_then(serde_json::Value::as_bool) != Some(true) {
             return Err("device control requires confirmation".into());
@@ -1496,6 +1486,16 @@ impl Daemon {
             .get("control")
             .and_then(serde_json::Value::as_str)
             .ok_or_else(|| "device control fields are required".to_owned())?;
+        let destination = request
+            .get("destination")
+            .and_then(serde_json::Value::as_str)
+            .ok_or_else(|| "device control fields are required".to_owned())?;
+        if profile_id == "lexicon.reflex" && control == "system-reset" {
+            let payload = vec![0xFF];
+            self.outputs.send_direct(destination, &payload)?;
+            self.record_physical_send(destination, "device-control:lexicon.reflex:system-reset");
+            return Ok(payload);
+        }
         let channel = request
             .get("channel")
             .and_then(serde_json::Value::as_u64)
@@ -1506,10 +1506,6 @@ impl Daemon {
             .and_then(serde_json::Value::as_u64)
             .and_then(|number| u16::try_from(number).ok())
             .ok_or_else(|| "device control fields are required".to_owned())?;
-        let destination = request
-            .get("destination")
-            .and_then(serde_json::Value::as_str)
-            .ok_or_else(|| "device control fields are required".to_owned())?;
         let profile =
             mackes_profiles::builtin_profile(profile_id).ok_or("unknown device profile")?;
         let payload = profile
@@ -1517,6 +1513,25 @@ impl Daemon {
             .map_err(|_| "invalid device control".to_owned())?;
         self.outputs.send_direct(destination, &payload)?;
         self.record_physical_send(destination, format!("device-control:{profile_id}:{control}"));
+        if profile_id == "eventide.micropitch" && control.eq_ignore_ascii_case("ACTIVE/BYPASS") {
+            let active = control_value >= 64;
+            let mapped: Vec<(String, String)> = self
+                .mapping_store
+                .active
+                .iter()
+                .filter(|mapping| {
+                    mapping.destination_profile == profile_id
+                        && mapping.destination_parameter == "control-2"
+                })
+                .map(|mapping| (mapping.id.clone(), mapping.physical_control_id.clone()))
+                .collect();
+            let now_ms = u64::try_from(self.safety_clock.elapsed().as_millis()).unwrap_or(u64::MAX);
+            for (mapping_id, control_id) in mapped {
+                self.button_toggle_state.insert(mapping_id, (false, active));
+                self.led.begin_backend_confirmation(&control_id, active, now_ms);
+                self.led.finish_backend_confirmation(true);
+            }
+        }
         Ok(payload)
     }
 
@@ -1734,6 +1749,26 @@ impl Daemon {
         let mut sent = 0;
         let mut unmatched = 0;
         for event in events.into_iter().take(limit.min(128)) {
+            if Self::launch_control_factory1_layout_id(&event).is_some() {
+                let now_ms =
+                    u64::try_from(self.safety_clock.elapsed().as_millis()).unwrap_or(u64::MAX);
+                self.led.record_touch(now_ms);
+            }
+            if let Some(control_id) = Self::launch_control_factory1_layout_id(&event) {
+                let now_ms =
+                    u64::try_from(self.safety_clock.elapsed().as_millis()).unwrap_or(u64::MAX);
+                let pressed = match event.message {
+                    mackes_domain::MidiMessage::ControlChange { value, .. } => value.as_u8() != 0,
+                    mackes_domain::MidiMessage::NoteOn { velocity, .. } => velocity.as_u8() != 0,
+                    _ => false,
+                };
+                self.led.record_arrow(&control_id, pressed, now_ms);
+                if control_id.starts_with("knob-")
+                    && matches!(event.message, mackes_domain::MidiMessage::ControlChange { .. })
+                {
+                    self.led.record_knob_activity(&control_id, now_ms);
+                }
+            }
             if let Some(control_id) = Self::launch_control_factory1_control_id(&event) {
                 if control_id == "utility-1" {
                     self.assignment_device_down_at = Some(Instant::now());
@@ -1840,6 +1875,12 @@ impl Daemon {
                         "up" => mackes_ipc::AssignmentAction::Up,
                         "down" => mackes_ipc::AssignmentAction::Down,
                         "left" => mackes_ipc::AssignmentAction::Back,
+                        "right"
+                            if self.assignment_session.phase
+                                == mackes_ipc::AssignmentPhase::ConfirmReplace =>
+                        {
+                            mackes_ipc::AssignmentAction::ConfirmReplace
+                        }
                         _ => mackes_ipc::AssignmentAction::Enter,
                     };
                     let _ = self.apply_assignment_request(mackes_ipc::AssignmentRequest {
@@ -2412,6 +2453,7 @@ impl Daemon {
             "last_activity": self.last_activity,
             "last_mapping_activity": self.last_mapping_activity,
             "control_mappings": self.mapping_store.active,
+            "mapping_registry": self.resolved_mapping_registry(),
             "activation_result": self.activation_result.as_deref(),
             "assignment_session": self.assignment_session,
             "catalog": self.catalog,
@@ -2501,6 +2543,7 @@ impl Daemon {
             "last_activity": self.last_activity,
             "last_mapping_activity": self.last_mapping_activity,
             "control_mappings": self.mapping_store.active,
+            "mapping_registry": self.resolved_mapping_registry(),
             "activation_result": self.activation_result.as_deref(),
             "assignment_session": self.assignment_session,
             "last_sequence": self.state_sequence,
@@ -2522,6 +2565,8 @@ impl Daemon {
                 "target_id": self.led.diagnostics().target_id,
                 "template": self.led.diagnostics().template,
                 "pending_deadline_ms": self.led.diagnostics().pending_deadline_ms,
+                "backend_confirmation": self.led.diagnostics().backend_confirmation,
+                "backend_state": self.led.diagnostics().backend_state,
             },
             "health": match self.health {
                 Health::Starting => "starting",
@@ -2532,6 +2577,59 @@ impl Daemon {
         })
         .to_string()
             + "\n"
+    }
+
+    /// Returns the single resolved reference model consumed by status, TUI, and diagnostics.
+    fn resolved_mapping_registry(&self) -> Vec<serde_json::Value> {
+        let physical = mackes_profiles::launch_control_physical_catalog();
+        self.mapping_store
+            .active
+            .iter()
+            .map(|mapping| {
+                let control = physical
+                    .iter()
+                    .find(|item| item.id.as_str() == mapping.physical_control_id);
+                let parameter = mackes_profiles::builtin_profile(&mapping.destination_profile)
+                    .and_then(|profile| {
+                        mackes_profiles::destination_parameters(&profile)
+                            .into_iter()
+                            .find(|item| item.id == mapping.destination_parameter)
+                    });
+                let channel = mapping.destination_channel.map_or(1, |value| value + 1);
+                let wire_example = mackes_profiles::builtin_profile(&mapping.destination_profile)
+                    .and_then(|profile| {
+                        profile
+                            .render_parameter_message(&mapping.destination_parameter, channel, 127)
+                            .ok()
+                    });
+                let algorithm_labels = mapping
+                    .destination_parameter
+                    .strip_prefix("reflex.parameter-")
+                    .and_then(|value| value.parse::<u8>().ok())
+                    .map(|number| {
+                        mackes_profiles::lexicon_reflex::algorithms()
+                            .iter()
+                            .filter_map(|algorithm| {
+                                mackes_profiles::lexicon_reflex::parameters(algorithm.number)
+                                    .iter()
+                                    .find(|parameter| parameter.number == number)
+                                    .map(|parameter| {
+                                        format!("{}: {}", algorithm.name, parameter.mrc_name)
+                                    })
+                            })
+                            .collect::<Vec<_>>()
+                    });
+                serde_json::json!({
+                    "id": mapping.id,
+                    "enabled": mapping.enabled,
+                    "physical_control": mapping.physical_control_id,
+                    "physical_role": control.map(|item| format!("{:?}", item.role)),
+                    "input": {"endpoint": mapping.source_endpoint, "kind": mapping.source_kind, "channel": mapping.source_channel + 1, "number": mapping.source_number},
+                    "device": {"profile": mapping.destination_profile, "parameter": mapping.destination_parameter, "label": parameter.map(|item| item.label), "algorithm_labels": algorithm_labels, "channel": channel, "endpoint": mapping.destination_endpoint, "wire_example": wire_example},
+                    "led": if mapping.source_kind == "note" { "state: green active / red bypass" } else if control.is_some_and(|item| format!("{:?}", item.role) == "Knob") { "blink green while moving" } else { "normal assigned state" }
+                })
+            })
+            .collect()
     }
 
     fn subscribe_response(&self, request: &[u8]) -> String {
@@ -2616,7 +2714,7 @@ impl Daemon {
         let response = if command
             .is_some_and(|command| authorize(command, actor) == Authorization::Allowed)
         {
-            self.health = health_after_authorized_command(self.health, command);
+            self.health = mapping_runtime::health_after_authorized_command(self.health, command);
             self.generation = self.generation.saturating_add(1);
             if command == Some(Command::Configuration) {
                 let value = serde_json::from_slice::<serde_json::Value>(&request_payload)
@@ -3068,8 +3166,8 @@ impl Daemon {
                 };
             }
             if command == Some(Command::Sysex) {
-                let value =
-                    serde_json::from_slice::<serde_json::Value>(&request).unwrap_or_default();
+                let value = serde_json::from_slice::<serde_json::Value>(&request_payload)
+                    .unwrap_or_default();
                 if value.get("confirm").and_then(serde_json::Value::as_bool) != Some(true) {
                     return stream
                         .write_all(b"{\"ok\":false,\"error\":\"SysEx requires confirmation\"}\n");
@@ -3129,16 +3227,16 @@ impl Daemon {
                 Some(Command::Subscribe) => self.subscribe_response(&request),
                 Some(Command::Scenes) => self.scenes_response(),
                 Some(Command::Assignment) => {
-                    let parsed = serde_json::from_slice::<serde_json::Value>(&request)
-                        .ok()
-                        .and_then(|mut value| {
-                            value.as_object_mut()?.remove("command");
-                            Some(value)
-                        })
-                        .and_then(|value| {
-                            serde_json::from_value::<mackes_ipc::AssignmentRequest>(value).ok()
-                        })
-                        .and_then(|request| request.validate().ok());
+                    let parsed =
+                        serde_json::from_slice::<mackes_ipc::AssignmentRequest>(&request_payload)
+                            .ok()
+                            .or_else(|| {
+                                let mut value =
+                                    serde_json::from_slice::<serde_json::Value>(&request).ok()?;
+                                value.as_object_mut()?.remove("command");
+                                serde_json::from_value(value).ok()
+                            })
+                            .and_then(|request| request.validate().ok());
                     let result = match parsed {
                         None => mackes_ipc::AssignmentResult {
                             generation: self.assignment_generation,
@@ -3157,16 +3255,16 @@ impl Daemon {
                     )
                 }
                 Some(Command::Mappings) => {
-                    let parsed = serde_json::from_slice::<serde_json::Value>(&request)
-                        .ok()
-                        .and_then(|mut value| {
-                            value.as_object_mut()?.remove("command");
-                            Some(value)
-                        })
-                        .and_then(|value| {
-                            serde_json::from_value::<mackes_ipc::MappingRequest>(value).ok()
-                        })
-                        .and_then(|mapping| mapping.validate().ok());
+                    let parsed =
+                        serde_json::from_slice::<mackes_ipc::MappingRequest>(&request_payload)
+                            .ok()
+                            .or_else(|| {
+                                let mut value =
+                                    serde_json::from_slice::<serde_json::Value>(&request).ok()?;
+                                value.as_object_mut()?.remove("command");
+                                serde_json::from_value(value).ok()
+                            })
+                            .and_then(|mapping| mapping.validate().ok());
                     let mut outcome = mackes_ipc::MappingOutcome::Invalid;
                     if let Some(mapping) = parsed {
                         if matches!(mapping.operation, mackes_ipc::MappingOperation::Snapshot) {
@@ -3391,6 +3489,24 @@ impl Daemon {
         self.physical_devices = serde_json::Value::Array(merged);
     }
 
+    /// Installs validated profile-to-output bindings from persistent configuration.
+    ///
+    /// # Errors
+    /// Returns an error for an unknown profile, unavailable endpoint, or duplicate profile.
+    pub fn set_profile_bindings(&mut self, bindings: Vec<(String, String)>) -> Result<(), String> {
+        for (index, (profile, endpoint)) in bindings.iter().enumerate() {
+            if mackes_profiles::builtin_profile(profile).is_none()
+                || !self.outputs.output_infos().iter().any(|output| output.id == *endpoint)
+                || bindings[..index].iter().any(|(prior, _)| prior == profile)
+            {
+                return Err("profile output binding is invalid, unavailable, or duplicated".into());
+            }
+        }
+        self.profile_bindings = bindings;
+        self.sync_assignment_catalog();
+        Ok(())
+    }
+
     /// Sets the daemon-owned configuration path for authorized persistence.
     pub fn set_config_path(&mut self, path: impl Into<std::path::PathBuf>) {
         let path = path.into();
@@ -3429,49 +3545,18 @@ impl Daemon {
         }
     }
 
-    fn assignment_profile_ids(&self) -> Vec<String> {
-        let mut ids = Vec::new();
-        if let Some(devices) = self.physical_devices.as_array() {
-            for device in devices {
-                let name = device
-                    .get("name")
-                    .and_then(serde_json::Value::as_str)
-                    .unwrap_or_default()
-                    .to_ascii_lowercase();
-                if name.contains("reflex") {
-                    ids.push("lexicon.reflex".into());
-                }
-                if name.contains("eventide") || name.contains("micropitch") {
-                    ids.push("eventide.micropitch".into());
-                }
-            }
-        }
-        if ids.is_empty() {
-            ids.extend(["lexicon.reflex".into(), "eventide.micropitch".into()]);
-        }
-        let mut unique = Vec::new();
-        for id in ids {
-            if !unique.contains(&id) {
-                unique.push(id);
-            }
-        }
-        unique
-    }
-
     fn sync_assignment_catalog(&mut self) {
-        let profiles = self.assignment_profile_ids();
+        let profiles =
+            profile_bindings::catalog_ids(&self.physical_devices, &self.profile_bindings);
         assignment_catalog::refresh(&mut self.assignment_session, &profiles);
         if self.assignment_session.catalog.source_endpoint.is_none() {
             self.assignment_session.catalog.source_endpoint = Some("launch-control-xl-mk2".into());
         }
-        if self.assignment_session.catalog.destination_endpoint.is_none() {
-            self.assignment_session.catalog.destination_endpoint = self
-                .assignment_session
-                .catalog
-                .selected_device
-                .clone()
-                .or_else(|| Some("lexicon.reflex".into()));
-        }
+        let profile =
+            self.assignment_session.catalog.selected_device.as_deref().unwrap_or("lexicon.reflex");
+        self.assignment_session.catalog.destination_endpoint =
+            profile_bindings::stable_destination(&self.outputs, &self.profile_bindings, profile)
+                .or_else(|| Some(profile.to_owned()));
     }
 
     fn scenes_response(&self) -> String {
@@ -3488,105 +3573,15 @@ impl Daemon {
     }
 }
 
-/// Loads persisted state and computes automatic startup restore behavior.
-///
-/// # Errors
-///
-/// Returns a configuration error when persisted state cannot be loaded or validated.
-pub fn startup_restore(path: &Path) -> Result<RestoreResult, ConfigError> {
-    let document: ConfigDocument = load(path)?;
-    let active_project = document.settings.active_project.clone();
-    let active_scene = document.settings.active_scene.clone();
-    let scenes = match active_project.as_deref() {
-        None => {
-            if active_scene.is_some() {
-                return Err(ConfigError::Semantic {
-                    path: path.to_owned(),
-                    message: "active scene requires an active project".into(),
-                });
-            }
-            Vec::new()
-        }
-        Some(project_id) => match document.projects.iter().find(|project| project.id == project_id)
-        {
-            Some(project) => {
-                if let Some(scene) = active_scene.as_deref() {
-                    if !project.scenes.iter().any(|entry| entry.id == scene) {
-                        return Err(ConfigError::Semantic {
-                            path: path.to_owned(),
-                            message: format!(
-                                "active scene '{scene}' is not present in the active project"
-                            ),
-                        });
-                    }
-                }
-                project.scenes.iter().map(|scene| scene.id.clone()).collect()
-            }
-            None => {
-                return Err(ConfigError::Semantic {
-                    path: path.to_owned(),
-                    message: format!(
-                        "active project '{project_id}' is not present in the configuration"
-                    ),
-                })
-            }
-        },
-    };
-    let should_activate = active_project.is_some() && !scenes.is_empty();
-    Ok(RestoreResult {
-        active_project,
-        active_scene,
-        scenes,
-        should_activate,
-        // Startup may recover the selected project, but every hardware-mutating
-        // action remains held until the operator explicitly arms unsafe mode.
-        unsafe_actions_blocked: usize::from(should_activate),
-    })
-}
-
-/// Compiles one persisted scene's actions into the ordinary activation planner.
-///
-/// # Errors
-///
-/// Returns the planner validation error when the action graph is invalid.
+mod startup_restore;
+pub use startup_restore::startup_restore;
 #[cfg(target_os = "linux")]
-pub fn compile_scene_actions(
-    scene: &mackes_config::SceneRef,
-) -> Result<mackes_scene_engine::ActivationPlan, &'static str> {
-    mackes_scene_engine::ActivationPlan::compile(
-        scene
-            .actions
-            .iter()
-            .map(|action| mackes_scene_engine::ActivationAction {
-                id: action.id.clone(),
-                description: action.description.clone(),
-                unsafe_action: action.unsafe_action,
-                depends_on: action.depends_on.clone(),
-                destination: action.destination.clone(),
-                message: action.message.clone(),
-            })
-            .collect(),
-    )
-}
-
-/// Persists an accepted active-scene selection through validated atomic config saving.
-///
-/// # Errors
-///
-/// Returns the load, validation, or atomic-save error without modifying the in-memory daemon.
-#[cfg(target_os = "linux")]
-pub fn persist_active_scene(path: &Path, scene: Option<&str>) -> Result<(), String> {
-    let document = mackes_config::load(path).map_err(|error| error.to_string())?;
-    let updated = mackes_config::set_active_scene(&document, scene)?;
-    mackes_config::save(path, &updated, 10).map_err(|error| error.to_string())
-}
-
+pub use startup_restore::{compile_scene_actions, persist_active_scene};
 mod assignment_catalog;
 mod assignment_commit;
 mod led_surface;
-
 #[cfg(all(test, target_os = "linux"))]
 mod native_cutover;
-
+mod profile_bindings;
 #[cfg(test)]
 mod tests;

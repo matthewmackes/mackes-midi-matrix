@@ -2194,6 +2194,20 @@ impl ParameterMapping {
             mackes_domain::MidiMessage::ProgramChange { channel, .. } => {
                 mackes_domain::MidiMessage::ProgramChange { channel: *channel, program: value }
             }
+            mackes_domain::MidiMessage::NoteOn { channel, note, .. } => {
+                mackes_domain::MidiMessage::NoteOn {
+                    channel: *channel,
+                    note: *note,
+                    velocity: value,
+                }
+            }
+            mackes_domain::MidiMessage::NoteOff { channel, note, .. } => {
+                mackes_domain::MidiMessage::NoteOff {
+                    channel: *channel,
+                    note: *note,
+                    velocity: value,
+                }
+            }
             _ => return None,
         };
         Some((

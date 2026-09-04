@@ -18,11 +18,11 @@ fn health_operational_states_are_explicit() {
     assert!(Health::Degraded.is_operational());
     assert!(!Health::Stopping.is_operational());
     assert_eq!(
-        health_after_authorized_command(Health::Starting, Some(Command::Health)),
+        mapping_runtime::health_after_authorized_command(Health::Starting, Some(Command::Health)),
         Health::Starting
     );
     assert_eq!(
-        health_after_authorized_command(Health::Starting, Some(Command::Snapshot)),
+        mapping_runtime::health_after_authorized_command(Health::Starting, Some(Command::Snapshot)),
         Health::Ready
     );
 }
@@ -108,6 +108,62 @@ fn daemon_owns_generation_checked_assignment_session() {
     });
     assert!(!unknown.applied);
     assert_eq!(unknown.reason.as_deref(), Some("assignment control is reserved or unknown"));
+    let _ = fs::remove_file(socket);
+}
+
+#[test]
+fn eventide_assignment_skips_preset_and_type_levels() {
+    let socket =
+        std::env::temp_dir().join(format!("mackes-eventide-flow-{}.sock", std::process::id()));
+    let mut daemon = Daemon::bind(&socket).expect("daemon");
+    let mut generation = daemon
+        .apply_assignment_request(mackes_ipc::AssignmentRequest {
+            generation: 0,
+            action: mackes_ipc::AssignmentAction::Start,
+            physical_control_id: None,
+            destination_profile: None,
+            destination_effect: None,
+            destination_parameter: None,
+        })
+        .generation;
+    let captured = daemon.apply_assignment_request(mackes_ipc::AssignmentRequest {
+        generation,
+        action: mackes_ipc::AssignmentAction::ControlCaptured,
+        physical_control_id: Some("button-r1-c2".into()),
+        destination_profile: None,
+        destination_effect: None,
+        destination_parameter: None,
+    });
+    assert!(captured.applied);
+    generation = captured.generation;
+    let selected_device = daemon.apply_assignment_request(mackes_ipc::AssignmentRequest {
+        generation,
+        action: mackes_ipc::AssignmentAction::Down,
+        physical_control_id: None,
+        destination_profile: None,
+        destination_effect: None,
+        destination_parameter: None,
+    });
+    generation = selected_device.generation;
+    let effect = daemon.apply_assignment_request(mackes_ipc::AssignmentRequest {
+        generation,
+        action: mackes_ipc::AssignmentAction::Enter,
+        physical_control_id: None,
+        destination_profile: None,
+        destination_effect: None,
+        destination_parameter: None,
+    });
+    assert_eq!(effect.session.phase, mackes_ipc::AssignmentPhase::ChooseEffect);
+    generation = effect.generation;
+    let parameter = daemon.apply_assignment_request(mackes_ipc::AssignmentRequest {
+        generation,
+        action: mackes_ipc::AssignmentAction::Enter,
+        physical_control_id: None,
+        destination_profile: None,
+        destination_effect: None,
+        destination_parameter: None,
+    });
+    assert_eq!(parameter.session.phase, mackes_ipc::AssignmentPhase::ChooseParameter);
     let _ = fs::remove_file(socket);
 }
 
@@ -286,7 +342,8 @@ fn occupied_assignment_enters_confirm_replace_and_replaces_atomically() {
         physical_control_id: "knob-r1-c1".into(),
         source_endpoint: "controller".into(),
         source_kind: "cc".into(),
-        source_channel: 0,
+        source_channel: 8,
+        destination_channel: None,
         source_number: 21,
         destination_endpoint: "processor".into(),
         destination_profile: "lexicon.reflex".into(),
@@ -574,6 +631,7 @@ fn mapping_activity_reports_disconnected_destination_without_fallback() {
         source_endpoint: "1".into(),
         source_kind: "cc".into(),
         source_channel: 0,
+        destination_channel: None,
         source_number: 21,
         destination_endpoint: "2".into(),
         destination_profile: "eventide.micropitch".into(),
@@ -624,7 +682,8 @@ fn profile_destination_mapping_dispatches_to_the_unique_eventide_output() {
         physical_control_id: "knob-r3-c8".into(),
         source_endpoint: "launch-input".into(),
         source_kind: "cc".into(),
-        source_channel: 8,
+        source_channel: 0,
+        destination_channel: None,
         source_number: 56,
         destination_endpoint: "eventide.micropitch".into(),
         destination_profile: "eventide.micropitch".into(),
@@ -644,13 +703,128 @@ fn profile_destination_mapping_dispatches_to_the_unique_eventide_output() {
         sequence: 1,
         endpoint: mackes_midi_engine::numeric_endpoint_id("launch-input").expect("source"),
         message: mackes_domain::MidiMessage::ControlChange {
-            channel: mackes_domain::MidiChannel::new(9).expect("channel"),
+            channel: mackes_domain::MidiChannel::new(1).expect("channel"),
             controller: mackes_domain::SevenBit::new(56).expect("controller"),
             value: mackes_domain::SevenBit::new(64).expect("value"),
         },
     };
     assert_eq!(daemon.dispatch_registered(&event), (1, 0));
     assert_eq!(daemon.last_mapping_activity.as_ref().expect("activity")["outcome"], "sent");
+    let _ = fs::remove_file(socket);
+}
+
+#[test]
+fn eventide_bypass_button_toggles_once_per_press() {
+    let socket =
+        std::env::temp_dir().join(format!("mackes-eventide-toggle-{}.sock", std::process::id()));
+    let mut daemon = Daemon::bind(&socket).expect("daemon");
+    daemon
+        .register_output(Box::new(mackes_midi_engine::VirtualEndpoint::new(
+            "eventide-out",
+            "MicroPitch Pedal",
+            mackes_midi_engine::EndpointDirection::Output,
+        )))
+        .expect("register eventide output");
+    daemon.mapping_store.active.push(mackes_config::ControlMapping {
+        id: "eventide-bypass".into(),
+        controller_profile: "launch-control-xl-mk2".into(),
+        physical_control_id: "button-r1-c1".into(),
+        source_endpoint: "launch-input".into(),
+        source_kind: "note".into(),
+        source_channel: 8,
+        destination_channel: Some(6),
+        source_number: 41,
+        destination_endpoint: "eventide.micropitch".into(),
+        destination_profile: "eventide.micropitch".into(),
+        destination_effect: "global".into(),
+        destination_parameter: "control-2".into(),
+        behavior: mackes_config::MappingBehavior {
+            source_range: (0, 127),
+            destination_range: (0, 127),
+            invert: false,
+            curve: "linear".into(),
+        },
+        enabled: true,
+        profile_version: 1,
+    });
+    let event = |velocity| mackes_domain::MidiEvent {
+        timestamp: mackes_domain::TimestampNanos::new(1),
+        sequence: 1,
+        endpoint: mackes_midi_engine::numeric_endpoint_id("launch-input").expect("source"),
+        message: mackes_domain::MidiMessage::NoteOn {
+            channel: mackes_domain::MidiChannel::new(9).expect("channel"),
+            note: mackes_domain::SevenBit::new(41).expect("note"),
+            velocity: mackes_domain::SevenBit::new(velocity).expect("velocity"),
+        },
+    };
+
+    assert_eq!(daemon.dispatch_registered(&event(127)), (1, 0));
+    assert_eq!(daemon.last_mapping_activity.as_ref().expect("bypass")["source_value"], 0);
+    assert_eq!(
+        daemon.last_mapping_activity.as_ref().expect("wire")["wire_bytes"],
+        serde_json::json!([182, 14, 0])
+    );
+    assert_eq!(daemon.dispatch_registered(&event(0)), (0, 0));
+    assert_eq!(daemon.dispatch_registered(&event(127)), (1, 0));
+    assert_eq!(daemon.last_mapping_activity.as_ref().expect("active")["source_value"], 127);
+    let _ = fs::remove_file(socket);
+}
+
+#[test]
+fn device_cursor_rebinds_exact_destination_output() {
+    let socket =
+        std::env::temp_dir().join(format!("mackes-profile-binding-{}.sock", std::process::id()));
+    let mut daemon = Daemon::bind(&socket).expect("daemon");
+    for (id, name) in [("port-d", "MidiSport 4x4 MIDI 4"), ("eventide-out", "MicroPitch Pedal")] {
+        daemon
+            .register_output(Box::new(mackes_midi_engine::VirtualEndpoint::new(
+                id,
+                name,
+                mackes_midi_engine::EndpointDirection::Output,
+            )))
+            .expect("output");
+    }
+    daemon.physical_devices = serde_json::json!([
+        {"name": "MidiSport 4x4"},
+        {"name": "MicroPitch Pedal"}
+    ]);
+    daemon.set_profile_bindings(vec![("lexicon.reflex".into(), "port-d".into())]).expect("binding");
+    let start = daemon.apply_assignment_request(mackes_ipc::AssignmentRequest {
+        generation: 0,
+        action: mackes_ipc::AssignmentAction::Start,
+        physical_control_id: None,
+        destination_profile: None,
+        destination_effect: None,
+        destination_parameter: None,
+    });
+    let capture = daemon.apply_assignment_request(mackes_ipc::AssignmentRequest {
+        generation: start.generation,
+        action: mackes_ipc::AssignmentAction::ControlCaptured,
+        physical_control_id: Some("knob-r1-c1".into()),
+        destination_profile: None,
+        destination_effect: None,
+        destination_parameter: None,
+    });
+    assert_eq!(capture.session.catalog.selected_device.as_deref(), Some("lexicon.reflex"));
+    assert_eq!(capture.session.catalog.destination_endpoint.as_deref(), Some("port-d"));
+    let moved = daemon.apply_assignment_request(mackes_ipc::AssignmentRequest {
+        generation: capture.generation,
+        action: mackes_ipc::AssignmentAction::Down,
+        physical_control_id: None,
+        destination_profile: None,
+        destination_effect: None,
+        destination_parameter: None,
+    });
+    let eventide = daemon.apply_assignment_request(mackes_ipc::AssignmentRequest {
+        generation: moved.generation,
+        action: mackes_ipc::AssignmentAction::Enter,
+        physical_control_id: None,
+        destination_profile: None,
+        destination_effect: None,
+        destination_parameter: None,
+    });
+    assert_eq!(eventide.session.catalog.selected_device.as_deref(), Some("eventide.micropitch"));
+    assert_eq!(eventide.session.catalog.destination_endpoint.as_deref(), Some("eventide-out"));
     let _ = fs::remove_file(socket);
 }
 
@@ -832,6 +1006,46 @@ fn mapping_ipc_draft_persists_through_typed_request() {
 
 #[cfg(target_os = "linux")]
 #[test]
+fn assignment_ipc_accepts_documented_nested_payload() {
+    use std::io::{Read, Write};
+    use std::os::unix::net::UnixStream;
+    let socket =
+        std::env::temp_dir().join(format!("mackes-assignment-ipc-{}.sock", std::process::id()));
+    let mut daemon = Daemon::bind(&socket).expect("daemon");
+    let started = daemon.apply_assignment_request(mackes_ipc::AssignmentRequest {
+        generation: 0,
+        action: mackes_ipc::AssignmentAction::Start,
+        physical_control_id: None,
+        destination_profile: None,
+        destination_effect: None,
+        destination_parameter: None,
+    });
+    let client_socket = socket.clone();
+    let worker = std::thread::spawn(move || {
+        let mut client = UnixStream::connect(client_socket).expect("connect");
+        client
+            .write_all(
+                format!(
+                    "{{\"protocol_major\":1,\"protocol_minor\":0,\"request_id\":7,\"command\":\"assignment\",\"payload\":{{\"generation\":{},\"action\":\"Cancel\",\"physical_control_id\":null,\"destination_profile\":null,\"destination_effect\":null,\"destination_parameter\":null}}}}\n",
+                    started.generation
+                )
+                .as_bytes(),
+            )
+            .expect("write cancel");
+        let mut response = String::new();
+        client.read_to_string(&mut response).expect("read response");
+        response
+    });
+    daemon.serve_once(AccessPolicy { control_gid: 0, daemon_uid: 0 }).expect("serve cancel");
+    let result: mackes_ipc::AssignmentResult =
+        serde_json::from_str(worker.join().expect("worker").trim()).expect("assignment result");
+    assert!(result.applied, "{result:?}");
+    assert_eq!(result.session.phase, mackes_ipc::AssignmentPhase::Idle);
+    let _ = fs::remove_file(socket);
+}
+
+#[cfg(target_os = "linux")]
+#[test]
 fn active_scene_persistence_round_trips_through_config() {
     let source = std::path::Path::new("../../fixtures/config-valid.json5");
     let path =
@@ -942,7 +1156,7 @@ fn registered_dispatch_updates_activity_and_publishes_live_event() {
         sequence: 1,
         endpoint: mackes_domain::EndpointId::new(1).expect("endpoint"),
         message: mackes_domain::MidiMessage::ControlChange {
-            channel: mackes_domain::MidiChannel::new(1).expect("channel"),
+            channel: mackes_domain::MidiChannel::new(9).expect("channel"),
             controller: mackes_domain::SevenBit::new(1).expect("controller"),
             value: mackes_domain::SevenBit::new(2).expect("value"),
         },
@@ -1410,6 +1624,42 @@ fn device_control_requires_confirmation_and_registered_destination() {
 }
 
 #[test]
+fn reflex_system_reset_is_narrow_confirmed_and_daemon_owned() {
+    let path =
+        std::env::temp_dir().join(format!("mackes-reflex-reset-{}.sock", std::process::id()));
+    let mut daemon = Daemon::bind(&path).expect("daemon");
+    daemon
+        .register_output(Box::new(mackes_midi_engine::VirtualEndpoint::new(
+            "reflex-port-a",
+            "MidiSport 4x4 MIDI 1",
+            mackes_midi_engine::EndpointDirection::Output,
+        )))
+        .expect("output");
+    let request = serde_json::json!({
+        "profile_id": "lexicon.reflex",
+        "control": "system-reset",
+        "destination": "reflex-port-a",
+        "confirm": true,
+    });
+    assert_eq!(daemon.apply_device_control(&request).expect("reset"), vec![0xFF]);
+    assert_eq!(daemon.activity_counters().1, 1);
+    let audit = daemon.audit.newest_first().next().expect("audit");
+    assert_eq!(audit.target_alias, "reflex-port-a");
+    assert_eq!(audit.action_id, "device-control:lexicon.reflex:system-reset");
+    let unrelated = serde_json::json!({
+        "profile_id": "eventide.micropitch",
+        "control": "system-reset",
+        "destination": "reflex-port-a",
+        "confirm": true,
+    });
+    assert_eq!(
+        daemon.apply_device_control(&unrelated).unwrap_err(),
+        "device control fields are required"
+    );
+    let _ = fs::remove_file(path);
+}
+
+#[test]
 fn button_preset_mapping_survives_reload_and_knob_preset_is_stripped() {
     let socket =
         std::env::temp_dir().join(format!("mackes-preset-reload-{}.sock", std::process::id()));
@@ -1476,6 +1726,7 @@ fn button_preset_mapping_survives_reload_and_knob_preset_is_stripped() {
         source_endpoint: "launch-control-xl-mk2".into(),
         source_kind: "cc".into(),
         source_channel: 8,
+        destination_channel: None,
         source_number: 13,
         destination_endpoint: "lexicon.reflex".into(),
         destination_profile: "lexicon.reflex".into(),
@@ -1528,6 +1779,7 @@ fn led_surface_restores_owner_colors_from_mappings_and_exposes_zero_send() {
         source_endpoint: "launch-control-xl-mk2".into(),
         source_kind: "cc".into(),
         source_channel: 8,
+        destination_channel: None,
         source_number: 13,
         destination_endpoint: "lexicon.reflex".into(),
         destination_profile: "lexicon.reflex".into(),

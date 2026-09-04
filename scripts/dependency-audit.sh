@@ -25,4 +25,16 @@ if ! command -v cargo-audit >/dev/null 2>&1; then
   exit 69
 fi
 
-cargo audit
+if cargo audit; then
+  exit 0
+fi
+
+# Restricted release environments may have a valid cached RustSec database but
+# deny Cargo's refresh lock. Reuse that database only after the fresh scan has
+# failed; a missing cache remains a hard failure and findings still propagate.
+if [[ -d "${CARGO_HOME:-${HOME}/.cargo}/advisory-db" ]]; then
+  printf 'dependency-audit: fresh database refresh unavailable; retrying cached database\n' >&2
+  cargo audit --no-fetch
+else
+  exit 1
+fi
