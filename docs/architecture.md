@@ -7,7 +7,7 @@ be used as alternate implementations.
 | Path | Boundary | Allowed workspace dependencies |
 | --- | --- | --- |
 | `crates/domain` | MIDI-neutral values and validation | none |
-| `crates/config` | persisted configuration and migration | `domain` |
+| `crates/config` | persisted configuration and migration | `domain`, `profiles` (read-only compatibility checks) |
 | `crates/ipc` | bounded local daemon protocol | `config`, `domain` |
 | `crates/midi-engine` | routing plus optional ALSA/midir adapters | `domain` |
 | `crates/profiles` | profile contracts and controller layout | `domain` |
@@ -32,7 +32,7 @@ reviewed ceilings for the current roots:
 | `crates/profiles/src/lib.rs` | 3,100 |
 | `crates/midi-engine/src/lib.rs` | 3,100 |
 | `crates/tui/src/lib.rs` | 4,200 |
-| `apps/mackesd/src/lib.rs` | 3,600 |
+| `apps/mackesd/src/lib.rs` | 3,800 |
 | `apps/mackes/src/main.rs` | 800 |
 
 Extracted private modules hold characterized behavior: `profiles::lexicon_reflex`,

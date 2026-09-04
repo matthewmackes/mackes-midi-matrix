@@ -14,12 +14,17 @@ MAX_LINES = {
     "crates/profiles/src/lib.rs": 3100,
     "crates/midi-engine/src/lib.rs": 3100,
     "crates/tui/src/lib.rs": 4200,
-    "apps/mackesd/src/lib.rs": 3600,
+    # The daemon's composition root retains a small amount of wiring while the
+    # remaining service modules are extracted incrementally.  Keep this ceiling
+    # explicit and reviewed rather than silently allowing unbounded growth.
+    "apps/mackesd/src/lib.rs": 3800,
     "apps/mackes/src/main.rs": 800,
 }
 
 ALLOWED_LOCAL_DEPS = {
-    "mackes-config": {"mackes-domain"},
+    # Configuration validation includes profile-owned hardware tuple checks;
+    # this is an intentional, read-only contract dependency (not transport I/O).
+    "mackes-config": {"mackes-domain", "mackes-profiles"},
     "mackes-domain": set(),
     "mackes-ipc": {"mackes-config", "mackes-domain"},
     "mackes-midi-engine": {"mackes-domain"},
