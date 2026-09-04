@@ -1791,6 +1791,20 @@ impl Daemon {
         let mut sent = 0;
         let mut unmatched = 0;
         for event in events.into_iter().take(limit.min(128)) {
+            if matches!(event.message, mackes_domain::MidiMessage::SysEx(_)) {
+                let frame = event.message.wire_bytes();
+                if let Ok(mackes_profiles::lexicon_reflex::DecodedMessage::ActiveSetup {
+                    setup,
+                    ..
+                }) = mackes_profiles::lexicon_reflex::decode_message(&frame)
+                {
+                    if let Ok(setup) = mackes_profiles::lexicon_reflex::ReflexSetup::new(&setup) {
+                        if let Some(algorithm) = setup.algorithm() {
+                            self.led.set_active_lexicon_algorithm(algorithm);
+                        }
+                    }
+                }
+            }
             if Self::launch_control_factory1_layout_id(&event).is_some() {
                 let now_ms =
                     u64::try_from(self.safety_clock.elapsed().as_millis()).unwrap_or(u64::MAX);
