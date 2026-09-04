@@ -56,6 +56,8 @@ pub struct LedDiagnostics {
     pub backend_confirmation: Option<String>,
     /// Last successfully delivered logical backend state.
     pub backend_state: Option<String>,
+    /// Last Lexicon algorithm confirmed by a selection or active-setup readback.
+    pub active_lexicon_algorithm: Option<u8>,
 }
 
 impl LedDiagnostics {
@@ -71,6 +73,7 @@ impl LedDiagnostics {
             pending_deadline_ms: None,
             backend_confirmation: None,
             backend_state: None,
+            active_lexicon_algorithm: None,
         }
     }
 }
@@ -118,6 +121,7 @@ impl LedSurface {
     /// Records the last Lexicon algorithm selection delivered by the daemon.
     pub fn set_active_lexicon_algorithm(&mut self, algorithm: u8) {
         self.active_lexicon_algorithm = Some(algorithm);
+        self.diagnostics.active_lexicon_algorithm = Some(algorithm);
         self.request_full_resync();
     }
     /// Forces a complete replay of desired state on the next flush.
