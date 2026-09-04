@@ -58,6 +58,8 @@ pub struct LedDiagnostics {
     pub backend_state: Option<String>,
     /// Last Lexicon algorithm confirmed by a selection or active-setup readback.
     pub active_lexicon_algorithm: Option<u8>,
+    /// Most recent Lexicon active-setup decode error, if any.
+    pub lexicon_readback_error: Option<String>,
 }
 
 impl LedDiagnostics {
@@ -74,6 +76,7 @@ impl LedDiagnostics {
             backend_confirmation: None,
             backend_state: None,
             active_lexicon_algorithm: None,
+            lexicon_readback_error: None,
         }
     }
 }
@@ -122,7 +125,12 @@ impl LedSurface {
     pub fn set_active_lexicon_algorithm(&mut self, algorithm: u8) {
         self.active_lexicon_algorithm = Some(algorithm);
         self.diagnostics.active_lexicon_algorithm = Some(algorithm);
+        self.diagnostics.lexicon_readback_error = None;
         self.request_full_resync();
+    }
+
+    pub fn set_lexicon_readback_error(&mut self, error: impl Into<String>) {
+        self.diagnostics.lexicon_readback_error = Some(error.into());
     }
     /// Forces a complete replay of desired state on the next flush.
     pub fn request_full_resync(&mut self) {

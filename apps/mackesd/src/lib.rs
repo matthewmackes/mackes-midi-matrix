@@ -1331,15 +1331,22 @@ impl Daemon {
         let _ = self.activity.push(event);
         if matches!(event.message, mackes_domain::MidiMessage::SysEx(_)) {
             let frame = event.message.wire_bytes();
-            if let Ok(mackes_profiles::lexicon_reflex::DecodedMessage::ActiveSetup {
-                setup, ..
-            }) = mackes_profiles::lexicon_reflex::decode_message(&frame)
-            {
-                if let Ok(setup) = mackes_profiles::lexicon_reflex::ReflexSetup::new(&setup) {
-                    if let Some(algorithm) = setup.algorithm() {
-                        self.led.set_active_lexicon_algorithm(algorithm);
+            match mackes_profiles::lexicon_reflex::decode_message(&frame) {
+                Ok(mackes_profiles::lexicon_reflex::DecodedMessage::ActiveSetup {
+                    setup, ..
+                }) => {
+                    match mackes_profiles::lexicon_reflex::ReflexSetup::new(&setup)
+                        .ok()
+                        .and_then(|setup| setup.algorithm())
+                    {
+                        Some(algorithm) => self.led.set_active_lexicon_algorithm(algorithm),
+                        None => self
+                            .led
+                            .set_lexicon_readback_error("active setup has invalid algorithm"),
                     }
                 }
+                Ok(_) => {}
+                Err(error) => self.led.set_lexicon_readback_error(error),
             }
         }
         let stable_endpoint = self.inputs.stable_id_for_endpoint(event.endpoint);
