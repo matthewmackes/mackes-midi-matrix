@@ -98,7 +98,7 @@ pub const CONTROLLER_ASSIGNMENTS: [ControllerAssignment; 18] = [
     },
     ControllerAssignment {
         physical_control_id: "knob-r1-c6",
-        destination_parameter: "reflex.parameter-2",
+        destination_parameter: "reflex.parameter-5",
     },
     ControllerAssignment {
         physical_control_id: "knob-r1-c7",
@@ -110,7 +110,7 @@ pub const CONTROLLER_ASSIGNMENTS: [ControllerAssignment; 18] = [
     },
     ControllerAssignment {
         physical_control_id: "fader-4",
-        destination_parameter: "reflex.parameter-5",
+        destination_parameter: "reflex.parameter-2",
     },
     ControllerAssignment {
         physical_control_id: "fader-5",

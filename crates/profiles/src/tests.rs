@@ -1003,6 +1003,16 @@ fn reflex_controller_layout_uniquely_owns_all_parameters_and_algorithms() {
             .map(|assignment| assignment.destination_parameter),
         Some("reflex.parameter-9")
     );
+    assert_eq!(
+        lexicon_reflex::controller_assignment("fader-4")
+            .map(|assignment| assignment.destination_parameter),
+        Some("reflex.parameter-2")
+    );
+    assert_eq!(
+        lexicon_reflex::controller_assignment("knob-r1-c6")
+            .map(|assignment| assignment.destination_parameter),
+        Some("reflex.parameter-5")
+    );
 }
 
 #[test]
