@@ -560,12 +560,13 @@ impl AlsaInputCapture {
                 },
             );
         let mut client_guard = client.lock().map_err(|_| "ALSA client lock poisoned".to_owned())?;
-        let source = client_guard
-            .discover_ports()
-            .into_iter()
+        let discovered = client_guard.discover_ports();
+        let source = discovered
+            .iter()
             .find(|port| {
                 port.readable && (port.port_name == name || requested_address == Some(port.address))
             })
+            .cloned()
             .ok_or_else(|| format!("ALSA MIDI input not found: {name}"))?;
         client_guard.subscribe_input(source.address)?;
         client_guard.subscribe_announcements()?;
@@ -573,6 +574,16 @@ impl AlsaInputCapture {
         let stable_id = stable_endpoint_id(name, EndpointDirection::Input);
         let mut reader =
             NativeAlsaReader::new(DEFAULT_NATIVE_BATCH_LIMIT).map_err(str::to_owned)?;
+        // All captures share one ALSA client. Its first reader drains the client
+        // queue, so every reader must recognize every explicitly subscribed source;
+        // otherwise a Lexicon/processor reply is consumed as spoofed by the first
+        // unrelated controller reader.
+        for port in discovered.into_iter().filter(|port| port.readable) {
+            reader.subscribe(
+                port.address,
+                stable_endpoint_id(&port.port_name, EndpointDirection::Input),
+            );
+        }
         reader.subscribe(source.address, stable_id.clone());
         Ok(Self {
             info: EndpointInfo {
