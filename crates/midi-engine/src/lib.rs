@@ -604,9 +604,13 @@ impl AlsaInputCapture {
         // otherwise a Lexicon/processor reply is consumed as spoofed by the first
         // unrelated controller reader.
         for port in discovered.into_iter().filter(|port| port.readable) {
+            let backend_name = format!(
+                "{}:{} {}:{}",
+                port.client_name, port.port_name, port.address.client, port.address.port
+            );
             reader.subscribe(
                 port.address,
-                stable_endpoint_id(&port.port_name, EndpointDirection::Input),
+                stable_endpoint_id(&backend_name, EndpointDirection::Input),
             );
         }
         reader.subscribe(source.address, stable_id.clone());
