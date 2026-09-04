@@ -908,7 +908,20 @@ impl Daemon {
             self.xl_midi_output_address = current;
             self.native_led_resync = true;
             self.replay_controller_leds();
+            self.request_lexicon_active_setup();
         }
+    }
+
+    /// Requests the Lexicon's authoritative active setup after its output is available.
+    fn request_lexicon_active_setup(&mut self) {
+        let Some(destination) = profile_bindings::stable_destination(
+            &self.outputs,
+            &self.profile_bindings,
+            "lexicon.reflex",
+        ) else {
+            return;
+        };
+        let _ = self.outputs.send_direct(&destination, &[0xF0, 0x06, 0x02, 0x30, 0x60, 0x00, 0xF7]);
     }
 
     /// Advances LED overlays at an explicit fake-clock instant.
@@ -3526,6 +3539,7 @@ impl Daemon {
         }
         self.profile_bindings = bindings;
         self.sync_assignment_catalog();
+        self.request_lexicon_active_setup();
         Ok(())
     }
 
