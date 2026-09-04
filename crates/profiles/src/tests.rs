@@ -362,7 +362,7 @@ fn physical_catalog_is_complete_unique_and_separates_faders_from_utilities() {
     assert_eq!(controls[0].source_address, Some(13));
     assert_eq!(controls[8].source_address, Some(29));
     assert_eq!(controls[24].source_address, Some(41));
-    assert_eq!(controls[32].source_address, Some(57));
+    assert_eq!(controls[32].source_address, Some(73));
     assert_eq!(controls[40].source_address, Some(77));
 }
 
@@ -454,7 +454,7 @@ fn mk2_factory1_every_control_press_resolves_and_release_is_rejected() {
             55, 56
         ]
     );
-    assert_eq!(buttons, vec![41, 42, 43, 44, 45, 46, 47, 48, 57, 58, 59, 60, 61, 62, 63, 64]);
+    assert_eq!(buttons, vec![41, 42, 43, 44, 57, 58, 59, 60, 73, 74, 75, 76, 89, 90, 91, 92]);
     assert_eq!(faders, vec![77, 78, 79, 80, 81, 82, 83, 84]);
     assert_eq!(LAUNCH_CONTROL_MK2_FACTORY1_SLOT, 8);
 }

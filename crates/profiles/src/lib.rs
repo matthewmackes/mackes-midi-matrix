@@ -698,7 +698,10 @@ pub fn launch_control_physical_catalog() -> Vec<PhysicalControl> {
             row,
             column,
             order: 24 + order,
-            source_address: Some(if row == 1 { 41 + order % 8 } else { 57 + order % 8 }),
+            // Factory Template 1 follows the Launchpad-style four-column
+            // note grid: 41–44 / 57–60 on the top row and 73–76 / 89–92 on
+            // the bottom row. Physical identity and LED index remain row-major.
+            source_address: Some(41 + (row - 1) * 32 + ((column - 1) / 4) * 16 + (column - 1) % 4),
             feedback_address: Some(index),
             label: launch_control_index_label(index).unwrap_or_default(),
         });
