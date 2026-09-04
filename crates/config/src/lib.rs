@@ -1845,6 +1845,25 @@ pub fn validate(document: &ConfigDocument) -> Result<(), String> {
                     mapping.source_number
                 ));
             }
+            if mapping.destination_profile == "lexicon.reflex" {
+                let assignment = mackes_profiles::lexicon_reflex::controller_assignment(
+                    &mapping.physical_control_id,
+                )
+                .ok_or_else(|| {
+                    format!(
+                        "'{}' is not assigned to Lexicon Reflex in the production layout",
+                        mapping.physical_control_id
+                    )
+                })?;
+                if mapping.destination_parameter != assignment.destination_parameter {
+                    return Err(format!(
+                        "Lexicon destination mismatch for '{}': expected '{}', got '{}'",
+                        mapping.physical_control_id,
+                        assignment.destination_parameter,
+                        mapping.destination_parameter
+                    ));
+                }
+            }
         }
     }
     for draft in &document.control_mapping_drafts {

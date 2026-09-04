@@ -74,6 +74,100 @@ pub const ALGORITHMS: [AlgorithmMetadata; 8] = [
     },
 ];
 
+/// One controller-to-Reflex destination assignment in the production layout.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ControllerAssignment {
+    /// Stable Launch Control physical identity.
+    pub physical_control_id: &'static str,
+    /// Stable Reflex destination parameter or operation.
+    pub destination_parameter: &'static str,
+}
+
+/// Production Launch Control layout for all Reflex algorithms and parameters.
+///
+/// This table owns destination placement. MIDI source tuples remain owned by
+/// the Launch Control Factory Template 1 catalog.
+pub const CONTROLLER_ASSIGNMENTS: [ControllerAssignment; 18] = [
+    ControllerAssignment {
+        physical_control_id: "knob-r1-c4",
+        destination_parameter: "reflex.parameter-0",
+    },
+    ControllerAssignment {
+        physical_control_id: "knob-r1-c5",
+        destination_parameter: "reflex.parameter-1",
+    },
+    ControllerAssignment {
+        physical_control_id: "knob-r1-c6",
+        destination_parameter: "reflex.parameter-2",
+    },
+    ControllerAssignment {
+        physical_control_id: "knob-r1-c7",
+        destination_parameter: "reflex.parameter-3",
+    },
+    ControllerAssignment {
+        physical_control_id: "knob-r1-c8",
+        destination_parameter: "reflex.parameter-4",
+    },
+    ControllerAssignment {
+        physical_control_id: "fader-4",
+        destination_parameter: "reflex.parameter-5",
+    },
+    ControllerAssignment {
+        physical_control_id: "fader-5",
+        destination_parameter: "reflex.parameter-6",
+    },
+    ControllerAssignment {
+        physical_control_id: "fader-6",
+        destination_parameter: "reflex.parameter-7",
+    },
+    ControllerAssignment {
+        physical_control_id: "fader-7",
+        destination_parameter: "reflex.parameter-8",
+    },
+    ControllerAssignment {
+        physical_control_id: "fader-8",
+        destination_parameter: "reflex.parameter-9",
+    },
+    ControllerAssignment {
+        physical_control_id: "button-r1-c5",
+        destination_parameter: "reflex.algorithm-1",
+    },
+    ControllerAssignment {
+        physical_control_id: "button-r1-c6",
+        destination_parameter: "reflex.algorithm-2",
+    },
+    ControllerAssignment {
+        physical_control_id: "button-r1-c7",
+        destination_parameter: "reflex.algorithm-3",
+    },
+    ControllerAssignment {
+        physical_control_id: "button-r1-c8",
+        destination_parameter: "reflex.algorithm-4",
+    },
+    ControllerAssignment {
+        physical_control_id: "button-r2-c5",
+        destination_parameter: "reflex.algorithm-5",
+    },
+    ControllerAssignment {
+        physical_control_id: "button-r2-c6",
+        destination_parameter: "reflex.algorithm-6",
+    },
+    ControllerAssignment {
+        physical_control_id: "button-r2-c7",
+        destination_parameter: "reflex.algorithm-7",
+    },
+    ControllerAssignment {
+        physical_control_id: "button-r2-c8",
+        destination_parameter: "reflex.algorithm-8",
+    },
+];
+
+/// Returns the production controller assignment for a physical control.
+#[must_use]
+pub fn controller_assignment(control_id: &str) -> Option<&'static ControllerAssignment> {
+    CONTROLLER_ASSIGNMENTS.iter().find(|assignment| assignment.physical_control_id == control_id)
+}
+
 /// Returns the compiled algorithm table without permitting caller reordering.
 #[must_use]
 pub const fn algorithms() -> &'static [AlgorithmMetadata; 8] {

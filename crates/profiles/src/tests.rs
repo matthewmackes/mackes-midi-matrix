@@ -980,6 +980,32 @@ fn reflex_parameter_metadata_excludes_unused_slots_and_bounds_values() {
 }
 
 #[test]
+fn reflex_controller_layout_uniquely_owns_all_parameters_and_algorithms() {
+    let assignments = lexicon_reflex::CONTROLLER_ASSIGNMENTS;
+    assert_eq!(assignments.len(), 18);
+    let controls = assignments
+        .iter()
+        .map(|assignment| assignment.physical_control_id)
+        .collect::<std::collections::BTreeSet<_>>();
+    let destinations = assignments
+        .iter()
+        .map(|assignment| assignment.destination_parameter)
+        .collect::<std::collections::BTreeSet<_>>();
+    assert_eq!(controls.len(), 18);
+    assert_eq!(destinations.len(), 18);
+    assert_eq!(
+        lexicon_reflex::controller_assignment("button-r2-c8")
+            .map(|assignment| assignment.destination_parameter),
+        Some("reflex.algorithm-8")
+    );
+    assert_eq!(
+        lexicon_reflex::controller_assignment("fader-8")
+            .map(|assignment| assignment.destination_parameter),
+        Some("reflex.parameter-9")
+    );
+}
+
+#[test]
 fn reflex_echo_rhythm_is_bounded_and_ordered() {
     assert_eq!(lexicon_reflex::ECHO_RHYTHMS.len(), 14);
     assert_eq!(lexicon_reflex::echo_rhythm(1).expect("first").label, "64th");
