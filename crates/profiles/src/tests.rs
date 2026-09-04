@@ -973,6 +973,10 @@ fn reflex_parameter_metadata_excludes_unused_slots_and_bounds_values() {
         .all(|parameter| parameter.number != 8 && parameter.number != 9));
     assert_eq!(lexicon_reflex::parameters(3).len(), 8);
     assert_eq!(lexicon_reflex::parameters(6).len(), 7);
+    assert_eq!(lexicon_reflex::normalize_parameter(1, 0, 0), Some(0x8000));
+    assert_eq!(lexicon_reflex::normalize_parameter(1, 0, 127), Some(0xBC00));
+    assert_eq!(lexicon_reflex::normalize_parameter(2, 8, 64), None);
+    assert_eq!(lexicon_reflex::normalize_parameter(5, 0, 64), None);
 }
 
 #[test]

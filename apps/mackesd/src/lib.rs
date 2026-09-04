@@ -1453,12 +1453,47 @@ impl Daemon {
                 else {
                     continue;
                 };
+                let mut destination_value = value;
+                if mapping.destination_profile == "lexicon.reflex" {
+                    if let Some(parameter) = mapping
+                        .destination_parameter
+                        .strip_prefix("reflex.parameter-")
+                        .and_then(|number| number.parse::<u8>().ok())
+                    {
+                        let Some(algorithm) = self.lexicon_active_algorithm else {
+                            self.last_mapping_activity = Some(serde_json::json!({
+                                "mapping_id": mapping.id,
+                                "destination": mapping.destination_parameter,
+                                "outcome": "blocked",
+                                "reason": "lexicon_algorithm_unknown"
+                            }));
+                            continue;
+                        };
+                        let Ok(normalized) = u8::try_from(value.min(127)) else {
+                            continue;
+                        };
+                        let Some(scaled) = mackes_profiles::lexicon_reflex::normalize_parameter(
+                            algorithm, parameter, normalized,
+                        ) else {
+                            self.last_mapping_activity = Some(serde_json::json!({
+                                "mapping_id": mapping.id,
+                                "destination": mapping.destination_parameter,
+                                "outcome": "blocked",
+                                "reason": "parameter_not_supported_by_active_algorithm",
+                                "active_algorithm": algorithm,
+                                "parameter": parameter
+                            }));
+                            continue;
+                        };
+                        destination_value = scaled;
+                    }
+                }
                 let channel =
                     mapping.destination_channel.map_or(1, |channel| channel.saturating_add(1));
                 let Ok(bytes) = profile.render_parameter_message(
                     &mapping.destination_parameter,
                     channel,
-                    value,
+                    destination_value,
                 ) else {
                     continue;
                 };

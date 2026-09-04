@@ -1078,6 +1078,21 @@ fn normalized_parameter(algorithm: u8, metadata: ParameterMetadata, normalized: 
         .min(metadata.max)
 }
 
+/// Converts a normalized controller value into the documented wire range for
+/// one parameter of the selected algorithm.
+///
+/// Returns `None` when the algorithm is invalid or the parameter slot is not
+/// implemented by that algorithm. This is the single runtime authority for
+/// both parameter availability and value scaling.
+#[must_use]
+pub fn normalize_parameter(algorithm: u8, number: u8, normalized: u8) -> Option<u16> {
+    parameters(algorithm)
+        .iter()
+        .copied()
+        .find(|parameter| parameter.number == number)
+        .map(|metadata| normalized_parameter(algorithm, metadata, normalized.min(127)))
+}
+
 /// Builds a validated Reflex setup for a named PCM70 translation.
 ///
 /// # Errors
