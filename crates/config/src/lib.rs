@@ -1845,7 +1845,9 @@ pub fn validate(document: &ConfigDocument) -> Result<(), String> {
                     mapping.source_number
                 ));
             }
-            if mapping.destination_profile == "lexicon.reflex" {
+            let production_lexicon_mapping = mapping.id.starts_with("lexicon-algorithm-")
+                || mapping.id.starts_with("lexicon-param-");
+            if mapping.destination_profile == "lexicon.reflex" && production_lexicon_mapping {
                 let assignment = mackes_profiles::lexicon_reflex::controller_assignment(
                     &mapping.physical_control_id,
                 )

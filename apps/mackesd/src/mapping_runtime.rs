@@ -41,6 +41,16 @@ pub fn destination_value(
     mapping: &mackes_config::ControlMapping,
     input: u16,
 ) -> Option<u16> {
+    let press_only = mapping.destination_profile == "lexicon.reflex"
+        && (mapping.destination_parameter.starts_with("reflex.algorithm-")
+            || mapping.destination_parameter.starts_with("pcm70_reflex:"));
+    if press_only && mapping.source_kind == "note" {
+        let state = states.entry(mapping.id.clone()).or_insert((false, false));
+        let pressed = input != 0;
+        let rising = pressed && !state.0;
+        state.0 = pressed;
+        return rising.then_some(input);
+    }
     let parameter =
         mackes_profiles::builtin_profile(&mapping.destination_profile).and_then(|profile| {
             mackes_profiles::destination_parameters(&profile)
@@ -88,5 +98,45 @@ impl super::Daemon {
             index,
             self.assignment_led_state_at(elapsed_ms),
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn algorithm_mapping() -> mackes_config::ControlMapping {
+        mackes_config::ControlMapping {
+            id: "algorithm-1".into(),
+            controller_profile: "launch-control-xl-mk2".into(),
+            physical_control_id: "button-r1-c5".into(),
+            source_endpoint: "controller".into(),
+            source_kind: "note".into(),
+            source_channel: 8,
+            destination_channel: Some(0),
+            source_number: 57,
+            destination_endpoint: "lexicon".into(),
+            destination_profile: "lexicon.reflex".into(),
+            destination_effect: "algorithm-1".into(),
+            destination_parameter: "reflex.algorithm-1".into(),
+            behavior: mackes_config::MappingBehavior {
+                source_range: (0, 127),
+                destination_range: (0, 127),
+                invert: false,
+                curve: "linear".into(),
+            },
+            enabled: true,
+            profile_version: 1,
+        }
+    }
+
+    #[test]
+    fn lexicon_algorithm_selection_is_press_only() {
+        let mapping = algorithm_mapping();
+        let mut states = HashMap::new();
+        assert_eq!(destination_value(&mut states, &mapping, 127), Some(127));
+        assert_eq!(destination_value(&mut states, &mapping, 127), None);
+        assert_eq!(destination_value(&mut states, &mapping, 0), None);
+        assert_eq!(destination_value(&mut states, &mapping, 127), Some(127));
     }
 }
