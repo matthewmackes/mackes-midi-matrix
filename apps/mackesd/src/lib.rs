@@ -1316,6 +1316,19 @@ impl Daemon {
     #[allow(clippy::too_many_lines)]
     pub fn dispatch_registered(&mut self, event: &mackes_domain::MidiEvent) -> (usize, usize) {
         let _ = self.activity.push(event);
+        if let mackes_domain::MidiMessage::SysEx(frame) = &event.message {
+            let frame = frame.iter().map(|byte| byte.as_u8()).collect::<Vec<_>>();
+            if let Ok(mackes_profiles::lexicon_reflex::DecodedMessage::ActiveSetup {
+                setup, ..
+            }) = mackes_profiles::lexicon_reflex::decode_message(&frame)
+            {
+                if let Ok(setup) = mackes_profiles::lexicon_reflex::ReflexSetup::new(&setup) {
+                    if let Some(algorithm) = setup.algorithm() {
+                        self.led.set_active_lexicon_algorithm(algorithm);
+                    }
+                }
+            }
+        }
         let stable_endpoint = self.inputs.stable_id_for_endpoint(event.endpoint);
         let routed = self.route_event(event);
         let mut sent = 0;
