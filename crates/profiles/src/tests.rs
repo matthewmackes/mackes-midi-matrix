@@ -456,7 +456,7 @@ fn mk2_factory1_every_control_press_resolves_and_release_is_rejected() {
     );
     assert_eq!(buttons, vec![41, 42, 43, 44, 45, 46, 47, 48, 57, 58, 59, 60, 61, 62, 63, 64]);
     assert_eq!(faders, vec![77, 78, 79, 80, 81, 82, 83, 84]);
-    assert_eq!(LAUNCH_CONTROL_MK2_FACTORY1_SLOT, 1);
+    assert_eq!(LAUNCH_CONTROL_MK2_FACTORY1_SLOT, 8);
 }
 
 #[test]

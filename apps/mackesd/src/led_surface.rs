@@ -14,7 +14,7 @@ use mackes_profiles::{
 use std::collections::{BTreeMap, BTreeSet};
 
 /// Mk1 LED `SysEx` template byte for Factory 1 (User 0–7, Factory 8–15).
-const FACTORY1_LED_TEMPLATE: u8 = 8;
+const FACTORY1_LED_TEMPLATE: u8 = mackes_profiles::LAUNCH_CONTROL_MK2_FACTORY1_SLOT;
 
 const LED_SEND_ATTEMPTS: u8 = 3;
 const LED_FLUSH_LIMIT: usize = 48;
@@ -361,7 +361,9 @@ impl LedSurface {
         };
         self.diagnostics.target_id = Some(selected.1);
         if self.template_reselect_pending {
-            if let Some(bytes) = mackes_profiles::encode_launch_control_template(8) {
+            if let Some(bytes) = mackes_profiles::encode_launch_control_template(
+                mackes_profiles::LAUNCH_CONTROL_MK2_FACTORY1_SLOT,
+            ) {
                 if let Ok(message) = MidiMessage::from_wire(&bytes) {
                     let event = MidiEvent {
                         timestamp: TimestampNanos::new(0),

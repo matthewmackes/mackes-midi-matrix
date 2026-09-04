@@ -569,8 +569,9 @@ pub struct LaunchControlLayoutControl {
     pub feedback_address: Option<u8>,
 }
 
-/// Factory Template 1 slot selected on the hardware. MACKES does not write templates.
-pub const LAUNCH_CONTROL_MK2_FACTORY1_SLOT: u8 = 1;
+/// Factory Template 1 slot selected on the hardware. Novation numbers User
+/// templates 0–7 and Factory templates 8–15, so Factory Template 1 is 8.
+pub const LAUNCH_CONTROL_MK2_FACTORY1_SLOT: u8 = 8;
 
 /// The sole machine-readable Launch Control XL Mk2 production layout.
 ///

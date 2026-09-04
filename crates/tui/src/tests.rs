@@ -342,7 +342,7 @@ fn persisted_launch_control_template_converts_fail_closed() {
 #[test]
 fn launch_control_template_readiness_fails_closed_for_missing_and_incomplete_layouts() {
     assert_eq!(launch_control_template_readiness(None), "MACKES TEMPLATE REQUIRED");
-    let incomplete = LaunchControlTemplate { template: 1, assignments: Vec::new() };
+    let incomplete = LaunchControlTemplate { template: 8, assignments: Vec::new() };
     assert_eq!(launch_control_template_readiness(Some(&incomplete)), "MACKES TEMPLATE REQUIRED");
     let wrong_slot = LaunchControlTemplate { template: 0, assignments: Vec::new() };
     assert_eq!(launch_control_template_readiness(Some(&wrong_slot)), "MACKES TEMPLATE MISMATCH");
