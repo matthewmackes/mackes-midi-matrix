@@ -912,6 +912,16 @@ fn pcm70_catalog_translates_to_valid_named_reflex_setups_and_sysex() {
 }
 
 #[test]
+fn reflex_decodes_hardware_active_setup_with_reserved_tail() {
+    let frame = crate::parse_sysex_hex(
+        "F0 06 02 00 38 50 01 00 00 00 14 40 36 0A 00 08 00 3C 00 00 00 54 00 40 36 00 26 00 30 00 43 6F 6E 63 65 72 74 00 20 57 61 76 65 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 4A F7",
+    )
+    .expect("hardware frame");
+    let (_, setup) = lexicon_reflex::decode_active_setup_frame(&frame).expect("active setup");
+    assert_eq!(lexicon_reflex::ReflexSetup::new(&setup).unwrap().algorithm(), Some(1));
+}
+
+#[test]
 fn pcm70_translation_values_are_on_reflex_wire_steps() {
     let setup = lexicon_reflex::translate_pcm70("concert-wave").expect("translation");
     assert_eq!(

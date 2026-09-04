@@ -1579,10 +1579,10 @@ pub fn decode_setup_frame(frame: &[u8]) -> Result<(u8, Vec<u8>), &'static str> {
 ///
 /// Returns an error when framing, checksum, or packed size is invalid.
 pub fn decode_active_setup_frame(frame: &[u8]) -> Result<(u8, Vec<u8>), &'static str> {
-    if frame.len() != 63
+    if !matches!(frame.len(), 63 | 65)
         || frame[0..3] != [0xF0, MANUFACTURER_ID, PRODUCT_ID]
         || frame[4] != 0x38
-        || frame[62] != 0xF7
+        || frame[frame.len() - 1] != 0xF7
     {
         return Err("invalid Reflex active setup frame");
     }
@@ -1591,7 +1591,7 @@ pub fn decode_active_setup_frame(frame: &[u8]) -> Result<(u8, Vec<u8>), &'static
         return Err("invalid Reflex active setup header");
     }
     let packed = &frame[5..61];
-    if checksum(packed) != frame[61] || packed.iter().any(|byte| *byte > 127) {
+    if checksum(packed) != frame[frame.len() - 2] || packed.iter().any(|byte| *byte > 127) {
         return Err("Reflex active setup checksum or data invalid");
     }
     decode_packed_setup(packed).map(|raw| (channel, raw))
