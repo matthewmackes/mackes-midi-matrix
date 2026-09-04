@@ -1329,8 +1329,8 @@ impl Daemon {
     #[allow(clippy::too_many_lines)]
     pub fn dispatch_registered(&mut self, event: &mackes_domain::MidiEvent) -> (usize, usize) {
         let _ = self.activity.push(event);
-        if let mackes_domain::MidiMessage::SysEx(frame) = &event.message {
-            let frame = frame.iter().map(|byte| byte.as_u8()).collect::<Vec<_>>();
+        if matches!(event.message, mackes_domain::MidiMessage::SysEx(_)) {
+            let frame = event.message.wire_bytes();
             if let Ok(mackes_profiles::lexicon_reflex::DecodedMessage::ActiveSetup {
                 setup, ..
             }) = mackes_profiles::lexicon_reflex::decode_message(&frame)
