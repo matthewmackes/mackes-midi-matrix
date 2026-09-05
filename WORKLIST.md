@@ -4793,7 +4793,7 @@ tests, strict Clippy, architecture/worklist policy, and the complete release gat
 - **Design evidence:** Official architecture and client model reviewed; implementation and live
   changes are delegated, not executed in this design task.
 
-#### [ ] W112 — Inspect PiPedal and qualify its control protocol
+#### [x] W112 — Inspect PiPedal and qualify its control protocol
 - **Status:** `DONE`
 - **Owner:** Unassigned
 - **Depends on:** None
