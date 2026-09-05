@@ -229,6 +229,37 @@ pub struct MidiBinding {
     pub switch_control_type: i32,
 }
 
+/// Stable identity for a discovered PiPedal plugin instance.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PluginTarget {
+    /// Plugin LV2/VST URI.
+    pub uri: String,
+    /// Runtime instance ID, never used as reusable identity.
+    #[serde(rename = "instanceId")]
+    pub instance_id: u64,
+    /// Human-readable plugin name.
+    pub name: String,
+}
+
+/// Metadata for one discovered, controllable plugin parameter.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ControlDescriptor {
+    /// Plugin URI and symbol together identify the reusable control.
+    pub plugin_uri: String,
+    /// LV2/plugin control symbol.
+    pub symbol: String,
+    /// Display label.
+    pub label: String,
+    /// Minimum value.
+    pub min_value: f32,
+    /// Maximum value.
+    pub max_value: f32,
+    /// Current value, if known.
+    pub value: Option<f32>,
+    /// Whether PiPedal accepts writes for this control.
+    pub writable: bool,
+}
+
 /// Encode a `PiPedal` request as its documented two-element JSON array.
 pub fn encode_request<T: Serialize>(request: &Request<T>) -> serde_json::Result<Vec<u8>> {
     let header = serde_json::json!({
