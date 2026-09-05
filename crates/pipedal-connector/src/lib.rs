@@ -2,6 +2,7 @@
 #![allow(clippy::doc_markdown)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::option_if_let_else)]
+#![allow(clippy::match_same_arms)]
 #![allow(missing_docs)]
 
 //! Typed, transport-independent `PiPedal` WebSocket protocol contracts.
@@ -41,6 +42,41 @@ pub struct MessageHeader {
 pub struct ErrorBody {
     /// Human-readable server error.
     pub message: String,
+}
+
+/// Ordered phases of a PiPedal control session.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SessionPhase {
+    /// No WebSocket handshake has completed.
+    Disconnected,
+    /// WebSocket is open and `hello` is next.
+    Connected,
+    /// Client identity was accepted; `version` is next.
+    Identified,
+    /// Server version was read; catalog loading is in progress.
+    LoadingCatalog,
+    /// Required startup catalog/state has been loaded.
+    Ready,
+}
+
+impl SessionPhase {
+    /// Advance the session after a successful response.
+    pub fn accept(self, message: &str) -> Result<Self, String> {
+        match (self, message) {
+            (Self::Connected, "hello") => Ok(Self::Identified),
+            (Self::Identified, "version") => Ok(Self::LoadingCatalog),
+            (Self::LoadingCatalog, "getSystemMidiBindings") => Ok(Self::Ready),
+            (
+                Self::LoadingCatalog,
+                "plugins" | "currentPedalboard" | "pluginClasses" | "getPresets" | "getBankIndex"
+                | "getFavorites" | "imageList",
+            ) => Ok(Self::LoadingCatalog),
+            (Self::Ready, _) => Ok(Self::Ready),
+            (phase, message) => {
+                Err(format!("unexpected PiPedal message {message} during {phase:?}"))
+            }
+        }
+    }
 }
 
 /// Decode a bounded PiPedal array-framed message.
@@ -177,5 +213,17 @@ mod tests {
         assert!(decode_body::<ErrorBody>(None).is_err());
         let body = serde_json::json!({"message":"invalid control"});
         assert_eq!(decode_body::<ErrorBody>(Some(body)).expect("body").message, "invalid control");
+    }
+
+    #[test]
+    fn session_requires_hello_and_version_before_catalog_ready() {
+        assert_eq!(
+            SessionPhase::Connected.accept("hello").expect("hello"),
+            SessionPhase::Identified
+        );
+        assert!(SessionPhase::Connected.accept("getSystemMidiBindings").is_err());
+        let phase = SessionPhase::Identified.accept("version").expect("version");
+        let phase = phase.accept("plugins").expect("plugins");
+        assert_eq!(phase.accept("getSystemMidiBindings").expect("bindings"), SessionPhase::Ready);
     }
 }
