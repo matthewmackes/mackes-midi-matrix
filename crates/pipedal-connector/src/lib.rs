@@ -306,8 +306,12 @@ impl PluginCatalog {
     /// Resolve a reusable mapping against this snapshot.
     pub fn resolve_mapping(&self, mapping: &ControlMapping) -> Result<&ControlDescriptor, String> {
         mapping.validate()?;
-        if !self.targets.iter().any(|target| target.uri == mapping.plugin_uri) {
+        let matches = self.targets.iter().filter(|target| target.uri == mapping.plugin_uri).count();
+        if matches == 0 {
             return Err("PiPedal mapping plugin is unavailable".into());
+        }
+        if matches > 1 && mapping.scope.is_none() {
+            return Err("PiPedal mapping plugin is ambiguous".into());
         }
         let control = self
             .find_control(&mapping.plugin_uri, &mapping.symbol)
@@ -624,5 +628,13 @@ mod tests {
             scope: None,
         };
         assert!(catalog.resolve_mapping(&mapping).is_ok());
+        let ambiguous = PluginCatalog {
+            targets: vec![
+                PluginTarget { uri: "urn:eq".into(), instance_id: 1, name: "EQ 1".into() },
+                PluginTarget { uri: "urn:eq".into(), instance_id: 2, name: "EQ 2".into() },
+            ],
+            controls: catalog.controls,
+        };
+        assert!(ambiguous.resolve_mapping(&mapping).is_err());
     }
 }
