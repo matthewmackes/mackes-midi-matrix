@@ -17,7 +17,8 @@ use std::collections::{BTreeMap, BTreeSet};
 const FACTORY1_LED_TEMPLATE: u8 = mackes_profiles::LAUNCH_CONTROL_MK2_FACTORY1_SLOT;
 
 const LED_SEND_ATTEMPTS: u8 = 3;
-const LED_FLUSH_LIMIT: usize = 48;
+const LED_FLUSH_LIMIT: usize = 8;
+const LED_MIN_INTERVAL_MS: u64 = 20;
 const IDLE_SLEEP_AFTER_MS: u64 = 5 * 60 * 1_000;
 const IDLE_SWEEP_STEP_MS: u64 = 600;
 const RECONNECT_SHOW_MS: u64 = 12_000;
@@ -92,6 +93,7 @@ pub struct LedSurface {
     sleep_active: bool,
     reconnect_show_started_ms: Option<u64>,
     template_reselect_pending: bool,
+    last_emit_ms: Option<u64>,
     arrow_states: BTreeMap<u8, (bool, u64)>,
     knob_activity: BTreeMap<String, u64>,
     backend_confirmation: Option<BackendConfirmation>,
@@ -110,6 +112,7 @@ impl Default for LedSurface {
             sleep_active: false,
             reconnect_show_started_ms: None,
             template_reselect_pending: false,
+            last_emit_ms: None,
             arrow_states: BTreeMap::new(),
             knob_activity: BTreeMap::new(),
             backend_confirmation: None,
@@ -381,9 +384,16 @@ impl LedSurface {
             .diagnostics
             .coalesced
             .saturating_add((self.coalescer.desired_len().saturating_sub(pending_len)) as u64);
-        let pending = self.coalescer.drain_pending_limited(LED_FLUSH_LIMIT);
-        for (index, state) in pending {
-            self.emit_frame(outputs, selected.0, index, state);
+        let can_emit =
+            self.last_emit_ms.is_none_or(|last| now_ms.saturating_sub(last) >= LED_MIN_INTERVAL_MS);
+        if can_emit {
+            let pending = self.coalescer.drain_pending_limited(LED_FLUSH_LIMIT);
+            if !pending.is_empty() {
+                self.last_emit_ms = Some(now_ms);
+            }
+            for (index, state) in pending {
+                self.emit_frame(outputs, selected.0, index, state);
+            }
         }
         self.diagnostics.pending_deadline_ms =
             pending_deadline(self.scheduler, now_ms, self.result_started_ms);
