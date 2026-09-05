@@ -168,7 +168,6 @@ impl LedSurface {
         if control_id.starts_with("knob-") {
             self.knob_activity
                 .insert(control_id.into(), now_ms.saturating_add(KNOB_ACTIVITY_VISIBLE_MS));
-            self.request_full_resync();
         }
     }
 
@@ -892,6 +891,23 @@ mod tests {
         assert_eq!(surface.diagnostics.sent, first_sent);
         assert!(surface.diagnostics.coalesced > 0);
         assert_eq!(surface.coalescer.desired(0).map(|state| state.color), Some(LedColor::Amber));
+    }
+
+    #[test]
+    fn knob_activity_does_not_replay_the_entire_led_matrix() {
+        let mut outputs = OutputRegistry::new(4);
+        outputs
+            .insert(Box::new(recording("xl-midi", "Launch Control XL MIDI 1").0))
+            .expect("output");
+        let mut surface = LedSurface::default();
+        let store = ControlMappingStore::default();
+        let session = AssignmentSession::new("live");
+
+        surface.flush(0, &store, &session, None, &mut outputs, false);
+        let initial = surface.diagnostics.sent;
+        surface.record_knob_activity("knob-r2-c1", 1);
+        surface.flush(1, &store, &session, None, &mut outputs, false);
+        assert!(surface.diagnostics.sent <= initial.saturating_add(2));
     }
 
     #[test]
