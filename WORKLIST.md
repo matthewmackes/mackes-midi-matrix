@@ -4866,6 +4866,9 @@ tests, strict Clippy, architecture/worklist policy, and the complete release gat
 - **Progress evidence (2026-09-05):** Added `ServerFrame` decoding for unmasked server frame
   headers, FIN/opcode preservation, extended lengths, exact payload bounds, and overflow/
   masking rejection. Eight connector tests and strict Clippy pass.
+- **Progress evidence (2026-09-05):** Added bounded masked client text-frame encoding with
+  short/extended lengths and deterministic mask tests, completing the connector’s frame-level
+  primitives without opening sockets or enabling live writes.
 - **Validation evidence (2026-09-05):** Full `cargo test --workspace --all-targets` passed,
   including 79 daemon, 26 IPC, and 4 connector tests; one existing physical ALSA reconnect
   test remains ignored by its explicit hardware gate.
