@@ -4889,6 +4889,8 @@ tests, strict Clippy, architecture/worklist policy, and the complete release gat
 - **Progress evidence (2026-09-05):** Added deterministic `PluginCatalog::find_control` lookup
   by stable plugin URI and parameter symbol, with missing-target coverage; runtime instance IDs
   remain out of mapping resolution.
+- **Progress evidence (2026-09-05):** Added catalog-backed mapping resolution that fails closed
+  for unavailable plugins, missing controls, and read-only parameters before runtime writes.
 - **Progress evidence (2026-09-05):** Added explicit `SessionPhase::reset` behavior and
   reconnect coverage so socket loss returns the connector to `Disconnected` before a fresh
   `ehlo`/version/catalog negotiation.
