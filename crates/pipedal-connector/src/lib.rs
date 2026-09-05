@@ -44,6 +44,35 @@ pub struct ServerFrame {
     pub payload: Vec<u8>,
 }
 
+/// Encode a masked client text frame for PiPedal.
+pub fn encode_client_text(payload: &[u8], mask: [u8; 4]) -> Result<Vec<u8>, String> {
+    if payload.len() > MAX_FRAME_BYTES {
+        return Err("PiPedal client payload exceeds configured limit".into());
+    }
+    let mut output = Vec::with_capacity(payload.len() + 14);
+    output.push(0x81);
+    match payload.len() {
+        0..=125 => output.push(
+            0x80 | u8::try_from(payload.len()).map_err(|_| "invalid short payload".to_string())?,
+        ),
+        126..=65_535 => {
+            output.push(0xFE);
+            output.extend_from_slice(
+                &u16::try_from(payload.len())
+                    .map_err(|_| "invalid extended payload".to_string())?
+                    .to_be_bytes(),
+            );
+        }
+        _ => {
+            output.push(0xFF);
+            output.extend_from_slice(&(payload.len() as u64).to_be_bytes());
+        }
+    }
+    output.extend_from_slice(&mask);
+    output.extend(payload.iter().enumerate().map(|(i, byte)| byte ^ mask[i % 4]));
+    Ok(output)
+}
+
 /// Decode one complete unmasked server WebSocket frame.
 pub fn decode_server_frame(input: &[u8]) -> Result<ServerFrame, String> {
     if input.len() < 2 {
@@ -311,5 +340,13 @@ mod tests {
         );
         assert!(decode_server_frame(&[0x81, 0x80]).is_err());
         assert!(decode_server_frame(&[0x81, 4, b'o']).is_err());
+    }
+
+    #[test]
+    fn client_encoder_masks_text_and_supports_extended_lengths() {
+        let frame = encode_client_text(b"ok", [1, 2, 3, 4]).expect("frame");
+        assert_eq!(&frame[..6], &[0x81, 0x82, 1, 2, 3, 4]);
+        assert_eq!(&frame[6..], &[110, 105]);
+        assert!(encode_client_text(&vec![0; MAX_FRAME_BYTES + 1], [0; 4]).is_err());
     }
 }
