@@ -11,6 +11,7 @@ members = [
   "crates/scene-engine",
   "crates/tui",
   "crates/testkit",
+  "crates/pipedal-connector",
 ]
 
 [workspace.package]
