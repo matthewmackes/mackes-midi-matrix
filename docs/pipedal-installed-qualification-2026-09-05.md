@@ -57,6 +57,14 @@ deadline. This proves the endpoint and upgrade path, but not the request contrac
 installed session likely requires an initialization message or route-specific handshake.
 W112 must capture that sequence from the matching client before enabling writes.
 
+Live handshake fixture (read-only, 2026-09-05): the correct route is `/pipedal`. Sending
+`[{"message":"hello","replyTo":1}]` returned `[{"reply":1,"message":"ehlo"},2]`.
+Sending `version` returned `serverVersion: "PiPedal v2.0.110-Release"`, operating system
+`Linux 7.1.13-300.vanilla.fc44.x86_64+rt/x86_64`, and the two advertised web addresses.
+Subsequent `plugins` and `currentPedalboard` requests returned data; responses may be split
+across multiple WebSocket frames and the connector must reassemble complete text messages.
+This closes the route/version/hello portion of W112. Binding and full catalog fixtures remain.
+
 Upstream client initialization order (pinned source commit) begins with `hello`, then
 `version`, followed by `imageList`, `plugins`, `currentPedalboard`, `pluginClasses`,
 `getPresets`, `getBankIndex`, `getFavorites`, and `getSystemMidiBindings` among other

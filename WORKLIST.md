@@ -4827,6 +4827,11 @@ tests, strict Clippy, architecture/worklist policy, and the complete release gat
   Protocols` from the running PiPedal service. A direct `getSystemMidiBindings` frame timed
   out after three seconds, confirming that an initialization sequence or route-specific
   handshake remains to be identified; no write was attempted.
+- **Live handshake fixture:** `/pipedal` returned `ehlo` and client ID 2 for `hello`; `version`
+  identified `PiPedal v2.0.110-Release` on the installed Fedora realtime kernel. `plugins` and
+  `currentPedalboard` returned data. WebSocket responses were observed split across frames;
+  W113 must reassemble complete text messages. Route/version/hello are now evidenced; binding
+  and complete catalog fixtures remain.
 - **Protocol progress:** Upstream client tracing identifies the required startup sequence:
   `hello`, `version`, then catalog/state requests including `plugins`, `currentPedalboard`,
   `pluginClasses`, `getPresets`, `getBankIndex`, `getFavorites`, and
