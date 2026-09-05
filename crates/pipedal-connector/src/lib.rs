@@ -260,6 +260,35 @@ pub struct ControlDescriptor {
     pub writable: bool,
 }
 
+/// Reusable physical-to-PiPedal mapping identity.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ControlMapping {
+    /// Launch Control physical ID, for example `knob-r3-c4`.
+    pub physical_control_id: String,
+    /// Stable plugin URI.
+    pub plugin_uri: String,
+    /// Stable plugin parameter symbol.
+    pub symbol: String,
+    /// Optional preset or snapshot scope.
+    pub scope: Option<String>,
+}
+
+impl ControlMapping {
+    /// Validate a reusable mapping before persistence or runtime resolution.
+    pub fn validate(&self) -> Result<(), String> {
+        if self.physical_control_id.is_empty()
+            || self.plugin_uri.is_empty()
+            || self.symbol.is_empty()
+        {
+            return Err("PiPedal mapping identity is incomplete".into());
+        }
+        if self.scope.as_ref().is_some_and(String::is_empty) {
+            return Err("PiPedal mapping scope is empty".into());
+        }
+        Ok(())
+    }
+}
+
 impl ControlDescriptor {
     /// Validate identity, bounds, and an optional current value.
     pub fn validate(&self) -> Result<(), String> {
@@ -414,5 +443,17 @@ mod tests {
         assert!(descriptor.validate().is_ok());
         descriptor.value = Some(13.0);
         assert!(descriptor.validate().is_err());
+    }
+
+    #[test]
+    fn control_mapping_requires_stable_identity() {
+        let mapping = ControlMapping {
+            physical_control_id: "knob-r3-c4".into(),
+            plugin_uri: "http://two-play.com/plugins/toob-parametric-eq".into(),
+            symbol: "lfLevel".into(),
+            scope: Some("preset:10".into()),
+        };
+        assert!(mapping.validate().is_ok());
+        assert!(ControlMapping { symbol: String::new(), ..mapping }.validate().is_err());
     }
 }
