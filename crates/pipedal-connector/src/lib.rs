@@ -303,6 +303,21 @@ impl PluginCatalog {
             .find(|control| control.plugin_uri == plugin_uri && control.symbol == symbol)
     }
 
+    /// Resolve a reusable mapping against this snapshot.
+    pub fn resolve_mapping(&self, mapping: &ControlMapping) -> Result<&ControlDescriptor, String> {
+        mapping.validate()?;
+        if !self.targets.iter().any(|target| target.uri == mapping.plugin_uri) {
+            return Err("PiPedal mapping plugin is unavailable".into());
+        }
+        let control = self
+            .find_control(&mapping.plugin_uri, &mapping.symbol)
+            .ok_or_else(|| "PiPedal mapping control is unavailable".to_string())?;
+        if !control.writable {
+            return Err("PiPedal mapping control is read-only".into());
+        }
+        Ok(control)
+    }
+
     /// Validate bounds, instance identity, and every control descriptor.
     pub fn validate(&self) -> Result<(), String> {
         if self.controls.len() > MAX_CATALOG_CONTROLS {
@@ -602,5 +617,12 @@ mod tests {
             Some("Low")
         );
         assert!(catalog.find_control("urn:eq", "missing").is_none());
+        let mapping = ControlMapping {
+            physical_control_id: "knob-r3-c4".into(),
+            plugin_uri: "urn:eq".into(),
+            symbol: "lfLevel".into(),
+            scope: None,
+        };
+        assert!(catalog.resolve_mapping(&mapping).is_ok());
     }
 }
