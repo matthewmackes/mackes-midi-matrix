@@ -4848,6 +4848,9 @@ tests, strict Clippy, architecture/worklist policy, and the complete release gat
   tests. Connector remains transport-independent and performs no live writes.
 - **Progress evidence (2026-09-05):** Added typed `ErrorBody` replies and generic body decoding,
   with missing-body and server-error tests. Transport/session ownership remains open.
+- **Progress evidence (2026-09-05):** Added bounded `SessionPhase` transitions requiring
+  `hello`, `version`, catalog loading, and `getSystemMidiBindings` before `Ready`; out-of-order
+  messages are rejected and covered by tests.
 - **Validation evidence (2026-09-05):** Full `cargo test --workspace --all-targets` passed,
   including 79 daemon, 26 IPC, and 4 connector tests; one existing physical ALSA reconnect
   test remains ignored by its explicit hardware gate.
