@@ -4815,6 +4815,11 @@ tests, strict Clippy, architecture/worklist policy, and the complete release gat
   operation/event candidates for control, pedalboard/plugin setters, snapshots, system MIDI
   bindings, and change events. Names are not treated as a protocol contract; W112 must pin
   matching source and capture JSON envelopes before W113 implementation.
+- **Pinned protocol evidence:** Upstream PiPedal commit
+  `32c45bf2d1714221eac2c2c62cafcbb77cee899e` defines array-framed WebSocket messages,
+  `setControl` body fields (`clientId`, `instanceId`, `symbol`, `value`), and the
+  `MidiBinding` schema. W113 must still verify this revision against the installed binary
+  with a fixture before enabling writes.
 - **Version evidence:** The installed web manifest has no release version and
   `/usr/sbin/pipedald` is not owned by a package in the local RPM database. Protocol
   compatibility remains unresolved until source revision or wire fixtures are captured.

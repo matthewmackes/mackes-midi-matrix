@@ -36,6 +36,15 @@ Read-only strings inspection of `/usr/sbin/pipedald` exposed operation/event can
 `onPedalboardChanged`. These names are discovery evidence only; W112 must capture their
 JSON envelopes and semantics from the matching client/server source before implementation.
 
+Upstream source inspection was pinned to commit `32c45bf2d1714221eac2c2c62cafcbb77cee899e`.
+The client sends WebSocket messages as JSON arrays whose first object contains `message`
+and optional `replyTo`, followed by an optional body. `setControl` uses a body containing
+`clientId`, `instanceId`, `symbol`, and `value`; `getSystemMidiBindings` returns an array
+of `MidiBinding` records. The binding schema includes `symbol`, `channel`, `bindingType`,
+`note`, `control`, `minControlValue`, `maxControlValue`, `minValue`, `maxValue`,
+`rotaryScale`, `linearControlType`, and `switchControlType`. This is the first pinned
+protocol evidence for W113; installed-build compatibility still requires a wire fixture.
+
 The installed web manifest identifies PiPedal but contains no release version. Package
 ownership metadata is also absent for `/usr/sbin/pipedald`; protocol compatibility therefore
 cannot be pinned from local version metadata alone. W112 must capture the matching source
