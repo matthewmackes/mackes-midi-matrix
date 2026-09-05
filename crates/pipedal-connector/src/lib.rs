@@ -23,6 +23,34 @@ pub struct Request<T> {
     pub body: Option<T>,
 }
 
+/// Maximum encoded PiPedal control frame accepted by the connector.
+pub const MAX_FRAME_BYTES: usize = 1_048_576;
+
+/// Header returned by PiPedal for replies and asynchronous events.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct MessageHeader {
+    /// Message or event name.
+    pub message: String,
+    /// Correlation identifier for a request response.
+    #[serde(rename = "replyTo")]
+    pub reply_to: Option<u64>,
+}
+
+/// Decode a bounded PiPedal array-framed message.
+pub fn decode_message(input: &[u8]) -> Result<(MessageHeader, Option<serde_json::Value>), String> {
+    if input.len() > MAX_FRAME_BYTES {
+        return Err("PiPedal frame exceeds configured limit".into());
+    }
+    let value: serde_json::Value = serde_json::from_slice(input).map_err(|e| e.to_string())?;
+    let array = value.as_array().ok_or_else(|| "PiPedal frame is not an array".to_string())?;
+    if !(1..=2).contains(&array.len()) {
+        return Err("PiPedal frame must contain one header and at most one body".into());
+    }
+    let header: MessageHeader =
+        serde_json::from_value(array[0].clone()).map_err(|e| e.to_string())?;
+    Ok((header, array.get(1).cloned()))
+}
+
 /// Body accepted by `PiPedal`'s `setControl` operation.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct SetControl {
@@ -110,5 +138,22 @@ mod tests {
         };
         let encoded = serde_json::to_vec(&binding).expect("encode");
         assert_eq!(serde_json::from_slice::<MidiBinding>(&encoded).expect("decode"), binding);
+    }
+
+    #[test]
+    fn decoder_rejects_invalid_shape_and_accepts_event_body() {
+        assert!(decode_message(br"{}").is_err());
+        assert!(decode_message(br#"[{"message":"x"},{},{}]"#).is_err());
+        let (header, body) =
+            decode_message(br#"[{"message":"onPedalboardChanged"},{"generation":3}]"#)
+                .expect("decode");
+        assert_eq!(header.message, "onPedalboardChanged");
+        assert_eq!(body.expect("body")["generation"], 3);
+    }
+
+    #[test]
+    fn decoder_rejects_oversized_frames() {
+        let input = vec![b' '; MAX_FRAME_BYTES + 1];
+        assert!(decode_message(&input).is_err());
     }
 }
