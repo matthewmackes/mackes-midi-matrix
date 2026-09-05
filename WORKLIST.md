@@ -4774,14 +4774,74 @@ tests, strict Clippy, architecture/worklist policy, and the complete release gat
   migration backup/undo results, Eventide pedal observations, workspace tests, strict Clippy,
   formatting and repository/worklist checks. No cargo-audit requirement.
 
-#### [ ] W111 — PiPedal EQ reusable MIDI connector
-- **Status:** `READY`; **Owner:** codex; **Depends on:** PiPedal MIDI binding contract and operator answers.
-- **Scope:** Research PiPedal MIDI bindings, define a reusable connector/profile, and assign
-  Launch Control XL `knob-r3-c4` through `knob-r3-c8` to the selected PiPedal EQ controls.
-- **Gate:** No implementation or live configuration changes until the ten operator questions
-  are answered and the PiPedal control/CC/channel contract is documented.
-- **Acceptance:** deterministic mappings, bounded feedback, persistence across restart, and
-  live validation against the PiPedal endpoint.
+#### [ ] W111 — First-class PiPedal connector design and delivery
+- **Status:** `IN_PROGRESS`
+- **Owner:** Next implementation AI (design prepared by Codex)
+- **Depends on:** W112, W113, W114, W115, W116
+- **Scope:** All operations controllable through the qualified PiPedal connector: discovery, plugin
+  parameters and editing, pedalboard routing, presets/banks/snapshots, MIDI, files, audio and
+  system settings, plus feedback, recovery, persistence and CLI/TUI parity. EQ is the first
+  physical assignment, not the capability boundary.
+- **Design:** [PiPedal connector implementation handoff](docs/pipedal-connector-design.md).
+- **Project rule:** Record every task and scope change in this worklist before executing it.
+- **Decisions:** Reserve R3C4–R3C8 for PiPedal EQ. Inspect installed configuration to resolve
+  plugin identity and parameter symbols; never invent five EQ bands or fixed CC assignments.
+  The prior ten-question blanket gate is superseded by this design handoff: use recorded design
+  defaults and ask only for unresolved musical choices that inspection cannot establish.
+- **Acceptance:** All child packets and operation-by-operation capability coverage evidence complete;
+  do not mark done for EQ-only coverage or source-only tests.
+- **Design evidence:** Official architecture and client model reviewed; implementation and live
+  changes are delegated, not executed in this design task.
+
+#### [ ] W112 — Inspect PiPedal and qualify its control protocol
+- **Status:** `READY`
+- **Owner:** Unassigned
+- **Depends on:** None
+- **Work:** Read design; inspect installed version, endpoint, active pedalboard, EQ instances,
+  parameter metadata, MIDI bindings, and routing read-only. Pin upstream source revision and
+  inventory every exposed operation/event, including files, audio settings and administrative
+  actions. Document exact requests/events, authentication, limits and compatibility fixtures.
+- **Acceptance:** Evidence identifies five intended EQ targets or a precise unresolved choice;
+  unsupported versions remain read-only. Document conflicts on R3C4–R3C8 before migration.
+
+#### [ ] W113 — Implement reusable PiPedal adapter and catalog
+- **Status:** `NOT_STARTED`
+- **Owner:** Unassigned
+- **Depends on:** W112
+- **Work:** Implement daemon-owned transport, typed catalog/state, identity resolution, bounded
+  asynchronous requests, compatibility checks, and optional explicit MIDI transport. Implement all qualified operations using typed capability
+  descriptors; explicitly report absent or unsupported operations.
+- **Acceptance:** Mock-server contract tests cover discovery, metadata, malformed responses,
+  timeouts and reconnect; blocking network work never runs on the MIDI dispatch path.
+
+#### [ ] W114 — Persist EQ mappings and integrate operator workflows
+- **Status:** `NOT_STARTED`
+- **Owner:** Unassigned
+- **Depends on:** W113
+- **Work:** Implement versioned connector configuration, export/import, preview/apply/undo,
+  R3C4–R3C8 conflict migration, dynamic destination catalog, and CLI/TUI parity for every
+  qualified operation. Provide suitable editors/actions for non-scalar controls; expose
+  destructive actions with explicit confirmation and never bind them to knobs by default.
+- **Acceptance:** Five mappings resolve by plugin identity/parameter symbol; unrelated mappings
+  survive; duplicate/missing plugins require repair; save failure leaves prior bindings intact.
+
+#### [ ] W115 — Synchronize PiPedal state and bound recovery traffic
+- **Status:** `NOT_STARTED`
+- **Owner:** Unassigned
+- **Depends on:** W113, W114
+- **Work:** Implement pickup, parameter-event reconciliation, preset/snapshot generations,
+  bounded control/LED queues, stale-state reporting, and automatic recovery.
+- **Acceptance:** Stress tests prove no feedback loop, stale replay, unbounded queue or daemon
+  stall; external edits and reconnect re-arm pickup without overwriting PiPedal values.
+
+#### [ ] W116 — Qualify and deploy PiPedal integration
+- **Status:** `NOT_STARTED`
+- **Owner:** Unassigned
+- **Depends on:** W114, W115
+- **Work:** Run design qualification matrix, document results, build/install with rollback,
+  and verify all five physical EQ controls alongside Eventide and Lexicon.
+- **Acceptance:** CLI/TUI agree with PiPedal read-back; physical sweep and reconnect evidence
+  recorded; no Novation lockup; missing hardware evidence remains explicitly open.
 
 #### [ ] W100 — Reproducible appliance installation and boot supervision
 
