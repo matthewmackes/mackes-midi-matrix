@@ -295,6 +295,14 @@ pub struct PluginCatalog {
 }
 
 impl PluginCatalog {
+    /// Find a control by stable plugin URI and parameter symbol.
+    #[must_use]
+    pub fn find_control(&self, plugin_uri: &str, symbol: &str) -> Option<&ControlDescriptor> {
+        self.controls
+            .iter()
+            .find(|control| control.plugin_uri == plugin_uri && control.symbol == symbol)
+    }
+
     /// Validate bounds, instance identity, and every control descriptor.
     pub fn validate(&self) -> Result<(), String> {
         if self.controls.len() > MAX_CATALOG_CONTROLS {
@@ -572,5 +580,27 @@ mod tests {
             })
             .collect();
         assert!(PluginCatalog { targets: Vec::new(), controls }.validate().is_err());
+    }
+
+    #[test]
+    fn catalog_lookup_uses_uri_and_symbol() {
+        let control = ControlDescriptor {
+            plugin_uri: "urn:eq".into(),
+            symbol: "lfLevel".into(),
+            label: "Low".into(),
+            min_value: -12.0,
+            max_value: 12.0,
+            value: Some(0.0),
+            writable: true,
+        };
+        let catalog = PluginCatalog {
+            targets: vec![PluginTarget { uri: "urn:eq".into(), instance_id: 1, name: "EQ".into() }],
+            controls: vec![control],
+        };
+        assert_eq!(
+            catalog.find_control("urn:eq", "lfLevel").map(|value| value.label.as_str()),
+            Some("Low")
+        );
+        assert!(catalog.find_control("urn:eq", "missing").is_none());
     }
 }
