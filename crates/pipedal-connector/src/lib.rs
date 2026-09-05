@@ -27,6 +27,32 @@ pub struct Request<T> {
 /// Maximum encoded PiPedal control frame accepted by the connector.
 pub const MAX_FRAME_BYTES: usize = 1_048_576;
 
+/// Bounded accumulator for fragmented WebSocket text messages.
+#[derive(Debug, Default)]
+pub struct TextAssembler {
+    pending: Vec<u8>,
+}
+
+impl TextAssembler {
+    /// Add one WebSocket payload fragment, returning a complete message at `final_fragment`.
+    pub fn push(
+        &mut self,
+        fragment: &[u8],
+        final_fragment: bool,
+    ) -> Result<Option<Vec<u8>>, String> {
+        if self.pending.len().saturating_add(fragment.len()) > MAX_FRAME_BYTES {
+            self.pending.clear();
+            return Err("PiPedal fragmented message exceeds configured limit".into());
+        }
+        self.pending.extend_from_slice(fragment);
+        if final_fragment {
+            Ok(Some(std::mem::take(&mut self.pending)))
+        } else {
+            Ok(None)
+        }
+    }
+}
+
 /// Header returned by PiPedal for replies and asynchronous events.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct MessageHeader {
@@ -225,5 +251,15 @@ mod tests {
         let phase = SessionPhase::Identified.accept("version").expect("version");
         let phase = phase.accept("plugins").expect("plugins");
         assert_eq!(phase.accept("getSystemMidiBindings").expect("bindings"), SessionPhase::Ready);
+    }
+
+    #[test]
+    fn text_assembler_reassembles_fragments_and_bounds_growth() {
+        let mut assembler = TextAssembler::default();
+        assert_eq!(assembler.push(br"[{", false).expect("fragment"), None);
+        assert_eq!(assembler.push(br"}]", true).expect("complete"), Some(b"[{}]".to_vec()));
+        let mut assembler = TextAssembler::default();
+        assert!(assembler.push(&vec![b'x'; MAX_FRAME_BYTES], false).is_ok());
+        assert!(assembler.push(b"x", true).is_err());
     }
 }
