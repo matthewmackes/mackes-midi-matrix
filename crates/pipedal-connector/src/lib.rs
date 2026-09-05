@@ -157,6 +157,13 @@ pub enum SessionPhase {
 }
 
 impl SessionPhase {
+    /// Return to the unauthenticated state after socket loss.
+    #[must_use]
+    pub const fn reset(self) -> Self {
+        let _ = self;
+        Self::Disconnected
+    }
+
     /// Advance the session after a successful response.
     pub fn accept(self, message: &str) -> Result<Self, String> {
         match (self, message) {
@@ -427,6 +434,7 @@ mod tests {
         let phase = SessionPhase::Identified.accept("version").expect("version");
         let phase = phase.accept("plugins").expect("plugins");
         assert_eq!(phase.accept("getSystemMidiBindings").expect("bindings"), SessionPhase::Ready);
+        assert_eq!(phase.reset(), SessionPhase::Disconnected);
     }
 
     #[test]
