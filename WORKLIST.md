@@ -4871,6 +4871,9 @@ tests, strict Clippy, architecture/worklist policy, and the complete release gat
 - **Progress evidence (2026-09-05):** Added `ServerFrame` decoding for unmasked server frame
   headers, FIN/opcode preservation, extended lengths, exact payload bounds, and overflow/
   masking rejection. Eight connector tests and strict Clippy pass.
+- **Progress evidence (2026-09-05):** Added reusable `PluginTarget` and `ControlDescriptor`
+  catalog contracts with URI/symbol identity, bounds, current-value freshness, and writable
+  state. This supports dynamic EQ and non-EQ plugin discovery without fixed band assumptions.
 - **Correction evidence (2026-09-05):** Live fixture showed the `hello` request returns
   response message `ehlo`; the session state machine now accepts `ehlo` and rejects treating
   the request name itself as the response. Nine connector tests pass.
