@@ -4842,6 +4842,8 @@ tests, strict Clippy, architecture/worklist policy, and the complete release gat
 - **Validation evidence (2026-09-05):** Full `cargo test --workspace --all-targets` passed,
   including 79 daemon, 26 IPC, and 4 connector tests; one existing physical ALSA reconnect
   test remains ignored by its explicit hardware gate.
+- **Quality evidence (2026-09-05):** `cargo clippy --workspace --all-targets --all-features
+  -- -D warnings` passed across all workspace crates, including the connector.
 - **Acceptance:** Mock-server contract tests cover discovery, metadata, malformed responses,
   timeouts and reconnect; blocking network work never runs on the MIDI dispatch path.
 
