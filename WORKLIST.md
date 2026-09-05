@@ -4894,6 +4894,9 @@ tests, strict Clippy, architecture/worklist policy, and the complete release gat
   test remains ignored by its explicit hardware gate.
 - **Quality evidence (2026-09-05):** `cargo clippy --workspace --all-targets --all-features
   -- -D warnings` passed across all workspace crates, including the connector.
+- **Release evidence (2026-09-05):** `scripts/release-gate.sh` passed after registering the
+  connector in the architecture policy, including workspace tests, benchmark, hermetic
+  integration (13 passed, 1 explicitly ignored), installer smoke, and release artifact checks.
 - **Acceptance:** Mock-server contract tests cover discovery, metadata, malformed responses,
   timeouts and reconnect; blocking network work never runs on the MIDI dispatch path.
 

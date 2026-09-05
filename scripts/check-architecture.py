@@ -34,6 +34,7 @@ ALLOWED_LOCAL_DEPS = {
     "mackes-testkit": {"mackes-config", "mackes-domain", "mackes-ipc", "mackes-midi-engine", "mackes-profiles", "mackes-scene-engine", "mackes-tui"},
     "mackes-midi-matrix": {"mackes-config", "mackes-domain", "mackes-ipc", "mackes-midi-engine", "mackes-profiles", "mackes-scene-engine", "mackes-tui"},
     "mackesd": {"mackes-config", "mackes-domain", "mackes-ipc", "mackes-midi-engine", "mackes-profiles", "mackes-scene-engine"},
+    "mackes-pipedal-connector": set(),
 }
 
 
