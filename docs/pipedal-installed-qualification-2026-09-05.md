@@ -35,3 +35,8 @@ Read-only strings inspection of `/usr/sbin/pipedald` exposed operation/event can
 `onSelectedSnapshotChanged`, `onSystemMidiBindingsChanged`, `onSnapshotModified`, and
 `onPedalboardChanged`. These names are discovery evidence only; W112 must capture their
 JSON envelopes and semantics from the matching client/server source before implementation.
+
+The installed web manifest identifies PiPedal but contains no release version. Package
+ownership metadata is also absent for `/usr/sbin/pipedald`; protocol compatibility therefore
+cannot be pinned from local version metadata alone. W112 must capture the matching source
+revision or equivalent wire-level fixtures before connector writes are enabled.

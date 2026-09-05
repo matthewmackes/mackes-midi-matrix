@@ -4815,6 +4815,9 @@ tests, strict Clippy, architecture/worklist policy, and the complete release gat
   operation/event candidates for control, pedalboard/plugin setters, snapshots, system MIDI
   bindings, and change events. Names are not treated as a protocol contract; W112 must pin
   matching source and capture JSON envelopes before W113 implementation.
+- **Version evidence:** The installed web manifest has no release version and
+  `/usr/sbin/pipedald` is not owned by a package in the local RPM database. Protocol
+  compatibility remains unresolved until source revision or wire fixtures are captured.
 
 #### [ ] W113 — Implement reusable PiPedal adapter and catalog
 - **Status:** `NOT_STARTED`
