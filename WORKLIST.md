@@ -12,7 +12,7 @@
 | Target release | v1.0 |
 | Primary platform | Fedora Linux 44, x86_64 |
 | Language | Rust |
-| Last updated | 2026-09-02 |
+| Last updated | 2026-09-05 |
 | Overall status | `IN_PROGRESS` (software release scope; post-release qualification tracked in §6.1) |
 | Canonical file | `WORKLIST.md` |
 
@@ -5852,3 +5852,4 @@ features as well as source calls.
 | 2026-09-05 | W091/W103/W104 | codex | Novation lock audit and LED feedback storm fix | Live audit found 570 controller events accompanied by 11,064 LED SysEx writes and roughly 540,000 coalesced updates. Each knob event was requesting a full 48-index LED resync, overwhelming the Launch Control XL during Eventide use. Removed the per-knob full resync; knob activity now updates only the changed LED state. Added regression coverage, rebuilt/restarted the daemon, and verified all devices connected, `health=ready`, zero dropped events, and no native failure. |
 | 2026-09-05 | W100 | codex | console setting negative coverage | Installer smoke now rejects invalid console usernames and relative home paths under `--check`; shell syntax, smoke, worklist, and diff checks pass. |
 | 2026-09-05 | W101 | codex | unique backup staging | Backup payload and manifest staging names now include a timestamp, preventing an interrupted stale temp file from being silently reused. Config tests (29), strict config Clippy, formatting, and worklist checks pass. |
+| 2026-09-05 | W099/W103/W104 | codex | live Novation lock regression closed in software | Removed per-knob full LED resync after audit showed 11,064 LED SysEx writes for 570 input events. The daemon was rebuilt, installed, restarted, and re-audited with Launch Control XL, MicroPitch, MidiSport 4x4, Device Monitor, and PiPedal connected; status was `ready`, with zero drops and no native failure. Physical reconnect-cycle acceptance remains open. |
