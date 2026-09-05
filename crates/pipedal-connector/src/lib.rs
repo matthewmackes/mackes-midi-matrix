@@ -36,6 +36,13 @@ pub struct MessageHeader {
     pub reply_to: Option<u64>,
 }
 
+/// PiPedal error reply body.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ErrorBody {
+    /// Human-readable server error.
+    pub message: String,
+}
+
 /// Decode a bounded PiPedal array-framed message.
 pub fn decode_message(input: &[u8]) -> Result<(MessageHeader, Option<serde_json::Value>), String> {
     if input.len() > MAX_FRAME_BYTES {
@@ -49,6 +56,14 @@ pub fn decode_message(input: &[u8]) -> Result<(MessageHeader, Option<serde_json:
     let header: MessageHeader =
         serde_json::from_value(array[0].clone()).map_err(|e| e.to_string())?;
     Ok((header, array.get(1).cloned()))
+}
+
+/// Decode a message body into a caller-selected typed value.
+pub fn decode_body<T: for<'de> Deserialize<'de>>(
+    body: Option<serde_json::Value>,
+) -> Result<T, String> {
+    body.ok_or_else(|| "PiPedal message has no body".to_string())
+        .and_then(|value| serde_json::from_value(value).map_err(|e| e.to_string()))
 }
 
 /// Body accepted by `PiPedal`'s `setControl` operation.
@@ -155,5 +170,12 @@ mod tests {
     fn decoder_rejects_oversized_frames() {
         let input = vec![b' '; MAX_FRAME_BYTES + 1];
         assert!(decode_message(&input).is_err());
+    }
+
+    #[test]
+    fn typed_body_decode_reports_missing_body_and_errors() {
+        assert!(decode_body::<ErrorBody>(None).is_err());
+        let body = serde_json::json!({"message":"invalid control"});
+        assert_eq!(decode_body::<ErrorBody>(Some(body)).expect("body").message, "invalid control");
     }
 }
