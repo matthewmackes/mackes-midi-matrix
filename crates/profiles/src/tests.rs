@@ -198,15 +198,17 @@ fn eventide_active_bypass_accepts_button_toggle_sources() {
 #[test]
 fn approved_eventide_controller_layout_covers_knobs_mix_and_safe_bypass() {
     let assignments = eventide_controller_assignments();
-    assert_eq!(assignments.len(), 19);
-    assert_eq!(assignments[0].physical_control_id, "knob-r2-c1");
-    assert_eq!(assignments[7].physical_control_id, "knob-r2-c8");
-    assert_eq!(assignments[8].physical_control_id, "knob-r3-c1");
-    assert_eq!(assignments[15].physical_control_id, "knob-r3-c8");
-    assert_eq!(assignments[16].parameter_id.as_deref(), Some("control-4"));
-    assert_eq!(assignments[17].parameter_id.as_deref(), Some("control-2"));
-    assert!(assignments[18].parameter_id.is_none());
-    assert!(assignments[18].unsupported_reason.is_some());
+    assert_eq!(assignments.len(), 14);
+    assert_eq!(assignments[0].physical_control_id, "knob-r1-c1");
+    assert_eq!(assignments[0].label, "Pitch A");
+    assert_eq!(assignments[1].label, "Pitch B");
+    assert_eq!(assignments[2].label, "Delay A");
+    assert_eq!(assignments[3].label, "Delay B");
+    assert_eq!(assignments[4].label, "Feedback");
+    assert_eq!(assignments[8].physical_control_id, "fader-1");
+    assert_eq!(assignments[11].label, "Out Lvl");
+    assert_eq!(assignments[12].parameter_id.as_deref(), Some("control-2"));
+    assert!(assignments[13].parameter_id.is_none());
 }
 
 #[test]

@@ -18,35 +18,29 @@ pub struct EventideControllerAssignment {
 /// Returns the approved row-2/row-3 Eventide layout without inventing MIDI.
 #[must_use]
 pub fn eventide_controller_assignments() -> Vec<EventideControllerAssignment> {
-    let controls = profile()
-        .controls
+    let layout = [
+        ("knob-r1-c1", 5, "Pitch A"),
+        ("knob-r1-c2", 6, "Pitch B"),
+        ("knob-r2-c1", 11, "Delay A"),
+        ("knob-r2-c2", 12, "Delay B"),
+        ("knob-r2-c3", 14, "Feedback"),
+        ("knob-r3-c1", 8, "Rate/Sens"),
+        ("knob-r3-c2", 7, "Depth"),
+        ("knob-r3-c3", 10, "Tone"),
+        ("fader-1", 4, "Mix"),
+        ("fader-2", 9, "Pitch Mix"),
+        ("fader-3", 13, "Mod"),
+        ("fader-4", 15, "Out Lvl"),
+    ];
+    let mut assignments = layout
         .iter()
-        .enumerate()
-        .filter(|(_, control)| control.cc.is_some())
-        .map(|(index, control)| (index, control.label.clone()))
-        .collect::<Vec<_>>();
-    let mut assignments = controls
-        .iter()
-        .enumerate()
-        .map(|(index, (control_index, label))| EventideControllerAssignment {
-            physical_control_id: if index < 8 {
-                format!("knob-r2-c{}", index + 1)
-            } else {
-                format!("knob-r3-c{}", index - 7)
-            },
-            parameter_id: Some(format!("control-{control_index}")),
-            label: label.clone(),
+        .map(|(physical, index, label)| EventideControllerAssignment {
+            physical_control_id: (*physical).into(),
+            parameter_id: Some(format!("control-{index}")),
+            label: (*label).into(),
             unsupported_reason: None,
         })
         .collect::<Vec<_>>();
-    if let Some(mix) = assignments.iter().find(|assignment| assignment.label == "Mix").cloned() {
-        assignments.push(EventideControllerAssignment {
-            physical_control_id: "fader-1".into(),
-            parameter_id: mix.parameter_id,
-            label: "Mix (master)".into(),
-            unsupported_reason: None,
-        });
-    }
     assignments.push(EventideControllerAssignment {
         physical_control_id: "button-r1-c1".into(),
         parameter_id: Some("control-2".into()),
