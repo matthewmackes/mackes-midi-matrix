@@ -4874,6 +4874,8 @@ tests, strict Clippy, architecture/worklist policy, and the complete release gat
 - **Progress evidence (2026-09-05):** Added reusable `PluginTarget` and `ControlDescriptor`
   catalog contracts with URI/symbol identity, bounds, current-value freshness, and writable
   state. This supports dynamic EQ and non-EQ plugin discovery without fixed band assumptions.
+- **Progress evidence (2026-09-05):** Added descriptor validation for non-empty identity,
+  finite ordered ranges, and in-range current values, with regression coverage before mapping.
 - **Correction evidence (2026-09-05):** Live fixture showed the `hello` request returns
   response message `ehlo`; the session state machine now accepts `ehlo` and rejects treating
   the request name itself as the response. Nine connector tests pass.
