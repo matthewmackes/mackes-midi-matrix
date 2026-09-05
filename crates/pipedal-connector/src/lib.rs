@@ -260,6 +260,27 @@ pub struct ControlDescriptor {
     pub writable: bool,
 }
 
+impl ControlDescriptor {
+    /// Validate identity, bounds, and an optional current value.
+    pub fn validate(&self) -> Result<(), String> {
+        if self.plugin_uri.is_empty() || self.symbol.is_empty() {
+            return Err("PiPedal control identity is empty".into());
+        }
+        if !self.min_value.is_finite()
+            || !self.max_value.is_finite()
+            || self.min_value > self.max_value
+        {
+            return Err("PiPedal control range is invalid".into());
+        }
+        if let Some(value) = self.value {
+            if !value.is_finite() || value < self.min_value || value > self.max_value {
+                return Err("PiPedal control value is outside its range".into());
+            }
+        }
+        Ok(())
+    }
+}
+
 /// Encode a `PiPedal` request as its documented two-element JSON array.
 pub fn encode_request<T: Serialize>(request: &Request<T>) -> serde_json::Result<Vec<u8>> {
     let header = serde_json::json!({
@@ -377,5 +398,21 @@ mod tests {
         assert_eq!(&frame[..6], &[0x81, 0x82, 1, 2, 3, 4]);
         assert_eq!(&frame[6..], &[110, 105]);
         assert!(encode_client_text(&vec![0; MAX_FRAME_BYTES + 1], [0; 4]).is_err());
+    }
+
+    #[test]
+    fn control_descriptor_rejects_invalid_identity_range_and_value() {
+        let mut descriptor = ControlDescriptor {
+            plugin_uri: "urn:eq".into(),
+            symbol: "gain".into(),
+            label: "Gain".into(),
+            min_value: -12.0,
+            max_value: 12.0,
+            value: Some(0.0),
+            writable: true,
+        };
+        assert!(descriptor.validate().is_ok());
+        descriptor.value = Some(13.0);
+        assert!(descriptor.validate().is_err());
     }
 }
