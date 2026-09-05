@@ -4774,6 +4774,15 @@ tests, strict Clippy, architecture/worklist policy, and the complete release gat
   migration backup/undo results, Eventide pedal observations, workspace tests, strict Clippy,
   formatting and repository/worklist checks. No cargo-audit requirement.
 
+#### [ ] W111 — PiPedal EQ reusable MIDI connector
+- **Status:** `READY`; **Owner:** codex; **Depends on:** PiPedal MIDI binding contract and operator answers.
+- **Scope:** Research PiPedal MIDI bindings, define a reusable connector/profile, and assign
+  Launch Control XL `knob-r3-c4` through `knob-r3-c8` to the selected PiPedal EQ controls.
+- **Gate:** No implementation or live configuration changes until the ten operator questions
+  are answered and the PiPedal control/CC/channel contract is documented.
+- **Acceptance:** deterministic mappings, bounded feedback, persistence across restart, and
+  live validation against the PiPedal endpoint.
+
 #### [ ] W100 — Reproducible appliance installation and boot supervision
 
 - **Status:** `IN_PROGRESS`
