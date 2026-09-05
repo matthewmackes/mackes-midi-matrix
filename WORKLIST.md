@@ -4794,7 +4794,7 @@ tests, strict Clippy, architecture/worklist policy, and the complete release gat
   changes are delegated, not executed in this design task.
 
 #### [ ] W112 — Inspect PiPedal and qualify its control protocol
-- **Status:** `IN_PROGRESS`
+- **Status:** `DONE`
 - **Owner:** Unassigned
 - **Depends on:** None
 - **Work:** Read design; inspect installed version, endpoint, active pedalboard, EQ instances,
@@ -4836,6 +4836,11 @@ tests, strict Clippy, architecture/worklist policy, and the complete release gat
   `getSystemMidiBindings`) returned nine typed bindings: four bank/program actions and six
   snapshot actions. All returned `channel: -1` and normalized 0–1 ranges. Frame reassembly
   was required and validated; no mutation request was sent.
+- **Completion evidence:** Upstream protocol revision, installed route and version, live
+  handshake, typed MIDI-binding response, fragmented-frame behavior, service recovery risk,
+  and the multiple incompatible installed EQ targets are recorded in the linked qualification
+  artifact. W113 is the correct owner for implementing the bounded session state machine and
+  dynamic catalog; no unresolved W112 inspection task remains.
 - **Protocol progress:** Upstream client tracing identifies the required startup sequence:
   `hello`, `version`, then catalog/state requests including `plugins`, `currentPedalboard`,
   `pluginClasses`, `getPresets`, `getBankIndex`, `getFavorites`, and
