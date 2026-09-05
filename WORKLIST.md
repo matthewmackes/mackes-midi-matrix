@@ -4832,6 +4832,10 @@ tests, strict Clippy, architecture/worklist policy, and the complete release gat
   `currentPedalboard` returned data. WebSocket responses were observed split across frames;
   W113 must reassemble complete text messages. Route/version/hello are now evidenced; binding
   and complete catalog fixtures remain.
+- **Binding fixture:** A complete live `/pipedal` session (`hello`, `version`, then
+  `getSystemMidiBindings`) returned nine typed bindings: four bank/program actions and six
+  snapshot actions. All returned `channel: -1` and normalized 0–1 ranges. Frame reassembly
+  was required and validated; no mutation request was sent.
 - **Protocol progress:** Upstream client tracing identifies the required startup sequence:
   `hello`, `version`, then catalog/state requests including `plugins`, `currentPedalboard`,
   `pluginClasses`, `getPresets`, `getBankIndex`, `getFavorites`, and

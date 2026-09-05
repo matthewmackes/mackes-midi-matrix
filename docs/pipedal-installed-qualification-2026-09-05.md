@@ -65,6 +65,14 @@ Subsequent `plugins` and `currentPedalboard` requests returned data; responses m
 across multiple WebSocket frames and the connector must reassemble complete text messages.
 This closes the route/version/hello portion of W112. Binding and full catalog fixtures remain.
 
+Using a complete frame reassembler, a live read-only session then completed `hello`,
+`version`, and `getSystemMidiBindings`. The installed response contains nine bindings:
+`prevBank`/`nextBank`/`prevProgram`/`nextProgram` (binding type 1, notes 41–44) and
+`snapshot1` through `snapshot6` (binding type 0, note 72), all with `channel: -1`,
+`control: 1`, and normalized value range 0–1. This validates the response codec against
+the installed service and confirms the prior timeout was caused by using `/` and skipping
+the `hello` session step. No mutation request was sent.
+
 Upstream client initialization order (pinned source commit) begins with `hello`, then
 `version`, followed by `imageList`, `plugins`, `currentPedalboard`, `pluginClasses`,
 `getPresets`, `getBankIndex`, `getFavorites`, and `getSystemMidiBindings` among other
