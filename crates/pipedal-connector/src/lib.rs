@@ -29,6 +29,8 @@ pub struct Request<T> {
 pub const MAX_FRAME_BYTES: usize = 1_048_576;
 /// Maximum reusable PiPedal mappings in one connector configuration.
 pub const MAX_MAPPINGS: usize = 128;
+/// Maximum discovered plugin controls in one catalog snapshot.
+pub const MAX_CATALOG_CONTROLS: usize = 2_048;
 
 /// Bounded accumulator for fragmented WebSocket text messages.
 #[derive(Debug, Default)]
@@ -283,6 +285,37 @@ pub struct ControlMapping {
     pub scope: Option<String>,
 }
 
+/// A bounded, validated snapshot of the PiPedal plugin catalog.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct PluginCatalog {
+    /// Discovered plugin instances.
+    pub targets: Vec<PluginTarget>,
+    /// Discovered controls across those instances.
+    pub controls: Vec<ControlDescriptor>,
+}
+
+impl PluginCatalog {
+    /// Validate bounds, instance identity, and every control descriptor.
+    pub fn validate(&self) -> Result<(), String> {
+        if self.controls.len() > MAX_CATALOG_CONTROLS {
+            return Err("PiPedal catalog exceeds configured control limit".into());
+        }
+        let mut instances = HashSet::with_capacity(self.targets.len());
+        for target in &self.targets {
+            if target.uri.is_empty()
+                || target.name.is_empty()
+                || !instances.insert(target.instance_id)
+            {
+                return Err("PiPedal catalog has invalid or duplicate plugin instance".into());
+            }
+        }
+        for control in &self.controls {
+            control.validate()?;
+        }
+        Ok(())
+    }
+}
+
 impl ControlMapping {
     /// Validate a reusable mapping before persistence or runtime resolution.
     pub fn validate(&self) -> Result<(), String> {
@@ -520,5 +553,24 @@ mod tests {
             })
             .collect::<Vec<_>>();
         assert!(validate_mappings(&many).is_err());
+    }
+
+    #[test]
+    fn catalog_rejects_duplicate_instances_and_oversized_control_sets() {
+        let target = PluginTarget { uri: "urn:eq".into(), instance_id: 1, name: "EQ".into() };
+        let catalog = PluginCatalog { targets: vec![target.clone(), target], controls: Vec::new() };
+        assert!(catalog.validate().is_err());
+        let controls = (0..=MAX_CATALOG_CONTROLS)
+            .map(|i| ControlDescriptor {
+                plugin_uri: "urn:eq".into(),
+                symbol: format!("c{i}"),
+                label: "Control".into(),
+                min_value: 0.0,
+                max_value: 1.0,
+                value: Some(0.0),
+                writable: true,
+            })
+            .collect();
+        assert!(PluginCatalog { targets: Vec::new(), controls }.validate().is_err());
     }
 }
