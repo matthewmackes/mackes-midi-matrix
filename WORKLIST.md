@@ -4883,6 +4883,9 @@ tests, strict Clippy, architecture/worklist policy, and the complete release gat
   duplicate physical controls and duplicate scoped plugin targets now fail before persistence.
 - **Progress evidence (2026-09-05):** Added a hard limit of 128 reusable PiPedal mappings and
   regression coverage for oversized imported sets, preventing unbounded connector state.
+- **Progress evidence (2026-09-05):** Added bounded `PluginCatalog` snapshots with duplicate
+  instance rejection, 2,048-control ceiling, and descriptor validation tests for safe catalog
+  publication by the future session worker.
 - **Progress evidence (2026-09-05):** Added explicit `SessionPhase::reset` behavior and
   reconnect coverage so socket loss returns the connector to `Disconnected` before a fresh
   `ehlo`/version/catalog negotiation.
