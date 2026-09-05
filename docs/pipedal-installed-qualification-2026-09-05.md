@@ -27,3 +27,11 @@ generic “five EQ bands”.
 The service journal also reports previous crash recovery. W115 must test reconnect and
 recovery without replaying stale controls. W112 remains open until the connector protocol
 revision and exact WebSocket operations are pinned against this installed PiPedal build.
+
+Read-only strings inspection of `/usr/sbin/pipedald` exposed operation/event candidates:
+`setControl`, `setSelectedPedalboardPlugin`, `setPedalboardItemEnable`,
+`setPedalboardItemUseModUi`, `updateCurrentPedalboard`, `setSnapshot`, `setSnapshots`,
+`setSystemMidiBindings`, `getSystemMidiBindings`, `setPedalboardItemTitle`,
+`onSelectedSnapshotChanged`, `onSystemMidiBindingsChanged`, `onSnapshotModified`, and
+`onPedalboardChanged`. These names are discovery evidence only; W112 must capture their
+JSON envelopes and semantics from the matching client/server source before implementation.

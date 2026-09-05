@@ -4811,6 +4811,10 @@ tests, strict Clippy, architecture/worklist policy, and the complete release gat
   `mid`, `treble`, etc.); no five-knob universal EQ target can be inferred. PiPedal reports
   prior crash recovery in the journal, so connector qualification must include restart/recovery.
 - **Artifact:** [installed qualification evidence](docs/pipedal-installed-qualification-2026-09-05.md).
+- **Additional evidence:** Read-only strings inspection of `/usr/sbin/pipedald` exposed
+  operation/event candidates for control, pedalboard/plugin setters, snapshots, system MIDI
+  bindings, and change events. Names are not treated as a protocol contract; W112 must pin
+  matching source and capture JSON envelopes before W113 implementation.
 
 #### [ ] W113 — Implement reusable PiPedal adapter and catalog
 - **Status:** `NOT_STARTED`
