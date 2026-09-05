@@ -11,6 +11,7 @@
 //! bounded message types without placing network I/O on the MIDI dispatch path.
 
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 
 /// `PiPedal`'s array-framed WebSocket request envelope.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -289,6 +290,29 @@ impl ControlMapping {
     }
 }
 
+/// Validate a mapping set for identity and physical-control collisions.
+pub fn validate_mappings(mappings: &[ControlMapping]) -> Result<(), String> {
+    let mut physical = HashSet::with_capacity(mappings.len());
+    let mut targets = HashSet::with_capacity(mappings.len());
+    for mapping in mappings {
+        mapping.validate()?;
+        if !physical.insert(&mapping.physical_control_id) {
+            return Err(format!(
+                "duplicate PiPedal physical control {}",
+                mapping.physical_control_id
+            ));
+        }
+        let target = (&mapping.plugin_uri, &mapping.symbol, &mapping.scope);
+        if !targets.insert(target) {
+            return Err(format!(
+                "duplicate PiPedal target {}:{}",
+                mapping.plugin_uri, mapping.symbol
+            ));
+        }
+    }
+    Ok(())
+}
+
 impl ControlDescriptor {
     /// Validate identity, bounds, and an optional current value.
     pub fn validate(&self) -> Result<(), String> {
@@ -455,5 +479,24 @@ mod tests {
         };
         assert!(mapping.validate().is_ok());
         assert!(ControlMapping { symbol: String::new(), ..mapping }.validate().is_err());
+    }
+
+    #[test]
+    fn mapping_set_rejects_physical_and_target_collisions() {
+        let first = ControlMapping {
+            physical_control_id: "knob-r3-c4".into(),
+            plugin_uri: "urn:eq".into(),
+            symbol: "lfLevel".into(),
+            scope: None,
+        };
+        let second = ControlMapping {
+            physical_control_id: "knob-r3-c4".into(),
+            plugin_uri: "urn:eq".into(),
+            symbol: "hfLevel".into(),
+            scope: None,
+        };
+        assert!(validate_mappings(&[first.clone(), second]).is_err());
+        let duplicate_target = ControlMapping { physical_control_id: "knob-r3-c5".into(), ..first };
+        assert!(validate_mappings(&[duplicate_target.clone(), duplicate_target]).is_err());
     }
 }
