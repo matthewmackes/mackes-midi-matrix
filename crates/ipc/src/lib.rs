@@ -1517,21 +1517,19 @@ impl LineDecoder {
     ///
     /// Returns an error when a partial or complete envelope exceeds the configured bound.
     pub fn feed(&mut self, bytes: &[u8]) -> Result<Vec<Vec<u8>>, String> {
-        self.buffer.extend_from_slice(bytes);
-        if self.buffer.len() > self.maximum && !self.buffer.contains(&b'\n') {
-            return Err(format!("IPC envelope exceeds {} bytes", self.maximum));
-        }
         let mut result = Vec::new();
-        while let Some(index) = self.buffer.iter().position(|byte| *byte == b'\n') {
-            let line: Vec<u8> = self.buffer.drain(..=index).collect();
-            let line = &line[..line.len() - 1];
-            if line.len() > self.maximum {
+        // Inspect only newly received bytes. Rescanning the accumulated frame
+        // on every byte makes large activity snapshots quadratic to decode.
+        for part in bytes.split_inclusive(|byte| *byte == b'\n') {
+            let complete = part.last() == Some(&b'\n');
+            let payload = if complete { &part[..part.len() - 1] } else { part };
+            if payload.len() > self.maximum.saturating_sub(self.buffer.len()) {
                 return Err(format!("IPC envelope exceeds {} bytes", self.maximum));
             }
-            result.push(line.to_vec());
-        }
-        if self.buffer.len() > self.maximum {
-            return Err(format!("IPC envelope exceeds {} bytes", self.maximum));
+            self.buffer.extend_from_slice(payload);
+            if complete {
+                result.push(std::mem::take(&mut self.buffer));
+            }
         }
         Ok(result)
     }
@@ -1540,6 +1538,21 @@ impl LineDecoder {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn maximum_response_decodes_bytewise_and_retains_following_frames() {
+        let mut decoder = LineDecoder::default();
+        for _ in 0..MAX_FRAME_BYTES {
+            assert!(decoder.feed(b"x").expect("partial frame").is_empty());
+        }
+        let lines = decoder.feed(b"\nnext\npartial").expect("complete frames");
+        assert_eq!(lines.len(), 2);
+        assert_eq!(lines[0], vec![b'x'; MAX_FRAME_BYTES]);
+        assert_eq!(lines[1], b"next");
+        assert_eq!(decoder.feed(b"\n").expect("retained tail"), vec![b"partial".to_vec()]);
+        let mut oversized = LineDecoder::new(2);
+        assert!(oversized.feed(b"abc\n").is_err());
+    }
 
     #[test]
     fn live_test_status_tags_are_stable_and_terminal() {

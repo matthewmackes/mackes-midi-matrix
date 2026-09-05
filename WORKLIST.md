@@ -4831,6 +4831,15 @@ LED replay, and pedal-state observations are still open.
 
 - **Status:** `IN_PROGRESS`
 - **Owner:** Luna
+- **Active increment owner:** codex — 2026-09-05, console IPC backpressure regression.
+- **Evidence update:** The recurring lock showed the daemon blocked in Unix socket send and
+  the console consuming a CPU core; stopping the console restored status/MIDI progress.
+  Earlier LED saturation explanations were hypotheses, not proof of the lock's root cause.
+  The IPC client fed its decoder one byte at a time, and each feed rescanned the accumulated
+  frame. Replaced quadratic framing with a linear scan of new bytes and added a 100 ms server
+  write timeout so a non-reading client cannot block the MIDI loop indefinitely. The full-size
+  bytewise framing regression and all 26 IPC / 79 daemon tests pass. Full recovery acceptance
+  and live pressure verification remain open; this increment does not close W102.
 - **Depends on:** W096
 - **Priority:** High; coordinate identity/repair contracts with W099.
 - **Implementation:** derive health from required bindings, subscriptions, outputs, configuration

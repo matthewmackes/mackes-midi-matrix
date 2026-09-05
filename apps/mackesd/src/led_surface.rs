@@ -384,6 +384,12 @@ impl LedSurface {
             .diagnostics
             .coalesced
             .saturating_add((self.coalescer.desired_len().saturating_sub(pending_len)) as u64);
+        self.emit_pending(outputs, selected.0, now_ms);
+        self.diagnostics.pending_deadline_ms =
+            pending_deadline(self.scheduler, now_ms, self.result_started_ms);
+    }
+
+    fn emit_pending(&mut self, outputs: &mut OutputRegistry, endpoint: EndpointId, now_ms: u64) {
         let can_emit =
             self.last_emit_ms.is_none_or(|last| now_ms.saturating_sub(last) >= LED_MIN_INTERVAL_MS);
         if can_emit {
@@ -392,11 +398,9 @@ impl LedSurface {
                 self.last_emit_ms = Some(now_ms);
             }
             for (index, state) in pending {
-                self.emit_frame(outputs, selected.0, index, state);
+                self.emit_frame(outputs, endpoint, index, state);
             }
         }
-        self.diagnostics.pending_deadline_ms =
-            pending_deadline(self.scheduler, now_ms, self.result_started_ms);
     }
 
     fn emit_frame(

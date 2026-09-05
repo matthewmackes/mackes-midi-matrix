@@ -2847,6 +2847,7 @@ impl Daemon {
         let _ = self.drain_virtual_input();
         let (mut stream, identity) = self.server.accept_authorized(policy)?;
         stream.set_read_timeout(Some(std::time::Duration::from_millis(100)))?;
+        stream.set_write_timeout(Some(std::time::Duration::from_millis(100)))?;
         let mut request = Vec::new();
         let mut byte = [0_u8; 1];
         loop {
