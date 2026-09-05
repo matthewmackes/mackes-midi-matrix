@@ -27,6 +27,8 @@ pub struct Request<T> {
 
 /// Maximum encoded PiPedal control frame accepted by the connector.
 pub const MAX_FRAME_BYTES: usize = 1_048_576;
+/// Maximum reusable PiPedal mappings in one connector configuration.
+pub const MAX_MAPPINGS: usize = 128;
 
 /// Bounded accumulator for fragmented WebSocket text messages.
 #[derive(Debug, Default)]
@@ -292,6 +294,9 @@ impl ControlMapping {
 
 /// Validate a mapping set for identity and physical-control collisions.
 pub fn validate_mappings(mappings: &[ControlMapping]) -> Result<(), String> {
+    if mappings.len() > MAX_MAPPINGS {
+        return Err("PiPedal mapping set exceeds configured limit".into());
+    }
     let mut physical = HashSet::with_capacity(mappings.len());
     let mut targets = HashSet::with_capacity(mappings.len());
     for mapping in mappings {
@@ -498,5 +503,14 @@ mod tests {
         assert!(validate_mappings(&[first.clone(), second]).is_err());
         let duplicate_target = ControlMapping { physical_control_id: "knob-r3-c5".into(), ..first };
         assert!(validate_mappings(&[duplicate_target.clone(), duplicate_target]).is_err());
+        let many = (0..=MAX_MAPPINGS)
+            .map(|i| ControlMapping {
+                physical_control_id: format!("knob-{i}"),
+                plugin_uri: "urn:eq".into(),
+                symbol: format!("band-{i}"),
+                scope: None,
+            })
+            .collect::<Vec<_>>();
+        assert!(validate_mappings(&many).is_err());
     }
 }
