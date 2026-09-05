@@ -157,7 +157,7 @@ impl SessionPhase {
     /// Advance the session after a successful response.
     pub fn accept(self, message: &str) -> Result<Self, String> {
         match (self, message) {
-            (Self::Connected, "hello") => Ok(Self::Identified),
+            (Self::Connected, "ehlo") => Ok(Self::Identified),
             (Self::Identified, "version") => Ok(Self::LoadingCatalog),
             (Self::LoadingCatalog, "getSystemMidiBindings") => Ok(Self::Ready),
             (
@@ -311,10 +311,8 @@ mod tests {
 
     #[test]
     fn session_requires_hello_and_version_before_catalog_ready() {
-        assert_eq!(
-            SessionPhase::Connected.accept("hello").expect("hello"),
-            SessionPhase::Identified
-        );
+        assert_eq!(SessionPhase::Connected.accept("ehlo").expect("ehlo"), SessionPhase::Identified);
+        assert!(SessionPhase::Connected.accept("hello").is_err());
         assert!(SessionPhase::Connected.accept("getSystemMidiBindings").is_err());
         let phase = SessionPhase::Identified.accept("version").expect("version");
         let phase = phase.accept("plugins").expect("plugins");
