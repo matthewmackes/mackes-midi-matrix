@@ -4879,6 +4879,8 @@ tests, strict Clippy, architecture/worklist policy, and the complete release gat
 - **Progress evidence (2026-09-05):** Added `ControlMapping` persistence identity for physical
   control, plugin URI, parameter symbol, and optional scope, with validation that rejects
   incomplete or empty identities. Runtime instance IDs remain excluded from reusable mappings.
+- **Progress evidence (2026-09-05):** Added mapping-set validation using bounded collision sets;
+  duplicate physical controls and duplicate scoped plugin targets now fail before persistence.
 - **Correction evidence (2026-09-05):** Live fixture showed the `hello` request returns
   response message `ehlo`; the session state machine now accepts `ehlo` and rejects treating
   the request name itself as the response. Nine connector tests pass.
