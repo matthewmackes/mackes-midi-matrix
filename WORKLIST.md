@@ -4810,6 +4810,7 @@ tests, strict Clippy, architecture/worklist policy, and the complete release gat
   EQ (stereo), with differing symbols (`lfLevel`, `lmfLevel`, `hmfLevel`, `hfLevel`, `bass`,
   `mid`, `treble`, etc.); no five-knob universal EQ target can be inferred. PiPedal reports
   prior crash recovery in the journal, so connector qualification must include restart/recovery.
+- **Artifact:** [installed qualification evidence](docs/pipedal-installed-qualification-2026-09-05.md).
 
 #### [ ] W113 — Implement reusable PiPedal adapter and catalog
 - **Status:** `NOT_STARTED`
