@@ -4794,7 +4794,7 @@ tests, strict Clippy, architecture/worklist policy, and the complete release gat
   changes are delegated, not executed in this design task.
 
 #### [ ] W112 — Inspect PiPedal and qualify its control protocol
-- **Status:** `READY`
+- **Status:** `IN_PROGRESS`
 - **Owner:** Unassigned
 - **Depends on:** None
 - **Work:** Read design; inspect installed version, endpoint, active pedalboard, EQ instances,
@@ -4803,6 +4803,13 @@ tests, strict Clippy, architecture/worklist policy, and the complete release gat
   actions. Document exact requests/events, authentication, limits and compatibility fixtures.
 - **Acceptance:** Evidence identifies five intended EQ targets or a precise unresolved choice;
   unsupported versions remain read-only. Document conflicts on R3C4–R3C8 before migration.
+- **Evidence (2026-09-05):** `pipedald.service` is active (PID 41454), listening on port 8080;
+  ALSA exposes `PiPedal:in` at 128:0 and `Device Monitor:PiPedal:portMonitor` at 130:0.
+  `/var/pipedal/config/SystemMidiBindings.json` contains only prev/next bank/program bindings.
+  The active `Default+Bank.bank` contains TooB Parametric EQ (mono and stereo) and TooB 3 Band
+  EQ (stereo), with differing symbols (`lfLevel`, `lmfLevel`, `hmfLevel`, `hfLevel`, `bass`,
+  `mid`, `treble`, etc.); no five-knob universal EQ target can be inferred. PiPedal reports
+  prior crash recovery in the journal, so connector qualification must include restart/recovery.
 
 #### [ ] W113 — Implement reusable PiPedal adapter and catalog
 - **Status:** `NOT_STARTED`
