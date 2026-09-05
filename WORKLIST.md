@@ -4837,6 +4837,8 @@ tests, strict Clippy, architecture/worklist policy, and the complete release gat
 - **Progress evidence (2026-09-05):** Added bounded response decoding with a 1 MiB frame
   ceiling, array-shape validation, typed headers, event bodies, and oversized/malformed-frame
   tests. Connector remains transport-independent and performs no live writes.
+- **Progress evidence (2026-09-05):** Added typed `ErrorBody` replies and generic body decoding,
+  with missing-body and server-error tests. Transport/session ownership remains open.
 - **Acceptance:** Mock-server contract tests cover discovery, metadata, malformed responses,
   timeouts and reconnect; blocking network work never runs on the MIDI dispatch path.
 
