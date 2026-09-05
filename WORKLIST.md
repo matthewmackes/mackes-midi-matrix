@@ -4834,6 +4834,9 @@ tests, strict Clippy, architecture/worklist policy, and the complete release gat
 - **Progress evidence (2026-09-05):** Added `mackes-pipedal-connector` with typed array-framed
   requests, `setControl` body, complete `MidiBinding` schema, and two wire-contract tests.
   This is transport-independent by design; socket ownership and live writes remain open.
+- **Progress evidence (2026-09-05):** Added bounded response decoding with a 1 MiB frame
+  ceiling, array-shape validation, typed headers, event bodies, and oversized/malformed-frame
+  tests. Connector remains transport-independent and performs no live writes.
 - **Acceptance:** Mock-server contract tests cover discovery, metadata, malformed responses,
   timeouts and reconnect; blocking network work never runs on the MIDI dispatch path.
 
