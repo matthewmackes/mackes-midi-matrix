@@ -4881,6 +4881,8 @@ tests, strict Clippy, architecture/worklist policy, and the complete release gat
   incomplete or empty identities. Runtime instance IDs remain excluded from reusable mappings.
 - **Progress evidence (2026-09-05):** Added mapping-set validation using bounded collision sets;
   duplicate physical controls and duplicate scoped plugin targets now fail before persistence.
+- **Progress evidence (2026-09-05):** Added a hard limit of 128 reusable PiPedal mappings and
+  regression coverage for oversized imported sets, preventing unbounded connector state.
 - **Correction evidence (2026-09-05):** Live fixture showed the `hello` request returns
   response message `ehlo`; the session state machine now accepts `ehlo` and rejects treating
   the request name itself as the response. Nine connector tests pass.
