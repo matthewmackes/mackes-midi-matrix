@@ -4863,6 +4863,9 @@ tests, strict Clippy, architecture/worklist policy, and the complete release gat
 - **Progress evidence (2026-09-05):** Added `TextAssembler` for bounded WebSocket text
   fragmentation with reset-on-overflow behavior and reassembly/limit tests, matching the
   fragmented live PiPedal responses observed in W112.
+- **Progress evidence (2026-09-05):** Added `ServerFrame` decoding for unmasked server frame
+  headers, FIN/opcode preservation, extended lengths, exact payload bounds, and overflow/
+  masking rejection. Eight connector tests and strict Clippy pass.
 - **Validation evidence (2026-09-05):** Full `cargo test --workspace --all-targets` passed,
   including 79 daemon, 26 IPC, and 4 connector tests; one existing physical ALSA reconnect
   test remains ignored by its explicit hardware gate.
