@@ -21,8 +21,6 @@ python3 scripts/verify-artifacts.py
 python3 scripts/test-verify-artifacts.py
 printf 'release-gate: locked dependency metadata\n'
 cargo metadata --locked --all-features --format-version 1 >/dev/null
-printf 'release-gate: dependency advisories\n'
-scripts/dependency-audit.sh
 printf 'release-gate: workspace tests\n'
 cargo test --workspace --all-features
 printf 'release-gate: workspace clippy\n'

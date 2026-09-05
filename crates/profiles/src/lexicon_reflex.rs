@@ -1459,7 +1459,7 @@ pub fn encode_task(channel: u8, task: u8, argument: u8) -> Result<[u8; 7], &'sta
 /// # Errors
 ///
 /// Returns an error for malformed framing, unsupported tasks, or unsafe arguments.
-pub fn decode_task(frame: &[u8]) -> Result<(u8, u8, u8), &'static str> {
+pub const fn decode_task(frame: &[u8]) -> Result<(u8, u8, u8), &'static str> {
     if frame.len() != 7
         || frame[0] != 0xF0
         || frame[1] != MANUFACTURER_ID

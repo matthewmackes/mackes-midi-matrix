@@ -916,6 +916,29 @@ impl Daemon {
         }
     }
 
+    /// Reopens physical outputs that appeared after daemon startup or a USB reconnect.
+    #[cfg(feature = "alsa-seq-backend")]
+    fn restore_late_physical_outputs(&mut self) {
+        let Ok(endpoints) = mackes_midi_engine::enumerate_midir_ports() else { return };
+        let physical_endpoints = endpoints
+            .iter()
+            .filter(|endpoint| {
+                !endpoint.name.starts_with("MACKES ") && !endpoint.name.starts_with("Midi Through")
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+        self.set_physical_devices(&physical_endpoints);
+        let known = self.outputs.output_ids();
+        for endpoint in endpoints.iter().filter(|endpoint| {
+            endpoint.direction == mackes_midi_engine::EndpointDirection::Output
+                && !endpoint.name.starts_with("MACKES ")
+                && !endpoint.name.starts_with("Midi Through")
+                && !known.iter().any(|id| id == &endpoint.id)
+        }) {
+            let _ = self.provision_output(&endpoint.id);
+        }
+    }
+
     /// Requests the Lexicon's authoritative active setup after its output is available.
     fn request_lexicon_active_setup(&mut self) {
         let Some(destination) = profile_bindings::stable_destination(
@@ -1395,7 +1418,11 @@ impl Daemon {
                 }));
                 continue;
             }
-            let source_endpoint = if mapping.source_endpoint == "controller" {
+            let source_endpoint = if mapping.source_endpoint == "controller"
+                || (mapping.controller_profile == "launch-control-xl-mk2"
+                    && Self::launch_control_factory1_layout_id(event).as_deref()
+                        == Some(mapping.physical_control_id.as_str()))
+            {
                 event.endpoint
             } else if let Some(source_endpoint) =
                 mackes_midi_engine::numeric_endpoint_id(&mapping.source_endpoint)
@@ -1831,6 +1858,7 @@ impl Daemon {
         let _ = client.reconcile_input_subscriptions();
         drop(client);
         self.restore_launch_control_midi_output(&ports);
+        self.restore_late_physical_outputs();
         for announcement in announcements {
             self.alsa_supervisor.ingest(announcement);
         }
@@ -1843,11 +1871,22 @@ impl Daemon {
     /// The bound prevents a busy physical controller from starving IPC and scene work.
     #[allow(clippy::too_many_lines)]
     pub fn poll_and_dispatch_inputs(&mut self, limit: usize) -> (usize, usize, usize) {
-        let events = self.poll_inputs();
+        let mut events = self.poll_inputs();
+        let budget = limit.min(128);
+        if events.len() > budget {
+            let deferred = events.drain(budget..);
+            for event in deferred {
+                if self.deferred_inputs.len() < 256 {
+                    self.deferred_inputs.push_back(event);
+                } else {
+                    self.dropped_events = self.dropped_events.saturating_add(1);
+                }
+            }
+        }
         let mut processed = 0;
         let mut sent = 0;
         let mut unmatched = 0;
-        for event in events.into_iter().take(limit.min(128)) {
+        for event in events {
             if matches!(event.message, mackes_domain::MidiMessage::SysEx(_)) {
                 let frame = event.message.wire_bytes();
                 if let Ok(mackes_profiles::lexicon_reflex::DecodedMessage::ActiveSetup {

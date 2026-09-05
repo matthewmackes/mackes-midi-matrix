@@ -68,7 +68,6 @@ Qualification commands are available from the repository root:
 ```text
 scripts/qualify-hardware.sh
 scripts/installer-smoke.sh
-scripts/dependency-audit.sh
 scripts/benchmark-routing.sh
 scripts/soak-routing.sh 3600
 scripts/release-gate.sh

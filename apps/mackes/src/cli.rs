@@ -52,6 +52,67 @@ pub(crate) fn set_default_provider_cli(
     mackes_config::save(path, &updated, 10).map_err(|error| error.to_string())
 }
 
+pub(crate) fn register_endpoint_cli(
+    path: &str,
+    id: &str,
+    options: &[(&str, &str)],
+) -> Result<(), String> {
+    let option = |key: &str| {
+        options.iter().find(|(name, _)| *name == key).map(|(_, value)| (*value).to_owned())
+    };
+    let parse_hex = |key: &str| {
+        option(key)
+            .map(|value| {
+                u16::from_str_radix(value.trim_start_matches("0x"), 16)
+                    .map_err(|_| format!("invalid USB ID '{value}'"))
+            })
+            .transpose()
+    };
+    let document = mackes_config::load(std::path::Path::new(path)).map_err(|e| e.to_string())?;
+    let endpoint = mackes_config::EndpointAlias {
+        id: id.to_owned(),
+        stable_id: option("stable-id"),
+        name: option("name"),
+        vendor_id: parse_hex("vendor-id")?,
+        product_id: parse_hex("product-id")?,
+        serial: option("serial"),
+    };
+    let updated = mackes_config::register_endpoint(&document, endpoint)?;
+    mackes_config::save(std::path::Path::new(path), &updated, 10).map_err(|e| e.to_string())
+}
+
+pub(crate) fn restore_novation_template_cli(path: &str) -> Result<(), String> {
+    let document = mackes_config::load(std::path::Path::new(path)).map_err(|e| e.to_string())?;
+    let assignments = mackes_profiles::launch_control_mk2_factory1_layout()
+        .into_iter()
+        .enumerate()
+        .map(|(index, control)| {
+            let index = u8::try_from(index)
+                .map_err(|_| "Novation template has too many assignments".to_owned())?;
+            Ok(mackes_config::LaunchControlAssignmentConfig {
+                index,
+                physical_control_id: Some(control.physical_control_id),
+                channel: control.channel,
+                number: control.source_number,
+                kind: match control.source_kind {
+                    mackes_profiles::LaunchControlSourceKind::ControlChange => "cc",
+                    mackes_profiles::LaunchControlSourceKind::Note => "note",
+                }
+                .to_owned(),
+                destination: None,
+                needs_review: false,
+            })
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+    let mut updated = document;
+    updated.settings.launch_control_template = Some(mackes_config::LaunchControlTemplateConfig {
+        template: mackes_profiles::LAUNCH_CONTROL_MK2_FACTORY1_SLOT,
+        assignments,
+    });
+    mackes_config::validate(&updated)?;
+    mackes_config::save(std::path::Path::new(path), &updated, 10).map_err(|e| e.to_string())
+}
+
 pub(crate) fn print_default_provider(
     path: &str,
     capability: &str,

@@ -980,6 +980,7 @@ fn learn_requires_explicit_candidate_and_enter_commit_path() {
         schema_version: mackes_config::CURRENT_SCHEMA_VERSION,
         endpoints: vec![mackes_config::EndpointAlias {
             id: "launch-control".into(),
+            stable_id: None,
             name: None,
             vendor_id: None,
             product_id: None,

@@ -139,7 +139,7 @@ bash scripts/package-release.sh 0.1.11
 
 The bundle contains both binaries, the Fedora installer and service unit, the locked dependency
 file, documentation, license, release notes, and a checksum manifest. The automated release gate
-verifies formatting, repository policy, dependency advisories, workspace tests and documentation,
+verifies formatting, repository policy, workspace tests and documentation,
 strict Clippy, optimized routing throughput, hermetic integration scenarios, and installer
 preflight. Physical MIDI cabling, device writes, independent RTP-MIDI peers, and long-duration
 hardware/network soaks remain explicit post-release qualification activities.

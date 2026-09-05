@@ -1,0 +1,29 @@
+[
+  {
+    "source": 13647037574593170910,
+    "destination": 181837037996649115,
+    "enabled": true,
+    "priority": 0,
+    "curve": "linear",
+    "predicates": [],
+    "allow_cycle": false
+  },
+  {
+    "source": 13647037574593170910,
+    "destination": 14112482084819373760,
+    "enabled": true,
+    "priority": 1,
+    "curve": "linear",
+    "predicates": [],
+    "allow_cycle": false
+  },
+  {
+    "source": 13647037574593170910,
+    "destination": 15011414475078795038,
+    "enabled": true,
+    "priority": 2,
+    "curve": "linear",
+    "predicates": [],
+    "allow_cycle": false
+  }
+]

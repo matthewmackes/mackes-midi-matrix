@@ -490,13 +490,27 @@ pub fn save_backup(path: &Path, payload: &[u8], manifest: &BackupManifest) -> Re
     if path.exists() || manifest_path.exists() {
         return Err("backup artifact already exists and is immutable".into());
     }
-    let payload_tmp = path.with_extension("payload.tmp");
-    let manifest_tmp = path.with_extension("manifest.tmp");
+    let stamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_nanos();
+    let payload_tmp = path.with_extension(format!("payload.{stamp}.tmp"));
+    let manifest_tmp = path.with_extension(format!("manifest.{stamp}.tmp"));
     fs::write(&payload_tmp, payload).map_err(|error| error.to_string())?;
     let encoded = serde_json::to_vec_pretty(manifest).map_err(|error| error.to_string())?;
     fs::write(&manifest_tmp, encoded).map_err(|error| error.to_string())?;
-    fs::rename(payload_tmp, path).map_err(|error| error.to_string())?;
-    fs::rename(manifest_tmp, manifest_path).map_err(|error| error.to_string())
+    fs::File::open(&payload_tmp)
+        .and_then(|file| file.sync_all())
+        .map_err(|error| error.to_string())?;
+    fs::File::open(&manifest_tmp)
+        .and_then(|file| file.sync_all())
+        .map_err(|error| error.to_string())?;
+    fs::rename(&payload_tmp, path).map_err(|error| error.to_string())?;
+    let parent = path.parent().unwrap_or_else(|| Path::new("."));
+    fs::File::open(parent)
+        .and_then(|directory| directory.sync_all())
+        .map_err(|error| error.to_string())?;
+    fs::rename(&manifest_tmp, &manifest_path).map_err(|error| error.to_string())?;
+    fs::File::open(parent)
+        .and_then(|directory| directory.sync_all())
+        .map_err(|error| error.to_string())
 }
 
 /// Loads and verifies a backup payload and its manifest sidecar.
@@ -959,6 +973,9 @@ pub struct DefaultProvider {
 pub struct EndpointAlias {
     /// Stable alias.
     pub id: String,
+    /// Stable backend endpoint identity, when previously observed.
+    #[serde(default)]
+    pub stable_id: Option<String>,
     /// Backend display name pattern.
     #[serde(default)]
     pub name: Option<String>,
@@ -971,6 +988,38 @@ pub struct EndpointAlias {
     /// Optional serial, never logged.
     #[serde(default)]
     pub serial: Option<String>,
+}
+
+/// Registers or updates a portable physical MIDI endpoint alias.
+///
+/// The alias is the durable identity used by profiles and mappings.  `name`
+/// remains a portable fallback for backends that do not expose USB metadata;
+/// `vendor_id`, `product_id`, and `serial` should be supplied whenever known.
+///
+/// # Errors
+///
+/// Returns an error when the alias is blank, has no usable identity, or would
+/// leave the configuration invalid.
+pub fn register_endpoint(
+    document: &ConfigDocument,
+    endpoint: EndpointAlias,
+) -> Result<ConfigDocument, String> {
+    if endpoint.id.trim().is_empty() {
+        return Err("endpoint alias must not be blank".into());
+    }
+    if endpoint.name.as_deref().is_none_or(|name| name.trim().is_empty())
+        && endpoint.vendor_id.is_none()
+        && endpoint.product_id.is_none()
+        && endpoint.serial.as_deref().is_none_or(|serial| serial.trim().is_empty())
+    {
+        return Err("endpoint registration needs a name or hardware identity".into());
+    }
+    let mut candidate = document.clone();
+    candidate.endpoints.retain(|item| item.id != endpoint.id);
+    candidate.endpoints.push(endpoint);
+    candidate.endpoints.sort_by(|left, right| left.id.cmp(&right.id));
+    validate(&candidate)?;
+    Ok(candidate)
 }
 
 /// Project containing ordered scenes.
@@ -2003,7 +2052,14 @@ pub fn save(
     })?;
     fs::write(&temp, format!("{serialized}\n"))
         .map_err(|source| ConfigError::Replace { path: temp.clone(), source })?;
-    fs::rename(&temp, path).map_err(|source| ConfigError::Replace { path: path.to_owned(), source })
+    fs::File::open(&temp)
+        .and_then(|file| file.sync_all())
+        .map_err(|source| ConfigError::Replace { path: temp.clone(), source })?;
+    fs::rename(&temp, path)
+        .map_err(|source| ConfigError::Replace { path: path.to_owned(), source })?;
+    fs::File::open(parent)
+        .and_then(|directory| directory.sync_all())
+        .map_err(|source| ConfigError::Replace { path: parent.to_owned(), source })
 }
 
 /// Persists an authoritative mapping store through the validated atomic config writer.
@@ -2120,6 +2176,7 @@ mod tests {
         assert!(validate(&value).unwrap_err().contains("unknown endpoint"));
         value.endpoints.push(EndpointAlias {
             id: "reflex-port".into(),
+            stable_id: None,
             name: Some("MidiSport 4x4 MIDI 4".into()),
             vendor_id: None,
             product_id: None,
@@ -2224,6 +2281,7 @@ mod tests {
         let mut value = document();
         value.endpoints.push(EndpointAlias {
             id: "launch-control".into(),
+            stable_id: None,
             name: Some("Launch Control XL".into()),
             vendor_id: None,
             product_id: None,
@@ -2269,6 +2327,7 @@ mod tests {
         let mut document = document();
         document.endpoints.push(EndpointAlias {
             id: "input".into(),
+            stable_id: None,
             name: None,
             vendor_id: None,
             product_id: None,

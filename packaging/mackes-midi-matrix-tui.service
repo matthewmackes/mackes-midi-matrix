@@ -1,0 +1,26 @@
+[Unit]
+Description=MACKES MIDI Matrix appliance console
+Requires=mackes-midi-matrix.service
+After=mackes-midi-matrix.service getty@tty1.service
+Conflicts=getty@tty1.service
+
+[Service]
+Type=simple
+User=mm
+SupplementaryGroups=mackes-control
+WorkingDirectory=/home/mm
+Environment=MACKES_CONFIG=/etc/mackes-midi-matrix/config.json5
+ExecStart=/usr/local/bin/mackes-midi-matrix-local
+Restart=always
+RestartSec=2s
+TTYPath=/dev/tty1
+StandardInput=tty
+StandardOutput=tty
+StandardError=journal
+TTYReset=yes
+TTYVHangup=yes
+TTYVTDisallocate=yes
+UtmpIdentifier=tty1
+
+[Install]
+WantedBy=multi-user.target

@@ -38,11 +38,14 @@ install -m 0755 "$root_dir/target/release/mackes-midi-matrix" \
 install -m 0755 "$root_dir/target/release/mackes-midi-matrixd" \
   "$staging/$bundle_name/target/release/mackes-midi-matrixd"
 install -m 0755 "$root_dir/scripts/install-fedora.sh" \
+  "$root_dir/scripts/mackes-midi-matrix-local" \
   "$root_dir/scripts/verify-artifacts.py" \
   "$root_dir/scripts/test-verify-artifacts.py" \
   "$staging/$bundle_name/scripts/"
 install -m 0644 "$root_dir/packaging/mackes.service" \
-  "$staging/$bundle_name/packaging/mackes.service"
+  "$root_dir/packaging/10-appliance.conf" \
+  "$root_dir/packaging/mackes-midi-matrix-tui.service" \
+  "$staging/$bundle_name/packaging/"
 install -m 0644 "$root_dir/packaging/default-config.json5" \
   "$staging/$bundle_name/packaging/default-config.json5"
 install -m 0644 "$root_dir/README.md" "$root_dir/LICENSE" "$root_dir/Cargo.lock" \

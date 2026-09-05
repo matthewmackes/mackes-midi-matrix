@@ -130,14 +130,18 @@ fn main() {
             .learn_input_alias
             .as_deref()
             .and_then(|alias_id| document.endpoints.iter().find(|alias| alias.id == alias_id))
-            .and_then(|alias| alias.name.as_deref())
-            .and_then(|pattern| {
+            .and_then(|alias| {
                 mackes_midi_engine::enumerate_midir_ports().ok().and_then(|ports| {
                     ports
                         .into_iter()
                         .find(|port| {
                             port.direction == mackes_midi_engine::EndpointDirection::Input
-                                && port.name.contains(pattern)
+                                && alias.stable_id.as_deref().is_some_and(|id| id == port.id)
+                                || alias.stable_id.is_none()
+                                    && alias
+                                        .name
+                                        .as_deref()
+                                        .is_some_and(|pattern| port.name.contains(pattern))
                         })
                         .map(|port| port.id)
                 })
@@ -202,11 +206,7 @@ fn main() {
             let mut bindings = Vec::new();
             for profile in &document.profiles {
                 let Some(alias_id) = profile.endpoint_alias.as_deref() else { continue };
-                let Some(pattern) = document
-                    .endpoints
-                    .iter()
-                    .find(|alias| alias.id == alias_id)
-                    .and_then(|alias| alias.name.as_deref())
+                let Some(alias) = document.endpoints.iter().find(|alias| alias.id == alias_id)
                 else {
                     continue;
                 };
@@ -214,7 +214,12 @@ fn main() {
                     .iter()
                     .filter(|endpoint| {
                         endpoint.direction == mackes_midi_engine::EndpointDirection::Output
-                            && endpoint.name.contains(pattern)
+                            && (alias.stable_id.as_deref() == Some(endpoint.id.as_str())
+                                || alias.stable_id.is_none()
+                                    && alias
+                                        .name
+                                        .as_deref()
+                                        .is_some_and(|pattern| endpoint.name.contains(pattern)))
                     })
                     .collect::<Vec<_>>();
                 if matches.len() == 1 {
@@ -262,6 +267,18 @@ fn main() {
             daemon.request_shutdown();
             break;
         }
+        // Service local control IPC before polling MIDI.  Both paths are
+        // bounded, but prioritizing the nonblocking server keeps status,
+        // panic, and repair commands responsive during input bursts.
+        if let Err(error) = daemon.serve_once(policy) {
+            if error.kind() != std::io::ErrorKind::WouldBlock {
+                eprint!(
+                    "{}",
+                    mackesd::structured_log_line("error", "request_failed", &error.to_string())
+                );
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
         let mapped = daemon.process_dashboard_commands(&dashboard_bindings, 128);
         let _ = daemon.poll_and_dispatch_inputs(128);
         if !mapped.is_empty() {
@@ -273,15 +290,6 @@ fn main() {
                     &format!("count={}", mapped.len()),
                 )
             );
-        }
-        if let Err(error) = daemon.serve_once(policy) {
-            if error.kind() != std::io::ErrorKind::WouldBlock {
-                eprint!(
-                    "{}",
-                    mackesd::structured_log_line("error", "request_failed", &error.to_string())
-                );
-            }
-            std::thread::sleep(std::time::Duration::from_millis(10));
         }
         let current_scene = daemon.active_scene().map(str::to_owned);
         if current_scene != persisted_scene {

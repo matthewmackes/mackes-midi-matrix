@@ -56,6 +56,26 @@ fn native_device_press_starts_once_and_release_does_not_restart() {
 }
 
 #[test]
+fn native_dispatch_requeues_events_beyond_one_cycle_budget() {
+    let (mut daemon, path) = daemon();
+    for sequence in 0..130_u64 {
+        daemon.deferred_inputs.push_back(MidiEvent {
+            timestamp: TimestampNanos::new(sequence),
+            sequence,
+            endpoint: mackes_domain::EndpointId::new(1).expect("endpoint"),
+            message: MidiMessage::ChannelPressure {
+                channel: MidiChannel::new(1).expect("channel"),
+                pressure: SevenBit::new(64).expect("pressure"),
+            },
+        });
+    }
+    let (processed, sent, unmatched) = daemon.poll_and_dispatch_inputs(1);
+    assert_eq!((processed, sent, unmatched), (1, 0, 0));
+    assert_eq!(daemon.deferred_inputs.len(), 129);
+    let _ = fs::remove_file(path);
+}
+
+#[test]
 fn native_knob_advances_and_arrows_navigate() {
     let (mut daemon, path) = daemon();
     daemon.deferred_inputs.push_back(event(MidiMessage::NoteOn {

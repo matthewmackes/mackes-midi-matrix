@@ -2,6 +2,8 @@
 set -euo pipefail
 
 check_only=false
+console_user="${MACKES_CONSOLE_USER:-mm}"
+console_home="${MACKES_CONSOLE_HOME:-/home/$console_user}"
 if [[ "$#" -gt 1 || ("$#" -eq 1 && "$1" != "--check") ]]; then
   echo "usage: $0 [--check]" >&2
   exit 64
@@ -15,6 +17,10 @@ fi
 if [[ "$(uname -m)" != "x86_64" ]]; then
   echo "mackes-midi-matrix requires x86_64" >&2
   exit 78
+fi
+if [[ ! "$console_user" =~ ^[a-z_][a-z0-9_-]*$ || "$console_home" != /* ]]; then
+  echo "invalid console account or home" >&2
+  exit 83
 fi
 root_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 for required in "$root_dir/target/release/mackes-midi-matrix" "$root_dir/target/release/mackes-midi-matrixd"; do
@@ -55,6 +61,10 @@ if [[ "${#config_entries[@]}" -gt 0 ]]; then
 fi
 getent group mackes-control >/dev/null || groupadd --system mackes-control
 getent passwd mackes >/dev/null || useradd --system --home-dir "$state_dir" --shell /sbin/nologin mackes
+if ! getent passwd "$console_user" >/dev/null; then
+  useradd --create-home --home-dir "$console_home" --shell /bin/bash "$console_user"
+fi
+install -d -m 0755 "$console_home"
 if getent group audio >/dev/null; then
   usermod --append --groups audio mackes
 fi
@@ -63,6 +73,13 @@ install -m 0755 "$root_dir/scripts/mackes-midi-matrix-local" "$bin_dir/mackes-mi
 install -m 0755 "$root_dir/scripts/mackes-midi-matrix-local" "$bin_dir/mackes-midi-matrix-local"
 install -m 0755 "$root_dir/target/release/mackes-midi-matrixd" "$libexec_dir/mackes-midi-matrixd"
 install -m 0644 "$root_dir/packaging/mackes.service" /etc/systemd/system/mackes-midi-matrix.service
+install -d -m 0755 /etc/systemd/system/mackes-midi-matrix.service.d
+install -m 0644 "$root_dir/packaging/10-appliance.conf" /etc/systemd/system/mackes-midi-matrix.service.d/10-appliance.conf
+install -m 0644 "$root_dir/packaging/mackes-midi-matrix-tui.service" /etc/systemd/system/mackes-midi-matrix-tui.service
+sed -i \
+  -e "s/^User=mm$/User=$console_user/" \
+  -e "s#^WorkingDirectory=/home/mm$#WorkingDirectory=$console_home#" \
+  /etc/systemd/system/mackes-midi-matrix-tui.service
 if [[ ! -e "$config_dir/config.json5" ]]; then
   install -m 0640 "$root_dir/packaging/default-config.json5" "$config_dir/config.json5"
 fi
@@ -72,6 +89,6 @@ fi
 chown -R mackes:mackes "$config_dir" "$state_dir" "$run_dir"
 chmod 0750 "$config_dir" "$state_dir"
 systemctl daemon-reload
-systemctl enable --now mackes-midi-matrix.service
+systemctl enable --now mackes-midi-matrix.service mackes-midi-matrix-tui.service
 systemctl restart mackes-midi-matrix.service
 echo "installed and started; service is enabled for boot: mackes-midi-matrix.service"

@@ -6,10 +6,10 @@ pub const fn health_after_authorized_command(
     current: super::Health,
     command: Option<mackes_ipc::Command>,
 ) -> super::Health {
-    if matches!(command, Some(mackes_ipc::Command::Health)) {
-        current
-    } else {
-        super::Health::Ready
+    match (current, command) {
+        (super::Health::Starting, Some(mackes_ipc::Command::Health)) => super::Health::Starting,
+        (super::Health::Starting, _) => super::Health::Ready,
+        (current, _) => current,
     }
 }
 

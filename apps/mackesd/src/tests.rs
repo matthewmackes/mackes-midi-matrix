@@ -25,6 +25,10 @@ fn health_operational_states_are_explicit() {
         mapping_runtime::health_after_authorized_command(Health::Starting, Some(Command::Snapshot)),
         Health::Ready
     );
+    assert_eq!(
+        mapping_runtime::health_after_authorized_command(Health::Degraded, Some(Command::Snapshot)),
+        Health::Degraded
+    );
 }
 
 #[test]
@@ -729,7 +733,7 @@ fn eventide_bypass_button_toggles_once_per_press() {
         id: "eventide-bypass".into(),
         controller_profile: "launch-control-xl-mk2".into(),
         physical_control_id: "button-r1-c1".into(),
-        source_endpoint: "launch-input".into(),
+        source_endpoint: "midir-in-stale-after-reconnect".into(),
         source_kind: "note".into(),
         source_channel: 8,
         destination_channel: Some(6),

@@ -7,9 +7,10 @@ use cli::{
     apply_routes_cli, backup_entries, backup_status_label, daemon_command, daemon_request,
     daemon_status, discovered_endpoints, navigate_scene_cli, print_daemon_command,
     print_default_provider, print_effects_assignments, print_effects_demo, print_effects_faceplate,
-    print_effects_plan, print_learn, reflex_pcm70_preset, restore_cli, scene_action_add_cli,
-    scene_action_remove_cli, scene_actions_cli, scene_plan_cli, send_device_control_cli,
-    send_sysex_cli, set_default_provider_cli,
+    print_effects_plan, print_learn, reflex_pcm70_preset, register_endpoint_cli, restore_cli,
+    restore_novation_template_cli, scene_action_add_cli, scene_action_remove_cli,
+    scene_actions_cli, scene_plan_cli, send_device_control_cli, send_sysex_cli,
+    set_default_provider_cli,
 };
 use interactive::run_tui;
 
@@ -56,6 +57,8 @@ fn main() {
             println!("  mackes-midi-matrix scene actions <config> <project> <scene> [--json]");
             println!("  mackes-midi-matrix scene plan <config> <project> <scene> [--json]");
             println!("  mackes-midi-matrix routes apply <routes.json>");
+            println!("  mackes-midi-matrix device register <config> <alias> [--stable-id=ID] [--name=PATTERN] [--vendor-id=HEX] [--product-id=HEX] [--serial=SERIAL]");
+            println!("  mackes-midi-matrix device template restore <config>");
         }
         [command, action] if command == "effects" && action == "faceplate" => {
             print_effects_faceplate(false);
@@ -188,6 +191,29 @@ fn main() {
             if response.contains("\"ok\":false") {
                 std::process::exit(2);
             }
+        }
+        [command, action, path, alias, options @ ..]
+            if command == "device" && action == "register" =>
+        {
+            let parsed = options
+                .iter()
+                .filter_map(|item| item.strip_prefix("--"))
+                .filter_map(|item| item.split_once('='))
+                .collect::<Vec<_>>();
+            if let Err(error) = register_endpoint_cli(path, alias, &parsed) {
+                eprintln!("device registration failed: {error}");
+                std::process::exit(2);
+            }
+            println!("registered endpoint alias '{alias}' in {path}");
+        }
+        [command, action, subaction, path]
+            if command == "device" && action == "template" && subaction == "restore" =>
+        {
+            if let Err(error) = restore_novation_template_cli(path) {
+                eprintln!("template restore failed: {error}");
+                std::process::exit(2);
+            }
+            println!("restored Novation Factory Template 1 programming in {path}");
         }
         [command] if command == "scenes" || command == "devices" => {
             let ipc_command = if command == "scenes" {

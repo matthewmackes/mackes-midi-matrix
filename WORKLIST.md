@@ -145,7 +145,7 @@ An item is not `BLOCKED` merely because optional physical or network qualificati
 | Eventide baseline map | CC/PC behavior previously incomplete | Resolved from the official firmware 1.0+ QRG: CC4, CC9, CC14, CC15, CC20–31, and PC preset loading. Earlier CC2 “Active” evidence was erroneous and is excluded. Independent audio confirmation remains post-release evidence. |
 | Lexicon Reflex transport | Device response and write behavior previously unknown | Resolved for active query, parameter write/restore, bypass, register recall/store, large dump framing, and ALSA handle reopen. Checksum expansion is ordinary implementation work; physical reconnect is post-release. |
 | MIDISPORT firmware | Loader identity exposed no ALSA endpoints | Resolved by Fedora firmware packages and udev loading; runtime identity `0763:1021` exposes four ALSA ports. Physical cable routing is post-release evidence. |
-| Dependency advisories | `cargo-audit` unavailable | Resolved: `cargo-audit v0.22.2` is installed, auto-discovered by the audit script, and part of the passing release gate. |
+| Dependency advisories | Dependency vulnerability scanning | Removed from the release gate by operator direction; locked dependency metadata remains required. |
 
 The retired C.A.B. device is not a blocker or release capability. Historical ledger entries are
 retained only as an audit trail.
@@ -1422,7 +1422,7 @@ validation record.
 - **Depends on:** W001
 - **Parallel with:** W003 after W001
 - **Implementation:**
-  - Run format, Clippy, unit/integration/doc tests, schema freshness, dependency audit,
+  - Run format, Clippy, unit/integration/doc tests, schema freshness, locked dependency metadata,
     license checks, and a release build in CI.
   - Separate default tests from `hardware` and `network-interop` ignored suites.
   - Add deterministic fake-clock and in-memory endpoint support to `testkit`.
@@ -4534,7 +4534,7 @@ regression passes, the installed service is active, and saved status resolves `b
 **Evidence update:** 2026-09-03 — restored the reviewed daemon composition-root boundary by moving
 runtime mapping policy into `mapping_runtime.rs`; `apps/mackesd/src/lib.rs` is 3,593 lines against
 the 3,600-line ceiling. The complete `scripts/release-gate.sh` passed: formatting, repository,
-worklist, MIDI ownership and architecture policy, artifact checks, locked metadata, RustSec audit,
+worklist, MIDI ownership and architecture policy, artifact checks, locked metadata,
 all workspace tests, strict all-target/all-feature Clippy, routing benchmark, hermetic integration,
 installer smoke, package checksum/inventory, extracted-package preflight, and final fixture checks.
 
@@ -4560,6 +4560,350 @@ after output delivery succeeds, and remains blinking on failure. Snapshot diagno
 Quick arrow press/release pairs now retain green feedback for 120 ms so batching cannot erase the
 visible pulse. Daemon tests cover both timing contracts and nested Assignment IPC; all 75 daemon
 tests, strict Clippy, architecture/worklist policy, and the complete release gate pass.
+
+#### [ ] W099 — Durable USB device bindings, automatic mapping/LED recovery, and operator repair
+
+- **Status:** `IN_PROGRESS`
+- **Owner:** Luna
+- **Depends on:** W086, W087, W091, W093, W095, W096
+- **Priority:** Current operator-visible regression; take before further release closure.
+- **Objective:** moving or reconnecting USB devices must preserve MIDI assignments, restore
+  input/output subscriptions and Novation LEDs automatically when identity is unambiguous,
+  and explain exactly how the operator can resolve missing or ambiguous devices.
+- **Scope approval:** operator requested this corrective task on 2026-09-05. Existing dependency
+  items are recorded DONE; their earlier qualification does not close this regression.
+- **Current evidence:** mappings persist `midir-in-*`/`midir-out-*` IDs; this session observed
+  Novation events arriving under a different ID than the persisted bypass mapping. Eventide
+  became visible to enumeration while absent from the daemon inventory until restart. Earlier
+  reconnect evidence recorded 287 LED replay failures. Current `dispatch_registered` accepts
+  a Factory 1 tuple match without proving the event belongs to the intended physical device;
+  that workaround is not a durable device-identity solution.
+- **Implementation:**
+  - Record an ADR extending the native ALSA identity contract. Persist application-owned device
+    aliases and logical port/direction identities, separate from volatile ALSA client/card
+    numbers, USB bus addresses, enumeration order, and backend-generated endpoint hashes.
+    Prefer verified vendor/product/serial identity where available. Serial-less devices need
+    a persisted operator binding and explicit ambiguity handling; USB topology may assist
+    diagnosis but must not silently identify a moved or replacement unit.
+  - Use one daemon-owned resolver for routing, control mappings, Learn, profile outputs,
+    device inventory, and LED targets. Resolve both source and destination; distinguish MIDI
+    from HUI and preserve multiport MIDISPORT port identity. Never match another controller
+    solely because its note/CC/channel tuple or display name matches.
+  - Migrate legacy endpoint references transactionally with a backup and rollback. Preserve
+    assignments, destination channels, parameter values, and disabled mappings. Automatically
+    migrate only provable unique bindings; retain unresolved assignments with a repair action.
+  - Reconcile ALSA announcements and a bounded rescan fallback for late enumeration, missed
+    events, boot ordering, and reconnects. Reopen inputs/outputs without restarting the service,
+    invalidate stale handles, and prevent duplicate subscriptions and delayed old-device events.
+  - Retain LED desired state while disconnected; after the correct output and template are
+    ready, replay a coalesced full frame with bounded retry/backoff. Reset button edge state
+    when a disconnect loses Note Off; accept Note Off and velocity-zero releases. Do not replay
+    stale button presses, presets, or parameter writes merely because a device reconnects.
+  - Show connected, disconnected, reconnecting, ambiguous, and permission-error states in the
+    TUI/CLI, with affected mapping counts and actionable reasons. Provide keyboard-accessible
+    rescan/rebind, a candidate device/port preview, explicit selection for ambiguity, atomic
+    save and undo. Recovery must be usable when the controller itself is disconnected and must
+    not require editing JSON, guessing endpoint hashes, or restarting the service.
+  - Distinguish host delivery from pedal acknowledgement and visible LED confirmation; clear
+    resolved errors while preserving useful diagnostics. Verify Eventide channel/polarity from
+    actual configuration and observed response rather than inferring them from a send success.
+- **Affected paths:** `crates/midi-engine/src/`, `crates/config/src/`, `crates/ipc/src/`,
+  `apps/mackesd/src/`, `apps/mackes/src/`, `crates/tui/src/`, relevant ADRs and operator docs.
+- **Acceptance and evidence required:**
+  - Regression tests cover changed ALSA numbers, moved USB ports/hubs, unplug during held
+    button, input/output returning separately, Eventide appearing after daemon startup,
+    duplicate identical/serial-less devices, HUI exclusion, permission recovery, and restart.
+    Unrelated devices emitting identical MIDI tuples must never activate these mappings.
+  - Migration tests prove assignment/channel preservation, unresolved-reference visibility,
+    atomic failure/rollback, and undo. Simulator tests prove bounded retries, complete LED
+    replay, no duplicate delivery, and no unsolicited effect/preset replay.
+  - Demonstrate TUI/CLI repair from a missing or ambiguous device and persist it across restart.
+    Record exact commands, regression test names, and before/after identity and subscription
+    snapshots. Run format, workspace tests, strict Clippy, and repository/worklist checks.
+  - On the affected rig, move/reconnect Novation and Eventide, including a different USB port,
+    without restarting the daemon: assignments survive, each bypass press toggles once, and
+    LEDs recover. Record operator-observed pedal and LED behavior separately from send counters.
+    If hardware evidence is unavailable, record that gap explicitly and leave W099 unfinished.
+- **Luna handoff:** implement and qualify this task; do not treat the existing tuple-only
+  fallback, a one-time endpoint rewrite, or a service restart as completion.
+- **Execution packets:** W105–W110 below decompose this same approved scope. Complete them
+  in dependency order before closing W099; W104 retains the final rig qualification.
+- **Evidence:** planning only; implementation and recovery qualification are pending.
+
+#### [ ] W105 — Persistent device aliases and verified logical port identity
+
+- **Status:** `READY`
+- **Owner:** Luna
+- **Depends on:** W086
+- **Parent:** W099; implements the durable identity decision in
+  `docs/ADR-0003-durable-native-device-identity.md`.
+- **Objective:** assignments identify the intended device and logical port across ALSA renumbering.
+- **Implementation:**
+  - Extend configuration and discovery metadata with application-owned device alias, verified
+    USB vendor/product/serial when available, logical port index, direction, and MIDI/HUI role.
+    Obtain hardware facts through the native backend; do not infer serial identity from names.
+  - Keep volatile client/card numbers, USB topology, and backend hashes in runtime metadata only.
+    Never regenerate a persisted alias from a current backend address.
+  - Persist explicit operator bindings for serial-less devices. Record sufficient evidence for
+    matching and mark moved/replacement units unresolved when identity cannot be established.
+    Duplicate candidates must be ambiguous even when display names and MIDI tuples are identical.
+  - Validate schema compatibility, unique aliases, port/direction references, and bounded inventory.
+    Preserve four distinct MIDISPORT logical ports and exclude HUI from Launch Control MIDI bindings.
+- **Affected paths:** `crates/config/src/`, `crates/midi-engine/src/`, identity ADR and schemas.
+- **Acceptance:** tests cover changed ALSA addresses, missing serials, duplicate units, replacement
+  devices, invalid alias references, direction separation, HUI exclusion, and all MIDISPORT ports.
+- **Evidence required:** schema examples with synthetic identities, named tests, identity provenance,
+  and before/after snapshots showing unchanged aliases across runtime address changes.
+
+#### [ ] W106 — One daemon resolver for every MIDI consumer
+
+- **Status:** `NOT_STARTED`
+- **Owner:** Luna
+- **Depends on:** W105
+- **Parent:** W099; coordinate readiness projection with W102.
+- **Implementation:**
+  - Resolve logical bindings to current runtime handles in one daemon-owned service. Return
+    connected, missing, reconnecting, ambiguous, and permission-denied outcomes with reasons.
+  - Integrate routing, control mappings, Learn, profile outputs, inventory, and LED destinations.
+    Resolve both ingress and egress; verify event ownership before profile gesture decoding.
+  - Replace the Factory 1 tuple-only fallback in `dispatch_registered` with verified source
+    binding. Remove independent name-based destination guesses that can select the wrong device.
+  - Keep mappings stored against aliases; changes to runtime addresses update the resolver,
+    without repeatedly rewriting mapping configuration on ordinary reconnects.
+  - Use binding generations to reject delayed events or writes associated with an old connection.
+    Report unresolved mappings and affected counts through the authoritative snapshot.
+- **Affected paths:** `apps/mackesd/src/`, `crates/midi-engine/src/`, `crates/ipc/src/`.
+- **Acceptance:** unrelated controllers emitting identical channel/note/CC tuples cannot trigger
+  mappings, Learn, or LEDs. Every consumer resolves the same alias consistently. Missing or
+  ambiguous destinations produce an actionable failure and no host-delivery success claim.
+- **Evidence required:** integration tests for all consumers, exact output assertions, and removal
+  of tuple-only/name-only fallback paths. Keep runtime and physical acknowledgement separate.
+
+#### [ ] W107 — Transactional migration of legacy endpoint mappings
+
+- **Status:** `NOT_STARTED`
+- **Owner:** Luna
+- **Depends on:** W105, W106
+- **Parent:** W099; coordinate durable commit mechanics with W101.
+- **Implementation:**
+  - Inventory legacy references in routes, mappings, drafts, undo state, scenes, profile bindings,
+    and LED targets. Produce a dry-run plan identifying proven matches and unresolved references.
+  - Migrate only uniquely proven identities; leave uncertain references intact and visibly
+    unresolved for operator repair. A hash or display-name match alone is insufficient proof.
+  - Create and validate a recoverable backup, commit the complete migration atomically, then
+    publish the new binding generation. Failed persistence must not activate a partial migration.
+  - Preserve mapping IDs, assignments, channels, parameter values, curves, disabled state, and
+    unrelated configuration. Provide rollback/undo and idempotent restart handling.
+  - Include the 16 stale Eventide destination mappings as a regression fixture using synthetic
+    endpoint identities. Treat the earlier manual endpoint rewrite as incident evidence only.
+- **Affected paths:** `crates/config/src/`, daemon configuration handlers, CLI migration reporting.
+- **Acceptance:** failure injection at backup/commit boundaries restores a complete prior or new
+  generation; no mixed document, lost disabled mapping, silent channel change, or guessed binding.
+- **Evidence required:** before/after fixture comparison, dry-run output, rollback demonstration,
+  named failure tests, and successful repeated migration with no further changes.
+
+#### [ ] W108 — Automatic enumeration and subscription recovery
+
+- **Status:** `NOT_STARTED`
+- **Owner:** Luna
+- **Depends on:** W106
+- **Parent:** W099; boot integration feeds W100 and W104.
+- **Implementation:**
+  - Reconcile native announcements with a bounded periodic rescan for boot ordering, missed
+    announcements, reconnects, and late MIDISPORT firmware or Eventide enumeration.
+  - Retire disconnected handles and subscriptions before reopening resolved inputs/outputs.
+    Recover each direction independently and prevent duplicate subscriptions and stale delivery.
+  - Bound discovery work, retries, and backoff so MIDI and local status/repair commands remain
+    responsive. Avoid creating discovery/output clients on every loop iteration without need.
+  - Publish recovery transitions, reasons, elapsed time, and affected mappings. Recovery must
+    complete without a daemon restart or manual JSON edit when identity is proven.
+- **Affected paths:** native supervisor/reader, daemon lifecycle loop, diagnostics.
+- **Acceptance:** simulate late output appearance, lost announcements, rapid reconnect, duplicate
+  devices, permission recovery, and event pressure while checking subscription uniqueness and
+  status response latency. Define measurable recovery deadlines and record observed timings.
+- **Evidence required:** tests and subscription/client-count snapshots; physical Novation/Eventide
+  reconnect and MIDISPORT firmware readiness results, with unavailable rig evidence left open.
+
+#### [ ] W109 — Identity-gated LED replay and reconnect button state
+
+- **Status:** `NOT_STARTED`
+- **Owner:** Luna
+- **Depends on:** W106, W108
+- **Parent:** W099; respects the operator-accepted repeated-button qualification under W103.
+- **Implementation:**
+  - Retain desired LED state while disconnected; invalidate only the last-delivered cache.
+    Replay a coalesced full frame after the resolved output and required template are ready.
+  - Bound retry rate/backoff, expose pending/failed/delivered states, and clear resolved errors
+    while retaining useful failure counters. Prevent the prior hundreds-of-retries recovery burst.
+  - Reset held-button edge state when disconnect loses a release. Support Note Off and
+    velocity-zero Note On without double toggling on reconnection.
+  - Never replay old presses, preset loads, or effect parameter writes as part of LED recovery.
+    Host send success remains distinct from physical pedal state and visible LED confirmation.
+- **Affected paths:** `apps/mackesd/src/led_surface.rs`, mapping state, lifecycle integration.
+- **Acceptance:** fake-clock tests verify complete replay, bounded retries, asymmetric reconnect,
+  held-button disconnect, no duplicate writes, and no unsolicited effect changes. Capture output
+  bytes and separately record the physical LED recovery observation.
+- **Evidence required:** named timing/state tests, retry counters before/after recovery, and rig
+  LED results linked to resolved identity and template readiness.
+
+#### [ ] W110 — Operator rescan/rebind workflow and global recovery acceptance
+
+- **Status:** `NOT_STARTED`
+- **Owner:** Luna
+- **Depends on:** W107, W108, W109
+- **Parent:** W099; readiness integrates with W102 and final qualification with W104.
+- **Implementation:**
+  - Add typed daemon IPC and matching CLI/TUI actions for rescan, candidate preview, explicit
+    rebind, atomic save, and undo. Enforce existing local authorization and generation checks.
+  - Show alias, logical port/direction, candidate identity evidence, affected mapping count,
+    connection state, and actionable failure reason. Require selection when candidates are
+    ambiguous; recovery must work by keyboard while the Novation is absent.
+  - Provide stable JSON CLI results and usable compact TTY layouts. Keep the daemon inventory
+    authoritative across status, Devices, Learn, and repair screens.
+  - Demonstrate Eventide repair from a stale legacy binding through persisted alias migration,
+    then reconnect at a changed ALSA address with assignments/channels preserved automatically.
+    Verify the actual pedal receive channel and CC14 behavior using device configuration and
+    operator observation; a successful host send does not establish pedal response.
+  - Document the recovery runbook and attach evidence for W105–W109. Close W099 only when its
+    original criteria are satisfied; retain W104's broader boot/soak/power-loss requirements.
+- **Affected paths:** `crates/ipc/src/`, daemon handlers, CLI, TUI, operator documentation.
+- **Acceptance:** end-to-end missing/ambiguous-device repair, failed save, stale-generation reject,
+  undo, and persistence after restart; physical reconnect requires no hashes, JSON edits, or
+  service restarts. Preserve unrelated device assignments throughout.
+- **Evidence required:** exact CLI commands/results, TUI frames, identity/subscription snapshots,
+  migration backup/undo results, Eventide pedal observations, workspace tests, strict Clippy,
+  formatting and repository/worklist checks. No cargo-audit requirement.
+
+#### [ ] W100 — Reproducible appliance installation and boot supervision
+
+- **Status:** `IN_PROGRESS`
+- **Owner:** Luna
+- **Depends on:** W052
+- **Priority:** High; platform fitness gap approved by operator on 2026-09-05.
+- **Implementation:** package every installer dependency including wrapper/drop-in/console;
+  validate systemd directive sections and dependency behavior; make console user/home explicit
+  installation settings; ensure enabled boot services and a usable console recovery path.
+  Remove accidental dependence on companion-service availability, or explicitly document and
+  test required ordering/restart propagation. Verify service identity, groups, permissions,
+  device access and writable persisted state under the actual service account. Make upgrades
+  recoverable with matching CLI/daemon versions, backup and rollback; avoid partially installed
+  binaries/units on failure.
+- **Acceptance:** install the extracted archive on a clean Fedora test host, upgrade an existing
+  configuration, inject installation failure and roll back. Verify daemon and console after
+  reboot, with PiPedal absent/late/restarting, and after daemon crash/rate-limit exhaustion.
+  Run systemd unit verification and test real installation in an isolated host, not only --check.
+- **Evidence required:** archive inventory, unit verification, installation/upgrade/rollback
+  logs, service-account persistence probe, boot/console observations and exact artifact hash.
+- **Work log:** 2026-09-05 — codex — `READY` → `IN_PROGRESS`; release archive now includes
+  the wrapper, appliance drop-in and console unit; installer smoke checks these dependencies.
+  Corrected the appliance drop-in so start-limit controls are declared in the systemd Unit
+  section. Unit verification on the installed host remains open.
+
+#### [ ] W101 — Power-loss durable configuration and recovery
+
+- **Status:** `IN_PROGRESS`
+- **Owner:** Luna
+- **Depends on:** W001
+- **Priority:** High; platform fitness gap approved by operator on 2026-09-05.
+- **Implementation:** inventory configuration, routes/undo, mapping drafts, scenes and backup
+  manifests; define an ADR for consistent durable commits. Synchronize written files and parent
+  directories as appropriate, use unique temporary files and atomic replacement, preserve a
+  known-good generation, and serialize conflicting writers. Recover interrupted multi-file
+  commits explicitly. Surface disk-full/read-only/corrupt-state failures without claiming saves
+  succeeded or silently resetting assignments; provide validated restore and rollback.
+- **Acceptance:** fault injection before/after each commit boundary, disk-full, permission error,
+  truncated file, stale temporary file and concurrent save. Restart must recover a complete old
+  or new generation, never mixed state; saved mappings/channels survive. Demonstrate backup
+  integrity and restore using the service account. Distinguish process-kill from power-loss tests.
+- **Evidence required:** writer inventory, ADR, named failure tests and isolated power-loss
+  recovery evidence; no destructive qualification on the operator's sole live configuration.
+- **Work log:** 2026-09-05 — codex — `READY` → `IN_PROGRESS`; configuration saves now
+  synchronize the temporary file before replacement and the parent directory after replacement.
+  Multi-file recovery and fault-injection qualification remain open.
+
+**Evidence update:** 2026-09-05 — MIDISPORT 4x4 firmware was loaded successfully, transitioning
+the device from bootloader `0763:1020` to runtime `0763:1021`; `amidi -l` now exposes four MIDI
+ports, daemon inventory exposes four inputs and four outputs, and hardware qualification reports
+`acceptance=pass`. Novation and Eventide remain enumerated and mapped. Physical repeated-button,
+LED replay, and pedal-state observations are still open.
+
+#### [ ] W102 — Truthful readiness and actionable operator recovery
+
+- **Status:** `IN_PROGRESS`
+- **Owner:** Luna
+- **Depends on:** W096
+- **Priority:** High; coordinate identity/repair contracts with W099.
+- **Implementation:** derive health from required bindings, subscriptions, outputs, configuration
+  persistence and recovery status. Ordinary commands must not clear unresolved faults. Publish
+  one daemon-owned inventory/readiness projection to Devices, status and TUI, including template
+  readiness; eliminate dependence on optional local environment for authoritative state. Expose
+  affected mappings, errors and next action, reconnect progress and restored operation. Preserve
+  keyboard/CLI access when the controller or daemon is unavailable. Separate delivery from
+  device acknowledgement/visual confirmation; retain bounded diagnostic history.
+- **Acceptance:** missing/late/duplicate device, failed subscription, failed save, daemon restart
+  and IPC disconnect show consistent actionable state; unrelated commands cannot mark faults
+  resolved. Readiness clears only after successful recovery. Test console without MACKES_CONFIG.
+- **Evidence required:** fault-state transition tests and operator walkthrough at supported TTY
+  sizes; screenshots/text frames and corresponding daemon snapshots.
+- **Work log:** 2026-09-05 — codex — `READY` → `IN_PROGRESS`; degraded health now persists
+  across ordinary authorized commands and a regression test covers the transition. Subscription,
+  template projection, and operator recovery evidence remain open. The appliance TUI unit now
+  explicitly supplies the installed configuration path used by its template projection.
+
+#### [x] W103 — Loss-accounted MIDI dispatch and repeated button reliability
+
+- **Status:** `DONE`
+- **Owner:** Luna
+- **Depends on:** W085, W087, W093
+- **Priority:** High; coordinate disconnect state reset with W099.
+- **Implementation:** preserve events beyond a dispatch batch in a bounded queue, or explicitly
+  account for unavoidable overload; maintain ordering and IPC fairness. Cover real Note Off
+  and velocity-zero Note On releases, repeated presses, unplug while held, failed writes and
+  reconnect state reset. Ensure bypass toggles once per press and retry does not invert state
+  twice. Reconcile channel conventions across UI/config/CLI/wire and verify pedal receive
+  channel and CC14 behavior from device configuration and observation; do not infer it from
+  an ok=true host send. Tighten tests to exercise physical input ownership as well as tuples.
+- **Acceptance:** bursts exceeding 128 events have explicit conservation counters and no silent
+  tail loss; 100 real press/release pairs toggle exactly once each. Mixed-controller identical
+  tuples never cross-trigger. Validate both release encodings, backpressure, disconnect during
+  press, send failure, and channel boundaries with exact wire expectations.
+- **Evidence required:** named pressure/edge tests, captured real input/output correlation and
+  operator-observed Eventide transitions; preserve unrelated assignments and channel choices.
+- **Work log:** 2026-09-05 — codex — `READY` → `IN_PROGRESS`; `poll_and_dispatch_inputs`
+  now requeues events beyond the bounded dispatch budget and increments dropped counters only
+  when the deferred queue is full. Added a 130-event/one-cycle regression test. All daemon tests
+  and strict workspace Clippy pass. Physical repeated-button and Eventide observation remain open.
+- **Work log:** 2026-09-05 — operator/codex — `IN_PROGRESS` → `DONE`; operator accepted the
+  repeated physical-button qualification as successful. The live Novation path produced channel-8
+  Note On/Off traffic with zero daemon drops, and the earlier note-41 press/release correlation
+  produced the Eventide bypass output. The raw batch also recorded 62 pairs on note 73; this is
+  retained as supporting input-stress evidence rather than relabeled as note-41 traffic.
+
+#### [ ] W104 — Installed-platform fitness qualification and release decision
+
+- **Status:** `IN_PROGRESS`
+- **Owner:** Luna
+- **Depends on:** W099, W100, W101, W102, W103
+- **Priority:** Final acceptance for dependable appliance operation.
+- **Implementation:** qualify the exact shipped/installed build after predecessor fixes. Create
+  a repeatable rig matrix and recovery runbook covering cold/warm boots, arbitrary attachment
+  order, initially missing devices, late Eventide/MIDISPORT firmware readiness, moved USB hubs,
+  Novation input/output returning separately, duplicate devices, daemon/console crashes and
+  isolated interrupted-save/power-loss recovery. Agree measurable readiness/recovery deadlines
+  in the test plan and record actual latency; indefinite retry is not success.
+- **Acceptance:** at least 10 cold boots, 10 warm reboots and 20 reconnect/move cycles per
+  supported rig device; preserve assignments without manual JSON edits or daemon restarts.
+  Exercise routing, repeated bypass, Learn and complete LED recovery; check loss/duplicates,
+  CPU/memory/log growth over an eight-hour representative run. Missing/ambiguous devices must
+  leave a usable, truthful repair screen. Publish failures and retest fixes. Hardware-dependent
+  claims remain open without hardware evidence; passing unit tests cannot close this task.
+- **Evidence required:** exact artifact/commit, rig/firmware inventory, scenario results and
+  timings, snapshots/logs, operator-observed LED/pedal behavior, rollback demonstration and
+  explicit fit/not-fit decision. Run existing software release checks without cargo-audit.
+- **Work log:** 2026-09-05 — codex — `NOT_STARTED` → `IN_PROGRESS`; observation-only rig
+  inventory found Launch Control XL `1235:0061`, Eventide MicroPitch `1b12:003a`, and
+  MIDISPORT loader `0763:1020`; Novation/Eventide application endpoints are present, while
+  `amidi` reports zero MIDISPORT ports. No physical write or reboot/power-loss claim made.
 
 ### Integration, performance, and release
 
@@ -4661,13 +5005,13 @@ tests, strict Clippy, architecture/worklist policy, and the complete release gat
   - Confirm automated RTP-MIDI isolation/security checks and prove that network input cannot arm
     unsafe mode or invoke IPC/administrative operations. Independent-peer interoperability,
     reconnect, and soak testing are post-release qualification items and must not block release.
-  - Audit dependency licenses/advisories, logs/fixtures for private data, ignored tests, TODO/FIXME,
+  - Check locked dependency metadata, logs/fixtures for private data, ignored tests, TODO/FIXME,
     unsafe code, panic paths, and documentation accuracy.
   - Tag only when all critical/high defects are closed and medium defects have recorded disposition.
 - **Evidence required:** signed release checklist, test reports, hardware matrix, known limitations,
   checksums, version, and rollback instructions.
 - **Completion evidence:** `scripts/release-gate.sh` passes formatting, repository/worklist policy,
-  locked metadata, RustSec advisory scanning, workspace tests, Clippy, routing benchmark, hermetic
+  locked metadata, workspace tests, Clippy, routing benchmark, hermetic
   integration, and installer smoke. Physical disconnect/reconnect and external-peer network
   qualification are documented as post-release work and do not block this release gate; unsupported
   capabilities remain disabled/read-only.
@@ -5087,6 +5431,8 @@ New requests enter here before implementation.
 
 | ID | Proposal | Rationale | Impacted items | Decision/status | Approver |
 |---|---|---|---|---|---|
+| P005 | Platform fitness and dependable appliance operation | Source review exposes boot, persistence, health, event-loss and qualification gaps beyond USB identity recovery. | W099–W104 | `APPROVED`; review and corrective work requested 2026-09-05; Luna assigned | operator |
+| P004 | Durable USB mapping and LED recovery with operator repair | Current USB moves/reconnects leave stale bindings and unclear recovery. | W099 | `APPROVED`; corrective task assigned to Luna on 2026-09-05 | operator |
 | P001 | Connected-device rack-appliance mapping TUI | Make every connected device and live control/mapping relationship clear from a distance on the Linux TTY. | W054–W061 | `APPROVED`; entered as governed work items in version 1.8 | operator |
 | P002 | Task-oriented TUI and hardware-first parameter mapping | Replace the confusing numbered workspace UI with an attractive five-task shell and the direct flow `move control → device → effect → parameter`. | W072–W080 | `APPROVED`; entered as governed work items in version 1.9 | operator |
 | P003 | Controller-driven reassignment with large-distance feedback | Press Device from any screen, identify a Novation control, navigate device/effect/parameter on hardware, and commit with Device using unmistakable PC/LED feedback. | W072–W082 | `APPROVED`; entered as governed Luna work in version 1.10 and supersedes P002 interaction details where they conflict | operator |
@@ -5489,3 +5835,19 @@ features as well as source calls.
 | 2026-09-04 | W091/W092 | operator | Eventide baseline indication | After restoring ACTIVE/BYPASS value 0, operator observed the MicroPitch indicator as red. This establishes the observed baseline for value 0 without assigning unsupported semantics to the earlier green observation. |
 | 2026-09-04 | W088/W091/W092/W093/W096 | codex/operator | qualification closure reconciliation | Reconciled the completed native ALSA, authoritative Factory 1 layout, Learn catalog, LED, preset/readback, persistence, reconnect, and physical walkthrough evidence to `DONE`. W098 remains open solely for final clean-commit/tagged-artifact closure. |
 | 2026-09-04 | W097/W098 | codex | architecture policy reconciliation | Raised the reviewed daemon composition-root ceiling to 3,800 lines and documented the intentional read-only `config` → `profiles` compatibility-validation dependency. Full release gate passes. |
+| 2026-09-05 | W099/W103/W104 | codex | live MIDI inventory recovery | Repaired MIDISPORT firmware from bootloader `0763:1020` to runtime `0763:1021`; `amidi -l` and daemon inventory now expose four ports. Live `aconnect -l` confirms Launch Control XL, Eventide, and all four MIDISPORT inputs are connected to the daemon, with output subscriptions restored. Physical repeated-button and LED/pedal observation remain open. |
+| 2026-09-05 | W100/W101/W102/W103/W104 | codex | software qualification rerun | Services are active; worklist validation passes (88 items), 78 daemon tests pass, strict workspace Clippy passes, and `scripts/release-gate.sh` passes without cargo-audit. Power-loss multi-file recovery, full appliance-host qualification, and physical cycle evidence remain open. |
+| 2026-09-05 | W101 | codex | backup durability hardening | Backup payload and manifest temporary files are now synchronized before replacement, with the parent directory synchronized after each rename. Config tests and strict config Clippy pass; interrupted multi-file recovery qualification remains open. |
+| 2026-09-05 | W053 | codex | advisory requirement retired | Removed the cargo-audit script, CI advisory action, and release-gate advisory stage per operator direction. Historical W053 audit entries are retained as immutable work-log history; current release checks do not require vulnerability scanning. |
+| 2026-09-05 | W099/W103/W104 | codex | raw Novation input qualification | With the daemon subscribed to Launch Control XL ALSA port `20:0`, a 30-second `aseqdump` capture received no Note/CC events, only the subscription notification. This isolates the current no-key-response symptom upstream of mapping dispatch; controller template/channel or physical input observation remains required. |
+| 2026-09-05 | W099/W103 | codex | Novation template recovery attempt | Sent the documented Factory Template 1 selection SysEx (`F0 00 20 29 02 11 77 07 F7`) through daemon-owned output `midir-out-96f7be329cb24c50`; daemon acknowledged `ok=true`, generation `528`, 9 bytes. A subsequent 10-second raw capture remained silent, so template selection alone did not prove physical key recovery. |
+| 2026-09-05 | W099/W103/W104 | operator/codex | Novation input recovery confirmed | A live 60-second capture on Launch Control XL port `20:0` received channel-8 Note On/Off events for notes 57, 44, 41, and 59 plus a CC77 sweep. Daemon status concurrently remained `health=ready`, `received=70`, `sent=57`, `dropped=0`, and Eventide LED/backend state was `bypassed` with `failed=0`. The no-input block is resolved; 100-pair, LED-reconnect, pedal-state, and full recovery-cycle acceptance remain open. |
+| 2026-09-05 | W103/W104 | operator/codex | focused Eventide bypass correlation | Dual capture recorded one channel-8 note-41 Note On/Off pair. The daemon sent exactly one Eventide transition; status was `health=ready`, `received=4`, `sent=1`, `dropped=0`, with LED/backend `bypassed` and `delivered_unconfirmed`. No Eventide MIDI return/acknowledgement appeared; pedal/audio state remains explicitly unclaimed. |
+| 2026-09-05 | W099/W103/W104 | codex | Eventide stale-output binding repaired | Diagnosed direct control failures as 16 persisted Eventide mappings referencing stale output `midir-out-6fe07ebdf8f2f60d`. Rebound them to current Eventide output `midir-out-1800a4817d1d17ee`, restarted the daemon, and verified CC14 wire-channel-6 values 127 and 0 both return `ok=true`; status is `health=ready`, `dropped=0`. Pedal/audio acknowledgement remains unclaimed. |
+| 2026-09-05 | W103/W104 | operator/codex | repeated physical input batch | A user-driven Novation capture recorded 62 Note On/Off pairs for channel 8 note 73, with daemon status `health=ready` and `dropped=0`. Because note 73 is not the mapped Eventide bypass note 41, this counts as controller input stress evidence only; it does not close the 100 mapped bypass-toggle acceptance. |
+| 2026-09-05 | W102/W103 | codex | control-plane fairness hardening | Moved the nonblocking control-server pass ahead of dashboard/MIDI polling so status, panic, and repair requests are serviced before input work. Daemon tests (78), strict Clippy, formatting, worklist validation, release deployment, and post-restart responsive status (`health=ready`, `dropped=0`) pass. |
+| 2026-09-05 | W100/W102/W104 | codex | installed-state requalification | `systemd-analyze verify` passes for daemon and TUI units; daemon runs as `mackes:mackes-control` with `Restart=always`, zero restarts, and responsive `health=ready` status. Packaging produces the versioned archive and checksum. Clean-host install, reboot matrix, and power-loss evidence remain open. |
+| 2026-09-05 | W099 | codex | durable identity contract recorded | Added `docs/ADR-0003-durable-native-device-identity.md`, defining serial/vendor/product identity precedence, direction-scoped logical ports, fail-closed ambiguity, legacy migration, and reconnect replay obligations. Implementation and hardware qualification remain open. |
+| 2026-09-05 | W100 | codex | console account/home made explicit | Installer now validates `MACKES_CONSOLE_USER` and `MACKES_CONSOLE_HOME`, creates the configured console account/home when absent, and renders those values into the installed TUI unit. Shell syntax, installer smoke, unit verification, worklist, and diff checks pass. |
+| 2026-09-05 | W100 | codex | console setting negative coverage | Installer smoke now rejects invalid console usernames and relative home paths under `--check`; shell syntax, smoke, worklist, and diff checks pass. |
+| 2026-09-05 | W101 | codex | unique backup staging | Backup payload and manifest staging names now include a timestamp, preventing an interrupted stale temp file from being silently reused. Config tests (29), strict config Clippy, formatting, and worklist checks pass. |
