@@ -33,6 +33,45 @@ pub struct TextAssembler {
     pending: Vec<u8>,
 }
 
+/// A decoded server-to-client WebSocket frame.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ServerFrame {
+    /// FIN bit indicating the final fragment.
+    pub final_fragment: bool,
+    /// WebSocket opcode (1=text, 0=continuation, 8=close, 9=ping, 10=pong).
+    pub opcode: u8,
+    /// Unmasked payload bytes.
+    pub payload: Vec<u8>,
+}
+
+/// Decode one complete unmasked server WebSocket frame.
+pub fn decode_server_frame(input: &[u8]) -> Result<ServerFrame, String> {
+    if input.len() < 2 {
+        return Err("PiPedal frame header is truncated".into());
+    }
+    let final_fragment = input[0] & 0x80 != 0;
+    let opcode = input[0] & 0x0f;
+    if input[1] & 0x80 != 0 {
+        return Err("server WebSocket frame must not be masked".into());
+    }
+    let (length, offset) = match input[1] & 0x7f {
+        n @ 0..=125 => (n as usize, 2),
+        126 if input.len() >= 4 => (u16::from_be_bytes([input[2], input[3]]) as usize, 4),
+        127 if input.len() >= 10 => {
+            let mut bytes = [0_u8; 8];
+            bytes.copy_from_slice(&input[2..10]);
+            let length = usize::try_from(u64::from_be_bytes(bytes))
+                .map_err(|_| "PiPedal frame length overflows platform size".to_string())?;
+            (length, 10)
+        }
+        _ => return Err("PiPedal frame length is truncated".into()),
+    };
+    if length > MAX_FRAME_BYTES || input.len() != offset + length {
+        return Err("PiPedal frame length is invalid or exceeds limit".into());
+    }
+    Ok(ServerFrame { final_fragment, opcode, payload: input[offset..].to_vec() })
+}
+
 impl TextAssembler {
     /// Add one WebSocket payload fragment, returning a complete message at `final_fragment`.
     pub fn push(
@@ -261,5 +300,16 @@ mod tests {
         let mut assembler = TextAssembler::default();
         assert!(assembler.push(&vec![b'x'; MAX_FRAME_BYTES], false).is_ok());
         assert!(assembler.push(b"x", true).is_err());
+    }
+
+    #[test]
+    fn server_frame_decoder_validates_header_and_payload() {
+        let frame = decode_server_frame(&[0x81, 3, b'o', b'k', b'!']).expect("frame");
+        assert_eq!(
+            frame,
+            ServerFrame { final_fragment: true, opcode: 1, payload: b"ok!".to_vec() }
+        );
+        assert!(decode_server_frame(&[0x81, 0x80]).is_err());
+        assert!(decode_server_frame(&[0x81, 4, b'o']).is_err());
     }
 }
