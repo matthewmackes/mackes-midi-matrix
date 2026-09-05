@@ -56,3 +56,10 @@ Live wire probe (read-only, 2026-09-05) connected to `127.0.0.1:8080` and receiv
 deadline. This proves the endpoint and upgrade path, but not the request contract: the
 installed session likely requires an initialization message or route-specific handshake.
 W112 must capture that sequence from the matching client before enabling writes.
+
+Upstream client initialization order (pinned source commit) begins with `hello`, then
+`version`, followed by `imageList`, `plugins`, `currentPedalboard`, `pluginClasses`,
+`getPresets`, `getBankIndex`, `getFavorites`, and `getSystemMidiBindings` among other
+settings requests. The earlier direct probe skipped `hello`, explaining its timeout as
+an incomplete session sequence. W113 should implement this sequence as a bounded state
+machine and validate the installed build against it.

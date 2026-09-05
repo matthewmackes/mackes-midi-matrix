@@ -4827,6 +4827,11 @@ tests, strict Clippy, architecture/worklist policy, and the complete release gat
   Protocols` from the running PiPedal service. A direct `getSystemMidiBindings` frame timed
   out after three seconds, confirming that an initialization sequence or route-specific
   handshake remains to be identified; no write was attempted.
+- **Protocol progress:** Upstream client tracing identifies the required startup sequence:
+  `hello`, `version`, then catalog/state requests including `plugins`, `currentPedalboard`,
+  `pluginClasses`, `getPresets`, `getBankIndex`, `getFavorites`, and
+  `getSystemMidiBindings`. W113 must implement this as a bounded session state machine and
+  verify it against the installed service.
 
 #### [ ] W113 — Implement reusable PiPedal adapter and catalog
 - **Status:** `IN_PROGRESS`
