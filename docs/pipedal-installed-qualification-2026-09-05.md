@@ -49,3 +49,10 @@ The installed web manifest identifies PiPedal but contains no release version. P
 ownership metadata is also absent for `/usr/sbin/pipedald`; protocol compatibility therefore
 cannot be pinned from local version metadata alone. W112 must capture the matching source
 revision or equivalent wire-level fixtures before connector writes are enabled.
+
+Live wire probe (read-only, 2026-09-05) connected to `127.0.0.1:8080` and received
+`HTTP/1.1 101 Switching Protocols` from `WebSocket++/0.8.3-dev`. A masked array-framed
+`getSystemMidiBindings` request then received no response within a three-second bounded
+deadline. This proves the endpoint and upgrade path, but not the request contract: the
+installed session likely requires an initialization message or route-specific handshake.
+W112 must capture that sequence from the matching client before enabling writes.

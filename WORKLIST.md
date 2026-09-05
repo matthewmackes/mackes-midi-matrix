@@ -4823,6 +4823,10 @@ tests, strict Clippy, architecture/worklist policy, and the complete release gat
 - **Version evidence:** The installed web manifest has no release version and
   `/usr/sbin/pipedald` is not owned by a package in the local RPM database. Protocol
   compatibility remains unresolved until source revision or wire fixtures are captured.
+- **Live wire evidence (2026-09-05):** A bounded TCP/WebSocket probe received `101 Switching
+  Protocols` from the running PiPedal service. A direct `getSystemMidiBindings` frame timed
+  out after three seconds, confirming that an initialization sequence or route-specific
+  handshake remains to be identified; no write was attempted.
 
 #### [ ] W113 — Implement reusable PiPedal adapter and catalog
 - **Status:** `IN_PROGRESS`
