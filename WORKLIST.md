@@ -4825,12 +4825,15 @@ tests, strict Clippy, architecture/worklist policy, and the complete release gat
   compatibility remains unresolved until source revision or wire fixtures are captured.
 
 #### [ ] W113 — Implement reusable PiPedal adapter and catalog
-- **Status:** `NOT_STARTED`
+- **Status:** `IN_PROGRESS`
 - **Owner:** Unassigned
 - **Depends on:** W112
 - **Work:** Implement daemon-owned transport, typed catalog/state, identity resolution, bounded
   asynchronous requests, compatibility checks, and optional explicit MIDI transport. Implement all qualified operations using typed capability
   descriptors; explicitly report absent or unsupported operations.
+- **Progress evidence (2026-09-05):** Added `mackes-pipedal-connector` with typed array-framed
+  requests, `setControl` body, complete `MidiBinding` schema, and two wire-contract tests.
+  This is transport-independent by design; socket ownership and live writes remain open.
 - **Acceptance:** Mock-server contract tests cover discovery, metadata, malformed responses,
   timeouts and reconnect; blocking network work never runs on the MIDI dispatch path.
 
