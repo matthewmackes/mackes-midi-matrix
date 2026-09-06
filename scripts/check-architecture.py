@@ -11,7 +11,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 
 MAX_LINES = {
-    "crates/profiles/src/lib.rs": 3100,
+    # Novation XL protocol, LED batch encoding, and first-class controller
+    # capability descriptors remain in the profile boundary pending extraction.
+    "crates/profiles/src/lib.rs": 3200,
     "crates/midi-engine/src/lib.rs": 3100,
     "crates/tui/src/lib.rs": 4200,
     # The daemon's composition root retains a small amount of wiring while the

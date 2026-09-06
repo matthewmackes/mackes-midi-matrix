@@ -6211,6 +6211,11 @@ LED replay, and pedal-state observations are still open.
 - **Acceptance:** Tests fail against the original starvation/buffer/color defects, pass against
   the repair, and establish bounded traffic without weakening existing Eventide/Lexicon checks.
   Record commands, counts, build revision and remaining physical limitations in a qualification file.
+- **Release-gate evidence (2026-09-06):** The full `scripts/release-gate.sh` passed after the
+  Novation protocol work: repository/architecture policy, workspace tests, strict workspace
+  Clippy, 10,000-message throughput, 14-scenario hermetic integration, installer smoke, release
+  artifact checksum, and preflight validation. Physical protocol observation and dedicated
+  fairness/reconnect scenarios remain open and are not inferred from this gate.
 
 #### [ ] W126 — Deploy, physically verify, and close the Novation epic
 
