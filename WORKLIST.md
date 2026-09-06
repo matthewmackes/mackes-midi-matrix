@@ -6229,6 +6229,11 @@ LED replay, and pedal-state observations are still open.
 - **Acceptance:** Tests fail against the original starvation/buffer/color defects, pass against
   the repair, and establish bounded traffic without weakening existing Eventide/Lexicon checks.
   Record commands, counts, build revision and remaining physical limitations in a qualification file.
+- **Qualification evidence (2026-09-06):** `bash scripts/release-gate.sh` passed workspace tests,
+  strict workspace Clippy, the 10,000-message routing benchmark, 14-scenario hermetic integration,
+  installer smoke, and release artifact checksum validation. The gate includes 56 profile, 11
+  PiPedal adapter, and 85 daemon tests; two hardware/network scenarios remain explicitly ignored
+  because they require external devices.
 - **Release-gate evidence (2026-09-06):** The full `scripts/release-gate.sh` passed after the
   Novation protocol work: repository/architecture policy, workspace tests, strict workspace
   Clippy, 10,000-message throughput, 14-scenario hermetic integration, installer smoke, release
