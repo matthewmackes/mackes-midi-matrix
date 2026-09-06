@@ -11,8 +11,11 @@ pub fn line_from_payload(payload: &serde_json::Value) -> Option<String> {
     let template = led.get("template").and_then(serde_json::Value::as_u64).unwrap_or(1);
     let target = led.get("target_id").and_then(serde_json::Value::as_str).unwrap_or("none");
     let error = led.get("last_error").and_then(serde_json::Value::as_str).unwrap_or("none");
+    let phase = led.get("phase").and_then(serde_json::Value::as_str).unwrap_or("unknown");
+    let desired = led.get("desired_indices").and_then(serde_json::Value::as_u64).unwrap_or(0);
+    let pending = led.get("pending_indices").and_then(serde_json::Value::as_u64).unwrap_or(0);
     Some(format!(
-        "led attempted={attempted} sent={sent} coalesced={coalesced} failed={failed} template={template} target={target} error={error}"
+        "led phase={phase} desired={desired} pending={pending} attempted={attempted} sent={sent} coalesced={coalesced} failed={failed} template={template} target={target} error={error}"
     ))
 }
 
@@ -37,5 +40,6 @@ mod tests {
         assert!(line.contains("sent=0"));
         assert!(line.contains("failed=1"));
         assert!(line.contains("no unique Launch Control XL MIDI output"));
+        assert!(line.contains("phase=unknown"));
     }
 }
