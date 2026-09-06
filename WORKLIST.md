@@ -6075,10 +6075,10 @@ LED replay, and pedal-state observations are still open.
   counters once per accepted frame. Daemon tests (85), strict Clippy, worklist validation, and
   diff checks pass.
 
-#### [ ] W120 — Eliminate refresh starvation and unnecessary controller traffic
+#### [~] W120 — Eliminate refresh starvation and unnecessary controller traffic
 
-- **Status:** `NOT_STARTED`
-- **Owner:** Unassigned
+- **Status:** `IN_PROGRESS`
+- **Owner:** Codex
 - **Depends on:** W119
 - **Work:** Invalidate sent state only for an actual mapping, binding, template, or reconnect
   generation change. Repeated identical PiPedal projections must not request full replay.
@@ -6098,6 +6098,9 @@ LED replay, and pedal-state observations are still open.
   mapping list does not invalidate the LED sent-state cache on every daemon tick. Focused daemon
   tests (85), strict Clippy, worklist validation, formatting, and diff checks pass. Full fairness,
   traffic, and physical controller acceptance remain open under W125/W126.
+- **Implementation evidence (2026-09-06):** Cached the validated PiPedal physical-control
+  projection at configuration load; the real-time LED flush no longer reads configuration from
+  disk. This removes the remaining per-tick configuration I/O from the controller feedback path.
 
 #### [ ] W121 — Make initialization, template changes, and reconnect deterministic
 

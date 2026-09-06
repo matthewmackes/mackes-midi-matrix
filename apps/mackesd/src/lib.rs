@@ -210,6 +210,9 @@ pub struct Daemon {
     profile_bindings: Vec<(String, String)>,
     binding_generation: u64,
     config_path: Option<std::path::PathBuf>,
+    /// Cached `PiPedal` physical control IDs used by the real-time LED composer.
+    /// This must be refreshed at configuration boundaries, never from the LED tick.
+    pipedal_controls: Vec<String>,
     mapping_store: mackes_config::ControlMappingStore,
     button_toggle_state: std::collections::HashMap<String, (bool, bool)>,
     lexicon_active_algorithm: Option<u8>,
@@ -562,6 +565,7 @@ impl Daemon {
             profile_bindings: Vec::new(),
             binding_generation: 0,
             config_path: None,
+            pipedal_controls: Vec::new(),
             mapping_store: mackes_config::ControlMappingStore::default(),
             button_toggle_state: std::collections::HashMap::new(),
             lexicon_active_algorithm: None,
@@ -983,21 +987,7 @@ impl Daemon {
             .find(|(profile, _)| profile == "launch-control-xl-mk2")
             .map(|(_, endpoint)| endpoint.clone());
         self.led.set_target_binding(target);
-        let pipedal_controls = self
-            .config_path
-            .as_deref()
-            .and_then(|path| mackes_config::load(path).ok())
-            .map(|document| {
-                document
-                    .settings
-                    .pipedal_mappings
-                    .mappings
-                    .into_iter()
-                    .map(|mapping| mapping.physical_control_id)
-                    .collect()
-            })
-            .unwrap_or_default();
-        self.led.set_pipedal_controls(pipedal_controls);
+        self.led.set_pipedal_controls(self.pipedal_controls.clone());
         self.led.flush(
             now_ms,
             &self.mapping_store,
@@ -3907,17 +3897,28 @@ impl Daemon {
     pub fn set_config_path(&mut self, path: impl Into<std::path::PathBuf>) {
         let path = path.into();
         match mackes_config::load(&path) {
-            Ok(document) => match mackes_config::ControlMappingStore::from_document(&document) {
-                Ok(store) => {
-                    self.mapping_store = store;
-                    self.mapping_store.active.retain(assignment_commit::mapping_role_compatible);
-                    self.assignment_session.has_draft = !self.mapping_store.drafts.is_empty();
+            Ok(document) => {
+                self.pipedal_controls = document
+                    .settings
+                    .pipedal_mappings
+                    .mappings
+                    .iter()
+                    .map(|mapping| mapping.physical_control_id.clone())
+                    .collect();
+                match mackes_config::ControlMappingStore::from_document(&document) {
+                    Ok(store) => {
+                        self.mapping_store = store;
+                        self.mapping_store
+                            .active
+                            .retain(assignment_commit::mapping_role_compatible);
+                        self.assignment_session.has_draft = !self.mapping_store.drafts.is_empty();
+                    }
+                    Err(error) => eprint!(
+                        "{}",
+                        structured_log_line("error", "control_mapping_restore_rejected", &error)
+                    ),
                 }
-                Err(error) => eprint!(
-                    "{}",
-                    structured_log_line("error", "control_mapping_restore_rejected", &error)
-                ),
-            },
+            }
             Err(error) => eprint!(
                 "{}",
                 structured_log_line("error", "control_mapping_restore_failed", &error.to_string())
