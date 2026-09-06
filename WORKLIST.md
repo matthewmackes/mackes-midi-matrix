@@ -6208,6 +6208,8 @@ LED replay, and pedal-state observations are still open.
   reconnect/template state. This is published with desired/pending index counts and transport
   diagnostics. Daemon tests (85), strict Clippy, formatting, architecture, worklist, and diff
   checks pass; full runbook and TUI parity remain open.
+- **Regression evidence (2026-09-06):** Added a deterministic LED-surface test covering absent,
+  ready, initialization, animation, and post-animation restoration phases.
 - **Implementation evidence (2026-09-06):** Normal daemon status now publishes authoritative
   `desired_indices` and `pending_indices` alongside host-transport acceptance counters, target
   identity, template, retries, and failure state. The counts come directly from the coalescer and
