@@ -6162,6 +6162,11 @@ LED replay, and pedal-state observations are still open.
   intended backend update, reconciles readback, and receives the corresponding LED state.
   Missing EQ, duplicate instances, removed controls, and stale sessions produce actionable status.
   Config-only records without a working dispatch path cannot be labeled active or qualified.
+- **Implementation evidence (2026-09-06):** Cached stable PiPedal mapping identities alongside
+  the physical-control projection and made snapshot resolution consume that cache, eliminating
+  configuration-file reads from the status path as well as the LED tick. Daemon tests (85), strict
+  Clippy, architecture, worklist, formatting, and diff checks pass. MIDI-to-PiPedal dispatch,
+  pickup, and live backend qualification remain open.
 
 #### [ ] W123 — Unify device colors and overlay precedence
 

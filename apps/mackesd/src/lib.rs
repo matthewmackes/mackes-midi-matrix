@@ -213,6 +213,8 @@ pub struct Daemon {
     /// Cached `PiPedal` physical control IDs used by the real-time LED composer.
     /// This must be refreshed at configuration boundaries, never from the LED tick.
     pipedal_controls: Vec<String>,
+    /// Cached validated `PiPedal` identities used by snapshots and dispatch.
+    pipedal_mappings: Vec<mackes_pipedal_adapter::MappingIdentity>,
     mapping_store: mackes_config::ControlMappingStore,
     button_toggle_state: std::collections::HashMap<String, (bool, bool)>,
     lexicon_active_algorithm: Option<u8>,
@@ -566,6 +568,7 @@ impl Daemon {
             binding_generation: 0,
             config_path: None,
             pipedal_controls: Vec::new(),
+            pipedal_mappings: Vec::new(),
             mapping_store: mackes_config::ControlMappingStore::default(),
             button_toggle_state: std::collections::HashMap::new(),
             lexicon_active_algorithm: None,
@@ -2803,21 +2806,7 @@ impl Daemon {
     }
 
     fn pipedal_mapping_resolution(&self) -> serde_json::Value {
-        let Some(path) = self.config_path.as_deref() else { return serde_json::json!([]) };
-        let Ok(document) = mackes_config::load(path) else { return serde_json::json!([]) };
-        let mappings = document
-            .settings
-            .pipedal_mappings
-            .mappings
-            .into_iter()
-            .map(|mapping| mackes_pipedal_adapter::MappingIdentity {
-                physical_control_id: mapping.physical_control_id,
-                plugin_uri: mapping.plugin_uri,
-                symbol: mapping.symbol,
-                scope: mapping.scope,
-            })
-            .collect::<Vec<_>>();
-        serde_json::to_value(self.pipedal_worker.resolve_mappings(&mappings))
+        serde_json::to_value(self.pipedal_worker.resolve_mappings(&self.pipedal_mappings))
             .unwrap_or_else(|_| serde_json::json!([]))
     }
     fn resolved_mapping_registry(&self) -> Vec<serde_json::Value> {
@@ -3904,6 +3893,18 @@ impl Daemon {
                     .mappings
                     .iter()
                     .map(|mapping| mapping.physical_control_id.clone())
+                    .collect();
+                self.pipedal_mappings = document
+                    .settings
+                    .pipedal_mappings
+                    .mappings
+                    .iter()
+                    .map(|mapping| mackes_pipedal_adapter::MappingIdentity {
+                        physical_control_id: mapping.physical_control_id.clone(),
+                        plugin_uri: mapping.plugin_uri.clone(),
+                        symbol: mapping.symbol.clone(),
+                        scope: mapping.scope.clone(),
+                    })
                     .collect();
                 match mackes_config::ControlMappingStore::from_document(&document) {
                     Ok(store) => {
