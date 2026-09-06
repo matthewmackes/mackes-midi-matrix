@@ -6203,6 +6203,12 @@ LED replay, and pedal-state observations are still open.
   Payloads and logging are bounded and idle requests do not trigger replay or backend mutation.
 - **Deliverable:** Extend the recovery runbook with exact read-only diagnostic commands and a
   targeted resync operation whose effect and evidence limits are explicit.
+- **Implementation evidence (2026-09-06):** Normal daemon status now publishes authoritative
+  `desired_indices` and `pending_indices` alongside host-transport acceptance counters, target
+  identity, template, retries, and failure state. The counts come directly from the coalescer and
+  distinguish desired surface size from delivery still pending. Daemon tests (85), strict Clippy,
+  formatting, architecture, worklist, and diff checks pass; lifecycle phase, pickup, and runbook
+  completion remain open.
 
 #### [ ] W125 — Qualify protocol, fairness, and recovery in software
 
