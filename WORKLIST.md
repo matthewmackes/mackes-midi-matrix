@@ -6189,6 +6189,11 @@ LED replay, and pedal-state observations are still open.
   host layout, 12 legacy knobs plus five PiPedal knobs are assigned; seven unassigned knobs stay
   off outside explicitly requested overlays. Yellow is observably distinct from Amber in the
   documented encoding. The user confirms the actual rendered layout during W126.
+- **Implementation evidence (2026-09-06):** Enforced explicit PiPedal ownership matching and
+  changed Yellow ownership projection to preserve any already-composed higher-priority state.
+  Regression coverage verifies arbitrary `eq` profile names do not claim PiPedal and that an
+  existing Eventide state is not overwritten. Daemon suite now passes 88 tests; physical rendering
+  confirmation remains open under W126.
 
 #### [ ] W124 — Expose meaningful controller and PiPedal diagnostics
 
