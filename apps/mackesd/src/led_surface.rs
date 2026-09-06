@@ -649,6 +649,8 @@ fn owner_led_color(profile: &str) -> LedColor {
         LedColor::Red
     } else if lowered.contains("lexicon") {
         LedColor::Amber
+    } else if lowered.contains("pipedal") || lowered.contains("eq") {
+        LedColor::Yellow
     } else {
         LedColor::Green
     }
