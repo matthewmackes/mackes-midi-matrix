@@ -345,7 +345,7 @@ impl LedSurface {
         );
         for control_id in &self.pipedal_controls {
             if let Some(index) = led_index(control_id) {
-                desired.insert(index, LedState::new(LedColor::Yellow, 127, false));
+                desired.entry(index).or_insert_with(|| LedState::new(LedColor::Yellow, 127, false));
             }
         }
         if let Some(started) = self.reconnect_show_started_ms {
@@ -970,6 +970,19 @@ mod tests {
     fn owner_color_does_not_treat_arbitrary_eq_profile_as_pipedal() {
         assert_eq!(owner_led_color("custom.eq.plugin"), LedColor::Green);
         assert_eq!(owner_led_color("pipedal.eq"), LedColor::Yellow);
+    }
+
+    #[test]
+    fn pipedal_owner_does_not_overwrite_existing_higher_priority_surface_state() {
+        let mut outputs = OutputRegistry::new(4);
+        let (adapter, _) = recording("xl-midi", "Launch Control XL MIDI 1");
+        outputs.insert(Box::new(adapter)).expect("output");
+        let mut surface = LedSurface::default();
+        surface.set_pipedal_controls(vec!["knob-r1-c1".into()]);
+        let mut store = ControlMappingStore::default();
+        store.active.push(mapping("knob-r1-c1", "eventide.micropitch"));
+        surface.flush(0, &store, &AssignmentSession::new("live"), None, &mut outputs, false);
+        assert_eq!(surface.coalescer.desired(0).map(|state| state.color), Some(LedColor::Red));
     }
 
     #[test]
