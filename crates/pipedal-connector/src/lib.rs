@@ -32,6 +32,56 @@ pub const MAX_MAPPINGS: usize = 128;
 /// Maximum discovered plugin controls in one catalog snapshot.
 pub const MAX_CATALOG_CONTROLS: usize = 2_048;
 
+/// PiPedal operations that the connector may expose after capability discovery.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Operation {
+    /// Set one plugin parameter.
+    SetControl,
+    /// Preview a parameter without committing it.
+    PreviewControl,
+    /// Replace the current pedalboard graph.
+    UpdateCurrentPedalboard,
+    /// Enable or bypass one pedalboard item.
+    SetPedalboardItemEnable,
+    /// Select or write a snapshot.
+    SetSnapshot,
+    /// Write system MIDI bindings.
+    SetSystemMidiBindings,
+    /// Restart the PiPedal engine.
+    Restart,
+    /// Shut down the PiPedal host.
+    Shutdown,
+}
+
+impl Operation {
+    /// Wire operation name registered by PiPedal.
+    #[must_use]
+    pub const fn wire_name(self) -> &'static str {
+        match self {
+            Self::SetControl => "setControl",
+            Self::PreviewControl => "previewControl",
+            Self::UpdateCurrentPedalboard => "updateCurrentPedalboard",
+            Self::SetPedalboardItemEnable => "setPedalboardItemEnable",
+            Self::SetSnapshot => "setSnapshot",
+            Self::SetSystemMidiBindings => "setSystemMidiBindings",
+            Self::Restart => "restart",
+            Self::Shutdown => "shutdown",
+        }
+    }
+
+    /// Whether this operation changes persistent or host-wide state.
+    #[must_use]
+    pub const fn requires_confirmation(self) -> bool {
+        matches!(
+            self,
+            Self::UpdateCurrentPedalboard
+                | Self::SetSystemMidiBindings
+                | Self::Restart
+                | Self::Shutdown
+        )
+    }
+}
+
 /// Bounded accumulator for fragmented WebSocket text messages.
 #[derive(Debug, Default)]
 pub struct TextAssembler {
@@ -520,6 +570,13 @@ mod tests {
         assert_eq!(requests[1], "version");
         assert_eq!(requests.last(), Some(&"getSystemMidiBindings"));
         assert!(requests.len() <= 16);
+    }
+
+    #[test]
+    fn operation_catalog_preserves_wire_names_and_confirmation_policy() {
+        assert_eq!(Operation::SetControl.wire_name(), "setControl");
+        assert!(!Operation::SetControl.requires_confirmation());
+        assert!(Operation::Shutdown.requires_confirmation());
     }
 
     #[test]
