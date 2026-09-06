@@ -57,6 +57,14 @@ impl Default for Session {
 }
 
 impl Session {
+    /// Mark a newly opened WebSocket as ready for the hello request.
+    pub fn connect(&mut self) -> Result<(), String> {
+        if self.phase != SessionPhase::Disconnected {
+            return Err("PiPedal session is already connected".into());
+        }
+        self.phase = SessionPhase::Connected;
+        Ok(())
+    }
     /// Current handshake phase.
     #[must_use]
     pub const fn phase(&self) -> SessionPhase {
@@ -794,6 +802,14 @@ mod tests {
         assert!(session.enqueue(generation, b"stale".to_vec()).is_err());
         assert!(session.pop().is_none());
         assert_eq!(session.generation(), generation + 1);
+    }
+
+    #[test]
+    fn session_connect_starts_handshake_once() {
+        let mut session = Session::default();
+        session.connect().expect("connect");
+        assert_eq!(session.phase(), SessionPhase::Connected);
+        assert!(session.connect().is_err());
     }
 
     #[test]
