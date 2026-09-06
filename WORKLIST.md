@@ -6127,6 +6127,10 @@ LED replay, and pedal-state observations are still open.
   complete desired render. Exact reset-frame coverage, 56 profile tests, 85 daemon tests, strict
   Clippy, worklist validation, and diff checks pass. Live deployment and physical reset behavior
   remain open.
+- **Deployment evidence (2026-09-06):** Built and installed the release containing the reset
+  sequence. Both `mackes-midi-matrix.service` and `pipedald.service` are active; the daemon
+  reports `health=ready`, target `midir-out-96f7be329cb24c50`, 35 accepted LED frames, and zero
+  LED failures after startup. Physical LED appearance and repeated reconnect behavior remain open.
 
 #### [ ] W122 — Integrate PiPedal mappings with truthful ownership and input dispatch
 
