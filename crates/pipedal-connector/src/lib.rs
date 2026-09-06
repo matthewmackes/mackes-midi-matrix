@@ -47,6 +47,18 @@ pub enum Operation {
     SetSnapshot,
     /// Write system MIDI bindings.
     SetSystemMidiBindings,
+    /// Set the PiPedal input mixer level.
+    SetInputVolume,
+    /// Set the PiPedal output mixer level.
+    SetOutputVolume,
+    /// Load a saved preset.
+    LoadPreset,
+    /// Save the current preset.
+    SaveCurrentPreset,
+    /// Query ALSA devices.
+    GetAlsaDevices,
+    /// Query JACK status.
+    GetJackStatus,
     /// Restart the PiPedal engine.
     Restart,
     /// Shut down the PiPedal host.
@@ -64,6 +76,12 @@ impl Operation {
             Self::SetPedalboardItemEnable => "setPedalboardItemEnable",
             Self::SetSnapshot => "setSnapshot",
             Self::SetSystemMidiBindings => "setSystemMidiBindings",
+            Self::SetInputVolume => "setInputVolume",
+            Self::SetOutputVolume => "setOutputVolume",
+            Self::LoadPreset => "loadPreset",
+            Self::SaveCurrentPreset => "saveCurrentPreset",
+            Self::GetAlsaDevices => "getAlsaDevices",
+            Self::GetJackStatus => "getJackStatus",
             Self::Restart => "restart",
             Self::Shutdown => "shutdown",
         }
@@ -76,6 +94,10 @@ impl Operation {
             self,
             Self::UpdateCurrentPedalboard
                 | Self::SetSystemMidiBindings
+                | Self::SetInputVolume
+                | Self::SetOutputVolume
+                | Self::LoadPreset
+                | Self::SaveCurrentPreset
                 | Self::Restart
                 | Self::Shutdown
         )

@@ -4918,6 +4918,9 @@ tests, strict Clippy, architecture/worklist policy, and the complete release gat
   qualified control, pedalboard, snapshot, MIDI-binding, restart, and shutdown operations.
   Each operation exposes its PiPedal wire name and marks host-wide or persistent mutations
   as confirmation-required; connector tests cover the policy.
+- **Progress evidence (2026-09-05):** Extended the capability catalog with qualified audio
+  volume, preset load/save, ALSA-device, and JACK-status operations, preserving explicit wire
+  names and confirmation policy for mutating actions.
 - **Release evidence (2026-09-05):** `scripts/release-gate.sh` passed after registering the
   connector in the architecture policy, including workspace tests, benchmark, hermetic
   integration (13 passed, 1 explicitly ignored), installer smoke, and release artifact checks.
