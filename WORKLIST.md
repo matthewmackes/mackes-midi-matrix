@@ -4945,6 +4945,9 @@ tests, strict Clippy, architecture/worklist policy, and the complete release gat
 - **Artifact evidence (2026-09-05):** Added `docs/fixtures/pipedal-eq-r3-example.json`, a
   reusable five-knob R3C4–R3C8 mapping fixture using the qualified parametric-EQ URI and stable
   symbols (`lfLevel`, `lmfLevel`, `hmfLevel`, `hfLevel`, `gain`).
+- **Validation evidence (2026-09-05):** Added `scripts/check-pipedal-fixture.py` to enforce
+  bounded mapping count, complete stable identities, and physical/target uniqueness; the R3
+  fixture passes validation.
 - **Release evidence (2026-09-05):** `scripts/release-gate.sh` passed after registering the
   connector in the architecture policy, including workspace tests, benchmark, hermetic
   integration (13 passed, 1 explicitly ignored), installer smoke, and release artifact checks.
