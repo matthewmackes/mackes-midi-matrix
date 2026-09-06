@@ -52,6 +52,8 @@ pub enum Operation {
     SetPedalboardItemTitle,
     /// Select or write a snapshot.
     SetSnapshot,
+    /// Replace snapshot definitions.
+    SetSnapshots,
     /// Write system MIDI bindings.
     SetSystemMidiBindings,
     /// Set the PiPedal input mixer level.
@@ -85,6 +87,7 @@ impl Operation {
             Self::SetPedalboardItemUseModUi,
             Self::SetPedalboardItemTitle,
             Self::SetSnapshot,
+            Self::SetSnapshots,
             Self::SetSystemMidiBindings,
             Self::SetInputVolume,
             Self::SetOutputVolume,
@@ -109,6 +112,7 @@ impl Operation {
             Self::SetPedalboardItemUseModUi => "setPedalboardItemUseModUi",
             Self::SetPedalboardItemTitle => "setPedalboardItemTitle",
             Self::SetSnapshot => "setSnapshot",
+            Self::SetSnapshots => "setSnapshots",
             Self::SetSystemMidiBindings => "setSystemMidiBindings",
             Self::SetInputVolume => "setInputVolume",
             Self::SetOutputVolume => "setOutputVolume",
@@ -159,7 +163,7 @@ impl Operation {
             | Self::SetPedalboardItemEnable => "pedalboard",
             Self::SetPedalboardItemUseModUi => "pedalboard",
             Self::SetPedalboardItemTitle => "pedalboard",
-            Self::SetSnapshot => "snapshots",
+            Self::SetSnapshot | Self::SetSnapshots => "snapshots",
             Self::SetSystemMidiBindings => "midi",
             Self::SetInputVolume | Self::SetOutputVolume => "audio",
             Self::LoadPreset | Self::SaveCurrentPreset => "presets",
@@ -676,7 +680,7 @@ mod tests {
                 assert!(!operation.is_read_only());
             }
         }
-        assert_eq!(Operation::all().len(), 17);
+        assert_eq!(Operation::all().len(), 18);
         assert!(Operation::all().iter().all(|operation| !operation.wire_name().is_empty()));
         assert_eq!(serde_json::to_string(&Operation::SetControl).expect("json"), "\"setControl\"");
     }
