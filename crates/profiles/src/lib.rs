@@ -244,7 +244,7 @@ pub enum ControlTransport {
 }
 
 /// Supported controller identity for the Launch Control profile gate.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum LaunchControlIdentity {
     /// Novation Launch Control XL Mk2, the platform template identity.
     Mk1,
@@ -254,6 +254,39 @@ pub enum LaunchControlIdentity {
     LaunchpadFamily,
     /// Any other or unrecognized controller.
     Unknown,
+}
+
+/// Versioned, typed capability contract for the supported Launch Control XL surface.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct LaunchControlCapabilityDescriptor {
+    /// Contract version, independent of firmware version.
+    pub version: u16,
+    /// Supported hardware identity.
+    pub identity: LaunchControlIdentity,
+    /// Number of stable physical controls in the catalog.
+    pub physical_control_count: u8,
+    /// Number of addressable background LEDs.
+    pub led_count: u8,
+    /// Factory 1 wire template byte.
+    pub factory1_template: u8,
+    /// Whether template selection is documented and supported.
+    pub template_selection: bool,
+    /// Whether LED readback is supported (it is not for this contract).
+    pub led_readback: bool,
+}
+
+/// Returns the supported Launch Control XL capability contract.
+#[must_use]
+pub const fn launch_control_capability_descriptor() -> LaunchControlCapabilityDescriptor {
+    LaunchControlCapabilityDescriptor {
+        version: 1,
+        identity: LaunchControlIdentity::Mk1,
+        physical_control_count: 56,
+        led_count: 48,
+        factory1_template: LAUNCH_CONTROL_MK2_FACTORY1_SLOT,
+        template_selection: true,
+        led_readback: false,
+    }
 }
 
 /// Novation product families recognized by the platform discovery layer.

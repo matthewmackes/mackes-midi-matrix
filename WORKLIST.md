@@ -6315,6 +6315,12 @@ LED replay, and pedal-state observations are still open.
   rebound and diagnosed through the same platform contracts as other devices. Eventide, Lexicon
   and PiPedal each use its shared control catalog. Device absence leaves persisted assignments
   visible and repairable. Architecture tests prevent direct UI transport or parallel LED writers.
+- **Implementation evidence (2026-09-06):** Added the versioned, serializable
+  `LaunchControlCapabilityDescriptor` covering the supported identity, 56 physical controls,
+  48 LED addresses, Factory 1 template byte, template-selection support, and explicitly unsupported
+  LED readback. Profile tests (57), strict Clippy, architecture, worklist, and diff checks pass.
+  Daemon lifecycle ownership, persistence migration, and complete CLI/TUI device workflows remain
+  open.
 
 #### [ ] W128 — Deliver complete Novation device and assignment workflows
 

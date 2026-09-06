@@ -1329,3 +1329,15 @@ fn effect_colors_have_stable_non_color_markers() {
         LedState::new(LedColor::Red, 127, false)
     );
 }
+
+#[test]
+fn launch_control_capability_descriptor_is_explicit_and_serializable() {
+    let descriptor = launch_control_capability_descriptor();
+    assert_eq!(descriptor.version, 1);
+    assert_eq!(descriptor.identity, LaunchControlIdentity::Mk1);
+    assert_eq!(descriptor.physical_control_count, 56);
+    assert_eq!(descriptor.led_count, 48);
+    assert!(descriptor.template_selection);
+    assert!(!descriptor.led_readback);
+    assert!(serde_json::to_string(&descriptor).is_ok());
+}
