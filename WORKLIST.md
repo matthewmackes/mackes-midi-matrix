@@ -4933,6 +4933,9 @@ tests, strict Clippy, architecture/worklist policy, and the complete release gat
 - **Progress evidence (2026-09-05):** The operation contract now classifies read-only ALSA/JACK
   queries separately from writable actions, preventing discovery-only capabilities from being
   presented as physical mapping destinations.
+- **Progress evidence (2026-09-05):** Added an explicit mapping-eligibility policy: only
+  parameter, item-enable, and snapshot operations may be assigned to physical controls;
+  restart, shutdown, graph, preset, and discovery actions are excluded by construction.
 - **Release evidence (2026-09-05):** `scripts/release-gate.sh` passed after registering the
   connector in the architecture policy, including workspace tests, benchmark, hermetic
   integration (13 passed, 1 explicitly ignored), installer smoke, and release artifact checks.

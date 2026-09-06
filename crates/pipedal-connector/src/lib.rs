@@ -130,6 +130,12 @@ impl Operation {
     pub const fn is_read_only(self) -> bool {
         matches!(self, Self::GetAlsaDevices | Self::GetJackStatus)
     }
+
+    /// Whether the operation is safe to expose as a physical scalar/toggle mapping.
+    #[must_use]
+    pub const fn is_mapping_eligible(self) -> bool {
+        matches!(self, Self::SetControl | Self::SetPedalboardItemEnable | Self::SetSnapshot)
+    }
 }
 
 /// Bounded accumulator for fragmented WebSocket text messages.
@@ -629,6 +635,8 @@ mod tests {
         assert!(Operation::Shutdown.requires_confirmation());
         assert!(Operation::GetJackStatus.is_read_only());
         assert!(!Operation::SetOutputVolume.is_read_only());
+        assert!(Operation::SetControl.is_mapping_eligible());
+        assert!(!Operation::Restart.is_mapping_eligible());
         assert_eq!(Operation::all().len(), 14);
         assert!(Operation::all().iter().all(|operation| !operation.wire_name().is_empty()));
         assert_eq!(serde_json::to_string(&Operation::SetControl).expect("json"), "\"setControl\"");
