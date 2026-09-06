@@ -6321,6 +6321,9 @@ LED replay, and pedal-state observations are still open.
   LED readback. Profile tests (57), strict Clippy, architecture, worklist, and diff checks pass.
   Daemon lifecycle ownership, persistence migration, and complete CLI/TUI device workflows remain
   open.
+- **Snapshot evidence (2026-09-06):** Published the typed capability descriptor in both normal
+  daemon snapshots and state-event projections, making the Novation contract discoverable by CLI,
+  TUI, and future web consumers without duplicating protocol metadata.
 
 #### [ ] W128 — Deliver complete Novation device and assignment workflows
 
