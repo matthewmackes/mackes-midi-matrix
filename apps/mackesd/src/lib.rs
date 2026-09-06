@@ -2648,6 +2648,7 @@ impl Daemon {
             "assignment_session": self.assignment_session,
             "catalog": self.catalog,
             "physical_devices": self.physical_devices,
+            "novation_capabilities": mackes_profiles::launch_control_capability_descriptor(),
             "config_persistence": persistence_projection::config_persistence(
                 self.config_path.as_deref(),
             ),
@@ -2745,6 +2746,7 @@ impl Daemon {
             "last_sequence": self.state_sequence,
             "catalog": self.catalog,
             "physical_devices": self.physical_devices,
+            "novation_capabilities": mackes_profiles::launch_control_capability_descriptor(),
             "endpoint_bindings": self.endpoint_binding_projection(),
             "binding_generation": self.binding_generation,
             "native_backend": if cfg!(feature = "alsa-seq-backend") {
