@@ -708,7 +708,7 @@ fn owner_led_color(profile: &str) -> LedColor {
         LedColor::Red
     } else if lowered.contains("lexicon") {
         LedColor::Amber
-    } else if lowered.contains("pipedal") || lowered.contains("eq") {
+    } else if lowered == "pipedal" || lowered.starts_with("pipedal.") {
         LedColor::Yellow
     } else {
         LedColor::Green
@@ -964,6 +964,12 @@ mod tests {
         assert_eq!(desired.get(&32).map(|state| state.color), Some(LedColor::Amber));
         assert_eq!(desired.get(&33).map(|state| state.color), Some(LedColor::Amber));
         assert_eq!(desired.get(&1).map(|state| state.color), Some(LedColor::Off));
+    }
+
+    #[test]
+    fn owner_color_does_not_treat_arbitrary_eq_profile_as_pipedal() {
+        assert_eq!(owner_led_color("custom.eq.plugin"), LedColor::Green);
+        assert_eq!(owner_led_color("pipedal.eq"), LedColor::Yellow);
     }
 
     #[test]
