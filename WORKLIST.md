@@ -6075,9 +6075,9 @@ LED replay, and pedal-state observations are still open.
   counters once per accepted frame. Daemon tests (85), strict Clippy, worklist validation, and
   diff checks pass.
 
-#### [~] W120 — Eliminate refresh starvation and unnecessary controller traffic
+#### [x] W120 — Eliminate refresh starvation and unnecessary controller traffic
 
-- **Status:** `IN_PROGRESS`
+- **Status:** `DONE`
 - **Owner:** Codex
 - **Depends on:** W119
 - **Work:** Invalidate sent state only for an actual mapping, binding, template, or reconnect
@@ -6101,6 +6101,10 @@ LED replay, and pedal-state observations are still open.
 - **Implementation evidence (2026-09-06):** Cached the validated PiPedal physical-control
   projection at configuration load; the real-time LED flush no longer reads configuration from
   disk. This removes the remaining per-tick configuration I/O from the controller feedback path.
+- **Completion evidence (2026-09-06):** Focused daemon tests (85), strict Clippy, formatting,
+  architecture, worklist, and diff checks pass. The bounded LED composer now satisfies the
+  software-side starvation, coalescing, retry, and configuration-cache contract; physical
+  appearance and recovery evidence remain explicitly owned by W125/W126.
 
 #### [ ] W121 — Make initialization, template changes, and reconnect deterministic
 
