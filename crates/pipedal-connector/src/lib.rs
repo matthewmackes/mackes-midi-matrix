@@ -33,7 +33,8 @@ pub const MAX_MAPPINGS: usize = 128;
 pub const MAX_CATALOG_CONTROLS: usize = 2_048;
 
 /// PiPedal operations that the connector may expose after capability discovery.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub enum Operation {
     /// Set one plugin parameter.
     SetControl,
@@ -622,6 +623,7 @@ mod tests {
         assert!(Operation::Shutdown.requires_confirmation());
         assert_eq!(Operation::all().len(), 14);
         assert!(Operation::all().iter().all(|operation| !operation.wire_name().is_empty()));
+        assert_eq!(serde_json::to_string(&Operation::SetControl).expect("json"), "\"setControl\"");
     }
 
     #[test]
