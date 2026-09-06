@@ -6219,6 +6219,10 @@ LED replay, and pedal-state observations are still open.
   checks pass; full runbook and TUI parity remain open.
 - **Regression evidence (2026-09-06):** Added a deterministic LED-surface test covering absent,
   ready, initialization, animation, and post-animation restoration phases.
+- **Runbook evidence (2026-09-06):** Expanded `docs/operator-recovery-runbook.md` with the exact
+  JSON status command, LED phase/counter interpretation, HUI exclusion, and bounded `rescan`
+  recovery action. It explicitly separates host transport acceptance from physical LED
+  acknowledgment and documents that no generic force-resync command is currently exposed.
 - **Implementation evidence (2026-09-06):** Normal daemon status now publishes authoritative
   `desired_indices` and `pending_indices` alongside host-transport acceptance counters, target
   identity, template, retries, and failure state. The counts come directly from the coalescer and

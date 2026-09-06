@@ -45,6 +45,28 @@ reconnected under a new ALSA address, or reported ambiguous.
 5. Recheck `mackes devices --json` and the daemon snapshot. A host MIDI send counter proves
    delivery to the host only; pedal response and visible LED recovery must be observed separately.
 
+   ```text
+   mackes status --json
+   ```
+
+   In the JSON response, inspect `led.phase`, `led.target_id`, `led.desired_indices`,
+   `led.pending_indices`, `led.sent`, `led.failed`, and `led.last_error`:
+
+   - `absent` means no uniquely selected Launch Control XL MIDI output is available; HUI is not an
+     LED target.
+   - `initializing` means the daemon is sending the template-scoped reset/template setup.
+   - `animating` means the bounded reconnect indication is active; it will restore the desired
+     surface when complete.
+   - `ready` means the host-side surface is eligible for normal writes. It is not proof that the
+     controller visibly accepted or rendered the bytes.
+   - A nonzero `pending_indices` or `failed` requires retaining the snapshot and `last_error` for
+     diagnosis; do not repeatedly restart the service.
+
+   `mackes rescan --json` is the supported targeted recovery action. It rechecks native endpoint
+   identity and subscriptions without restarting the service; it does not claim hardware LED
+   acknowledgment. There is no generic force-resync command: a matching output return, template
+   change, scene change, or reconnect invalidates the daemon's sent cache and schedules replay.
+
 6. Check the `config_persistence` object in `mackes status --json` (or the dashboard's
    `config=...` line):
 
