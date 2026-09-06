@@ -546,6 +546,28 @@ fn command_ack(
 
 #[cfg(target_os = "linux")]
 impl Daemon {
+    fn cache_pipedal_mappings(&mut self, document: &mackes_config::ConfigDocument) {
+        self.pipedal_controls = document
+            .settings
+            .pipedal_mappings
+            .mappings
+            .iter()
+            .map(|mapping| mapping.physical_control_id.clone())
+            .collect();
+        self.pipedal_mappings = document
+            .settings
+            .pipedal_mappings
+            .mappings
+            .iter()
+            .map(|mapping| mackes_pipedal_adapter::MappingIdentity {
+                physical_control_id: mapping.physical_control_id.clone(),
+                plugin_uri: mapping.plugin_uri.clone(),
+                symbol: mapping.symbol.clone(),
+                scope: mapping.scope.clone(),
+            })
+            .collect();
+    }
+
     /// Binds the daemon control socket.
     ///
     /// # Errors
@@ -3887,25 +3909,7 @@ impl Daemon {
         let path = path.into();
         match mackes_config::load(&path) {
             Ok(document) => {
-                self.pipedal_controls = document
-                    .settings
-                    .pipedal_mappings
-                    .mappings
-                    .iter()
-                    .map(|mapping| mapping.physical_control_id.clone())
-                    .collect();
-                self.pipedal_mappings = document
-                    .settings
-                    .pipedal_mappings
-                    .mappings
-                    .iter()
-                    .map(|mapping| mackes_pipedal_adapter::MappingIdentity {
-                        physical_control_id: mapping.physical_control_id.clone(),
-                        plugin_uri: mapping.plugin_uri.clone(),
-                        symbol: mapping.symbol.clone(),
-                        scope: mapping.scope.clone(),
-                    })
-                    .collect();
+                self.cache_pipedal_mappings(&document);
                 match mackes_config::ControlMappingStore::from_document(&document) {
                     Ok(store) => {
                         self.mapping_store = store;
