@@ -6223,6 +6223,9 @@ LED replay, and pedal-state observations are still open.
   JSON status command, LED phase/counter interpretation, HUI exclusion, and bounded `rescan`
   recovery action. It explicitly separates host transport acceptance from physical LED
   acknowledgment and documents that no generic force-resync command is currently exposed.
+- **TUI evidence (2026-09-06):** The compact TUI LED status line now shows lifecycle phase,
+  desired-index count, and pending-index count using the same daemon snapshot fields as CLI
+  status. Focused TUI test and strict Clippy pass; full visual parity remains open.
 - **Implementation evidence (2026-09-06):** Normal daemon status now publishes authoritative
   `desired_indices` and `pending_indices` alongside host-transport acceptance counters, target
   identity, template, retries, and failure state. The counts come directly from the coalescer and
