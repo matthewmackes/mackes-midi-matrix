@@ -832,6 +832,28 @@ mod tests {
     }
 
     #[test]
+    fn session_allows_control_only_after_catalog_handshake() {
+        let mut session = Session::default();
+        session.connect().expect("connect");
+        let generation = session.generation();
+        for message in [
+            "ehlo",
+            "version",
+            "plugins",
+            "currentPedalboard",
+            "pluginClasses",
+            "getPresets",
+            "getBankIndex",
+            "getSystemMidiBindings",
+        ] {
+            session.accept(message).expect("handshake");
+        }
+        assert!(session.is_ready());
+        session.enqueue_control(generation, b"control".to_vec()).expect("control");
+        assert_eq!(session.pop(), Some(b"control".to_vec()));
+    }
+
+    #[test]
     fn decoder_rejects_invalid_shape_and_accepts_event_body() {
         assert!(decode_message(br"{}").is_err());
         assert!(decode_message(br#"[{"message":"x"},{},{}]"#).is_err());

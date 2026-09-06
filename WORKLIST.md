@@ -4972,6 +4972,8 @@ tests, strict Clippy, architecture/worklist policy, and the complete release gat
 - **Progress evidence (2026-09-05):** Session enqueue now rejects all outbound work while
   disconnected, closing a boot/reconnect race where platform writes could otherwise queue before
   PiPedal readiness is established.
+- **Validation evidence (2026-09-05):** Added a handshake-to-control integration test proving
+  control traffic remains blocked through catalog loading and becomes queueable only at Ready.
 - **Progress evidence (2026-09-05):** Added `Session::is_ready()` as the single readiness gate
   for MIDI consumers, requiring the verified catalog and system-binding handshake to complete
   before platform delivery is considered available.
