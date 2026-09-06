@@ -4956,6 +4956,9 @@ tests, strict Clippy, architecture/worklist policy, and the complete release gat
   channel/control/range validation, covering the typed body contract for `setSystemMidiBindings`.
 - **Progress evidence (2026-09-05):** Added fail-closed `setControl` payload validation for
   bounded client/symbol identities and finite numeric values before wire encoding.
+- **Progress evidence (2026-09-05):** Added a FIFO `RequestQueue` bounded to 64 encoded frames,
+  with frame-size and saturation rejection, establishing the transport-worker handoff without
+  running network I/O on the MIDI dispatch path.
 - **Artifact evidence (2026-09-05):** Added `docs/fixtures/pipedal-eq-r3-example.json`, a
   reusable five-knob R3C4–R3C8 mapping fixture using the qualified parametric-EQ URI and stable
   symbols (`lfLevel`, `lmfLevel`, `hmfLevel`, `hfLevel`, `gain`).

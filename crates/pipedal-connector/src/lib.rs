@@ -11,7 +11,7 @@
 //! bounded message types without placing network I/O on the MIDI dispatch path.
 
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use std::collections::{HashSet, VecDeque};
 
 /// `PiPedal`'s array-framed WebSocket request envelope.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -33,6 +33,45 @@ pub const MAX_MAPPINGS: usize = 128;
 pub const MAX_CATALOG_CONTROLS: usize = 2_048;
 /// Maximum system MIDI bindings accepted in one PiPedal update.
 pub const MAX_SYSTEM_MIDI_BINDINGS: usize = 128;
+/// Maximum requests waiting for the PiPedal transport worker.
+pub const MAX_PENDING_REQUESTS: usize = 64;
+
+/// Bounded handoff queue between MIDI/control callers and the PiPedal transport worker.
+#[derive(Debug, Default)]
+pub struct RequestQueue {
+    pending: VecDeque<Vec<u8>>,
+}
+
+impl RequestQueue {
+    /// Enqueue an encoded request, rejecting oversized or saturated queues.
+    pub fn push(&mut self, request: Vec<u8>) -> Result<(), String> {
+        if request.len() > MAX_FRAME_BYTES {
+            return Err("PiPedal request exceeds configured frame limit".into());
+        }
+        if self.pending.len() >= MAX_PENDING_REQUESTS {
+            return Err("PiPedal request queue is full".into());
+        }
+        self.pending.push_back(request);
+        Ok(())
+    }
+
+    /// Remove the oldest request for transport processing.
+    pub fn pop(&mut self) -> Option<Vec<u8>> {
+        self.pending.pop_front()
+    }
+
+    /// Number of requests awaiting transport.
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.pending.len()
+    }
+
+    /// Whether no requests await transport processing.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.pending.is_empty()
+    }
+}
 
 /// PiPedal operations that the connector may expose after capability discovery.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -684,6 +723,17 @@ mod tests {
             switch_control_type: 0,
         };
         assert!(SystemMidiBindings { bindings: vec![binding] }.validate().is_ok());
+    }
+
+    #[test]
+    fn request_queue_is_fifo_and_bounded() {
+        let mut queue = RequestQueue::default();
+        queue.push(b"one".to_vec()).expect("push");
+        queue.push(b"two".to_vec()).expect("push");
+        assert_eq!(queue.len(), 2);
+        assert_eq!(queue.pop(), Some(b"one".to_vec()));
+        assert_eq!(queue.pop(), Some(b"two".to_vec()));
+        assert_eq!(queue.pop(), None);
     }
 
     #[test]
