@@ -4946,6 +4946,8 @@ tests, strict Clippy, architecture/worklist policy, and the complete release gat
   operation to the typed catalog and pedalboard family, bringing the enumerable set to 15.
 - **Documentation evidence (2026-09-05):** Updated the connector design operation list to
   include `setSelectedPedalboardPlugin`, keeping the documented catalog synchronized.
+- **Progress evidence (2026-09-05):** Added qualified `setPedalboardItemUseModUi` support to
+  the typed pedalboard capability family; the enumerable catalog now contains 16 operations.
 - **Artifact evidence (2026-09-05):** Added `docs/fixtures/pipedal-eq-r3-example.json`, a
   reusable five-knob R3C4–R3C8 mapping fixture using the qualified parametric-EQ URI and stable
   symbols (`lfLevel`, `lmfLevel`, `hmfLevel`, `hfLevel`, `gain`).
