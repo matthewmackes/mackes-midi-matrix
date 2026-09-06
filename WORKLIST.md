@@ -6203,6 +6203,11 @@ LED replay, and pedal-state observations are still open.
   Payloads and logging are bounded and idle requests do not trigger replay or backend mutation.
 - **Deliverable:** Extend the recovery runbook with exact read-only diagnostic commands and a
   targeted resync operation whose effect and evidence limits are explicit.
+- **Implementation evidence (2026-09-06):** Added an explicit LED lifecycle phase to normal
+  status: `absent`, `initializing`, `animating`, or `ready`, derived from the selected binding and
+  reconnect/template state. This is published with desired/pending index counts and transport
+  diagnostics. Daemon tests (85), strict Clippy, formatting, architecture, worklist, and diff
+  checks pass; full runbook and TUI parity remain open.
 - **Implementation evidence (2026-09-06):** Normal daemon status now publishes authoritative
   `desired_indices` and `pending_indices` alongside host-transport acceptance counters, target
   identity, template, retries, and failure state. The counts come directly from the coalescer and
