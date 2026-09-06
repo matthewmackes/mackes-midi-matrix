@@ -4930,6 +4930,9 @@ tests, strict Clippy, architecture/worklist policy, and the complete release gat
 - **Documentation evidence (2026-09-05):** Design documentation now records the complete
   14-operation qualified catalog, its confirmation policy, and the explicit pending boundary
   for operations lacking installed-version wire fixtures.
+- **Progress evidence (2026-09-05):** The operation contract now classifies read-only ALSA/JACK
+  queries separately from writable actions, preventing discovery-only capabilities from being
+  presented as physical mapping destinations.
 - **Release evidence (2026-09-05):** `scripts/release-gate.sh` passed after registering the
   connector in the architecture policy, including workspace tests, benchmark, hermetic
   integration (13 passed, 1 explicitly ignored), installer smoke, and release artifact checks.

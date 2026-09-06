@@ -124,6 +124,12 @@ impl Operation {
                 | Self::Shutdown
         )
     }
+
+    /// Whether this operation only queries PiPedal state.
+    #[must_use]
+    pub const fn is_read_only(self) -> bool {
+        matches!(self, Self::GetAlsaDevices | Self::GetJackStatus)
+    }
 }
 
 /// Bounded accumulator for fragmented WebSocket text messages.
@@ -621,6 +627,8 @@ mod tests {
         assert_eq!(Operation::SetControl.wire_name(), "setControl");
         assert!(!Operation::SetControl.requires_confirmation());
         assert!(Operation::Shutdown.requires_confirmation());
+        assert!(Operation::GetJackStatus.is_read_only());
+        assert!(!Operation::SetOutputVolume.is_read_only());
         assert_eq!(Operation::all().len(), 14);
         assert!(Operation::all().iter().all(|operation| !operation.wire_name().is_empty()));
         assert_eq!(serde_json::to_string(&Operation::SetControl).expect("json"), "\"setControl\"");
