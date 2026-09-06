@@ -1056,6 +1056,31 @@ mod tests {
     }
 
     #[test]
+    fn lifecycle_diagnostics_distinguish_absent_ready_and_reconnect_animation() {
+        let mut outputs = OutputRegistry::new(4);
+        outputs
+            .insert(Box::new(recording("xl-midi", "Launch Control XL MIDI 1").0))
+            .expect("output");
+        let mut surface = LedSurface::default();
+        let store = ControlMappingStore::default();
+        let session = AssignmentSession::new("live");
+
+        surface.flush(0, &store, &session, None, &mut outputs, false);
+        assert_eq!(surface.diagnostics.phase, "absent");
+        surface.set_target_binding(Some("xl-midi".into()));
+        surface.flush(1, &store, &session, None, &mut outputs, false);
+        assert_eq!(surface.diagnostics.phase, "ready");
+        surface.start_reconnect_show(2);
+        surface.flush(2, &store, &session, None, &mut outputs, false);
+        assert_eq!(surface.diagnostics.phase, "initializing");
+        surface.flush(12_001, &store, &session, None, &mut outputs, false);
+        assert_eq!(surface.diagnostics.phase, "animating");
+        surface.flush(12_022, &store, &session, None, &mut outputs, false);
+        surface.flush(12_043, &store, &session, None, &mut outputs, false);
+        assert_eq!(surface.diagnostics.phase, "ready");
+    }
+
+    #[test]
     fn knob_activity_does_not_replay_the_entire_led_matrix() {
         let mut outputs = OutputRegistry::new(4);
         outputs
