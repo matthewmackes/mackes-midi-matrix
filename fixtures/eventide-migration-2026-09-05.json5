@@ -1,0 +1,23 @@
+{
+  note: 'Synthetic migration fixture; no physical device identity is asserted.',
+  before: { source_endpoint: 'midir-in-legacy', destination_endpoint: 'eventide-legacy' },
+  after: { source_endpoint: 'eventide-input', destination_endpoint: 'eventide-output' },
+  mappings: [
+    { control: 'knob-r2-c2', parameter: 'Expression Pedal', enabled: false },
+    { control: 'knob-r2-c3', parameter: 'TAP TEMPO', enabled: false },
+    { control: 'knob-r3-c1', parameter: 'FLEX', enabled: false },
+    { control: 'knob-r1-c1', parameter: 'Pitch A', enabled: true },
+    { control: 'knob-r1-c2', parameter: 'Pitch B', enabled: true },
+    { control: 'knob-r3-c2', parameter: 'Depth', enabled: true },
+    { control: 'knob-r3-c1', parameter: 'Rate/Sens', enabled: true },
+    { control: 'fader-2', parameter: 'Pitch Mix', enabled: true },
+    { control: 'knob-r3-c3', parameter: 'Tone', enabled: true },
+    { control: 'knob-r2-c1', parameter: 'Delay A', enabled: true },
+    { control: 'knob-r2-c2', parameter: 'Delay B', enabled: true },
+    { control: 'fader-3', parameter: 'Mod', enabled: true },
+    { control: 'knob-r2-c3', parameter: 'Feedback', enabled: true },
+    { control: 'knob-r3-c4', parameter: 'Out Lvl', enabled: false },
+    { control: 'fader-1', parameter: 'Mix', enabled: true },
+    { control: 'button-r1-c1', parameter: 'ACTIVE/BYPASS', enabled: true },
+  ],
+}

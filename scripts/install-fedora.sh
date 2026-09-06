@@ -29,6 +29,17 @@ for required in "$root_dir/target/release/mackes-midi-matrix" "$root_dir/target/
     exit 79
   fi
 done
+for required in \
+  "$root_dir/packaging/mackes.service" \
+  "$root_dir/packaging/10-appliance.conf" \
+  "$root_dir/packaging/mackes-midi-matrix-tui.service" \
+  "$root_dir/packaging/default-config.json5" \
+  "$root_dir/scripts/mackes-midi-matrix-local"; do
+  if [[ ! -f "$required" ]]; then
+    echo "missing packaged dependency: $required" >&2
+    exit 79
+  fi
+done
 for tool in install getent groupadd useradd usermod systemctl ldconfig; do
   command -v "$tool" >/dev/null || { echo "missing required tool: $tool" >&2; exit 80; }
 done
@@ -77,8 +88,8 @@ install -d -m 0755 /etc/systemd/system/mackes-midi-matrix.service.d
 install -m 0644 "$root_dir/packaging/10-appliance.conf" /etc/systemd/system/mackes-midi-matrix.service.d/10-appliance.conf
 install -m 0644 "$root_dir/packaging/mackes-midi-matrix-tui.service" /etc/systemd/system/mackes-midi-matrix-tui.service
 sed -i \
-  -e "s/^User=mm$/User=$console_user/" \
-  -e "s#^WorkingDirectory=/home/mm$#WorkingDirectory=$console_home#" \
+  -e "s|^User=mm$|User=${console_user}|" \
+  -e "s|^WorkingDirectory=/home/mm$|WorkingDirectory=${console_home}|" \
   /etc/systemd/system/mackes-midi-matrix-tui.service
 if [[ ! -e "$config_dir/config.json5" ]]; then
   install -m 0640 "$root_dir/packaging/default-config.json5" "$config_dir/config.json5"
@@ -91,4 +102,22 @@ chmod 0750 "$config_dir" "$state_dir"
 systemctl daemon-reload
 systemctl enable --now mackes-midi-matrix.service mackes-midi-matrix-tui.service
 systemctl restart mackes-midi-matrix.service
+if ! systemctl is-active --quiet mackes-midi-matrix.service; then
+  echo "daemon installation failed: mackes-midi-matrix.service is not active" >&2
+  systemctl --no-pager --full status mackes-midi-matrix.service >&2 || true
+  exit 84
+fi
+if ! systemctl is-enabled --quiet mackes-midi-matrix.service; then
+  echo "daemon installation failed: mackes-midi-matrix.service is not enabled" >&2
+  exit 84
+fi
+if ! systemctl is-active --quiet mackes-midi-matrix-tui.service; then
+  echo "console installation failed: mackes-midi-matrix-tui.service is not active" >&2
+  systemctl --no-pager --full status mackes-midi-matrix-tui.service >&2 || true
+  exit 84
+fi
+if ! systemctl is-enabled --quiet mackes-midi-matrix-tui.service; then
+  echo "console installation failed: mackes-midi-matrix-tui.service is not enabled" >&2
+  exit 84
+fi
 echo "installed and started; service is enabled for boot: mackes-midi-matrix.service"

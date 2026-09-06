@@ -890,6 +890,8 @@ pub struct DashboardState {
     pub active_scene: Option<String>,
     /// Daemon health label.
     pub health: String,
+    /// Configuration persistence state shown to the operator.
+    pub config_persistence: String,
     /// Current routing generation.
     pub route_generation: u64,
     /// Generation of the authoritative hardware-first mapping store.
@@ -3113,6 +3115,8 @@ impl Default for LearnWorkspace {
 pub enum DashboardEvent {
     /// Daemon health label changed.
     Health(String),
+    /// Configuration persistence state changed.
+    ConfigPersistence(String),
     /// Active scene changed.
     ActiveScene(Option<String>),
     /// Route generation changed.
@@ -3178,6 +3182,13 @@ impl DashboardEvent {
         let mut events = Vec::with_capacity(8);
         if let Some(value) = payload.get("health").and_then(serde_json::Value::as_str) {
             events.push(Self::Health(value.to_owned()));
+        }
+        if let Some(value) = payload
+            .get("config_persistence")
+            .and_then(|value| value.get("state"))
+            .and_then(serde_json::Value::as_str)
+        {
+            events.push(Self::ConfigPersistence(value.to_owned()));
         }
         if let Some(value) = payload.get("active_scene").and_then(|value| {
             if value.is_null() {
@@ -3859,7 +3870,12 @@ impl DashboardState {
     /// Creates a safe initial dashboard state.
     #[must_use]
     pub fn initial() -> Self {
-        Self { health: "starting".into(), panic_available: true, ..Self::default() }
+        Self {
+            health: "starting".into(),
+            config_persistence: "unconfigured".into(),
+            panic_available: true,
+            ..Self::default()
+        }
     }
 
     /// Replaces activity counters from a daemon snapshot.
@@ -3906,6 +3922,7 @@ impl DashboardState {
     pub fn apply_event(&mut self, event: DashboardEvent) {
         match event {
             DashboardEvent::Health(value) => self.health = value,
+            DashboardEvent::ConfigPersistence(value) => self.config_persistence = value,
             DashboardEvent::ActiveScene(value) => {
                 self.active_scene = value;
                 self.effects_groups.request_resync();
@@ -4055,6 +4072,7 @@ impl DashboardState {
                 "routes={}  midi in={} out={} dropped={}",
                 self.route_generation, self.received, self.sent, self.dropped
             ),
+            format!("config_persistence={}", self.config_persistence),
             format!(
                 "activation={}/{}  performance_lock={}",
                 self.activation_progress.0, self.activation_progress.1, self.performance_locked
@@ -4085,6 +4103,7 @@ impl DashboardState {
         let lines = if viewport.compact() {
             vec![
                 format!("health={}", self.health),
+                format!("config={}", self.config_persistence),
                 format!("scene={}", self.active_scene.as_deref().unwrap_or("none")),
                 format!(
                     "routes={} in={} out={} drop={}",

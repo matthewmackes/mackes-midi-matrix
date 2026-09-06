@@ -12,6 +12,7 @@ members = [
   "crates/tui",
   "crates/testkit",
   "crates/pipedal-connector",
+  "crates/pipedal-adapter",
 ]
 
 [workspace.package]

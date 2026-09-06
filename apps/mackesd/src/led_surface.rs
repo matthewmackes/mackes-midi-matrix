@@ -4,7 +4,8 @@ use mackes_config::ControlMappingStore;
 use mackes_domain::{EndpointId, MidiEvent, MidiMessage, TimestampNanos};
 use mackes_ipc::{AssignmentPhase, AssignmentSession};
 use mackes_midi_engine::{
-    numeric_endpoint_id, AlsaSequencerAddress, AlsaSequencerPort, EndpointInfo, OutputRegistry,
+    numeric_endpoint_id, stable_endpoint_id, AlsaSequencerAddress, AlsaSequencerPort,
+    EndpointDirection, EndpointInfo, OutputRegistry,
 };
 use mackes_profiles::{
     encode_launch_control_feedback, fader_column_led_proxy, launch_control_physical_catalog,
@@ -45,6 +46,8 @@ pub struct LedDiagnostics {
     pub coalesced: u64,
     /// Encode, uniqueness, lock, or send failures.
     pub failed: u64,
+    /// Number of bounded retry attempts made after delivery failures.
+    pub retries: u64,
     /// Most recent failure reason.
     pub last_error: Option<String>,
     /// Stable output identity selected for writes.
@@ -70,6 +73,7 @@ impl LedDiagnostics {
             sent: 0,
             coalesced: 0,
             failed: 0,
+            retries: 0,
             last_error: None,
             target_id: None,
             template: FACTORY1_LED_TEMPLATE,
@@ -94,12 +98,15 @@ pub struct LedSurface {
     reconnect_show_started_ms: Option<u64>,
     template_reselect_pending: bool,
     last_emit_ms: Option<u64>,
+    retry_backoff_until_ms: u64,
+    retry_failures: u8,
     arrow_states: BTreeMap<u8, (bool, u64)>,
     knob_activity: BTreeMap<String, u64>,
     backend_confirmation: Option<BackendConfirmation>,
     backend_states: BTreeMap<String, bool>,
     active_lexicon_algorithm: Option<u8>,
     diagnostics: LedDiagnostics,
+    target_binding: Option<String>,
 }
 
 impl Default for LedSurface {
@@ -113,17 +120,24 @@ impl Default for LedSurface {
             reconnect_show_started_ms: None,
             template_reselect_pending: false,
             last_emit_ms: None,
+            retry_backoff_until_ms: 0,
+            retry_failures: 0,
             arrow_states: BTreeMap::new(),
             knob_activity: BTreeMap::new(),
             backend_confirmation: None,
             backend_states: BTreeMap::new(),
             active_lexicon_algorithm: None,
             diagnostics: LedDiagnostics::new(),
+            target_binding: None,
         }
     }
 }
 
 impl LedSurface {
+    /// Sets the daemon-resolved output identity used for LED writes.
+    pub fn set_target_binding(&mut self, endpoint_id: Option<String>) {
+        self.target_binding = endpoint_id;
+    }
     /// Records the last Lexicon algorithm selection delivered by the daemon.
     pub fn set_active_lexicon_algorithm(&mut self, algorithm: u8) {
         self.active_lexicon_algorithm = Some(algorithm);
@@ -282,6 +296,7 @@ impl LedSurface {
 
     /// Rebuilds desired state and emits changed Factory 1 frames to one unique output.
     #[allow(clippy::too_many_arguments)]
+    #[allow(clippy::too_many_lines)]
     pub fn flush(
         &mut self,
         now_ms: u64,
@@ -352,15 +367,35 @@ impl LedSurface {
             return;
         }
         let infos = outputs.output_infos();
-        let selected = match unique_launch_control_midi_output(
-            infos.iter().map(|info| (info.id.as_str(), info.name.as_str())),
-        ) {
+        #[allow(clippy::option_if_let_else)]
+        let selected = match self.target_binding.as_deref() {
+            Some(id) => infos
+                .iter()
+                .find(|info| info.id == id && info.direction == EndpointDirection::Output)
+                .and_then(|info| {
+                    numeric_endpoint_id(&info.id).map(|endpoint| (endpoint, info.id.clone()))
+                })
+                .ok_or_else(|| "resolved LED output is missing or not writable".to_owned()),
+            None => unique_launch_control_midi_output(
+                infos.iter().map(|info| (info.id.as_str(), info.name.as_str())),
+            ),
+        };
+        let selected = match selected {
             Ok(selected) => selected,
             Err(error) => {
+                if now_ms < self.retry_backoff_until_ms {
+                    return;
+                }
+                self.retry_failures = self.retry_failures.saturating_add(1).min(6);
+                self.retry_backoff_until_ms = now_ms.saturating_add(
+                    LED_MIN_INTERVAL_MS.saturating_mul(1_u64 << self.retry_failures).min(1_000),
+                );
                 self.fail(&error);
                 return;
             }
         };
+        self.retry_failures = 0;
+        self.retry_backoff_until_ms = 0;
         self.diagnostics.target_id = Some(selected.1);
         if self.template_reselect_pending {
             if let Some(bytes) = mackes_profiles::encode_launch_control_template(
@@ -390,6 +425,9 @@ impl LedSurface {
     }
 
     fn emit_pending(&mut self, outputs: &mut OutputRegistry, endpoint: EndpointId, now_ms: u64) {
+        if now_ms < self.retry_backoff_until_ms {
+            return;
+        }
         let can_emit =
             self.last_emit_ms.is_none_or(|last| now_ms.saturating_sub(last) >= LED_MIN_INTERVAL_MS);
         if can_emit {
@@ -398,7 +436,7 @@ impl LedSurface {
                 self.last_emit_ms = Some(now_ms);
             }
             for (index, state) in pending {
-                self.emit_frame(outputs, endpoint, index, state);
+                self.emit_frame(outputs, endpoint, index, state, now_ms);
             }
         }
     }
@@ -409,6 +447,7 @@ impl LedSurface {
         endpoint: EndpointId,
         index: u8,
         state: LedState,
+        now_ms: u64,
     ) {
         self.diagnostics.attempted = self.diagnostics.attempted.saturating_add(1);
         let Some(bytes) = encode_launch_control_feedback(FACTORY1_LED_TEMPLATE, index, state)
@@ -424,13 +463,21 @@ impl LedSurface {
         };
         let event = MidiEvent { timestamp: TimestampNanos::new(0), sequence: 0, endpoint, message };
         for _ in 0..LED_SEND_ATTEMPTS {
+            if self.retry_failures > 0 {
+                self.diagnostics.retries = self.diagnostics.retries.saturating_add(1);
+            }
             if outputs.send_to_endpoint(endpoint, event.clone()).is_ok() {
                 self.diagnostics.sent = self.diagnostics.sent.saturating_add(1);
                 self.diagnostics.last_error = None;
+                self.retry_failures = 0;
+                self.retry_backoff_until_ms = 0;
                 return;
             }
         }
         self.coalescer.revert_sent(index);
+        self.retry_failures = self.retry_failures.saturating_add(1).min(6);
+        let delay = LED_MIN_INTERVAL_MS.saturating_mul(1_u64 << self.retry_failures);
+        self.retry_backoff_until_ms = now_ms.saturating_add(delay.min(1_000));
         self.fail("LED destination output is not registered");
     }
 
@@ -545,6 +592,7 @@ pub fn unique_launch_control_midi_output<'a>(
 }
 
 /// Unique writable Mk2 MIDI sequencer port, ignoring HUI and duplicates.
+#[cfg(test)]
 #[must_use]
 pub fn unique_mk2_midi_writable_address(
     ports: &[AlsaSequencerPort],
@@ -566,6 +614,29 @@ pub fn unique_mk2_midi_writable_address(
         }
         matches.push(port.address);
     }
+    match matches.as_slice() {
+        [address] => Some(*address),
+        _ => None,
+    }
+}
+
+/// Resolves one writable ALSA port by the persisted stable output identity.
+#[must_use]
+pub fn mk2_midi_writable_address_for_binding(
+    ports: &[AlsaSequencerPort],
+    binding: &str,
+) -> Option<AlsaSequencerAddress> {
+    let matches = ports
+        .iter()
+        .filter(|port| {
+            port.writable
+                && stable_endpoint_id(
+                    &format!("{} {}", port.client_name, port.port_name),
+                    EndpointDirection::Output,
+                ) == binding
+        })
+        .map(|port| port.address)
+        .collect::<Vec<_>>();
     match matches.as_slice() {
         [address] => Some(*address),
         _ => None,
@@ -778,6 +849,9 @@ mod tests {
             port_name: "Launch Control XL MK2 MIDI 1".into(),
             readable: true,
             writable: true,
+            vendor_id: None,
+            product_id: None,
+            serial: None,
         };
         let hui = AlsaSequencerPort {
             address: AlsaSequencerAddress { client: 24, port: 1 },
@@ -785,6 +859,9 @@ mod tests {
             port_name: "Launch Control XL MK2 HUI".into(),
             readable: true,
             writable: true,
+            vendor_id: None,
+            product_id: None,
+            serial: None,
         };
         assert_eq!(
             unique_mk2_midi_writable_address(&[midi.clone(), hui]),
@@ -796,6 +873,9 @@ mod tests {
             port_name: "Launch Control XL MK2 MIDI 1".into(),
             readable: true,
             writable: true,
+            vendor_id: None,
+            product_id: None,
+            serial: None,
         };
         assert_eq!(unique_mk2_midi_writable_address(&[midi, twin]), None);
     }
@@ -992,6 +1072,36 @@ mod tests {
             surface.diagnostics.last_error.as_deref(),
             Some("duplicate Launch Control XL MIDI outputs; LED writes refused")
         );
+    }
+
+    #[test]
+    fn failed_led_delivery_waits_for_fake_clock_backoff() {
+        let mut outputs = OutputRegistry::new(4);
+        let mut surface = LedSurface::default();
+        let store = ControlMappingStore::default();
+        let session = AssignmentSession::new("live");
+
+        surface.flush(0, &store, &session, None, &mut outputs, false);
+        let failures = surface.diagnostics.failed;
+        surface.flush(20, &store, &session, None, &mut outputs, false);
+        assert_eq!(surface.diagnostics.failed, failures);
+        surface.flush(41, &store, &session, None, &mut outputs, false);
+        assert!(surface.diagnostics.failed > failures);
+    }
+
+    #[test]
+    fn failed_led_delivery_backoff_is_bounded() {
+        let mut outputs = OutputRegistry::new(4);
+        let mut surface = LedSurface::default();
+        let store = ControlMappingStore::default();
+        let session = AssignmentSession::new("live");
+        let mut now = 0;
+        for _ in 0..8 {
+            surface.flush(now, &store, &session, None, &mut outputs, false);
+            assert!(surface.retry_backoff_until_ms.saturating_sub(now) <= 1_000);
+            now = surface.retry_backoff_until_ms;
+        }
+        assert_eq!(surface.retry_failures, 6);
     }
 
     #[test]

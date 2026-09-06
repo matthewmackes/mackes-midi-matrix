@@ -8,11 +8,11 @@ use mackes_midi_engine::{
 };
 use std::fs;
 
-const fn event(message: MidiMessage) -> MidiEvent {
+fn event(message: MidiMessage) -> MidiEvent {
     MidiEvent {
         timestamp: TimestampNanos::new(1),
         sequence: 1,
-        endpoint: mackes_domain::EndpointId::new(1).expect("endpoint"),
+        endpoint: mackes_midi_engine::numeric_endpoint_id("1").expect("endpoint"),
         message,
     }
 }
@@ -78,6 +78,13 @@ fn native_dispatch_requeues_events_beyond_one_cycle_budget() {
 #[test]
 fn native_knob_advances_and_arrows_navigate() {
     let (mut daemon, path) = daemon();
+    daemon
+        .register_input(Box::new(mackes_midi_engine::VirtualEndpoint::new(
+            "1",
+            "Launch Control XL MIDI",
+            EndpointDirection::Input,
+        )))
+        .expect("native input");
     daemon.deferred_inputs.push_back(event(MidiMessage::NoteOn {
         channel: channel(),
         note: SevenBit::new(105).expect("note"),
@@ -170,11 +177,12 @@ fn reconnect_preserves_assignment_and_output_requests_led_replay() {
 #[test]
 fn native_routes_continue_and_unrelated_input_fails_closed() {
     let (mut daemon, path) = daemon();
+    let source = mackes_midi_engine::numeric_endpoint_id("1").expect("source");
     let destination = mackes_domain::EndpointId::new(2).expect("dest");
     daemon
         .replace_routes(
             vec![mackes_midi_engine::Route {
-                source: mackes_domain::EndpointId::new(1).expect("source"),
+                source,
                 destination,
                 destination_parameter: None,
                 channel: None,
@@ -196,11 +204,14 @@ fn native_routes_continue_and_unrelated_input_fails_closed() {
             EndpointDirection::Output,
         )))
         .expect("output");
-    daemon.deferred_inputs.push_back(event(MidiMessage::ControlChange {
-        channel: MidiChannel::new(2).expect("ch"),
-        controller: SevenBit::new(7).expect("cc"),
-        value: SevenBit::new(10).expect("value"),
-    }));
+    daemon.deferred_inputs.push_back(MidiEvent {
+        endpoint: source,
+        ..event(MidiMessage::ControlChange {
+            channel: MidiChannel::new(2).expect("ch"),
+            controller: SevenBit::new(7).expect("cc"),
+            value: SevenBit::new(10).expect("value"),
+        })
+    });
     let (processed, sent, unmatched) = daemon.poll_and_dispatch_inputs(8);
     assert_eq!(processed, 1);
     assert_eq!(sent, 1);

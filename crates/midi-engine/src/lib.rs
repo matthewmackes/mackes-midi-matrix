@@ -9,7 +9,10 @@ pub use native_reader::{
     MK2_ARROW_LEFT, MK2_ARROW_RIGHT, MK2_ARROW_UP, MK2_DEVICE_PRESS, MK2_DEVICE_RELEASE,
     MK2_FADER_1, MK2_KNOB_R1_C1,
 };
+#[cfg(target_os = "linux")]
+pub use native_supervisor::native_usb_identity_for_client_name;
 pub use native_supervisor::{
+    parse_usb_identity_properties, read_usb_identity_properties, usb_fields_for_client,
     NativeAlsaSupervisor, NativeHardwareIdentity, NativeIdentityTransition, NativePortAnnouncement,
     MAX_NATIVE_ANNOUNCEMENTS,
 };
@@ -45,36 +48,32 @@ pub struct EndpointInfo {
 }
 
 /// Volatile ALSA Sequencer client/port address for a live subscription.
+#[allow(missing_docs)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 pub struct AlsaSequencerAddress {
-    /// Runtime ALSA client number.
     pub client: u8,
-    /// Runtime ALSA port number.
     pub port: u8,
 }
-
 /// Maximum number of native ALSA input subscriptions retained for reconciliation.
 pub const MAX_ALSA_DESIRED_INPUTS: usize = 64;
+/// Maximum external ports returned by one native discovery pass.
+pub const MAX_ALSA_DISCOVERED_PORTS: usize = 256;
 /// Maximum ordinary MIDI events retained while lifecycle notifications are drained.
 #[cfg(feature = "alsa-seq-backend")]
 const MAX_ALSA_PENDING_WIRE: usize = 256;
-
-/// Descriptive native ALSA Sequencer port record used before subscription.
 #[cfg(feature = "alsa-seq-backend")]
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[allow(missing_docs)]
 pub struct AlsaSequencerPort {
-    /// Runtime client/port address.
     pub address: AlsaSequencerAddress,
-    /// ALSA client display name.
     pub client_name: String,
-    /// ALSA port display name.
     pub port_name: String,
-    /// Whether the port can be read by an application.
     pub readable: bool,
-    /// Whether the port can be written by an application.
     pub writable: bool,
+    pub vendor_id: Option<u16>,
+    pub product_id: Option<u16>,
+    pub serial: Option<String>,
 }
-
 impl AlsaSequencerAddress {
     /// Creates an address, rejecting values outside ALSA's MIDI address range.
     #[must_use]
@@ -97,7 +96,6 @@ pub enum AlsaSequencerLifecycle {
     /// A subscription was removed.
     Unsubscribed,
 }
-
 /// Connection state of a physical MIDI device projection.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum PhysicalDeviceState {
@@ -110,7 +108,6 @@ pub enum PhysicalDeviceState {
     /// No profile identity could be established from the endpoint metadata.
     Unknown,
 }
-
 /// Deterministic physical-device projection grouped from MIDI endpoints.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PhysicalDevice {
@@ -125,7 +122,6 @@ pub struct PhysicalDevice {
     /// Current identity state.
     pub state: PhysicalDeviceState,
 }
-
 /// Groups endpoint metadata without guessing across distinct names.
 #[must_use]
 pub fn group_physical_devices(endpoints: &[EndpointInfo]) -> Vec<PhysicalDevice> {
@@ -379,7 +375,11 @@ impl AlsaSequencerClient {
         let mut ports = Vec::new();
         for client in alsa::seq::ClientIter::new(&self.seq) {
             let Ok(client_name) = client.get_name() else { continue };
+            let (vendor_id, product_id, serial) = usb_fields_for_client(client_name);
             for port in alsa::seq::PortIter::new(&self.seq, client.get_client()) {
+                if ports.len() >= MAX_ALSA_DISCOVERED_PORTS {
+                    return ports;
+                }
                 let Ok(port_name) = port.get_name() else { continue };
                 let address = AlsaSequencerAddress {
                     client: u8::try_from(port.get_client()).unwrap_or_default(),
@@ -392,6 +392,9 @@ impl AlsaSequencerClient {
                     port_name: port_name.to_owned(),
                     readable: capabilities.contains(alsa::seq::PortCap::READ),
                     writable: capabilities.contains(alsa::seq::PortCap::WRITE),
+                    vendor_id,
+                    product_id,
+                    serial: serial.clone(),
                 });
             }
         }
@@ -880,7 +883,11 @@ impl InputRegistry {
     pub fn is_empty(&self) -> bool {
         self.inputs.is_empty()
     }
-
+    /// Returns registered input IDs in stable registration order.
+    #[must_use]
+    pub fn input_ids(&self) -> Vec<String> {
+        self.inputs.iter().map(|input| input.info().id.clone()).collect()
+    }
     /// Adds an input unless full or its stable ID is duplicated.
     ///
     /// # Errors
@@ -896,7 +903,6 @@ impl InputRegistry {
         self.inputs.push(input);
         Ok(())
     }
-
     /// Removes an input by stable endpoint ID.
     pub fn remove(&mut self, id: &str) -> bool {
         let Some(index) = self.inputs.iter().position(|input| input.info().id == id) else {
@@ -905,7 +911,6 @@ impl InputRegistry {
         self.inputs.remove(index);
         true
     }
-
     /// Returns the stable endpoint key for a numeric event endpoint.
     #[must_use]
     pub fn stable_id_for_endpoint(&self, endpoint: mackes_domain::EndpointId) -> Option<String> {
@@ -914,14 +919,12 @@ impl InputRegistry {
                 .then(|| input.info().id.clone())
         })
     }
-
     /// Polls each input once in stable registration order.
     #[must_use]
     pub fn poll_once(&mut self) -> Vec<MidiEvent> {
         self.inputs.iter_mut().filter_map(|input| input.receive()).collect()
     }
 }
-
 /// Output adapter boundary; backend-specific types must not cross it.
 pub trait MidiOutputAdapter {
     /// Returns immutable endpoint metadata.

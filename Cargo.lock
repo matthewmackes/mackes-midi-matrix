@@ -748,6 +748,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "mackes-pipedal-adapter"
+version = "0.1.11"
+dependencies = [
+ "mackes-ipc",
+ "mackes-pipedal-connector",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "mackes-pipedal-connector"
 version = "0.1.11"
 dependencies = [
@@ -805,6 +815,7 @@ dependencies = [
  "mackes-domain",
  "mackes-ipc",
  "mackes-midi-engine",
+ "mackes-pipedal-adapter",
  "mackes-profiles",
  "mackes-scene-engine",
  "serde_json",

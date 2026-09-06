@@ -1,0 +1,15 @@
+{
+  schema_version: 1,
+  settings: {},
+  endpoints: [
+    { id: 'midisport-1-in', vendor_id: 0x0763, product_id: 0x1021, logical_port: 0, direction: 'input', role: 'midi', stable_id: 'operator-port-1-in' },
+    { id: 'midisport-1-out', vendor_id: 0x0763, product_id: 0x1021, logical_port: 0, direction: 'output', role: 'midi', stable_id: 'operator-port-1-out' },
+    { id: 'midisport-2-in', vendor_id: 0x0763, product_id: 0x1021, logical_port: 1, direction: 'input', role: 'midi', stable_id: 'operator-port-2-in' },
+    { id: 'midisport-2-out', vendor_id: 0x0763, product_id: 0x1021, logical_port: 1, direction: 'output', role: 'midi', stable_id: 'operator-port-2-out' },
+    { id: 'midisport-3-in', vendor_id: 0x0763, product_id: 0x1021, logical_port: 2, direction: 'input', role: 'midi', stable_id: 'operator-port-3-in' },
+    { id: 'midisport-3-out', vendor_id: 0x0763, product_id: 0x1021, logical_port: 2, direction: 'output', role: 'midi', stable_id: 'operator-port-3-out' },
+    { id: 'midisport-4-in', vendor_id: 0x0763, product_id: 0x1021, logical_port: 3, direction: 'input', role: 'midi', stable_id: 'operator-port-4-in' },
+    { id: 'midisport-4-out', vendor_id: 0x0763, product_id: 0x1021, logical_port: 3, direction: 'output', role: 'midi', stable_id: 'operator-port-4-out' },
+  ],
+  projects: [], profiles: [],
+}

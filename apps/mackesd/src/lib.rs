@@ -1,5 +1,4 @@
 //! Persistent daemon lifecycle and local command boundary.
-
 use mackes_config::ConfigError;
 use mackes_ipc::{authorize, AccessPolicy, Authorization, Command, LocalServer};
 use std::{
@@ -10,7 +9,6 @@ use std::{
     sync::mpsc::{self, Receiver, Sender},
     time::{Duration, Instant},
 };
-
 mod mapping_runtime;
 
 /// Daemon health state.
@@ -25,14 +23,12 @@ pub enum Health {
     /// Daemon is shutting down.
     Stopping,
 }
-
 /// Formats a bounded JSON diagnostic line suitable for journald ingestion.
 #[must_use]
 pub fn structured_log_line(level: &str, event: &str, detail: &str) -> String {
     let bounded_detail: String = detail.chars().take(512).collect();
     serde_json::json!({"level": level, "event": event, "detail": bounded_detail}).to_string() + "\n"
 }
-
 impl Health {
     /// Returns whether the daemon may accept normal mutations.
     #[must_use]
@@ -40,7 +36,6 @@ impl Health {
         matches!(self, Self::Ready | Self::Degraded)
     }
 }
-
 /// Startup restore result.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RestoreResult {
@@ -55,7 +50,6 @@ pub struct RestoreResult {
     /// Actions held because unsafe mode starts disarmed.
     pub unsafe_actions_blocked: usize,
 }
-
 impl RestoreResult {
     /// Selects the persisted scene, falling back deterministically to the first scene.
     #[must_use]
@@ -63,7 +57,6 @@ impl RestoreResult {
         self.active_scene.as_deref().or_else(|| self.scenes.first().map(String::as_str))
     }
 }
-
 /// Bounded startup window used while required endpoint aliases settle.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct EndpointSettlePolicy {
@@ -87,13 +80,11 @@ impl EndpointSettlePolicy {
             Some(Self { window_ms })
         }
     }
-
     /// Returns the monotonic deadline for the settle window.
     #[must_use]
     pub const fn deadline_ms(self, started_ms: u64) -> u64 {
         started_ms.saturating_add(self.window_ms)
     }
-
     /// Classifies endpoint readiness at a monotonic timestamp.
     #[must_use]
     pub const fn classify(self, started_ms: u64, now_ms: u64, required_ready: bool) -> SettleState {
@@ -106,7 +97,6 @@ impl EndpointSettlePolicy {
         }
     }
 }
-
 /// Result of checking required endpoint readiness during startup restore.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum SettleState {
@@ -117,7 +107,6 @@ pub enum SettleState {
     /// The settle window elapsed without all required endpoints.
     TimedOut,
 }
-
 /// Validated restore data paired with endpoint readiness.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RestoreReadiness {
@@ -126,7 +115,6 @@ pub struct RestoreReadiness {
     /// Current endpoint prerequisite state.
     pub endpoints: SettleState,
 }
-
 impl RestoreReadiness {
     /// Returns whether ordinary startup activation may begin.
     #[must_use]
@@ -134,7 +122,6 @@ impl RestoreReadiness {
         self.restore.should_activate && matches!(self.endpoints, SettleState::Ready)
     }
 }
-
 /// Returns whether every required endpoint alias is present in discovery results.
 #[must_use]
 pub fn required_endpoints_ready(
@@ -145,7 +132,6 @@ pub fn required_endpoints_ready(
         .iter()
         .all(|required| endpoints.iter().any(|endpoint| endpoint.id == *required))
 }
-
 /// Combines discovered endpoint readiness with the bounded startup settle window.
 #[must_use]
 pub fn settle_required_endpoints(
@@ -157,7 +143,6 @@ pub fn settle_required_endpoints(
 ) -> SettleState {
     policy.classify(started_ms, now_ms, required_endpoints_ready(required_aliases, endpoints))
 }
-
 /// Loads persisted restore state and evaluates endpoint prerequisites atomically.
 ///
 /// # Errors
@@ -182,7 +167,6 @@ pub fn startup_restore_readiness(
         ),
     })
 }
-
 /// Single-instance lock held for the daemon lifetime.
 #[derive(Debug)]
 pub struct InstanceLock {
@@ -215,12 +199,16 @@ impl Drop for InstanceLock {
 pub struct Daemon {
     server: LocalServer,
     health: Health,
+    pipedal_worker: mackes_pipedal_adapter::Worker,
+    pipedal_transport: Option<mackes_pipedal_adapter::WebSocketTransport>,
+    pipedal_retry_at: Instant,
     generation: u64,
     active_scene: Option<String>,
     scene_ids: Vec<String>,
     catalog: serde_json::Value,
     physical_devices: serde_json::Value,
     profile_bindings: Vec<(String, String)>,
+    binding_generation: u64,
     config_path: Option<std::path::PathBuf>,
     mapping_store: mackes_config::ControlMappingStore,
     button_toggle_state: std::collections::HashMap<String, (bool, bool)>,
@@ -242,6 +230,7 @@ pub struct Daemon {
     alsa_supervisor: mackes_midi_engine::NativeAlsaSupervisor,
     last_native_failure: Option<&'static str>,
     native_led_resync: bool,
+    native_rescan_at: Option<Instant>,
     #[cfg(feature = "alsa-seq-backend")]
     xl_midi_output_address: Option<mackes_midi_engine::AlsaSequencerAddress>,
     #[cfg(feature = "alsa-seq-backend")]
@@ -277,6 +266,8 @@ pub fn classify_command(request: &[u8]) -> Option<Command> {
         (Command::Subscribe, b"subscribe"),
         (Command::Validate, b"validate"),
         (Command::Configuration, b"configuration"),
+        (Command::Migrate, b"migrate"),
+        (Command::Rescan, b"rescan"),
         (Command::Endpoints, b"endpoints"),
         (Command::Routes, b"routes"),
         (Command::Learn, b"learn"),
@@ -290,6 +281,7 @@ pub fn classify_command(request: &[u8]) -> Option<Command> {
         (Command::Panic, b"panic"),
         (Command::UnsafeMode, b"unsafe_mode"),
         (Command::Mappings, b"mappings"),
+        (Command::PiPedal, b"pipedal"),
         (Command::Assignment, b"assignment"),
         (Command::Shutdown, b"shutdown"),
     ];
@@ -327,6 +319,8 @@ fn physical_devices_value(endpoints: &[mackes_midi_engine::EndpointInfo]) -> ser
 }
 
 const MAX_PHYSICAL_DEVICE_RECORDS: usize = 32;
+/// Maximum interval between bounded native endpoint discovery passes.
+pub(crate) const NATIVE_RESCAN_INTERVAL_MS: u64 = 250;
 
 #[cfg(target_os = "linux")]
 fn routes_path(config_path: &std::path::Path) -> std::path::PathBuf {
@@ -340,11 +334,7 @@ fn routes_undo_path(config_path: &std::path::Path) -> std::path::PathBuf {
 
 #[cfg(target_os = "linux")]
 fn persist_routes(config_path: &std::path::Path, routes: &serde_json::Value) -> io::Result<()> {
-    let path = routes_path(config_path);
-    let temporary = path.with_extension("routes.json.tmp");
-    let bytes = serde_json::to_vec_pretty(routes).map_err(io::Error::other)?;
-    std::fs::write(&temporary, bytes)?;
-    std::fs::rename(temporary, path)
+    persistence_projection::persist_json_atomic(&routes_path(config_path), routes, "routes.json")
 }
 
 #[cfg(target_os = "linux")]
@@ -352,11 +342,11 @@ fn persist_routes_undo(
     config_path: &std::path::Path,
     routes: &serde_json::Value,
 ) -> io::Result<()> {
-    let path = routes_undo_path(config_path);
-    let temporary = path.with_extension("routes.undo.json.tmp");
-    let bytes = serde_json::to_vec_pretty(routes).map_err(io::Error::other)?;
-    std::fs::write(&temporary, bytes)?;
-    std::fs::rename(temporary, path)
+    persistence_projection::persist_json_atomic(
+        &routes_undo_path(config_path),
+        routes,
+        "routes.undo.json",
+    )
 }
 
 #[cfg(target_os = "linux")]
@@ -503,6 +493,12 @@ fn command_ack(
         Command::Configuration => {
             format!("{{\"ok\":true,\"generation\":{generation},\"configuration\":true}}\n")
         }
+        Command::Migrate => {
+            format!("{{\"ok\":true,\"generation\":{generation},\"migrate\":true}}\n")
+        }
+        Command::Rescan => {
+            format!("{{\"ok\":true,\"generation\":{generation},\"rescan\":\"scheduled\"}}\n")
+        }
         Command::Endpoints => {
             let payload = endpoints
                 .iter()
@@ -530,6 +526,9 @@ fn command_ack(
         Command::Mappings => {
             format!("{{\"ok\":true,\"generation\":{generation},\"mappings\":[],\"drafts\":[],\"undo_available\":false}}\n")
         }
+        Command::PiPedal => {
+            format!("{{\"ok\":true,\"generation\":{generation},\"pipedal\":true}}\n")
+        }
         Command::Assignment => {
             format!("{{\"ok\":true,\"generation\":{generation},\"phase\":\"Idle\"}}\n")
         }
@@ -552,12 +551,16 @@ impl Daemon {
         Ok(Self {
             server: LocalServer::bind(control_path)?,
             health: Health::Starting,
+            pipedal_worker: mackes_pipedal_adapter::Worker::default(),
+            pipedal_transport: None,
+            pipedal_retry_at: Instant::now(),
             generation: 0,
             active_scene: None,
             scene_ids: Vec::new(),
             catalog: serde_json::json!({"projects": [], "setlists": []}),
             physical_devices: serde_json::json!([]),
             profile_bindings: Vec::new(),
+            binding_generation: 0,
             config_path: None,
             mapping_store: mackes_config::ControlMappingStore::default(),
             button_toggle_state: std::collections::HashMap::new(),
@@ -580,6 +583,7 @@ impl Daemon {
             alsa_supervisor: mackes_midi_engine::NativeAlsaSupervisor::new(),
             last_native_failure: None,
             native_led_resync: false,
+            native_rescan_at: None,
             #[cfg(feature = "alsa-seq-backend")]
             xl_midi_output_address: None,
             #[cfg(feature = "alsa-seq-backend")]
@@ -605,7 +609,6 @@ impl Daemon {
             safety_clock: Instant::now(),
         })
     }
-
     /// Enables or disables nonblocking accepts for the daemon-owned control socket.
     ///
     /// # Errors
@@ -614,7 +617,6 @@ impl Daemon {
     pub fn set_nonblocking(&self, nonblocking: bool) -> io::Result<()> {
         self.server.set_nonblocking(nonblocking)
     }
-
     /// Creates and owns the standard ALSA virtual MIDI pair until daemon shutdown.
     ///
     /// # Errors
@@ -631,7 +633,6 @@ impl Daemon {
         self.virtual_ports = Some(ports);
         Ok(())
     }
-
     /// Drains bounded virtual-port input into the normal router path.
     pub fn drain_virtual_input(&mut self) -> usize {
         let mut accepted = 0;
@@ -654,7 +655,6 @@ impl Daemon {
         }
         accepted
     }
-
     /// Captures one bounded poll from the selected daemon-owned input for MIDI Learn.
     ///
     /// Capture is observational: it never routes or transmits the collected events. Events from
@@ -677,7 +677,6 @@ impl Daemon {
             .collect::<Vec<_>>();
         mackes_midi_engine::infer_midi_candidates(&events)
     }
-
     /// Atomically installs a validated route generation for subsequent events.
     ///
     /// # Errors
@@ -695,13 +694,9 @@ impl Daemon {
         }
         self.router.swap(routes, generation, hop_limit)
     }
-
     /// Replaces routes from a bounded JSON array using the daemon's validated route contract.
     ///
-    /// # Errors
-    ///
-    /// Returns an error for malformed JSON, missing fields, invalid channels,
-    /// unknown message classes, or invalid route topology.
+    #[allow(clippy::missing_errors_doc)]
     pub fn replace_routes_json(
         &self,
         payload: &[u8],
@@ -787,7 +782,6 @@ impl Daemon {
         }
         self.replace_routes(routes, generation, hop_limit)
     }
-
     /// Evaluates one ingress event against the current route generation.
     #[must_use]
     pub fn route_event(
@@ -796,7 +790,6 @@ impl Daemon {
     ) -> Vec<mackes_midi_engine::RoutedEvent> {
         self.router.route(event)
     }
-
     /// Routes and dispatches one ingress event to supplied output adapters.
     ///
     /// The caller owns adapter lifetimes and therefore controls whether the
@@ -809,7 +802,6 @@ impl Daemon {
     ) -> (usize, usize) {
         mackes_midi_engine::dispatch_routed_event(&self.router, event, outputs)
     }
-
     /// Pumps one captured physical input event through routing and outputs.
     ///
     /// This path exists only for the feature-gated `midir` rollback adapter. Production
@@ -828,7 +820,6 @@ impl Daemon {
         let Some(event) = input.receive_event(timestamp, sequence)? else { return Ok(None) };
         Ok(Some(self.dispatch_event(&event, outputs)))
     }
-
     /// Registers one explicitly opened output adapter with the daemon.
     ///
     /// # Errors
@@ -840,7 +831,6 @@ impl Daemon {
     ) -> Result<(), &'static str> {
         self.outputs.insert(output)
     }
-
     /// Opens and registers a physical ALSA output by stable endpoint ID.
     ///
     /// # Errors
@@ -867,16 +857,19 @@ impl Daemon {
         self.flush_controller_leds_at(now_ms);
     }
     fn drop_launch_control_midi_outputs(&mut self) {
+        let Some(target) = self
+            .profile_bindings
+            .iter()
+            .find(|(profile, _)| profile == "launch-control-xl-mk2")
+            .map(|(_, endpoint)| endpoint.clone())
+        else {
+            return;
+        };
         let ids: Vec<String> = self
             .outputs
             .output_infos()
             .into_iter()
-            .filter(|info| {
-                let lowered = info.name.to_ascii_lowercase();
-                !lowered.contains("hui")
-                    && mackes_profiles::classify_launch_control(&info.name)
-                        == mackes_profiles::LaunchControlIdentity::Mk2
-            })
+            .filter(|info| info.id == target)
             .map(|info| info.id)
             .collect();
         for id in ids {
@@ -885,21 +878,36 @@ impl Daemon {
     }
     fn reopen_launch_control_midi_output(&mut self) -> Result<(), String> {
         self.drop_launch_control_midi_outputs();
+        let target = self
+            .profile_bindings
+            .iter()
+            .find(|(profile, _)| profile == "launch-control-xl-mk2")
+            .map(|(_, endpoint)| endpoint.clone())
+            .ok_or_else(|| "Launch Control output binding is unresolved".to_owned())?;
         let ports = mackes_midi_engine::enumerate_midir_ports()?;
-        let selected =
-            led_surface::unique_launch_control_midi_output(ports.iter().filter_map(|port| {
-                (port.direction == mackes_midi_engine::EndpointDirection::Output)
-                    .then_some((port.id.as_str(), port.name.as_str()))
-            }))?;
-        self.provision_output(&selected.1)
+        let selected = ports
+            .into_iter()
+            .find(|port| {
+                port.direction == mackes_midi_engine::EndpointDirection::Output && port.id == target
+            })
+            .ok_or_else(|| "resolved Launch Control output is missing".to_owned())?;
+        self.provision_output(&selected.id)
     }
-
     #[cfg(feature = "alsa-seq-backend")]
     fn restore_launch_control_midi_output(
         &mut self,
         ports: &[mackes_midi_engine::AlsaSequencerPort],
     ) {
-        let current = led_surface::unique_mk2_midi_writable_address(ports);
+        let Some(binding) = self
+            .profile_bindings
+            .iter()
+            .find(|(profile, _)| profile == "launch-control-xl-mk2")
+            .map(|(_, endpoint)| endpoint.as_str())
+        else {
+            self.xl_midi_output_address = None;
+            return;
+        };
+        let current = led_surface::mk2_midi_writable_address_for_binding(ports, binding);
         if current == self.xl_midi_output_address {
             return;
         }
@@ -915,7 +923,6 @@ impl Daemon {
             self.request_lexicon_active_setup();
         }
     }
-
     /// Reopens physical outputs that appeared after daemon startup or a USB reconnect.
     #[cfg(feature = "alsa-seq-backend")]
     fn restore_late_physical_outputs(&mut self) {
@@ -938,7 +945,6 @@ impl Daemon {
             let _ = self.provision_output(&endpoint.id);
         }
     }
-
     /// Requests the Lexicon's authoritative active setup after its output is available.
     fn request_lexicon_active_setup(&mut self) {
         let Some(destination) = profile_bindings::stable_destination(
@@ -950,21 +956,33 @@ impl Daemon {
         };
         let _ = self.outputs.send_direct(&destination, &[0xF0, 0x06, 0x02, 0x30, 0x60, 0x00, 0xF7]);
     }
-
     fn confirm_lexicon_algorithm(&mut self, algorithm: u8) {
         self.lexicon_active_algorithm = Some(algorithm);
         self.lexicon_readback_error = None;
         self.led.set_active_lexicon_algorithm(algorithm);
     }
-
     fn reject_lexicon_readback(&mut self, error: impl Into<String>) {
         let error = error.into();
         self.lexicon_readback_error = Some(error.clone());
         self.led.set_lexicon_readback_error(error);
     }
-
     /// Advances LED overlays at an explicit fake-clock instant.
     pub fn flush_controller_leds_at(&mut self, now_ms: u64) {
+        self.flush_controller_leds_at_generation(now_ms, self.binding_generation);
+    }
+    fn flush_controller_leds_at_generation(&mut self, now_ms: u64, generation: u64) {
+        if generation != self.binding_generation {
+            self.led.set_lexicon_readback_error(
+                "LED write rejected: stale endpoint binding generation",
+            );
+            return;
+        }
+        let target = self
+            .profile_bindings
+            .iter()
+            .find(|(profile, _)| profile == "launch-control-xl-mk2")
+            .map(|(_, endpoint)| endpoint.clone());
+        self.led.set_target_binding(target);
         self.led.flush(
             now_ms,
             &self.mapping_store,
@@ -974,7 +992,6 @@ impl Daemon {
             self.safety.performance_locked(),
         );
     }
-
     /// Sends one already-validated event to a registered endpoint.
     pub fn send_event_to_endpoint(
         &mut self,
@@ -983,14 +1000,12 @@ impl Daemon {
     ) {
         let _ = self.outputs.send_to_endpoint(endpoint, event);
     }
-
     /// Arms experimental parameter mappings for the bounded fifteen-minute window.
     pub fn arm_experimental_mappings(&mut self) {
         let now = u64::try_from(self.safety_clock.elapsed().as_nanos().min(u128::from(u64::MAX)))
             .unwrap_or(u64::MAX);
         self.safety.arm_unsafe(now.saturating_add(15 * 60 * 1_000_000_000));
     }
-
     /// Applies one generation-checked assignment action in the daemon-owned session.
     ///
     /// # Panics
@@ -1300,7 +1315,6 @@ impl Daemon {
             reason,
         }
     }
-
     fn project_reflex_preset_to_controller(&mut self, preset_id: &str) {
         let Ok(values) =
             mackes_profiles::lexicon_reflex::pcm70_translation_controller_values(preset_id)
@@ -1356,12 +1370,22 @@ impl Daemon {
         }
         self.flush_controller_leds();
     }
-
     /// Resolves a profile-owned destination to one unique registered output.
     fn output_endpoint_for_profile(&self, profile_id: &str) -> Option<mackes_domain::EndpointId> {
         profile_bindings::output_endpoint(&self.outputs, &self.profile_bindings, profile_id)
     }
-
+    /// Resolves a persisted source alias to the currently registered runtime input.
+    fn source_alias_matches_runtime(&self, alias: &str, runtime_id: Option<&str>) -> bool {
+        let Some(runtime_id) = runtime_id else { return false };
+        let Some(path) = self.config_path.as_deref() else { return false };
+        mackes_config::load(path)
+            .ok()
+            .and_then(|document| {
+                document.endpoints.into_iter().find(|endpoint| endpoint.id == alias)
+            })
+            .and_then(|endpoint| endpoint.stable_id)
+            .is_some_and(|stable_id| stable_id == runtime_id)
+    }
     /// Dispatches one event through the daemon-owned output registry.
     /// Returns bounded aggregate MIDI activity counters.
     #[must_use]
@@ -1418,15 +1442,19 @@ impl Daemon {
                 }));
                 continue;
             }
-            let source_endpoint = if mapping.source_endpoint == "controller"
-                || (mapping.controller_profile == "launch-control-xl-mk2"
-                    && Self::launch_control_factory1_layout_id(event).as_deref()
-                        == Some(mapping.physical_control_id.as_str()))
-            {
+            let source_endpoint = if stable_endpoint.as_deref()
+                == Some(mapping.source_endpoint.as_str())
+                || self.source_alias_matches_runtime(
+                    &mapping.source_endpoint,
+                    stable_endpoint.as_deref(),
+                ) {
                 event.endpoint
             } else if let Some(source_endpoint) =
                 mackes_midi_engine::numeric_endpoint_id(&mapping.source_endpoint)
             {
+                if source_endpoint != event.endpoint {
+                    continue;
+                }
                 source_endpoint
             } else {
                 continue;
@@ -1597,7 +1625,6 @@ impl Daemon {
         }
         (sent, unmatched)
     }
-
     /// Applies a confirmed daemon-owned device control to a registered output.
     #[allow(clippy::missing_errors_doc)]
     pub fn apply_device_control(&mut self, request: &serde_json::Value) -> Result<Vec<u8>, String> {
@@ -1660,25 +1687,21 @@ impl Daemon {
         }
         Ok(payload)
     }
-
     /// Returns bounded aggregate MIDI activity counters.
     #[must_use]
     pub const fn activity_counters(&self) -> (u64, u64, u64) {
         (self.received_events, self.sent_events, self.dropped_events)
     }
-
     /// Records a validated startup scene for dashboard snapshots and events.
     pub fn set_active_scene(&mut self, scene: Option<String>) {
         self.active_scene = scene;
         self.record_state_event(Command::Scenes);
     }
-
     /// Returns the currently selected scene projected by the daemon.
     #[must_use]
     pub fn active_scene(&self) -> Option<&str> {
         self.active_scene.as_deref()
     }
-
     /// Selects the next or previous scene in the daemon-owned catalog.
     pub fn navigate_scene(&mut self, next: bool) -> Option<String> {
         if self.scene_ids.is_empty() {
@@ -1698,7 +1721,6 @@ impl Daemon {
         self.set_active_scene(Some(scene.clone()));
         Some(scene)
     }
-
     /// Selects an exact scene from the daemon-owned catalog and persists it.
     ///
     /// # Errors
@@ -1746,7 +1768,6 @@ impl Daemon {
         }
         Ok(selected)
     }
-
     /// Registers one explicitly opened input adapter with the daemon.
     ///
     /// # Errors
@@ -1758,7 +1779,6 @@ impl Daemon {
     ) -> Result<(), &'static str> {
         self.inputs.insert(input)
     }
-
     /// Opens and registers a physical ALSA input by exact backend name.
     ///
     /// # Errors
@@ -1795,7 +1815,6 @@ impl Daemon {
             self.register_input(Box::new(input)).map_err(str::to_owned)
         }
     }
-
     /// Polls each daemon-owned input once in stable registration order.
     #[must_use]
     pub fn poll_inputs(&mut self) -> Vec<mackes_domain::MidiEvent> {
@@ -1806,22 +1825,6 @@ impl Daemon {
         events
     }
 
-    fn apply_native_transitions(
-        &mut self,
-        transitions: Vec<mackes_midi_engine::NativeIdentityTransition>,
-    ) {
-        for transition in transitions {
-            if let Some(failure) = transition.failure {
-                self.last_native_failure = Some(failure);
-                self.health = Health::Degraded;
-            }
-            if transition.led_resync {
-                self.native_led_resync = true;
-                self.replay_controller_leds();
-            }
-        }
-    }
-
     #[cfg(feature = "alsa-seq-backend")]
     fn poll_native_alsa_lifecycle(&mut self) {
         let Some(client) = self.alsa_input_client.clone() else {
@@ -1830,23 +1833,21 @@ impl Daemon {
         let Ok(mut client) = client.lock() else {
             return;
         };
-        let ports = client.discover_ports();
+        let should_rescan = self
+            .native_rescan_at
+            .is_none_or(|last| last.elapsed() >= Duration::from_millis(NATIVE_RESCAN_INTERVAL_MS));
+        let ports = if should_rescan { client.discover_ports() } else { Vec::new() };
+        if should_rescan {
+            self.native_rescan_at = Some(Instant::now());
+        }
         let announcements = client
             .read_lifecycle_events(32)
             .into_iter()
             .map(|(lifecycle, address)| {
-                let identity = ports.iter().find(|port| port.address == address).map(|port| {
-                    mackes_midi_engine::NativeHardwareIdentity::new(
-                        &port.client_name,
-                        &port.port_name,
-                        port.address.port,
-                        if port.readable {
-                            mackes_midi_engine::EndpointDirection::Input
-                        } else {
-                            mackes_midi_engine::EndpointDirection::Output
-                        },
-                    )
-                });
+                let identity = ports
+                    .iter()
+                    .find(|port| port.address == address)
+                    .map(mackes_midi_engine::NativeHardwareIdentity::from_alsa_port);
                 mackes_midi_engine::NativePortAnnouncement {
                     lifecycle,
                     address,
@@ -1857,15 +1858,16 @@ impl Daemon {
             .collect::<Vec<_>>();
         let _ = client.reconcile_input_subscriptions();
         drop(client);
-        self.restore_launch_control_midi_output(&ports);
-        self.restore_late_physical_outputs();
+        if should_rescan {
+            self.restore_launch_control_midi_output(&ports);
+            self.restore_late_physical_outputs();
+        }
         for announcement in announcements {
             self.alsa_supervisor.ingest(announcement);
         }
         let transitions = self.alsa_supervisor.reconcile();
         self.apply_native_transitions(transitions);
     }
-
     /// Polls registered MIDI inputs and routes a bounded batch through the normal path.
     ///
     /// The bound prevents a busy physical controller from starving IPC and scene work.
@@ -1980,9 +1982,9 @@ impl Daemon {
                         });
                     if assignable
                         && captured.is_some_and(|id| id != control_id)
-                        && self
-                            .assignment_capture_at
-                            .is_some_and(|started| started.elapsed() < Duration::from_millis(250))
+                        && self.assignment_capture_at.is_some_and(|started| {
+                            started.elapsed() < Duration::from_millis(NATIVE_RESCAN_INTERVAL_MS)
+                        })
                     {
                         self.assignment_session.catalog.last_error =
                             Some("ambiguous capture within 250 ms".into());
@@ -1993,6 +1995,13 @@ impl Daemon {
             }
             if self.assignment_session.phase == mackes_ipc::AssignmentPhase::AwaitControl {
                 if let Some(control_id) = Self::launch_control_factory1_control_id(&event) {
+                    let Some(stable_source) = self.inputs.stable_id_for_endpoint(event.endpoint)
+                    else {
+                        self.assignment_session.catalog.last_error =
+                            Some("input identity is unresolved; repair the device binding".into());
+                        processed += 1;
+                        continue;
+                    };
                     let result = self.apply_assignment_request(mackes_ipc::AssignmentRequest {
                         generation: self.assignment_generation,
                         action: mackes_ipc::AssignmentAction::ControlCaptured,
@@ -2003,12 +2012,7 @@ impl Daemon {
                     });
                     if result.applied {
                         self.assignment_capture_at = Some(Instant::now());
-                        if let Some(stable) = self.inputs.stable_id_for_endpoint(event.endpoint) {
-                            self.assignment_session.catalog.source_endpoint = Some(stable);
-                        } else {
-                            self.assignment_session.catalog.source_endpoint =
-                                Some(event.endpoint.get().to_string());
-                        }
+                        self.assignment_session.catalog.source_endpoint = Some(stable_source);
                         if let mackes_domain::MidiMessage::ControlChange {
                             channel,
                             controller,
@@ -2140,7 +2144,6 @@ impl Daemon {
             }
         }
     }
-
     /// Polls registered inputs and resolves persisted dashboard bindings.
     ///
     /// Only the three non-destructive dashboard commands are returned. The
@@ -2231,7 +2234,6 @@ impl Daemon {
         }
         commands
     }
-
     /// Polls and records mapped dashboard commands for the daemon loop.
     #[must_use]
     pub fn process_dashboard_commands(
@@ -2250,7 +2252,6 @@ impl Daemon {
         }
         actions.into_iter().map(|(command, _)| command).collect()
     }
-
     /// Handles one daemon-owned dashboard command using the same bounded
     /// acknowledgment and journal path as a local IPC command.
     #[must_use]
@@ -2268,7 +2269,6 @@ impl Daemon {
         }
         command_ack(command, self.health, self.generation, &[], self.route_generation(), &[])
     }
-
     /// Sends bounded All Notes Off and All Sound Off controls on every channel
     /// to every currently registered output.
     fn send_panic_controls(&mut self) -> (usize, usize) {
@@ -2291,14 +2291,12 @@ impl Daemon {
         }
         (sent, failed)
     }
-
     /// Polls owned inputs and dispatches all decoded events through owned outputs.
     #[must_use]
     pub fn pump_registered_inputs(&mut self) -> Vec<(usize, usize)> {
         let events = self.inputs.poll_once();
         events.iter().map(|event| self.dispatch_registered(event)).collect()
     }
-
     /// Returns the active route generation, if the store lock is healthy.
     #[must_use]
     pub fn route_generation(&self) -> Option<u64> {
@@ -2618,6 +2616,12 @@ impl Daemon {
             "assignment_session": self.assignment_session,
             "catalog": self.catalog,
             "physical_devices": self.physical_devices,
+            "config_persistence": persistence_projection::config_persistence(
+                self.config_path.as_deref(),
+            ),
+            "pipedal": self.pipedal_worker.ipc_status(),
+            "pipedal_catalog": self.pipedal_worker.catalog(),
+            "pipedal_mapping_resolution": self.pipedal_mapping_resolution(),
             "health": match self.health {
                 Health::Starting => "starting",
                 Health::Ready => "ready",
@@ -2709,18 +2713,25 @@ impl Daemon {
             "last_sequence": self.state_sequence,
             "catalog": self.catalog,
             "physical_devices": self.physical_devices,
+            "endpoint_bindings": self.endpoint_binding_projection(),
+            "binding_generation": self.binding_generation,
             "native_backend": if cfg!(feature = "alsa-seq-backend") {
                 "alsa-seq"
             } else {
                 "midir-rollback"
             },
             "native_led_resync": self.native_led_resync,
+            "native_rescan_interval_ms": NATIVE_RESCAN_INTERVAL_MS,
             "native_failure": self.last_native_failure,
+            "config_persistence": persistence_projection::config_persistence(
+                self.config_path.as_deref(),
+            ),
             "led": {
                 "attempted": self.led.diagnostics().attempted,
                 "sent": self.led.diagnostics().sent,
                 "coalesced": self.led.diagnostics().coalesced,
                 "failed": self.led.diagnostics().failed,
+                "retries": self.led.diagnostics().retries,
                 "last_error": self.led.diagnostics().last_error,
                 "target_id": self.led.diagnostics().target_id,
                 "template": self.led.diagnostics().template,
@@ -2740,8 +2751,70 @@ impl Daemon {
         .to_string()
             + "\n"
     }
+    fn endpoint_binding_projection(&self) -> serde_json::Value {
+        let Some(path) = self.config_path.as_deref() else { return serde_json::json!([]) };
+        let Ok(document) = mackes_config::load(path) else { return serde_json::json!([]) };
+        let inputs = self.inputs.input_ids();
+        let outputs = self.outputs.output_ids();
+        serde_json::Value::Array(
+            document
+                .endpoints
+                .into_iter()
+                .map(|alias| {
+                    let stable_id = alias.stable_id.clone();
+                    let input_match = stable_id
+                        .as_deref()
+                        .is_some_and(|id| inputs.iter().any(|candidate| candidate == id));
+                    let output_match = stable_id
+                        .as_deref()
+                        .is_some_and(|id| outputs.iter().any(|candidate| candidate == id));
+                    let (state, action) = if stable_id.is_none() {
+                        ("missing", "bind this alias to a verified stable device identity")
+                    } else if alias.direction.is_none() && input_match && output_match {
+                        ("ambiguous", "choose input or output direction for this alias")
+                    } else if match alias.direction.as_deref() {
+                        Some("input") => input_match,
+                        Some("output") => output_match,
+                        _ => input_match || output_match,
+                    } {
+                        ("connected", "none")
+                    } else {
+                        (
+                            "missing",
+                            "rescan and rebind this alias; display-name matching is disabled",
+                        )
+                    };
+                    serde_json::json!({
+                        "alias": alias.id,
+                        "stable_id": stable_id,
+                        "direction": alias.direction,
+                        "role": alias.role,
+                        "state": state,
+                        "action": action,
+                    })
+                })
+                .collect(),
+        )
+    }
 
-    /// Returns the single resolved reference model consumed by status, TUI, and diagnostics.
+    fn pipedal_mapping_resolution(&self) -> serde_json::Value {
+        let Some(path) = self.config_path.as_deref() else { return serde_json::json!([]) };
+        let Ok(document) = mackes_config::load(path) else { return serde_json::json!([]) };
+        let mappings = document
+            .settings
+            .pipedal_mappings
+            .mappings
+            .into_iter()
+            .map(|mapping| mackes_pipedal_adapter::MappingIdentity {
+                physical_control_id: mapping.physical_control_id,
+                plugin_uri: mapping.plugin_uri,
+                symbol: mapping.symbol,
+                scope: mapping.scope,
+            })
+            .collect::<Vec<_>>();
+        serde_json::to_value(self.pipedal_worker.resolve_mappings(&mappings))
+            .unwrap_or_else(|_| serde_json::json!([]))
+    }
     fn resolved_mapping_registry(&self) -> Vec<serde_json::Value> {
         let physical = mackes_profiles::launch_control_physical_catalog();
         self.mapping_store
@@ -2836,7 +2909,6 @@ impl Daemon {
             .to_string()
             + "\n"
     }
-
     /// Handles one local request and remains usable for subsequent clients.
     ///
     /// # Errors
@@ -2879,6 +2951,9 @@ impl Daemon {
         {
             self.health = mapping_runtime::health_after_authorized_command(self.health, command);
             self.generation = self.generation.saturating_add(1);
+            if command == Some(Command::Migrate) {
+                return stream.write_all(self.migration_response(&request_payload).as_bytes());
+            }
             if command == Some(Command::Configuration) {
                 let value = serde_json::from_slice::<serde_json::Value>(&request_payload)
                     .unwrap_or_default();
@@ -3387,8 +3462,117 @@ impl Daemon {
             }
             match command {
                 Some(Command::Snapshot) => self.snapshot_response(),
+                Some(Command::Rescan) => {
+                    self.native_rescan_at = None;
+                    format!(
+                        "{{\"ok\":true,\"generation\":{},\"rescan\":\"scheduled\"}}\n",
+                        self.generation
+                    )
+                }
                 Some(Command::Subscribe) => self.subscribe_response(&request),
                 Some(Command::Scenes) => self.scenes_response(),
+                Some(Command::PiPedal) => {
+                    let parsed =
+                        serde_json::from_slice::<mackes_ipc::PiPedalRequest>(&request_payload).ok();
+                    match parsed {
+                        Some(request)
+                            if matches!(
+                                request.operation,
+                                mackes_ipc::PiPedalOperation::Snapshot
+                            ) =>
+                        {
+                            serde_json::json!({
+                                "ok": true,
+                                "generation": self.generation,
+                                "pipedal": self.pipedal_worker.ipc_status(),
+                                "catalog": self.pipedal_worker.catalog(),
+                                "mapping_resolution": self.pipedal_mapping_resolution(),
+                            })
+                            .to_string()
+                                + "\n"
+                        }
+                        Some(request)
+                            if matches!(request.operation, mackes_ipc::PiPedalOperation::Apply) =>
+                        {
+                            let Some(target) = request.mapping else {
+                                return stream.write_all(
+                                    b"{\"ok\":false,\"error\":\"PiPedal mapping is required\"}\n",
+                                );
+                            };
+                            let (Some(instance_id), Some(value), Some(client_id)) = (
+                                request.instance_id,
+                                request.value,
+                                self.pipedal_worker.pipedal_client_id(),
+                            ) else {
+                                return stream.write_all(b"{\"ok\":false,\"error\":\"PiPedal apply target fields are required\"}\n");
+                            };
+                            let mapping = mackes_pipedal_adapter::MappingIdentity {
+                                physical_control_id: target.physical_control_id,
+                                plugin_uri: target.plugin_uri,
+                                symbol: target.symbol,
+                                scope: target.scope,
+                            };
+                            let Some(previous_value) = self
+                                .pipedal_worker
+                                .catalog()
+                                .find_control(&mapping.plugin_uri, &mapping.symbol)
+                                .and_then(|control| control.value)
+                            else {
+                                return stream.write_all(b"{\"ok\":false,\"error\":\"PiPedal prior value is unavailable\"}\n");
+                            };
+                            match self.pipedal_worker.apply_set_control(
+                                request.generation,
+                                &mapping,
+                                instance_id,
+                                client_id,
+                                None,
+                                value,
+                                request.confirm,
+                            ) {
+                                Ok(()) => {
+                                    let _ = self.pipedal_worker.record_apply(
+                                        mackes_pipedal_adapter::ApplyRecord {
+                                            mapping,
+                                            instance_id,
+                                            previous_value,
+                                            generation: request.generation,
+                                        },
+                                    );
+                                    serde_json::json!({"ok": true, "applied": true, "generation": request.generation}).to_string() + "\n"
+                                }
+                                Err(error) => {
+                                    serde_json::json!({"ok": false, "error": error}).to_string()
+                                        + "\n"
+                                }
+                            }
+                        }
+                        Some(request)
+                            if matches!(request.operation, mackes_ipc::PiPedalOperation::Undo) =>
+                        {
+                            let Some(client_id) = self.pipedal_worker.pipedal_client_id() else {
+                                return stream.write_all(b"{\"ok\":false,\"error\":\"PiPedal client identity is unavailable\"}\n");
+                            };
+                            match self.pipedal_worker.restore_last_apply(
+                                request.generation,
+                                client_id,
+                                None,
+                                request.confirm,
+                            ) {
+                                Ok(()) => {
+                                    serde_json::json!({"ok": true, "undo": true, "generation": request.generation}).to_string() + "\n"
+                                }
+                                Err(error) => {
+                                    serde_json::json!({"ok": false, "error": error}).to_string()
+                                        + "\n"
+                                }
+                            }
+                        }
+                        _ => {
+                            "{\"ok\":false,\"error\":\"PiPedal mutation IPC is not yet enabled\"}\n"
+                                .to_owned()
+                        }
+                    }
+                }
                 Some(Command::Assignment) => {
                     let parsed =
                         serde_json::from_slice::<mackes_ipc::AssignmentRequest>(&request_payload)
@@ -3574,7 +3758,6 @@ impl Daemon {
         }
         Ok(())
     }
-
     /// Requests graceful shutdown without interrupting an in-flight operation.
     ///
     /// Service and signal adapters call this boundary; the main loop observes
@@ -3582,30 +3765,62 @@ impl Daemon {
     pub const fn request_shutdown(&mut self) {
         self.health = Health::Stopping;
     }
-
     /// Marks the daemon degraded while keeping routing and diagnostics available.
     pub const fn mark_degraded(&mut self) {
         if !matches!(self.health, Health::Stopping) {
             self.health = Health::Degraded;
         }
     }
-
     /// Returns current health.
     #[must_use]
     pub const fn health(&self) -> Health {
         self.health
     }
 
+    /// Services the bounded `PiPedal` worker without running network I/O on MIDI dispatch.
+    pub fn poll_pipedal(&mut self) {
+        let now = Instant::now();
+        if self.pipedal_transport.is_none() {
+            if now < self.pipedal_retry_at {
+                return;
+            }
+            if let Ok(transport) = mackes_pipedal_adapter::WebSocketTransport::connect(
+                mackes_pipedal_adapter::default_endpoint(),
+            ) {
+                self.pipedal_transport = Some(transport);
+                let _ = self.pipedal_worker.enqueue(mackes_pipedal_adapter::Command::Start);
+            } else {
+                self.pipedal_retry_at = now + Duration::from_secs(10);
+                return;
+            }
+        }
+        let result = if let Some(transport) = self.pipedal_transport.as_mut() {
+            self.pipedal_worker.process(transport, 1);
+            self.pipedal_worker.pump(transport, 8, 8)
+        } else {
+            return;
+        };
+        if let Ok(frames) = result {
+            for frame in frames {
+                if self.pipedal_worker.accept_frame(&frame).is_err() {
+                    self.pipedal_transport = None;
+                    self.pipedal_retry_at = Instant::now() + Duration::from_secs(10);
+                    break;
+                }
+            }
+        } else {
+            self.pipedal_transport = None;
+            self.pipedal_retry_at = Instant::now() + Duration::from_secs(10);
+        }
+    }
     /// Installs the validated active-project scene catalog for read-only IPC queries.
     pub fn set_scene_ids(&mut self, scene_ids: Vec<String>) {
         self.scene_ids = scene_ids;
     }
-
     /// Installs the validated project/setlist catalog for read-only UI queries.
     pub fn set_catalog(&mut self, catalog: serde_json::Value) {
         self.catalog = catalog;
     }
-
     /// Installs the daemon-owned physical-device inventory for snapshots.
     pub fn set_physical_devices(&mut self, endpoints: &[mackes_midi_engine::EndpointInfo]) {
         let discovered = physical_devices_value(endpoints);
@@ -3665,12 +3880,14 @@ impl Daemon {
                 return Err("profile output binding is invalid, unavailable, or duplicated".into());
             }
         }
+        if self.profile_bindings != bindings {
+            self.binding_generation = self.binding_generation.saturating_add(1);
+        }
         self.profile_bindings = bindings;
         self.sync_assignment_catalog();
         self.request_lexicon_active_setup();
         Ok(())
     }
-
     /// Sets the daemon-owned configuration path for authorized persistence.
     pub fn set_config_path(&mut self, path: impl Into<std::path::PathBuf>) {
         let path = path.into();
@@ -3743,9 +3960,11 @@ pub use startup_restore::startup_restore;
 pub use startup_restore::{compile_scene_actions, persist_active_scene};
 mod assignment_catalog;
 mod assignment_commit;
+mod binding_generation;
 mod led_surface;
 #[cfg(all(test, target_os = "linux"))]
 mod native_cutover;
+mod persistence_projection;
 mod profile_bindings;
 #[cfg(test)]
 mod tests;

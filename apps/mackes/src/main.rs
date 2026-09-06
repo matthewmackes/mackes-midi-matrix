@@ -5,9 +5,10 @@ pub(crate) mod interactive;
 
 use cli::{
     apply_routes_cli, backup_entries, backup_status_label, daemon_command, daemon_request,
-    daemon_status, discovered_endpoints, navigate_scene_cli, print_daemon_command,
-    print_default_provider, print_effects_assignments, print_effects_demo, print_effects_faceplate,
-    print_effects_plan, print_learn, reflex_pcm70_preset, register_endpoint_cli, restore_cli,
+    daemon_status, discovered_endpoints, mappings_cli, migrate_config_cli, navigate_scene_cli,
+    pipedal_mappings_cli, print_daemon_command, print_default_provider, print_effects_assignments,
+    print_effects_demo, print_effects_faceplate, print_effects_plan, print_learn,
+    reflex_pcm70_preset, register_endpoint_cli, rescan_cli, restore_cli,
     restore_novation_template_cli, scene_action_add_cli, scene_action_remove_cli,
     scene_actions_cli, scene_plan_cli, send_device_control_cli, send_sysex_cli,
     set_default_provider_cli,
@@ -39,6 +40,13 @@ fn main() {
             println!(
                 "mackes-midi-matrix: TUI/CLI\n\nUsage:\n  mackes-midi-matrix tui\n  mackes-midi-matrix validate <path> [--json]\n  mackes-midi-matrix export <config> <directory>\n  mackes-midi-matrix doctor [--json]\n  mackes-midi-matrix status [--json]\n  mackes-midi-matrix panic\n  mackes-midi-matrix endpoints [--json]\n  mackes-midi-matrix default get <config> <capability> [--json]\n  mackes-midi-matrix default set <config> <capability> <profile-id>\n  mackes-midi-matrix reflex preset <id> --dry-run\n  mackes-midi-matrix reflex preset <id> <destination-id> --confirm\n  mackes-midi-matrix scenes|devices|routes|monitor [--json]\n  mackes-midi-matrix scene list <config> [--json]\n  mackes-midi-matrix backup list|inspect ...\n  mackes-midi-matrix profile validate [--json]\n  mackes-midi-matrix --version"
             );
+            println!("  mackes-midi-matrix migrate <config> [--dry-run|--json]");
+            println!("  mackes-midi-matrix rescan [--json]");
+            println!("  mackes-midi-matrix pipedal mappings <config> [--json]");
+            println!("  mackes-midi-matrix pipedal snapshot [--json]");
+            println!("  mackes-midi-matrix pipedal apply <generation> <physical-id> <plugin-uri> <symbol> <instance-id> <value> --confirm");
+            println!("  mackes-midi-matrix pipedal undo <generation> --confirm");
+            println!("  mackes-midi-matrix mappings [--json]");
             println!("  mackes-midi-matrix learn <endpoint-id> [limit]");
             println!("  mackes-midi-matrix effects faceplate [--json]");
             println!("  mackes-midi-matrix effects demo [--json]");
@@ -57,7 +65,7 @@ fn main() {
             println!("  mackes-midi-matrix scene actions <config> <project> <scene> [--json]");
             println!("  mackes-midi-matrix scene plan <config> <project> <scene> [--json]");
             println!("  mackes-midi-matrix routes apply <routes.json>");
-            println!("  mackes-midi-matrix device register <config> <alias> [--stable-id=ID] [--name=PATTERN] [--vendor-id=HEX] [--product-id=HEX] [--serial=SERIAL]");
+            println!("  mackes-midi-matrix device register <config> <alias> [--stable-id=ID] [--name=PATTERN] [--vendor-id=HEX] [--product-id=HEX] [--serial=SERIAL] [--logical-port=N] [--direction=input|output] [--role=midi|hui]");
             println!("  mackes-midi-matrix device template restore <config>");
         }
         [command, action] if command == "effects" && action == "faceplate" => {
@@ -539,6 +547,119 @@ fn main() {
                 std::process::exit(2);
             }
         }
+        [command, path] if command == "migrate" => match migrate_config_cli(path, false, false) {
+            Ok(output) => println!("{output}"),
+            Err(error) => {
+                eprintln!("mackes migrate failed: {error}");
+                std::process::exit(2);
+            }
+        },
+        [command, path, flag] if command == "migrate" && flag == "--dry-run" => {
+            match migrate_config_cli(path, true, false) {
+                Ok(output) => println!("{output}"),
+                Err(error) => {
+                    eprintln!("mackes migrate failed: {error}");
+                    std::process::exit(2);
+                }
+            }
+        }
+        [command, path, flag] if command == "migrate" && flag == "--json" => {
+            match migrate_config_cli(path, false, true) {
+                Ok(output) => println!("{output}"),
+                Err(error) => {
+                    eprintln!("mackes migrate failed: {error}");
+                    std::process::exit(2);
+                }
+            }
+        }
+        [command] if command == "rescan" => println!("{}", rescan_cli(false)),
+        [command, flag] if command == "rescan" && flag == "--json" => {
+            print!("{}", rescan_cli(true));
+        }
+        [command] if command == "mappings" => println!("{}", mappings_cli(false)),
+        [command, flag] if command == "mappings" && flag == "--json" => {
+            print!("{}", mappings_cli(true));
+        }
+        [command, action, path] if command == "pipedal" && action == "mappings" => {
+            match pipedal_mappings_cli(path, false) {
+                Ok(output) => println!("{output}"),
+                Err(error) => {
+                    eprintln!("mackes pipedal mappings failed: {error}");
+                    std::process::exit(2);
+                }
+            }
+        }
+        [command, action, path, flag]
+            if command == "pipedal" && action == "mappings" && flag == "--json" =>
+        {
+            match pipedal_mappings_cli(path, true) {
+                Ok(output) => println!("{output}"),
+                Err(error) => {
+                    eprintln!("mackes pipedal mappings failed: {error}");
+                    std::process::exit(2);
+                }
+            }
+        }
+        [command, action] if command == "pipedal" && action == "snapshot" => {
+            let payload = serde_json::to_vec(&mackes_ipc::PiPedalRequest {
+                operation: mackes_ipc::PiPedalOperation::Snapshot,
+                generation: 0,
+                confirm: false,
+                mapping: None,
+                instance_id: None,
+                client_id: None,
+                value: None,
+            })
+            .expect("PiPedal snapshot request");
+            println!("{}", daemon_request(mackes_ipc::Command::PiPedal, &payload));
+        }
+        [command, action, flag]
+            if command == "pipedal" && action == "snapshot" && flag == "--json" =>
+        {
+            let payload = serde_json::to_vec(&mackes_ipc::PiPedalRequest {
+                operation: mackes_ipc::PiPedalOperation::Snapshot,
+                generation: 0,
+                confirm: false,
+                mapping: None,
+                instance_id: None,
+                client_id: None,
+                value: None,
+            })
+            .expect("PiPedal snapshot request");
+            print!("{}", daemon_request(mackes_ipc::Command::PiPedal, &payload));
+        }
+        [command, action, generation, physical_id, plugin_uri, symbol, instance_id, value, flag]
+            if command == "pipedal" && action == "apply" && flag == "--confirm" =>
+        {
+            let payload = serde_json::json!({
+                "operation": "apply",
+                "generation": generation.parse::<u64>().unwrap_or(u64::MAX),
+                "confirm": true,
+                "mapping": {"physical_control_id": physical_id, "plugin_uri": plugin_uri, "symbol": symbol},
+                "instance_id": instance_id.parse::<u64>().unwrap_or(u64::MAX),
+                "client_id": "mackes-cli",
+                "value": value.parse::<f32>().unwrap_or(f32::NAN),
+            });
+            println!(
+                "{}",
+                daemon_request(
+                    mackes_ipc::Command::PiPedal,
+                    &serde_json::to_vec(&payload).expect("PiPedal apply request")
+                )
+            );
+        }
+        [command, action, generation, flag]
+            if command == "pipedal" && action == "undo" && flag == "--confirm" =>
+        {
+            let payload = serde_json::json!({"operation": "undo", "generation": generation.parse::<u64>().unwrap_or(u64::MAX), "confirm": true, "client_id": "mackes-cli"});
+            println!(
+                "{}",
+                daemon_request(
+                    mackes_ipc::Command::PiPedal,
+                    &serde_json::to_vec(&payload).expect("PiPedal undo request")
+                )
+            );
+        }
         [command, input, directory] if command == "export" => {
             match mackes_config::load(std::path::Path::new(input)) {
                 Ok(document) => {
@@ -572,6 +693,9 @@ fn main() {
                 "mackes-midi-matrix".bright_white().bold(),
                 "mackes-midi-matrix".bright_white().bold()
             );
+            eprintln!("  mackes-midi-matrix migrate <config> [--dry-run|--json]");
+            eprintln!("  mackes-midi-matrix rescan [--json]");
+            eprintln!("  mackes-midi-matrix mappings [--json]");
             std::process::exit(64);
         }
     }
@@ -648,13 +772,17 @@ mod tests {
             &mut diagnostics,
             &serde_json::json!({
                 "health": "ready",
-                "audit": [{"action": "route_replace", "allowed": false}]
+                "audit": [{"action": "route_replace", "allowed": false}],
+                "config_persistence": {"state": "read_only", "action": "check permissions"}
             }),
         );
         assert!(diagnostics
             .entries
             .iter()
             .any(|entry| { entry.subject == "policy" && entry.reason.contains("route_replace") }));
+        assert!(diagnostics.entries.iter().any(|entry| {
+            entry.subject == "configuration" && entry.reason.contains("read_only")
+        }));
     }
 
     #[test]
@@ -674,5 +802,16 @@ mod tests {
         );
         assert_eq!(editor.drafts.len(), 1);
         assert_eq!(editor.drafts[0].id, "live");
+    }
+
+    #[test]
+    fn pipedal_mapping_preview_is_json_stable_and_fails_on_missing_config() {
+        let output = crate::cli::pipedal_mappings_cli("../../fixtures/config-valid.json5", true)
+            .expect("preview");
+        let value: serde_json::Value = serde_json::from_str(&output).expect("JSON preview");
+        assert_eq!(value["ok"], true);
+        assert_eq!(value["version"], 1);
+        assert_eq!(value["count"], 1);
+        assert!(crate::cli::pipedal_mappings_cli("/tmp/mackes-no-such-config.json5", true).is_err());
     }
 }

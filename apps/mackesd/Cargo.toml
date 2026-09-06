@@ -10,6 +10,7 @@ mackes-config = { path = "../../crates/config" }
 mackes-domain = { path = "../../crates/domain" }
 mackes-ipc = { path = "../../crates/ipc" }
 mackes-midi-engine = { path = "../../crates/midi-engine", features = ["midir-backend", "alsa-seq-backend"] }
+mackes-pipedal-adapter = { path = "../../crates/pipedal-adapter" }
 mackes-profiles = { path = "../../crates/profiles" }
 mackes-scene-engine = { path = "../../crates/scene-engine" }
 serde_json.workspace = true

@@ -314,6 +314,10 @@ pub enum Command {
     Validate,
     /// Load or save configuration.
     Configuration,
+    /// Plan or apply verified endpoint migration.
+    Migrate,
+    /// Request an immediate bounded native endpoint rescan.
+    Rescan,
     /// Inspect endpoint inventory.
     Endpoints,
     /// Inspect or mutate routes.
@@ -340,6 +344,8 @@ pub enum Command {
     UnsafeMode,
     /// Inspect or mutate durable hardware-first mappings.
     Mappings,
+    /// Inspect or mutate the daemon-owned `PiPedal` connector.
+    PiPedal,
     /// Drive the daemon-owned controller assignment session.
     Assignment,
     /// Request bounded daemon shutdown.
@@ -356,6 +362,8 @@ impl Command {
             Self::Subscribe => "subscribe",
             Self::Validate => "validate",
             Self::Configuration => "configuration",
+            Self::Migrate => "migrate",
+            Self::Rescan => "rescan",
             Self::Endpoints => "endpoints",
             Self::Routes => "routes",
             Self::Learn => "learn",
@@ -369,10 +377,63 @@ impl Command {
             Self::Panic => "panic",
             Self::UnsafeMode => "unsafe_mode",
             Self::Mappings => "mappings",
+            Self::PiPedal => "pipedal",
             Self::Assignment => "assignment",
             Self::Shutdown => "shutdown",
         }
     }
+}
+
+/// Typed `PiPedal` IPC operation.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PiPedalOperation {
+    /// Read health, catalog, and mapping resolution.
+    Snapshot,
+    /// Apply one explicitly confirmed control mutation.
+    Apply,
+    /// Request an explicitly confirmed restore of the last mutation.
+    Undo,
+}
+
+/// Strict `PiPedal` IPC request envelope.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PiPedalRequest {
+    /// Requested operation.
+    pub operation: PiPedalOperation,
+    /// Expected connector session generation.
+    pub generation: u64,
+    /// Required for mutation operations.
+    #[serde(default)]
+    pub confirm: bool,
+    /// Stable mapping identity for apply requests.
+    #[serde(default)]
+    pub mapping: Option<PiPedalMappingTarget>,
+    /// Fresh runtime plugin instance ID for apply requests.
+    #[serde(default)]
+    pub instance_id: Option<u64>,
+    /// Client identity used by `PiPedal`.
+    #[serde(default)]
+    pub client_id: Option<String>,
+    /// Requested normalized/control-domain value.
+    #[serde(default)]
+    pub value: Option<f32>,
+}
+
+/// Stable mapping target carried by a `PiPedal` apply request.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PiPedalMappingTarget {
+    /// Physical control identity.
+    pub physical_control_id: String,
+    /// Plugin URI.
+    pub plugin_uri: String,
+    /// Plugin parameter symbol.
+    pub symbol: String,
+    /// Optional instance-selection scope.
+    #[serde(default)]
+    pub scope: Option<String>,
 }
 
 /// Actor class attached to every mutation for policy and audit decisions.
@@ -441,6 +502,40 @@ pub struct Capabilities {
     pub may_arm_unsafe_mode: bool,
     /// Whether this connection may receive state events.
     pub may_subscribe: bool,
+}
+
+/// `PiPedal` session phases exposed to local status consumers.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PiPedalPhase {
+    /// No transport connection exists.
+    Disconnected,
+    /// Transport is open and the hello exchange is pending.
+    Connected,
+    /// The server accepted the client identity.
+    Identified,
+    /// Startup catalog/state requests are in progress.
+    LoadingCatalog,
+    /// Required startup state is available.
+    Ready,
+}
+
+/// Read-only health projection for one daemon-owned `PiPedal` session.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PiPedalStatus {
+    /// Current qualified protocol phase.
+    pub phase: PiPedalPhase,
+    /// Session generation used to reject stale work.
+    pub generation: u64,
+    /// Number of requests waiting for transport service.
+    pub pending_requests: u16,
+    /// Number of transport timeouts in this session.
+    pub timeouts: u64,
+    /// Number of non-timeout transport/protocol failures in this session.
+    pub transport_failures: u64,
+    /// Number of complete protocol reads accepted in this session.
+    pub successful_reads: u64,
 }
 
 /// A bounded, newline-delimited IPC envelope.
@@ -1540,6 +1635,24 @@ mod tests {
     use super::*;
 
     #[test]
+    fn pipedal_status_round_trips_and_rejects_unknown_fields() {
+        let status = PiPedalStatus {
+            phase: PiPedalPhase::LoadingCatalog,
+            generation: 4,
+            pending_requests: 7,
+            timeouts: 2,
+            transport_failures: 1,
+            successful_reads: 3,
+        };
+        let encoded = serde_json::to_vec(&status).expect("encode");
+        assert_eq!(serde_json::from_slice::<PiPedalStatus>(&encoded).expect("decode"), status);
+        assert!(serde_json::from_slice::<PiPedalStatus>(
+            br#"{"phase":"ready","generation":1,"pending_requests":0,"timeouts":0,"transport_failures":0,"extra":true}"#
+        )
+        .is_err());
+    }
+
+    #[test]
     fn maximum_response_decodes_bytewise_and_retains_following_frames() {
         let mut decoder = LineDecoder::default();
         for _ in 0..MAX_FRAME_BYTES {
@@ -1741,6 +1854,22 @@ mod tests {
         );
         assert_eq!(authorize(Command::Health, ActorClass::RtpMidi), Authorization::Denied);
         assert_eq!(authorize(Command::UnsafeMode, ActorClass::LocalTui), Authorization::Allowed);
+    }
+
+    #[test]
+    fn migration_command_is_local_only_and_wire_stable() {
+        assert_eq!(Command::Migrate.tag(), "migrate");
+        assert_eq!(authorize(Command::Migrate, ActorClass::LocalCli), Authorization::Allowed);
+        assert_eq!(authorize(Command::Migrate, ActorClass::MidiMapping), Authorization::Denied);
+        assert_eq!(authorize(Command::Migrate, ActorClass::RtpMidi), Authorization::Denied);
+    }
+
+    #[test]
+    fn rescan_command_is_local_only_and_wire_stable() {
+        assert_eq!(Command::Rescan.tag(), "rescan");
+        assert_eq!(authorize(Command::Rescan, ActorClass::LocalCli), Authorization::Allowed);
+        assert_eq!(authorize(Command::Rescan, ActorClass::MidiMapping), Authorization::Denied);
+        assert_eq!(authorize(Command::Rescan, ActorClass::RtpMidi), Authorization::Denied);
     }
 
     #[test]

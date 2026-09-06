@@ -648,6 +648,10 @@ fn dashboard_initial_state_keeps_panic_available() {
     assert!(dashboard.panic_available);
     assert!(dashboard.frame_lines().iter().any(|line| line.contains("PANIC: available")));
     assert!(dashboard.frame_lines_for(Viewport::new(20, 10)).iter().all(|line| line.len() <= 20));
+    assert!(dashboard
+        .frame_lines_for(Viewport::new(20, 10))
+        .iter()
+        .any(|line| line == "config=unconfigured"));
     assert!(dashboard.frame_lines_for(Viewport::new(6, 10)).iter().any(|line| line == "PANIC "));
     assert!(dashboard.frame_lines().iter().any(|line| line.contains("keys:")));
     assert!(dashboard
@@ -668,6 +672,7 @@ fn dashboard_initial_state_keeps_panic_available() {
 fn dashboard_event_projection_updates_widgets_and_keeps_panic() {
     let mut dashboard = DashboardState::initial();
     dashboard.apply_event(DashboardEvent::Health("ready".into()));
+    dashboard.apply_event(DashboardEvent::ConfigPersistence("missing".into()));
     dashboard.apply_event(DashboardEvent::ActiveScene(Some("intro".into())));
     dashboard.apply_event(DashboardEvent::PerformanceLock(true));
     dashboard.apply_event(DashboardEvent::ActivationProgress { completed: 2, total: 3 });
@@ -678,6 +683,7 @@ fn dashboard_event_projection_updates_widgets_and_keeps_panic() {
         message: "endpoint degraded".into(),
     });
     assert_eq!(dashboard.health, "ready");
+    assert_eq!(dashboard.config_persistence, "missing");
     assert_eq!(dashboard.active_scene.as_deref(), Some("intro"));
     assert!(dashboard.performance_locked);
     assert_eq!(dashboard.activation_progress, (2, 3));
@@ -738,6 +744,7 @@ fn dashboard_notifications_are_newest_first_and_bounded() {
 fn dashboard_payload_projection_decodes_authoritative_fields() {
     let payload = serde_json::json!({
         "health": "ready",
+        "config_persistence": {"state": "read_only"},
         "active_scene": "intro",
         "route_generation": 7,
         "route_undo_available": true,
@@ -771,6 +778,7 @@ fn dashboard_payload_projection_decodes_authoritative_fields() {
         dashboard.apply_event(event);
     }
     assert_eq!(dashboard.health, "ready");
+    assert_eq!(dashboard.config_persistence, "read_only");
     assert_eq!(dashboard.active_scene.as_deref(), Some("intro"));
     assert_eq!(dashboard.route_generation, 7);
     assert_eq!((dashboard.received, dashboard.sent, dashboard.dropped), (10, 8, 2));
@@ -985,6 +993,9 @@ fn learn_requires_explicit_candidate_and_enter_commit_path() {
             vendor_id: None,
             product_id: None,
             serial: None,
+            logical_port: None,
+            direction: None,
+            role: None,
         }],
         ..mackes_config::ConfigDocument::default()
     };

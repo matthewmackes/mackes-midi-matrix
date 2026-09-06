@@ -5,6 +5,7 @@
 
 use crate::{AlsaSequencerAddress, AlsaSequencerLifecycle, EndpointDirection, PhysicalDeviceState};
 use std::collections::{BTreeMap, HashMap, VecDeque};
+use std::path::Path;
 
 /// Maximum announcement records processed in one reconciliation.
 pub const MAX_NATIVE_ANNOUNCEMENTS: usize = 64;
@@ -20,6 +21,91 @@ pub struct NativeHardwareIdentity {
     pub port_index: u8,
     /// Endpoint direction.
     pub direction: EndpointDirection,
+    /// Transport role inferred from the native port capabilities/name.
+    pub role: String,
+    /// Verified USB vendor ID, if native discovery supplied it.
+    pub vendor_id: Option<u16>,
+    /// Verified USB product ID, if native discovery supplied it.
+    pub product_id: Option<u16>,
+    /// Verified USB serial, if native discovery supplied it.
+    pub serial: Option<String>,
+}
+
+/// Parses a bounded USB uevent/property record into verified identity fields.
+///
+/// Only complete hexadecimal vendor/product pairs are accepted. A serial is
+/// optional because serial-less devices require an explicit operator binding.
+#[must_use]
+pub fn parse_usb_identity_properties(properties: &str) -> Option<(u16, u16, Option<String>)> {
+    let mut vendor = None;
+    let mut product = None;
+    let mut serial = None;
+    for line in properties.lines().take(64) {
+        let Some((key, value)) = line.split_once('=') else { continue };
+        match key.trim() {
+            "ID_VENDOR_ID" => vendor = u16::from_str_radix(value.trim_start_matches("0x"), 16).ok(),
+            "ID_MODEL_ID" => product = u16::from_str_radix(value.trim_start_matches("0x"), 16).ok(),
+            "ID_SERIAL_SHORT" if !value.trim().is_empty() => serial = Some(value.trim().to_owned()),
+            "PRODUCT" => {
+                let mut parts = value.split('/');
+                vendor = u16::from_str_radix(parts.next().unwrap_or_default(), 16).ok();
+                product = u16::from_str_radix(parts.next().unwrap_or_default(), 16).ok();
+            }
+            _ => {}
+        }
+    }
+    Some((vendor?, product?, serial))
+}
+
+/// Reads one bounded udev/sysfs property record for native identity discovery.
+#[must_use]
+pub fn read_usb_identity_properties(path: &Path) -> Option<(u16, u16, Option<String>)> {
+    if std::fs::metadata(path).ok()?.len() > 16 * 1024 {
+        return None;
+    }
+    parse_usb_identity_properties(&std::fs::read_to_string(path).ok()?)
+}
+
+/// Resolves a USB identity for an ALSA client name using kernel card metadata.
+/// Ambiguous or missing card matches fail closed.
+#[cfg(target_os = "linux")]
+#[must_use]
+pub fn native_usb_identity_for_client_name(
+    client_name: &str,
+) -> Option<(u16, u16, Option<String>)> {
+    let cards = std::fs::read_to_string("/proc/asound/cards").ok()?;
+    let needle = normalize_client_name(client_name);
+    let mut matching_card = None;
+    for block in cards.split("\n ").filter(|block| !block.trim().is_empty()) {
+        if normalize_client_name(block).contains(&needle) {
+            let card = block.split_whitespace().next()?.parse::<u8>().ok()?;
+            if matching_card.replace(card).is_some() {
+                return None;
+            }
+        }
+    }
+    let card = matching_card?;
+    let path = format!("/sys/class/sound/card{card}/device/uevent");
+    read_usb_identity_properties(Path::new(&path))
+}
+
+/// Returns verified USB fields for one native client, or explicit unknown fields.
+#[must_use]
+#[cfg(target_os = "linux")]
+pub fn usb_fields_for_client(client_name: &str) -> (Option<u16>, Option<u16>, Option<String>) {
+    native_usb_identity_for_client_name(client_name)
+        .map_or((None, None, None), |(vendor, product, serial)| {
+            (Some(vendor), Some(product), serial)
+        })
+}
+
+/// Returns explicit unknown USB fields on platforms without ALSA card metadata.
+#[cfg(not(target_os = "linux"))]
+#[must_use]
+pub const fn usb_fields_for_client(
+    _client_name: &str,
+) -> (Option<u16>, Option<u16>, Option<String>) {
+    (None, None, None)
 }
 
 impl NativeHardwareIdentity {
@@ -36,6 +122,29 @@ impl NativeHardwareIdentity {
             port_name: port_name.as_ref().to_owned(),
             port_index,
             direction,
+            role: "midi".into(),
+            vendor_id: None,
+            product_id: None,
+            serial: None,
+        }
+    }
+
+    /// Builds an identity from native ALSA metadata while keeping runtime addresses out.
+    #[cfg(feature = "alsa-seq-backend")]
+    #[must_use]
+    pub fn from_alsa_port(port: &crate::AlsaSequencerPort) -> Self {
+        let direction =
+            if port.readable { EndpointDirection::Input } else { EndpointDirection::Output };
+        let role = if port.port_name.to_ascii_lowercase().contains("hui") { "hui" } else { "midi" };
+        Self {
+            client_name: normalize_client_name(&port.client_name),
+            port_name: port.port_name.clone(),
+            port_index: port.address.port,
+            direction,
+            role: role.into(),
+            vendor_id: port.vendor_id,
+            product_id: port.product_id,
+            serial: port.serial.clone(),
         }
     }
 }
@@ -279,6 +388,44 @@ mod tests {
 
     fn mk2(direction: EndpointDirection) -> NativeHardwareIdentity {
         NativeHardwareIdentity::new("Launch Control XL MK2", "MIDI", 0, direction)
+    }
+
+    #[test]
+    fn usb_properties_require_complete_vendor_product_identity() {
+        assert_eq!(
+            parse_usb_identity_properties(
+                "ID_VENDOR_ID=1235\nID_MODEL_ID=0061\nID_SERIAL_SHORT=abc"
+            ),
+            Some((0x1235, 0x0061, Some("abc".into())))
+        );
+        assert_eq!(parse_usb_identity_properties("ID_VENDOR_ID=1235\nID_SERIAL_SHORT=abc"), None);
+    }
+
+    #[test]
+    fn usb_properties_parse_kernel_product_tuple() {
+        assert_eq!(
+            parse_usb_identity_properties("PRODUCT=1235/0061/0\n"),
+            Some((0x1235, 0x0061, None))
+        );
+    }
+
+    #[test]
+    fn usb_properties_keep_serialless_identity_explicit() {
+        assert_eq!(
+            parse_usb_identity_properties("ID_VENDOR_ID=0763\nID_MODEL_ID=1021\n"),
+            Some((0x0763, 0x1021, None))
+        );
+    }
+
+    #[test]
+    fn usb_property_reader_is_bounded_and_reuses_parser() {
+        let path =
+            std::env::temp_dir().join(format!("mackes-usb-properties-{}", std::process::id()));
+        std::fs::write(&path, "ID_VENDOR_ID=1235\nID_MODEL_ID=0061\n").expect("write fixture");
+        assert_eq!(read_usb_identity_properties(&path), Some((0x1235, 0x0061, None)));
+        std::fs::write(&path, vec![b'x'; 16 * 1024 + 1]).expect("write oversized fixture");
+        assert_eq!(read_usb_identity_properties(&path), None);
+        let _ = std::fs::remove_file(path);
     }
 
     fn announce(

@@ -15,16 +15,13 @@ for other PiPedal plugins through metadata, rather than hard-coding an EQ-only p
 
 | Physical control | Destination |
 |---|---|
-| R3C4 | Selected EQ parameter 1 — resolve during inspection |
-| R3C5 | Selected EQ parameter 2 — resolve during inspection |
-| R3C6 | Selected EQ parameter 3 — resolve during inspection |
-| R3C7 | Selected EQ parameter 4 — resolve during inspection |
-| R3C8 | Selected EQ parameter 5 — resolve during inspection |
+| R3C4 | Native EQ `gain`, when advertised |
+| R3C5–R3C8 | Optional controls selected from active EQ metadata |
 
 Preserve Eventide R1C1–2, R2C1–3, R3C1–3 and sliders 1–4. Preserve the explicit
 R1C4 unassignment. Audit actual installed state: earlier conversation claims about
 live assignments are not evidence. Show and remove conflicting destinations for the
-five EQ knobs atomically; preserve every unrelated mapping. Do not reintroduce the
+advertised EQ controls atomically; preserve every unrelated mapping. Do not reintroduce the
 obsolete generic grouped board layout. PiPedal audio-chain placement is not specified:
 read it, but do not change audio routing or the Eventide-to-Lexicon chain.
 
@@ -63,6 +60,11 @@ connection health, protocol support, last successful read, queue pressure, timeo
 mapping-resolution failures over existing IPC. A connected socket is not proof of a
 resolved EQ or successful parameter change.
 
+The current architecture keeps `mackes-pipedal-connector` transport-independent; it must not
+be added as a direct dependency of `mackesd`. The eventual worker/IPC adapter belongs behind the
+repository's approved daemon boundary, with network ownership isolated from MIDI dispatch. Any
+integration that violates this dependency rule is rejected by the architecture policy.
+
 Persist a schema-versioned connector record: stable local connector ID, endpoint,
 qualified protocol/version, transport mode and credential reference if required. Never
 export credentials. A target contains plugin URI, explicit instance selector, control
@@ -71,11 +73,18 @@ from a fresh pedalboard snapshot; do not assume they survive reloads. Labels and
 positions are presentation only. Multiple matching instances are ambiguous, not a reason
 to choose the first. Export reusable templates without volatile ALSA IDs or session IDs.
 
+The current persisted local preview is `mackes pipedal mappings <config> [--json]`. It reads
+the version-1 `settings.pipedal_mappings` record, bounded to 128 entries, whose identity is
+`physical_control_id`, `plugin_uri`, `symbol`, and optional `scope`. Duplicate physical controls
+or duplicate targets fail validation before preview output; this command performs no PiPedal or
+MIDI write. Apply, undo, and live catalog resolution remain worker/IPC delivery work.
+
 Catalog entries expose label, symbol, units, min/max/default, enum/step/log properties,
 writability and current value with freshness. Unsupported metadata stays unavailable.
 Map physical 0–127 input using the verified parameter domain; clamp, quantize enumerations
-and respect logarithmic controls. Five knobs do not imply five gain bands: inspect the EQ
-and ask the operator only if its five intended parameters cannot be established.
+and respect logarithmic controls. Five knobs do not imply five gain bands: use `gain` as the
+cross-family default and discover optional band controls from active EQ metadata. Never invent
+symbols; ask the operator only when an optional control cannot be established.
 
 ## State, persistence and operating behavior
 
@@ -99,6 +108,12 @@ record justified changes. Do not retry non-idempotent actions automatically. Fee
 bounded LED scheduling only when state changes; a knob event must never request a full
 surface resync. Suppress echoed writes and ensure continuous activity cannot starve other
 devices or status requests. Keep PiPedal service restart independent of matrix restart.
+
+The transport-neutral connector implements pickup with a finite-value `PickupState` and a
+`ReconciliationLedger` bounded to 128 stable physical-control IDs. Observations from a stale
+session generation cannot acquire pickup; reconnect clears the ledger, and writes remain blocked
+until each physical value reaches the freshly reconciled external target. Duplicate catalog
+controls fail closed during mapping resolution.
 
 Configuration changes follow preview, validation, durable commit and runtime apply with
 rollback/undo. Detect concurrent edits using generation checks. Use PiPedal's qualified

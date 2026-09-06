@@ -1,6 +1,6 @@
 //! Explicit profile-to-output binding and catalog projection.
 
-/// Resolves an explicit binding first, then a uniquely named hardware profile.
+/// Resolves only an explicit durable profile-to-output binding.
 pub fn output_endpoint(
     outputs: &mackes_midi_engine::OutputRegistry,
     bindings: &[(String, String)],
@@ -17,28 +17,11 @@ pub fn stable_destination(
     bindings: &[(String, String)],
     profile_id: &str,
 ) -> Option<String> {
-    if let Some((_, endpoint_id)) = bindings.iter().find(|(profile, _)| profile == profile_id) {
-        return outputs
-            .output_infos()
-            .iter()
-            .any(|output| output.id == *endpoint_id)
-            .then(|| endpoint_id.clone());
-    }
-    let needles: &[&str] = match profile_id {
-        "eventide.micropitch" => &["eventide", "micropitch"],
-        "lexicon.reflex" => &["lexicon", "reflex"],
-        _ => return None,
-    };
-    let matches = outputs
-        .output_infos()
-        .into_iter()
-        .filter(|output| {
-            let name = output.name.to_ascii_lowercase();
-            needles.iter().any(|needle| name.contains(needle))
-        })
-        .map(|output| output.id)
-        .collect::<Vec<_>>();
-    (matches.len() == 1).then(|| matches[0].clone())
+    bindings.iter().find_map(|(profile, endpoint_id)| {
+        (profile == profile_id
+            && outputs.output_infos().iter().any(|output| output.id == *endpoint_id))
+        .then(|| endpoint_id.clone())
+    })
 }
 
 /// Returns unique profile IDs visible through bindings or identified hardware.

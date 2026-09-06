@@ -40,6 +40,121 @@ fn structured_log_line_is_json_and_bounded() {
 }
 
 #[test]
+fn snapshot_reports_configuration_persistence_state() {
+    let socket =
+        std::env::temp_dir().join(format!("mackes-config-state-{}.sock", std::process::id()));
+    let config =
+        std::env::temp_dir().join(format!("mackes-config-state-{}.json5", std::process::id()));
+    let daemon = Daemon::bind(&socket).expect("daemon");
+    let unconfigured: serde_json::Value =
+        serde_json::from_str(&daemon.snapshot_response()).expect("snapshot");
+    assert_eq!(unconfigured["config_persistence"]["state"], "unconfigured");
+    assert_eq!(unconfigured["native_rescan_interval_ms"], NATIVE_RESCAN_INTERVAL_MS);
+    drop(daemon);
+    fs::write(&config, b"{schema_version: 1}").expect("config");
+    let mut daemon = Daemon::bind(&socket).expect("daemon");
+    daemon.set_config_path(&config);
+    let ready: serde_json::Value =
+        serde_json::from_str(&daemon.snapshot_response()).expect("snapshot");
+    assert_eq!(ready["config_persistence"]["state"], "ready");
+    let directory =
+        std::env::temp_dir().join(format!("mackes-config-state-dir-{}", std::process::id()));
+    fs::create_dir(&directory).expect("directory");
+    daemon.set_config_path(&directory);
+    let invalid: serde_json::Value =
+        serde_json::from_str(&daemon.snapshot_response()).expect("snapshot");
+    assert_eq!(invalid["config_persistence"]["state"], "unreadable");
+    fs::write(&config, b"{invalid").expect("corrupt config");
+    daemon.set_config_path(&config);
+    let corrupt: serde_json::Value =
+        serde_json::from_str(&daemon.snapshot_response()).expect("snapshot");
+    assert_eq!(corrupt["config_persistence"]["state"], "corrupt");
+    let _ = fs::remove_file(socket);
+    let _ = fs::remove_file(config);
+    let _ = fs::remove_dir(directory);
+}
+
+#[test]
+fn snapshot_projects_identity_only_endpoint_binding_status() {
+    let socket = std::env::temp_dir().join(format!("mackes-bindings-{}.sock", std::process::id()));
+    let config = std::env::temp_dir().join(format!("mackes-bindings-{}.json5", std::process::id()));
+    fs::write(
+        &config,
+        "{schema_version: 1, endpoints: [{id: 'known', stable_id: 'known-input', direction: 'input'}, {id: 'both', stable_id: 'known-input'}, {id: 'legacy', name: 'Launch Control'}], projects: [], profiles: []}",
+    )
+    .expect("config");
+    let mut daemon = Daemon::bind(&socket).expect("daemon");
+    daemon.set_config_path(&config);
+    daemon
+        .register_input(Box::new(mackes_midi_engine::VirtualEndpoint::new(
+            "known-input",
+            "different runtime name",
+            mackes_midi_engine::EndpointDirection::Input,
+        )))
+        .expect("input");
+    daemon
+        .register_output(Box::new(mackes_midi_engine::VirtualEndpoint::new(
+            "known-input",
+            "different output name",
+            mackes_midi_engine::EndpointDirection::Output,
+        )))
+        .expect("output");
+    let snapshot: serde_json::Value =
+        serde_json::from_str(&daemon.snapshot_response()).expect("snapshot");
+    let bindings = snapshot["endpoint_bindings"].as_array().expect("bindings");
+    assert_eq!(bindings[0]["state"], "connected");
+    assert_eq!(bindings[1]["state"], "ambiguous");
+    assert!(bindings[1]["action"].as_str().expect("action").contains("direction"));
+    assert_eq!(bindings[2]["state"], "missing");
+    assert!(bindings[2]["action"].as_str().expect("action").contains("stable device identity"));
+    let _ = fs::remove_file(socket);
+    let _ = fs::remove_file(config);
+}
+
+#[test]
+fn binding_generation_rejects_delayed_output_after_rebind() {
+    let socket =
+        std::env::temp_dir().join(format!("mackes-generation-{}.sock", std::process::id()));
+    let mut daemon = Daemon::bind(&socket).expect("daemon");
+    daemon
+        .register_output(Box::new(mackes_midi_engine::VirtualEndpoint::new(
+            "bound-output",
+            "runtime name",
+            mackes_midi_engine::EndpointDirection::Output,
+        )))
+        .expect("output");
+    daemon
+        .set_profile_bindings(vec![("eventide.micropitch".into(), "bound-output".into())])
+        .expect("binding");
+    let generation = daemon.snapshot_response();
+    let current = serde_json::from_str::<serde_json::Value>(&generation).expect("snapshot")
+        ["binding_generation"]
+        .as_u64()
+        .expect("generation");
+    daemon.set_profile_bindings(Vec::new()).expect("unbind");
+    let event = mackes_domain::MidiEvent {
+        timestamp: mackes_domain::TimestampNanos::new(0),
+        sequence: 0,
+        endpoint: mackes_midi_engine::numeric_endpoint_id("bound-output").expect("endpoint"),
+        message: mackes_domain::MidiMessage::NoteOn {
+            channel: mackes_domain::MidiChannel::new(1).expect("channel"),
+            note: mackes_domain::SevenBit::new(1).expect("note"),
+            velocity: mackes_domain::SevenBit::new(1).expect("velocity"),
+        },
+    };
+    assert!(daemon
+        .send_event_to_endpoint_at_generation(event.endpoint, event.clone(), current)
+        .is_err());
+    daemon
+        .set_profile_bindings(vec![("eventide.micropitch".into(), "bound-output".into())])
+        .expect("rebind");
+    assert!(daemon
+        .send_event_to_endpoint_at_generation(event.endpoint, event, current + 2)
+        .is_ok());
+    let _ = fs::remove_file(socket);
+}
+
+#[test]
 fn endpoint_settle_policy_is_bounded_and_defaults_to_five_seconds() {
     assert_eq!(EndpointSettlePolicy::default().window_ms, 5_000);
     assert_eq!(EndpointSettlePolicy::default().deadline_ms(1_000), 6_000);
@@ -50,6 +165,12 @@ fn endpoint_settle_policy_is_bounded_and_defaults_to_five_seconds() {
     assert_eq!(policy.classify(1_000, 6_000, false), SettleState::TimedOut);
     assert_eq!(policy.classify(1_000, 6_000, true), SettleState::Ready);
     assert_eq!(policy.classify(1_000, 6_001, false), SettleState::TimedOut);
+}
+
+#[test]
+fn native_rescan_interval_is_explicitly_bounded() {
+    assert_eq!(NATIVE_RESCAN_INTERVAL_MS, 250);
+    const { assert!(NATIVE_RESCAN_INTERVAL_MS <= 250) };
 }
 
 #[test]
@@ -680,6 +801,9 @@ fn profile_destination_mapping_dispatches_to_the_unique_eventide_output() {
             mackes_midi_engine::EndpointDirection::Output,
         )))
         .expect("register eventide output");
+    daemon
+        .set_profile_bindings(vec![("eventide.micropitch".into(), "eventide-out".into())])
+        .expect("binding");
     daemon.mapping_store.active.push(mackes_config::ControlMapping {
         id: "eventide-map".into(),
         controller_profile: "launch-control-xl-mk2".into(),
@@ -723,17 +847,27 @@ fn eventide_bypass_button_toggles_once_per_press() {
         std::env::temp_dir().join(format!("mackes-eventide-toggle-{}.sock", std::process::id()));
     let mut daemon = Daemon::bind(&socket).expect("daemon");
     daemon
+        .register_input(Box::new(mackes_midi_engine::VirtualEndpoint::new(
+            "launch-input",
+            "Launch Control XL MIDI",
+            mackes_midi_engine::EndpointDirection::Input,
+        )))
+        .expect("register launch input");
+    daemon
         .register_output(Box::new(mackes_midi_engine::VirtualEndpoint::new(
             "eventide-out",
             "MicroPitch Pedal",
             mackes_midi_engine::EndpointDirection::Output,
         )))
         .expect("register eventide output");
+    daemon
+        .set_profile_bindings(vec![("eventide.micropitch".into(), "eventide-out".into())])
+        .expect("binding");
     daemon.mapping_store.active.push(mackes_config::ControlMapping {
         id: "eventide-bypass".into(),
         controller_profile: "launch-control-xl-mk2".into(),
         physical_control_id: "button-r1-c1".into(),
-        source_endpoint: "midir-in-stale-after-reconnect".into(),
+        source_endpoint: "launch-input".into(),
         source_kind: "note".into(),
         source_channel: 8,
         destination_channel: Some(6),
@@ -771,6 +905,12 @@ fn eventide_bypass_button_toggles_once_per_press() {
     assert_eq!(daemon.dispatch_registered(&event(0)), (0, 0));
     assert_eq!(daemon.dispatch_registered(&event(127)), (1, 0));
     assert_eq!(daemon.last_mapping_activity.as_ref().expect("active")["source_value"], 127);
+    let unrelated = mackes_domain::MidiEvent {
+        endpoint: mackes_midi_engine::numeric_endpoint_id("unrelated-controller")
+            .expect("endpoint"),
+        ..event(127)
+    };
+    assert_eq!(daemon.dispatch_registered(&unrelated), (0, 0));
     let _ = fs::remove_file(socket);
 }
 
@@ -792,7 +932,12 @@ fn device_cursor_rebinds_exact_destination_output() {
         {"name": "MidiSport 4x4"},
         {"name": "MicroPitch Pedal"}
     ]);
-    daemon.set_profile_bindings(vec![("lexicon.reflex".into(), "port-d".into())]).expect("binding");
+    daemon
+        .set_profile_bindings(vec![
+            ("lexicon.reflex".into(), "port-d".into()),
+            ("eventide.micropitch".into(), "eventide-out".into()),
+        ])
+        .expect("binding");
     let start = daemon.apply_assignment_request(mackes_ipc::AssignmentRequest {
         generation: 0,
         action: mackes_ipc::AssignmentAction::Start,
@@ -1179,6 +1324,7 @@ fn registered_dispatch_updates_activity_and_publishes_live_event() {
     assert_eq!(event_payload["last_activity"]["number"], 1);
     assert_eq!(event_payload["last_activity"]["value"], 2);
     assert_eq!(event_payload["last_activity"]["sequence"], 1);
+    assert_eq!(event_payload["config_persistence"]["state"], "unconfigured");
     let mut burst_event = event.clone();
     burst_event.sequence = 2;
     assert_eq!(daemon.dispatch_registered(&burst_event), (0, 0));
@@ -1398,6 +1544,10 @@ fn command_acknowledgments_are_stable_and_operation_specific() {
     assert_eq!(
         command_ack(Command::Health, Health::Degraded, 11, &[], None, &[]),
         "{\"ok\":true,\"generation\":11,\"health\":\"degraded\"}\n"
+    );
+    assert_eq!(
+        command_ack(Command::Rescan, Health::Ready, 12, &[], None, &[]),
+        "{\"ok\":true,\"generation\":12,\"rescan\":\"scheduled\"}\n"
     );
 }
 
@@ -1764,6 +1914,7 @@ fn led_surface_restores_owner_colors_from_mappings_and_exposes_zero_send() {
     let snapshot: serde_json::Value =
         serde_json::from_str(daemon.snapshot_response().trim()).expect("snapshot");
     assert_eq!(snapshot["led"]["sent"], 0);
+    assert_eq!(snapshot["led"]["retries"], 0);
     assert_eq!(snapshot["led"]["template"], 8);
     assert_eq!(
         snapshot["led"]["last_error"].as_str(),
@@ -1803,6 +1954,7 @@ fn led_surface_restores_owner_colors_from_mappings_and_exposes_zero_send() {
         serde_json::from_str(daemon.snapshot_response().trim()).expect("restored");
     assert!(restored["led"]["sent"].as_u64().unwrap_or(0) > 0);
     assert_eq!(restored["led"]["template"], 8);
+    assert_eq!(restored["led"]["retries"], 0);
     assert_eq!(restored["led"]["target_id"].as_str(), Some("xl-midi"));
     let first_sent = restored["led"]["sent"].as_u64().unwrap();
     let _ = daemon.snapshot_response();

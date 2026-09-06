@@ -52,6 +52,61 @@ pub(crate) fn set_default_provider_cli(
     mackes_config::save(path, &updated, 10).map_err(|error| error.to_string())
 }
 
+pub(crate) fn migrate_config_cli(path: &str, dry_run: bool, json: bool) -> Result<String, String> {
+    let migrated = mackes_config::migrate_file(std::path::Path::new(path), dry_run, 10)?;
+    if json {
+        Ok(serde_json::json!({"ok": true, "dry_run": dry_run, "migrated": migrated}).to_string())
+    } else if dry_run {
+        Ok(format!("migration plan: {migrated} endpoint references would change"))
+    } else {
+        Ok(format!("migration applied: {migrated} endpoint references changed"))
+    }
+}
+
+pub(crate) fn rescan_cli(json: bool) -> String {
+    let response = daemon_request(mackes_ipc::Command::Rescan, b"{}");
+    if json {
+        return response;
+    }
+    "native endpoint rescan scheduled".into()
+}
+
+pub(crate) fn pipedal_mappings_cli(path: &str, json: bool) -> Result<String, String> {
+    let document =
+        mackes_config::load(std::path::Path::new(path)).map_err(|error| error.to_string())?;
+    let mappings = &document.settings.pipedal_mappings;
+    let result = serde_json::json!({
+        "ok": true,
+        "version": mappings.version,
+        "count": mappings.mappings.len(),
+        "mappings": mappings.mappings,
+    });
+    if json {
+        Ok(result.to_string())
+    } else {
+        let rows = mappings
+            .mappings
+            .iter()
+            .map(|mapping| {
+                format!(
+                    "{} -> {}:{}{}",
+                    mapping.physical_control_id,
+                    mapping.plugin_uri,
+                    mapping.symbol,
+                    mapping.scope.as_deref().map_or(String::new(), |scope| format!(" [{scope}]"))
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("\n  ");
+        let suffix = if rows.is_empty() { String::new() } else { format!("\n  {rows}") };
+        Ok(format!(
+            "PiPedal mappings: version={}, count={}",
+            mappings.version,
+            mappings.mappings.len()
+        ) + &suffix)
+    }
+}
+
 pub(crate) fn register_endpoint_cli(
     path: &str,
     id: &str,
@@ -68,6 +123,9 @@ pub(crate) fn register_endpoint_cli(
             })
             .transpose()
     };
+    let logical_port = option("logical-port")
+        .map(|value| value.parse::<u8>().map_err(|_| format!("invalid logical port '{value}'")))
+        .transpose()?;
     let document = mackes_config::load(std::path::Path::new(path)).map_err(|e| e.to_string())?;
     let endpoint = mackes_config::EndpointAlias {
         id: id.to_owned(),
@@ -76,6 +134,9 @@ pub(crate) fn register_endpoint_cli(
         vendor_id: parse_hex("vendor-id")?,
         product_id: parse_hex("product-id")?,
         serial: option("serial"),
+        logical_port,
+        direction: option("direction"),
+        role: option("role"),
     };
     let updated = mackes_config::register_endpoint(&document, endpoint)?;
     mackes_config::save(std::path::Path::new(path), &updated, 10).map_err(|e| e.to_string())
@@ -471,6 +532,22 @@ pub(crate) fn daemon_command(command: mackes_ipc::Command) -> String {
     daemon_request(command, b"{}")
 }
 
+pub(crate) fn mappings_cli(json: bool) -> String {
+    let payload = serde_json::json!({
+        "operation": "Snapshot",
+        "generation": 0,
+    });
+    let response = daemon_request(
+        mackes_ipc::Command::Mappings,
+        &serde_json::to_vec(&payload).unwrap_or_default(),
+    );
+    if json {
+        response
+    } else {
+        format!("daemon mappings={response}")
+    }
+}
+
 pub(crate) fn daemon_request(command: mackes_ipc::Command, payload: &[u8]) -> String {
     let socket = std::env::var("MACKES_MIDI_MATRIX_SOCKET")
         .or_else(|_| std::env::var("MACKES_SOCKET"))
@@ -600,6 +677,21 @@ pub(crate) fn project_observability(
     diagnostics: &mut mackes_tui::DiagnosticsState,
     payload: &serde_json::Value,
 ) {
+    if let Some(persistence) = payload.get("config_persistence") {
+        let state = persistence.get("state").and_then(serde_json::Value::as_str);
+        if state.is_some_and(|state| state != "ready") {
+            diagnostics.push(mackes_tui::HealthDiagnostic {
+                subject: "configuration".into(),
+                severity: mackes_tui::MonitorSeverity::Warning,
+                reason: format!("configuration persistence is {}", state.unwrap_or("unknown")),
+                remediation: persistence
+                    .get("action")
+                    .and_then(serde_json::Value::as_str)
+                    .unwrap_or("check configuration persistence")
+                    .into(),
+            });
+        }
+    }
     if let Some(latest) =
         payload.get("audit").and_then(serde_json::Value::as_array).and_then(|audit| audit.first())
     {

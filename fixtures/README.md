@@ -10,3 +10,9 @@ format. Bindings must be explicit and are limited to `panic`, `next_scene`, and
 
 `config-scenes-valid.json5` is a redacted two-scene project fixture for testing
 scene navigation, active-scene persistence, and safe scene planning.
+
+`device-identities.json5` demonstrates durable serial-less operator bindings,
+direction separation, and all four logical MIDISPORT ports. Its IDs are synthetic.
+
+`eventide-migration-2026-09-05.json5` is a synthetic sixteen-row migration fixture
+used to verify that legacy Eventide mappings preserve controls, parameters, and enabled state.

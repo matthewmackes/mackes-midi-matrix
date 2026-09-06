@@ -1,0 +1,15 @@
+[package]
+name = "mackes-pipedal-adapter"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+mackes-pipedal-connector = { path = "../pipedal-connector" }
+mackes-ipc = { path = "../ipc" }
+serde_json.workspace = true
+serde.workspace = true
+
+[lints]
+workspace = true

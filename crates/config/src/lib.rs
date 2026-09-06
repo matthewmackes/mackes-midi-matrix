@@ -3,7 +3,8 @@
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
-    fmt, fs, io,
+    fmt, fs,
+    io::{self, Write},
     path::{Path, PathBuf},
     time::{SystemTime, UNIX_EPOCH},
 };
@@ -493,24 +494,48 @@ pub fn save_backup(path: &Path, payload: &[u8], manifest: &BackupManifest) -> Re
     let stamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_nanos();
     let payload_tmp = path.with_extension(format!("payload.{stamp}.tmp"));
     let manifest_tmp = path.with_extension(format!("manifest.{stamp}.tmp"));
-    fs::write(&payload_tmp, payload).map_err(|error| error.to_string())?;
-    let encoded = serde_json::to_vec_pretty(manifest).map_err(|error| error.to_string())?;
-    fs::write(&manifest_tmp, encoded).map_err(|error| error.to_string())?;
-    fs::File::open(&payload_tmp)
-        .and_then(|file| file.sync_all())
-        .map_err(|error| error.to_string())?;
-    fs::File::open(&manifest_tmp)
-        .and_then(|file| file.sync_all())
-        .map_err(|error| error.to_string())?;
-    fs::rename(&payload_tmp, path).map_err(|error| error.to_string())?;
+    let cleanup = || {
+        let _ = fs::remove_file(&payload_tmp);
+        let _ = fs::remove_file(&manifest_tmp);
+        let _ = fs::remove_file(path);
+        let _ = fs::remove_file(&manifest_path);
+    };
+    if let Err(error) = fs::write(&payload_tmp, payload) {
+        cleanup();
+        return Err(error.to_string());
+    }
+    let encoded = match serde_json::to_vec_pretty(manifest) {
+        Ok(encoded) => encoded,
+        Err(error) => {
+            cleanup();
+            return Err(error.to_string());
+        }
+    };
+    if let Err(error) = fs::write(&manifest_tmp, encoded)
+        .and_then(|()| fs::File::open(&payload_tmp)?.sync_all())
+        .and_then(|()| fs::File::open(&manifest_tmp)?.sync_all())
+    {
+        cleanup();
+        return Err(error.to_string());
+    }
+    if let Err(error) = fs::rename(&payload_tmp, path) {
+        cleanup();
+        return Err(error.to_string());
+    }
     let parent = path.parent().unwrap_or_else(|| Path::new("."));
-    fs::File::open(parent)
-        .and_then(|directory| directory.sync_all())
-        .map_err(|error| error.to_string())?;
-    fs::rename(&manifest_tmp, &manifest_path).map_err(|error| error.to_string())?;
-    fs::File::open(parent)
-        .and_then(|directory| directory.sync_all())
-        .map_err(|error| error.to_string())
+    if let Err(error) = fs::File::open(parent).and_then(|directory| directory.sync_all()) {
+        cleanup();
+        return Err(error.to_string());
+    }
+    if let Err(error) = fs::rename(&manifest_tmp, &manifest_path) {
+        cleanup();
+        return Err(error.to_string());
+    }
+    if let Err(error) = fs::File::open(parent).and_then(|directory| directory.sync_all()) {
+        cleanup();
+        return Err(error.to_string());
+    }
+    Ok(())
 }
 
 /// Loads and verifies a backup payload and its manifest sidecar.
@@ -607,9 +632,17 @@ pub fn restore_backup(
             status: manifest.status,
         });
     }
-    let temporary = target.with_extension("restore.tmp");
-    fs::write(&temporary, &payload).map_err(|error| error.to_string())?;
-    if let Err(error) = fs::rename(&temporary, target) {
+    cleanup_stale_restore_temporary_files(target).map_err(|error| error.to_string())?;
+    let parent = target.parent().unwrap_or_else(|| Path::new("."));
+    let file_name = target.file_name().and_then(|name| name.to_str()).unwrap_or("config");
+    let temporary = parent.join(format!(".{file_name}.restore.{}.tmp", std::process::id()));
+    let write_result = (|| -> io::Result<()> {
+        fs::write(&temporary, &payload)?;
+        fs::File::open(&temporary)?.sync_all()?;
+        fs::rename(&temporary, target)?;
+        fs::File::open(parent)?.sync_all()
+    })();
+    if let Err(error) = write_result {
         let _ = fs::remove_file(&temporary);
         return Err(error.to_string());
     }
@@ -641,6 +674,35 @@ pub struct Settings {
     /// Optional imported Launch Control XL template assignments.
     #[serde(default)]
     pub launch_control_template: Option<LaunchControlTemplateConfig>,
+    /// Versioned stable `PiPedal` mappings; runtime instance IDs are deliberately excluded.
+    #[serde(default)]
+    pub pipedal_mappings: PiPedalMappingConfig,
+}
+
+/// Persisted `PiPedal` mapping set using plugin URI and parameter symbol identity.
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct PiPedalMappingConfig {
+    /// Mapping format version.
+    pub version: u16,
+    /// Bounded reusable mappings.
+    #[serde(default)]
+    pub mappings: Vec<PiPedalMapping>,
+}
+
+/// One stable `PiPedal` mapping, independent of a live plugin instance ID.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct PiPedalMapping {
+    /// Stable physical control identity.
+    pub physical_control_id: String,
+    /// Stable plugin URI.
+    pub plugin_uri: String,
+    /// Stable parameter symbol.
+    pub symbol: String,
+    /// Optional scope for duplicate plugin instances.
+    #[serde(default)]
+    pub scope: Option<String>,
 }
 
 /// Serializable Launch Control XL assignment map used by the faceplate.
@@ -988,6 +1050,170 @@ pub struct EndpointAlias {
     /// Optional serial, never logged.
     #[serde(default)]
     pub serial: Option<String>,
+    /// Stable logical port index within a multi-port device.
+    #[serde(default)]
+    pub logical_port: Option<u8>,
+    /// Endpoint direction (`input` or `output`), separate for each port.
+    #[serde(default)]
+    pub direction: Option<String>,
+    /// Transport role (`midi` or `hui`); HUI is never a controller binding.
+    #[serde(default)]
+    pub role: Option<String>,
+}
+
+/// Rewrites only endpoint references with one exact verified alias match.
+///
+/// Name-only and ambiguous references are deliberately left unchanged.
+///
+/// # Errors
+/// Returns an error when more than one verified alias matches a reference.
+pub fn migrate_verified_endpoint_references(
+    document: &mut ConfigDocument,
+) -> Result<usize, String> {
+    let aliases = document
+        .endpoints
+        .iter()
+        .filter_map(|alias| alias.stable_id.as_deref().map(|stable| (stable, alias.id.as_str())))
+        .collect::<Vec<_>>();
+    let resolve = |value: &mut String| -> Result<usize, String> {
+        let matches = aliases.iter().filter(|(stable, _)| *stable == value).collect::<Vec<_>>();
+        match matches.as_slice() {
+            [] => Ok(0),
+            [(_, alias)] => {
+                if value == *alias {
+                    Ok(0)
+                } else {
+                    *value = (*alias).to_owned();
+                    Ok(1)
+                }
+            }
+            _ => Err(format!("endpoint reference '{value}' has ambiguous verified aliases")),
+        }
+    };
+    let mut migrated = 0;
+    for mapping in &mut document.control_mappings {
+        migrated += resolve(&mut mapping.source_endpoint)?;
+        migrated += resolve(&mut mapping.destination_endpoint)?;
+    }
+    for mapping in &mut document.learned_mappings {
+        migrated += resolve(&mut mapping.source_alias)?;
+    }
+    Ok(migrated)
+}
+
+/// Migrates one configuration file, or returns the planned count without mutation.
+///
+/// # Errors
+/// Returns an error when loading, migration, validation, backup rotation, or atomic replacement fails.
+pub fn migrate_file(path: &Path, dry_run: bool, backup_count: usize) -> Result<usize, String> {
+    let text = fs::read_to_string(path).map_err(|error| error.to_string())?;
+    let mut document: ConfigDocument = json5::from_str(&text).map_err(|error| error.to_string())?;
+    if document.schema_version != CURRENT_SCHEMA_VERSION {
+        return Err(format!("unsupported schema version {}", document.schema_version));
+    }
+    let migrated = migrate_verified_endpoint_references(&mut document)?;
+    validate(&document)?;
+    if !dry_run && migrated > 0 {
+        save(path, &document, backup_count).map_err(|error| error.to_string())?;
+    }
+    Ok(migrated)
+}
+
+/// Runtime identity evidence supplied by a discovery backend.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct EndpointObservation {
+    /// Backend-generated runtime endpoint ID, never persisted as identity.
+    pub runtime_id: String,
+    /// Verified USB vendor ID.
+    pub vendor_id: Option<u16>,
+    /// Verified USB product ID.
+    pub product_id: Option<u16>,
+    /// Verified USB serial, when present.
+    pub serial: Option<String>,
+    /// Logical port within the physical device.
+    pub logical_port: u8,
+    /// Input or output.
+    pub direction: String,
+    /// MIDI or HUI transport role.
+    pub role: String,
+}
+
+/// Fail-closed result of resolving one persisted alias against runtime evidence.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum EndpointResolution {
+    /// Exactly one runtime endpoint is proven to be the requested endpoint.
+    Matched(String),
+    /// No runtime endpoint is proven to match.
+    Missing,
+    /// More than one endpoint satisfies the persisted identity.
+    Ambiguous(Vec<String>),
+}
+
+/// Resolves a durable alias without using display names, MIDI tuples, or runtime addresses.
+#[must_use]
+pub fn resolve_endpoint_alias(
+    alias: &EndpointAlias,
+    observations: &[EndpointObservation],
+) -> EndpointResolution {
+    let candidates = observations.iter().filter(|observation| {
+        let port_matches = alias.logical_port.is_none_or(|port| port == observation.logical_port);
+        let direction_matches =
+            alias.direction.as_deref().is_none_or(|direction| direction == observation.direction);
+        let role_matches = alias.role.as_deref().is_none_or(|role| role == observation.role);
+        let serial_matches =
+            alias.serial.as_ref().is_some_and(|serial| observation.serial.as_ref() == Some(serial));
+        let usb_matches = alias.vendor_id.is_some()
+            && alias.vendor_id == observation.vendor_id
+            && alias.product_id == observation.product_id;
+        let operator_binding = alias.stable_id.as_deref() == Some(observation.runtime_id.as_str());
+        port_matches
+            && direction_matches
+            && role_matches
+            && if alias.serial.is_some() {
+                serial_matches
+            } else {
+                usb_matches && (alias.stable_id.is_none() || operator_binding)
+            }
+    });
+    let ids = candidates.map(|observation| observation.runtime_id.clone()).collect::<Vec<_>>();
+    match ids.as_slice() {
+        [] => EndpointResolution::Missing,
+        [id] if alias.serial.is_none() && alias.stable_id.is_none() => EndpointResolution::Missing,
+        [id] => EndpointResolution::Matched(id.clone()),
+        _ => EndpointResolution::Ambiguous(ids),
+    }
+}
+
+fn validate_endpoint_alias(endpoint: &EndpointAlias) -> Result<(), String> {
+    if endpoint.id.trim().is_empty() || endpoint.id.len() > 96 {
+        return Err("endpoint alias identity is invalid".into());
+    }
+    if endpoint.direction.as_deref().is_some_and(|value| !matches!(value, "input" | "output")) {
+        return Err(format!("endpoint '{}' has invalid direction", endpoint.id));
+    }
+    if endpoint.stable_id.as_deref().is_some_and(|value| value.trim() != value || value.is_empty())
+    {
+        return Err(format!("endpoint '{}' stable identity is invalid", endpoint.id));
+    }
+    if endpoint.logical_port.is_some_and(|port| port > 15) {
+        return Err(format!("endpoint '{}' logical port is out of range", endpoint.id));
+    }
+    if endpoint.vendor_id.is_some() != endpoint.product_id.is_some() {
+        return Err(format!(
+            "endpoint '{}' must provide vendor and product IDs together",
+            endpoint.id
+        ));
+    }
+    if endpoint.role.as_deref().is_some_and(|value| !matches!(value, "midi" | "hui")) {
+        return Err(format!("endpoint '{}' has invalid role", endpoint.id));
+    }
+    if endpoint.role.as_deref() == Some("hui") && endpoint.direction.as_deref() != Some("input") {
+        return Err(format!("endpoint '{}' HUI bindings must be input-only", endpoint.id));
+    }
+    if endpoint.serial.as_deref().is_some_and(|serial| serial.trim().is_empty()) {
+        return Err(format!("endpoint '{}' serial must not be blank", endpoint.id));
+    }
+    Ok(())
 }
 
 /// Registers or updates a portable physical MIDI endpoint alias.
@@ -1014,6 +1240,7 @@ pub fn register_endpoint(
     {
         return Err("endpoint registration needs a name or hardware identity".into());
     }
+    validate_endpoint_alias(&endpoint)?;
     let mut candidate = document.clone();
     candidate.endpoints.retain(|item| item.id != endpoint.id);
     candidate.endpoints.push(endpoint);
@@ -1700,6 +1927,9 @@ pub fn validate(document: &ConfigDocument) -> Result<(), String> {
         return Err(format!("schema_version must be {CURRENT_SCHEMA_VERSION}"));
     }
     unique(document.endpoints.iter().map(|entry| entry.id.as_str()), "endpoint")?;
+    for endpoint in &document.endpoints {
+        validate_endpoint_alias(endpoint)?;
+    }
     unique(document.projects.iter().map(|entry| entry.id.as_str()), "project")?;
     unique(document.profiles.iter().map(|entry| entry.id.as_str()), "profile")?;
     unique(document.setlists.iter().map(|entry| entry.id.as_str()), "setlist")?;
@@ -1797,6 +2027,27 @@ pub fn validate(document: &ConfigDocument) -> Result<(), String> {
         }
     }
     let mut capabilities = std::collections::BTreeSet::new();
+    let pipedal = &document.settings.pipedal_mappings;
+    if pipedal.version > 1 || pipedal.mappings.len() > 128 {
+        return Err("PiPedal mapping version or count is out of range".into());
+    }
+    let mut pipedal_physical = std::collections::BTreeSet::new();
+    let mut pipedal_targets = std::collections::BTreeSet::new();
+    for mapping in &pipedal.mappings {
+        if mapping.physical_control_id.trim().is_empty()
+            || mapping.plugin_uri.trim().is_empty()
+            || mapping.symbol.trim().is_empty()
+            || mapping.scope.as_deref().is_some_and(|scope| scope.trim().is_empty())
+            || !pipedal_physical.insert(mapping.physical_control_id.as_str())
+            || !pipedal_targets.insert((
+                mapping.plugin_uri.as_str(),
+                mapping.symbol.as_str(),
+                mapping.scope.as_deref(),
+            ))
+        {
+            return Err("PiPedal mapping identity is invalid or duplicated".into());
+        }
+    }
     for entry in &document.settings.default_providers {
         if entry.capability.is_empty()
             || entry.capability != entry.capability.trim().to_ascii_lowercase()
@@ -2034,6 +2285,10 @@ pub fn save(
     document: &ConfigDocument,
     backup_count: usize,
 ) -> Result<(), ConfigError> {
+    let _lock = SaveLock::acquire(path)
+        .map_err(|source| ConfigError::Io { path: path.to_owned(), source })?;
+    cleanup_stale_temporary_files(path)
+        .map_err(|source| ConfigError::Io { path: path.to_owned(), source })?;
     validate(document)
         .map_err(|message| ConfigError::Semantic { path: path.to_owned(), message })?;
     if path.exists() {
@@ -2050,16 +2305,63 @@ pub fn save(
     let serialized = serde_json::to_string_pretty(document).map_err(|error| {
         ConfigError::Parse { path: path.to_owned(), message: error.to_string() }
     })?;
-    fs::write(&temp, format!("{serialized}\n"))
-        .map_err(|source| ConfigError::Replace { path: temp.clone(), source })?;
-    fs::File::open(&temp)
-        .and_then(|file| file.sync_all())
-        .map_err(|source| ConfigError::Replace { path: temp.clone(), source })?;
-    fs::rename(&temp, path)
-        .map_err(|source| ConfigError::Replace { path: path.to_owned(), source })?;
-    fs::File::open(parent)
-        .and_then(|directory| directory.sync_all())
-        .map_err(|source| ConfigError::Replace { path: parent.to_owned(), source })
+    let write_result = (|| -> io::Result<()> {
+        fs::write(&temp, format!("{serialized}\n"))?;
+        fs::File::open(&temp)?.sync_all()?;
+        fs::rename(&temp, path)?;
+        fs::File::open(parent)?.sync_all()
+    })();
+    if let Err(source) = write_result {
+        let _ = fs::remove_file(&temp);
+        return Err(ConfigError::Replace { path: path.to_owned(), source });
+    }
+    Ok(())
+}
+
+struct SaveLock {
+    path: PathBuf,
+}
+
+impl SaveLock {
+    fn acquire(path: &Path) -> io::Result<Self> {
+        let lock_path = path.with_extension("json5.lock");
+        match fs::OpenOptions::new().write(true).create_new(true).open(&lock_path) {
+            Ok(mut lock) => {
+                writeln!(lock, "{}", std::process::id())?;
+            }
+            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {
+                let owner = fs::read_to_string(&lock_path)
+                    .ok()
+                    .and_then(|text| text.trim().parse::<u32>().ok());
+                let Some(owner) = owner else { return Err(error) };
+                let alive = {
+                    #[cfg(target_os = "linux")]
+                    {
+                        Path::new("/proc").join(owner.to_string()).exists()
+                    }
+                    #[cfg(not(target_os = "linux"))]
+                    {
+                        owner == std::process::id()
+                    }
+                };
+                if alive {
+                    return Err(error);
+                }
+                fs::remove_file(&lock_path)?;
+                let mut lock =
+                    fs::OpenOptions::new().write(true).create_new(true).open(&lock_path)?;
+                writeln!(lock, "{}", std::process::id())?;
+            }
+            Err(error) => return Err(error),
+        }
+        Ok(Self { path: lock_path })
+    }
+}
+
+impl Drop for SaveLock {
+    fn drop(&mut self) {
+        let _ = fs::remove_file(&self.path);
+    }
 }
 
 /// Persists an authoritative mapping store through the validated atomic config writer.
@@ -2091,13 +2393,21 @@ pub fn export_portable(
     fs::create_dir_all(directory)
         .map_err(|source| ConfigError::Io { path: directory.to_owned(), source })?;
     let target = directory.join("config.json5");
-    let temporary = directory.join("config.json5.tmp");
+    let stamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_nanos();
+    let temporary =
+        directory.join(format!(".config.json5.export.{}.{}.tmp", std::process::id(), stamp));
     let encoded = serde_json::to_vec_pretty(document)
         .map_err(|error| ConfigError::Parse { path: target.clone(), message: error.to_string() })?;
-    fs::write(&temporary, encoded)
-        .map_err(|source| ConfigError::Io { path: temporary.clone(), source })?;
-    fs::rename(&temporary, &target)
-        .map_err(|source| ConfigError::Io { path: target.clone(), source })?;
+    let result = (|| -> io::Result<()> {
+        fs::write(&temporary, encoded)?;
+        fs::File::open(&temporary)?.sync_all()?;
+        fs::rename(&temporary, &target)?;
+        fs::File::open(directory)?.sync_all()
+    })();
+    if let Err(source) = result {
+        let _ = fs::remove_file(&temporary);
+        return Err(ConfigError::Io { path: target, source });
+    }
     Ok(target)
 }
 
@@ -2129,6 +2439,37 @@ fn rotate_backups(path: &Path, backup_count: usize) -> io::Result<()> {
         }
     }
     fs::copy(path, path.with_extension("json5.bak1"))?;
+    let parent = path.parent().unwrap_or_else(|| Path::new("."));
+    fs::File::open(parent).and_then(|directory| directory.sync_all())
+}
+
+fn cleanup_stale_temporary_files(path: &Path) -> io::Result<()> {
+    let parent = path.parent().unwrap_or_else(|| Path::new("."));
+    let file_name = path.file_name().and_then(|name| name.to_str()).unwrap_or("config.json5");
+    let prefix = format!(".{file_name}.");
+    for entry in fs::read_dir(parent)? {
+        let entry = entry?;
+        let name = entry.file_name();
+        let name = name.to_string_lossy();
+        if name.starts_with(&prefix) && name.ends_with(".tmp") && entry.file_type()?.is_file() {
+            fs::remove_file(entry.path())?;
+        }
+    }
+    Ok(())
+}
+
+fn cleanup_stale_restore_temporary_files(path: &Path) -> io::Result<()> {
+    let parent = path.parent().unwrap_or_else(|| Path::new("."));
+    let file_name = path.file_name().and_then(|name| name.to_str()).unwrap_or("config");
+    let prefix = format!(".{file_name}.restore.");
+    for entry in fs::read_dir(parent)? {
+        let entry = entry?;
+        let name = entry.file_name();
+        let name = name.to_string_lossy();
+        if name.starts_with(&prefix) && name.ends_with(".tmp") && entry.file_type()?.is_file() {
+            fs::remove_file(entry.path())?;
+        }
+    }
     Ok(())
 }
 
@@ -2146,6 +2487,7 @@ mod tests {
                 learn_input_alias: None,
                 dashboard_midi_bindings: Vec::new(),
                 launch_control_template: None,
+                pipedal_mappings: PiPedalMappingConfig::default(),
             },
             endpoints: vec![],
             projects: vec![Project {
@@ -2181,11 +2523,169 @@ mod tests {
             vendor_id: None,
             product_id: None,
             serial: None,
+            logical_port: None,
+            direction: None,
+            role: None,
         });
         assert!(validate(&value).is_ok());
         let encoded = serde_json::to_string(&value).expect("encode");
         let decoded: ConfigDocument = serde_json::from_str(&encoded).expect("decode");
         assert_eq!(decoded.profiles[0].endpoint_alias.as_deref(), Some("reflex-port"));
+    }
+
+    #[test]
+    fn endpoint_identity_preserves_logical_port_and_direction() {
+        let mut value = document();
+        value.endpoints.push(EndpointAlias {
+            id: "midisport-port-4-in".into(),
+            stable_id: None,
+            name: Some("MIDISPORT 4x4 MIDI 4".into()),
+            vendor_id: Some(0x0763),
+            product_id: Some(0x1021),
+            serial: None,
+            logical_port: Some(3),
+            direction: Some("input".into()),
+            role: Some("midi".into()),
+        });
+        assert!(validate(&value).is_ok());
+        let encoded = serde_json::to_string(&value).expect("encode");
+        let decoded: ConfigDocument = serde_json::from_str(&encoded).expect("decode");
+        assert_eq!(decoded.endpoints[0].logical_port, Some(3));
+        assert_eq!(decoded.endpoints[0].direction.as_deref(), Some("input"));
+    }
+
+    #[test]
+    fn endpoint_identity_rejects_invalid_direction_and_hui_output() {
+        let mut value = document();
+        value.endpoints.push(EndpointAlias {
+            id: "bad".into(),
+            stable_id: None,
+            name: Some("controller".into()),
+            vendor_id: None,
+            product_id: None,
+            serial: None,
+            logical_port: Some(0),
+            direction: Some("sideways".into()),
+            role: Some("midi".into()),
+        });
+        assert!(validate(&value).is_err());
+        value.endpoints[0].direction = Some("output".into());
+        value.endpoints[0].role = Some("hui".into());
+        assert!(validate(&value).is_err());
+    }
+
+    #[test]
+    fn endpoint_identity_requires_verified_usb_pairing() {
+        let mut value = document();
+        value.endpoints.push(EndpointAlias {
+            id: "partial-usb".into(),
+            stable_id: Some(" volatile ".into()),
+            name: Some("controller".into()),
+            vendor_id: Some(1),
+            product_id: None,
+            serial: None,
+            logical_port: Some(0),
+            direction: Some("input".into()),
+            role: Some("midi".into()),
+        });
+        assert!(validate(&value).is_err());
+        value.endpoints[0].stable_id = Some("stable-endpoint".into());
+        value.endpoints[0].product_id = Some(2);
+        assert!(validate(&value).is_ok());
+    }
+
+    #[test]
+    fn endpoint_resolution_prefers_serial_and_rejects_name_only_matches() {
+        let alias = EndpointAlias {
+            id: "eventide-in".into(),
+            stable_id: None,
+            name: Some("MicroPitch".into()),
+            vendor_id: Some(0x1b12),
+            product_id: Some(0x003a),
+            serial: Some("A".into()),
+            logical_port: Some(0),
+            direction: Some("input".into()),
+            role: Some("midi".into()),
+        };
+        let observation = |runtime_id: &str, serial: Option<&str>| EndpointObservation {
+            runtime_id: runtime_id.into(),
+            vendor_id: Some(0x1b12),
+            product_id: Some(0x003a),
+            serial: serial.map(str::to_owned),
+            logical_port: 0,
+            direction: "input".into(),
+            role: "midi".into(),
+        };
+        assert_eq!(
+            resolve_endpoint_alias(&alias, &[observation("new-address", Some("A"))]),
+            EndpointResolution::Matched("new-address".into())
+        );
+        assert_eq!(
+            resolve_endpoint_alias(&alias, &[observation("wrong", Some("B"))]),
+            EndpointResolution::Missing
+        );
+    }
+
+    #[test]
+    fn serialless_resolution_requires_operator_binding_and_detects_duplicates() {
+        let mut alias = EndpointAlias {
+            id: "midisport-4-in".into(),
+            stable_id: None,
+            name: Some("MIDISPORT 4x4".into()),
+            vendor_id: Some(0x0763),
+            product_id: Some(0x1021),
+            serial: None,
+            logical_port: Some(3),
+            direction: Some("input".into()),
+            role: Some("midi".into()),
+        };
+        let observation = |runtime_id: &str| EndpointObservation {
+            runtime_id: runtime_id.into(),
+            vendor_id: Some(0x0763),
+            product_id: Some(0x1021),
+            serial: None,
+            logical_port: 3,
+            direction: "input".into(),
+            role: "midi".into(),
+        };
+        assert_eq!(
+            resolve_endpoint_alias(&alias, &[observation("other")]),
+            EndpointResolution::Missing
+        );
+        assert_eq!(
+            resolve_endpoint_alias(&alias, &[observation("bound-runtime"), observation("other")]),
+            EndpointResolution::Ambiguous(vec!["bound-runtime".into(), "other".into()])
+        );
+        alias.stable_id = Some("bound-runtime".into());
+        assert_eq!(
+            resolve_endpoint_alias(&alias, &[observation("bound-runtime")]),
+            EndpointResolution::Matched("bound-runtime".into())
+        );
+    }
+
+    #[test]
+    fn replacement_device_with_different_serial_never_reuses_assignment() {
+        let alias = EndpointAlias {
+            id: "controller".into(),
+            stable_id: None,
+            name: Some("same display name".into()),
+            vendor_id: Some(1),
+            product_id: Some(2),
+            serial: Some("original".into()),
+            logical_port: Some(0),
+            direction: Some("input".into()),
+            role: Some("midi".into()),
+        };
+        let replacement = EndpointObservation {
+            runtime_id: "renumbered".into(),
+            vendor_id: Some(1),
+            product_id: Some(2),
+            serial: Some("replacement".into()),
+            logical_port: 0,
+            direction: "input".into(),
+            role: "midi".into(),
+        };
+        assert_eq!(resolve_endpoint_alias(&alias, &[replacement]), EndpointResolution::Missing);
     }
 
     #[test]
@@ -2286,6 +2786,9 @@ mod tests {
             vendor_id: None,
             product_id: None,
             serial: None,
+            logical_port: None,
+            direction: None,
+            role: None,
         });
         let selected = set_learn_input_alias(&value, " launch-control ").expect("input");
         assert_eq!(selected.settings.learn_input_alias.as_deref(), Some("launch-control"));
@@ -2332,6 +2835,9 @@ mod tests {
             vendor_id: None,
             product_id: None,
             serial: None,
+            logical_port: None,
+            direction: None,
+            role: None,
         });
         let mapping = LearnedMapping {
             source_alias: "input".into(),
@@ -2498,6 +3004,70 @@ mod tests {
     }
 
     #[test]
+    fn save_removes_only_stale_temporary_files_for_its_target() {
+        let path =
+            std::env::temp_dir().join(format!("mackes-stale-temp-{}.json5", std::process::id()));
+        let stale = path
+            .with_file_name(format!(".{}.123.tmp", path.file_name().unwrap().to_string_lossy()));
+        let unrelated = path.with_file_name(format!(".other-{}.tmp", std::process::id()));
+        fs::write(&stale, b"stale").expect("stale");
+        fs::write(&unrelated, b"unrelated").expect("unrelated");
+        save(&path, &document(), 0).expect("save");
+        assert!(!stale.exists());
+        assert!(unrelated.exists());
+        let _ = fs::remove_file(&path);
+        let _ = fs::remove_file(unrelated);
+    }
+
+    #[test]
+    fn save_rejects_a_concurrent_writer_and_releases_lock() {
+        let path =
+            std::env::temp_dir().join(format!("mackes-save-lock-{}.json5", std::process::id()));
+        let lock = path.with_extension("json5.lock");
+        let document = document();
+        fs::write(&lock, std::process::id().to_string()).expect("lock fixture");
+        assert!(save(&path, &document, 0).is_err());
+        fs::remove_file(&lock).expect("remove lock fixture");
+        save(&path, &document, 0).expect("lock released");
+        assert!(!lock.exists());
+        let _ = fs::remove_file(&path);
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn save_reclaims_a_lock_owned_by_a_dead_process() {
+        let path =
+            std::env::temp_dir().join(format!("mackes-stale-lock-{}.json5", std::process::id()));
+        let lock = path.with_extension("json5.lock");
+        fs::write(&lock, b"4294967294\n").expect("stale lock fixture");
+        save(&path, &document(), 0).expect("stale lock reclaimed");
+        assert!(!lock.exists());
+        let _ = fs::remove_file(&path);
+    }
+
+    #[test]
+    fn save_fails_closed_on_a_malformed_lock_owner() {
+        let path = std::env::temp_dir()
+            .join(format!("mackes-malformed-lock-{}.json5", std::process::id()));
+        let lock = path.with_extension("json5.lock");
+        fs::write(&lock, b"unknown-owner\n").expect("malformed lock fixture");
+        assert!(save(&path, &document(), 0).is_err());
+        fs::remove_file(&lock).expect("remove lock fixture");
+    }
+
+    #[test]
+    fn rejected_save_releases_lock_for_a_following_writer() {
+        let path =
+            std::env::temp_dir().join(format!("mackes-invalid-lock-{}.json5", std::process::id()));
+        let mut invalid = document();
+        invalid.schema_version = 0;
+        assert!(save(&path, &invalid, 0).is_err());
+        assert!(!path.with_extension("json5.lock").exists());
+        save(&path, &document(), 0).expect("following writer");
+        let _ = fs::remove_file(&path);
+    }
+
+    #[test]
     fn current_version_migration_is_a_no_op() {
         assert_eq!(migrate(document()).expect("current migration"), document());
     }
@@ -2519,6 +3089,27 @@ mod tests {
         assert_eq!(load(&target).expect("load export"), document());
         assert_eq!(import_portable(&directory).expect("import export"), document());
         assert!(import_portable(&target).is_err());
+        assert!(fs::read_dir(&directory).expect("export directory").filter_map(Result::ok).all(
+            |entry| {
+                let name = entry.file_name();
+                let name = name.to_string_lossy();
+                !(name.starts_with(".config.json5.export.") && name.ends_with(".tmp"))
+            }
+        ));
+        let _ = fs::remove_dir_all(directory);
+    }
+
+    #[test]
+    fn portable_export_cleans_temporary_after_replace_failure() {
+        let directory =
+            std::env::temp_dir().join(format!("mackes-portable-fail-{}", std::process::id()));
+        fs::create_dir_all(directory.join("config.json5")).expect("target directory");
+        let error = export_portable(&document(), &directory).expect_err("directory target fails");
+        assert!(matches!(error, ConfigError::Io { .. }));
+        assert!(fs::read_dir(&directory)
+            .expect("export directory")
+            .filter_map(Result::ok)
+            .all(|entry| !entry.file_name().to_string_lossy().ends_with(".tmp")));
         let _ = fs::remove_dir_all(directory);
     }
 
@@ -2619,6 +3210,11 @@ mod tests {
             })
         );
         assert!(restore_backup(&backup, &target, "other", "serial:A", RestoreMode::Apply).is_err());
+        let stale_restore = target.with_file_name(format!(
+            ".{}.restore.123.tmp",
+            target.file_name().unwrap().to_string_lossy()
+        ));
+        fs::write(&stale_restore, b"stale").expect("stale restore");
         assert_eq!(
             restore_backup(&backup, &target, "reflex", "serial:A", RestoreMode::Apply),
             Ok(RestoreResult::Applied {
@@ -2628,6 +3224,8 @@ mod tests {
             })
         );
         assert_eq!(fs::read(&target).expect("target"), payload);
+        assert!(!stale_restore.exists());
+        assert!(!target.with_extension("restore.tmp").exists());
         let _ = fs::remove_file(&backup);
         let _ = fs::remove_file(backup.with_extension("manifest.json"));
         let _ = fs::remove_file(&target);
@@ -2949,5 +3547,245 @@ mod tests {
             .replace_with_runtime(1, replacement, |_| Err("adapter unavailable"))
             .is_err());
         assert_eq!(store, before);
+    }
+
+    #[test]
+    fn verified_endpoint_migration_rewrites_only_proven_references() {
+        let mapping = ControlMapping {
+            id: "legacy".into(),
+            controller_profile: "controller".into(),
+            physical_control_id: "knob-r1-c1".into(),
+            source_endpoint: "stable-in".into(),
+            source_kind: "cc".into(),
+            source_channel: 0,
+            destination_channel: None,
+            source_number: 1,
+            destination_endpoint: "display-name-only".into(),
+            destination_profile: "profile".into(),
+            destination_effect: "effect".into(),
+            destination_parameter: "one".into(),
+            behavior: MappingBehavior {
+                source_range: (0, 127),
+                destination_range: (0, 127),
+                invert: false,
+                curve: "linear".into(),
+            },
+            enabled: true,
+            profile_version: 1,
+        };
+        let mut document = ConfigDocument {
+            endpoints: vec![EndpointAlias {
+                id: "input-alias".into(),
+                stable_id: Some("stable-in".into()),
+                name: None,
+                vendor_id: None,
+                product_id: None,
+                serial: None,
+                logical_port: None,
+                direction: Some("input".into()),
+                role: Some("midi".into()),
+            }],
+            control_mappings: vec![mapping],
+            ..ConfigDocument::default()
+        };
+        assert_eq!(migrate_verified_endpoint_references(&mut document).expect("migration"), 1);
+        assert_eq!(document.control_mappings[0].source_endpoint, "input-alias");
+        assert_eq!(document.control_mappings[0].destination_endpoint, "display-name-only");
+    }
+
+    #[test]
+    fn migrate_file_dry_run_is_non_mutating_and_apply_rotates_backup() {
+        let path =
+            std::env::temp_dir().join(format!("mackes-migrate-{}.json5", std::process::id()));
+        let mut value = document();
+        value.endpoints.push(EndpointAlias {
+            id: "input-alias".into(),
+            stable_id: Some("stable-input".into()),
+            name: None,
+            vendor_id: None,
+            product_id: None,
+            serial: None,
+            logical_port: None,
+            direction: Some("input".into()),
+            role: Some("midi".into()),
+        });
+        value.learned_mappings.push(LearnedMapping {
+            source_alias: "stable-input".into(),
+            message_kind: "note_on".into(),
+            channel_policy: LearnedChannelPolicy::Exact(1),
+            number: Some(1),
+            raw: vec![0x90, 1, 1],
+            destination: "device".into(),
+            mode: "note".into(),
+            enabled: true,
+            priority: 0,
+            filters: Vec::new(),
+        });
+        fs::write(&path, serde_json::to_string_pretty(&value).expect("encode"))
+            .expect("initial save");
+        let before = fs::read(&path).expect("read before");
+        assert_eq!(migrate_file(&path, true, 1).expect("dry run"), 1);
+        assert_eq!(fs::read(&path).expect("read dry run"), before);
+        assert_eq!(migrate_file(&path, false, 1).expect("apply"), 1);
+        assert_eq!(load(&path).expect("reloaded").learned_mappings[0].source_alias, "input-alias");
+        assert!(path.with_extension("json5.bak1").exists());
+        let after = fs::read(&path).expect("read after");
+        assert_eq!(migrate_file(&path, false, 1).expect("repeat"), 0);
+        assert_eq!(fs::read(&path).expect("read repeat"), after);
+        let _ = fs::remove_file(&path);
+        let _ = fs::remove_file(path.with_extension("json5.bak1"));
+    }
+
+    #[test]
+    fn migrate_file_aborts_ambiguous_plan_without_mutation() {
+        let path = std::env::temp_dir()
+            .join(format!("mackes-migrate-ambiguous-{}.json5", std::process::id()));
+        let mut value = document();
+        value.endpoints = vec![
+            EndpointAlias {
+                id: "a".into(),
+                stable_id: Some("same".into()),
+                name: None,
+                vendor_id: None,
+                product_id: None,
+                serial: None,
+                logical_port: None,
+                direction: Some("input".into()),
+                role: Some("midi".into()),
+            },
+            EndpointAlias {
+                id: "b".into(),
+                stable_id: Some("same".into()),
+                name: None,
+                vendor_id: None,
+                product_id: None,
+                serial: None,
+                logical_port: None,
+                direction: Some("input".into()),
+                role: Some("midi".into()),
+            },
+        ];
+        value.learned_mappings.push(LearnedMapping {
+            source_alias: "same".into(),
+            message_kind: "note_on".into(),
+            channel_policy: LearnedChannelPolicy::Exact(1),
+            number: Some(1),
+            raw: vec![0x90, 1, 1],
+            destination: "device".into(),
+            mode: "note".into(),
+            enabled: true,
+            priority: 0,
+            filters: Vec::new(),
+        });
+        let bytes = serde_json::to_vec(&value).expect("encode");
+        fs::write(&path, &bytes).expect("write");
+        assert!(migrate_file(&path, false, 1).is_err());
+        assert_eq!(fs::read(&path).expect("read"), bytes);
+        assert!(!path.with_extension("json5.bak1").exists());
+        let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn migrate_file_preserves_config_when_backup_rotation_fails() {
+        let path = std::env::temp_dir()
+            .join(format!("mackes-migrate-backup-{}.json5", std::process::id()));
+        let conflict = path.with_extension("json5.bak2");
+        let mut value = document();
+        value.endpoints.push(EndpointAlias {
+            id: "input-alias".into(),
+            stable_id: Some("stable-input".into()),
+            name: None,
+            vendor_id: None,
+            product_id: None,
+            serial: None,
+            logical_port: None,
+            direction: Some("input".into()),
+            role: Some("midi".into()),
+        });
+        value.learned_mappings.push(LearnedMapping {
+            source_alias: "stable-input".into(),
+            message_kind: "note_on".into(),
+            channel_policy: LearnedChannelPolicy::Exact(1),
+            number: Some(1),
+            raw: vec![0x90, 1, 1],
+            destination: "device".into(),
+            mode: "note".into(),
+            enabled: true,
+            priority: 0,
+            filters: Vec::new(),
+        });
+        let bytes = serde_json::to_vec(&value).expect("encode");
+        fs::write(&path, &bytes).expect("write");
+        fs::write(path.with_extension("json5.bak1"), b"prior").expect("prior backup");
+        fs::create_dir(&conflict).expect("conflict");
+        assert!(migrate_file(&path, false, 1).is_err());
+        assert_eq!(fs::read(&path).expect("read"), bytes);
+        let _ = fs::remove_dir(&conflict);
+        let _ = fs::remove_file(&path);
+        let _ = fs::remove_file(path.with_extension("json5.bak1"));
+    }
+
+    #[test]
+    fn eventide_migration_fixture_preserves_all_sixteen_rows() {
+        let text = fs::read_to_string("../../fixtures/eventide-migration-2026-09-05.json5")
+            .expect("Eventide fixture");
+        let fixture: serde_json::Value = json5::from_str(&text).expect("valid JSON5 fixture");
+        let mappings = fixture["mappings"].as_array().expect("mapping array");
+
+        assert_eq!(mappings.len(), 16);
+        assert_ne!(fixture["before"]["source_endpoint"], fixture["after"]["source_endpoint"]);
+        assert_eq!(mappings.iter().filter(|mapping| mapping["enabled"] == true).count(), 12);
+        assert_eq!(mappings.iter().filter(|mapping| mapping["enabled"] == false).count(), 4);
+        assert!(mappings.iter().any(|mapping| {
+            mapping["control"] == "button-r1-c1" && mapping["parameter"] == "ACTIVE/BYPASS"
+        }));
+    }
+
+    #[test]
+    fn pipedal_mappings_are_bounded_and_identity_unique() {
+        let mut value = document();
+        value.settings.pipedal_mappings = PiPedalMappingConfig {
+            version: 1,
+            mappings: vec![PiPedalMapping {
+                physical_control_id: "knob-r3-c4".into(),
+                plugin_uri: "urn:example:eq".into(),
+                symbol: "gain".into(),
+                scope: None,
+            }],
+        };
+        assert!(validate(&value).is_ok());
+        value.settings.pipedal_mappings.mappings.push(PiPedalMapping {
+            physical_control_id: "knob-r3-c4".into(),
+            plugin_uri: "urn:example:eq".into(),
+            symbol: "gain".into(),
+            scope: None,
+        });
+        assert!(validate(&value).is_err());
+        value.settings.pipedal_mappings.mappings[1].physical_control_id = "knob-r3-c5".into();
+        assert!(validate(&value).is_err());
+        value.settings.pipedal_mappings.mappings.truncate(1);
+        value.settings.pipedal_mappings.mappings.extend((0..128).map(|index| PiPedalMapping {
+            physical_control_id: format!("control-{index}"),
+            plugin_uri: format!("urn:example:eq-{index}"),
+            symbol: "gain".into(),
+            scope: None,
+        }));
+        assert!(validate(&value).is_err());
+    }
+
+    #[test]
+    fn pipedal_mapping_fixture_round_trips_through_json5_config() {
+        let path = Path::new("../../fixtures/config-valid.json5");
+        let loaded = load(path).expect("valid config fixture");
+        validate(&loaded).expect("fixture validation");
+        assert_eq!(loaded.settings.pipedal_mappings.version, 1);
+        assert_eq!(loaded.settings.pipedal_mappings.mappings.len(), 1);
+        let mapping = &loaded.settings.pipedal_mappings.mappings[0];
+        assert_eq!(mapping.physical_control_id, "knob-r3-c4");
+        assert_eq!(mapping.plugin_uri, "urn:example:eq");
+        assert_eq!(mapping.symbol, "gain");
+        let encoded = serde_json::to_vec(&loaded).expect("encode config");
+        let decoded: ConfigDocument = serde_json::from_slice(&encoded).expect("decode config");
+        assert_eq!(decoded.settings.pipedal_mappings, loaded.settings.pipedal_mappings);
     }
 }

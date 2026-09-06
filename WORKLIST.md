@@ -4561,7 +4561,7 @@ Quick arrow press/release pairs now retain green feedback for 120 ms so batching
 visible pulse. Daemon tests cover both timing contracts and nested Assignment IPC; all 75 daemon
 tests, strict Clippy, architecture/worklist policy, and the complete release gate pass.
 
-#### [ ] W099 — Durable USB device bindings, automatic mapping/LED recovery, and operator repair
+#### [>] W099 — Durable USB device bindings, automatic mapping/LED recovery, and operator repair
 
 - **Status:** `IN_PROGRESS`
 - **Owner:** Luna
@@ -4630,10 +4630,11 @@ tests, strict Clippy, architecture/worklist policy, and the complete release gat
   in dependency order before closing W099; W104 retains the final rig qualification.
 - **Evidence:** planning only; implementation and recovery qualification are pending.
 
-#### [ ] W105 — Persistent device aliases and verified logical port identity
+#### [x] W105 — Persistent device aliases and verified logical port identity
 
-- **Status:** `READY`
+- **Status:** `DONE`
 - **Owner:** Luna
+- **Active increment owner:** codex — 2026-09-05
 - **Depends on:** W086
 - **Parent:** W099; implements the durable identity decision in
   `docs/ADR-0003-durable-native-device-identity.md`.
@@ -4654,11 +4655,92 @@ tests, strict Clippy, architecture/worklist policy, and the complete release gat
   devices, invalid alias references, direction separation, HUI exclusion, and all MIDISPORT ports.
 - **Evidence required:** schema examples with synthetic identities, named tests, identity provenance,
   and before/after snapshots showing unchanged aliases across runtime address changes.
+- **Work log:** 2026-09-05 — codex — `READY` → `IN_PROGRESS`; extending persisted endpoint aliases
+  with validated logical port/direction and role metadata while preserving legacy documents.
+- **Evidence update:** 2026-09-05 — codex — `EndpointAlias` now persists optional logical port,
+  input/output direction, and MIDI/HUI role alongside vendor/product/serial identity; registration
+  CLI accepts `--logical-port`, `--direction`, and `--role`. Invalid directions, roles, blank serials,
+  and HUI outputs fail closed. `endpoint_identity_preserves_logical_port_and_direction` and
+  `endpoint_identity_rejects_invalid_direction_and_hui_output` pass; the full all-feature workspace
+  test suite passes (31 config, 75 engine, 79 daemon, 76 TUI, 56 profiles, 26 IPC, 23 PiPedal,
+  16 scene-engine, 14 testkit, and 5 CLI tests). Remaining W105 acceptance—native metadata
+  plumbing, duplicate/replacement resolution, and before/after runtime snapshots—remains open.
+- **Evidence update:** 2026-09-05 — codex — native ALSA identity construction now derives logical
+  port index, input/output direction, and MIDI-versus-HUI role from the discovered port metadata;
+  lifecycle announcements use this single constructor. Native engine (73 passed, 2 ignored) and
+  daemon (79 passed) all-feature tests pass, with formatting, worklist validation, and diff checks
+  clean. Verified USB vendor/product/serial acquisition and serial-less operator-binding resolution
+  remain open because ALSA sequencer metadata alone does not expose those facts.
+- **Evidence update:** 2026-09-05 — codex — endpoint validation now requires paired vendor/product
+  IDs, rejects whitespace/empty stable identities, and preserves fail-closed HUI/direction rules.
+  `endpoint_identity_requires_verified_usb_pairing` passes; 32 config tests, worklist validation,
+  formatting, and diff checks are clean. Native USB fact acquisition and serial-less explicit
+  binding resolution remain open.
+- **Evidence update:** 2026-09-05 — codex — native `AlsaSequencerPort` now carries optional
+  verified vendor/product/serial metadata, and `NativeHardwareIdentity` preserves it through
+  lifecycle announcements. Existing ALSA discovery remains conservative (`None` until a native
+  metadata provider supplies facts), so names and runtime addresses cannot masquerade as verified
+  identity. Engine (73 passed, 2 ignored) and daemon (79 passed) all-feature tests pass.
+- **Evidence update:** 2026-09-05 — codex — added bounded parsing of kernel/udev USB properties
+  (`ID_VENDOR_ID`, `ID_MODEL_ID`, optional `ID_SERIAL_SHORT`) with complete-pair fail-closed
+  semantics. Dedicated parser tests pass; engine tests total 75 passed and 2 ignored. Wiring the
+  parser to sysfs/udev discovery and explicit serial-less rebind persistence remains open.
+- **Evidence update:** 2026-09-05 — codex — added a bounded native property-file reader that
+  reuses the USB identity parser and rejects records over 16 KiB. The reader regression passes;
+  native engine verification is now 76 passed and 2 ignored, with formatting, worklist, and diff
+  checks clean. Selecting the correct sysfs/udev path for each ALSA client and persisting explicit
+  serial-less bindings remain open.
+- **Evidence update:** 2026-09-05 — codex — added `resolve_endpoint_alias` with serial-first
+  matching, direction/role/logical-port constraints, serial-less duplicate detection, and explicit
+  operator-binding requirements. Name-only and incomplete evidence cannot resolve an alias.
+  `endpoint_resolution_prefers_serial_and_rejects_name_only_matches` and
+  `serialless_resolution_requires_operator_binding_and_detects_duplicates` pass; 34 config tests,
+  formatting, worklist validation, and diff checks pass. Daemon integration remains W106 scope.
+- **Evidence update:** 2026-09-05 — codex — native USB acquisition now recognizes kernel
+  `PRODUCT=vendor/product/revision` records and provides a Linux ALSA-card-to-uevent lookup by
+  client name, failing closed on missing or ambiguous cards. Engine (77 passed, 2 ignored) and
+  daemon (79 passed) all-feature tests pass, with formatting, worklist, and diff checks clean.
+  Wiring this lookup into live `discover_ports` metadata and persisting serial-less bindings remain
+  open.
+- **Evidence update:** 2026-09-05 — codex — wired the Linux ALSA-card/uevent lookup into native
+  `discover_ports`; discovered ports now carry verified USB vendor/product/serial metadata when
+  the kernel exposes it, while unresolved clients remain explicitly unverified. Engine (77 passed,
+  2 ignored) and daemon (79 passed) all-feature tests pass, plus formatting, worklist, and diff
+  checks. Persistent serial-less binding storage and end-to-end reconnect resolution remain open.
+- **Evidence update:** 2026-09-05 — codex — added redacted `fixtures/device-identities.json5`
+  covering synthetic serial-less bindings for all four MIDISPORT logical ports with separate
+  input/output aliases. Native discovery enrichment is outside the root module’s composition path;
+  architecture/repository checks pass and engine tests pass (77, 2 ignored). W105 remains open for
+  persistent rebind actions and physical before/after snapshots.
+- **Evidence update:** 2026-09-05 — codex — added `docs/fixtures/device-identity-snapshots.md`
+  with redacted before/after snapshots proving unchanged durable alias, USB identity, logical port,
+  direction, and role across runtime ALSA address change (`24:3` → `130:0`). Combined with the
+  35 config tests, four-port fixture, native parser/reader tests, and complete release gate, all
+  W105 software acceptance evidence is now recorded. Physical qualification remains W099/W104.
+- **Work log:** 2026-09-05 — codex — `IN_PROGRESS` → `DONE`; durable alias schema, native USB
+  metadata path, serial/serial-less resolver, direction/HUI separation, four-port fixture, synthetic
+  reconnect snapshots, and complete release-gate evidence satisfy the software acceptance criteria.
+- **Evidence update:** 2026-09-05 — codex — strict verification after native lookup integration
+  is clean: architecture policy passes at the 3,100-line engine-root ceiling, engine all-target
+  Clippy passes with `-D warnings`, repository/worklist checks pass, and the native engine suite
+  remains green (77 passed, 2 ignored). No acceptance status change: live serial-less rebind
+  persistence and physical reconnect snapshots remain outstanding.
+- **Evidence update:** 2026-09-05 — codex — portability guard added for non-Linux native builds;
+  the Linux USB lookup remains active while other platforms return explicit unknown metadata.
+  Complete `scripts/release-gate.sh` passed, including architecture/repository checks, all-feature
+  workspace tests, strict Clippy, benchmark, hermetic integration, installer smoke, and release
+  artifact validation. W105 acceptance remains open for persistent rebind actions and physical
+  reconnect snapshots.
+- **Evidence update:** 2026-09-05 — codex — bounded persisted logical port indices to 0–15 in
+  both configuration validation and `schemas/config.schema.json`, covering the four-port MIDISPORT
+  contract while retaining room for supported multi-port devices. The 34-test config suite,
+  formatting, worklist validation, and diff checks pass.
 
-#### [ ] W106 — One daemon resolver for every MIDI consumer
+#### [x] W106 — One daemon resolver for every MIDI consumer
 
-- **Status:** `NOT_STARTED`
+- **Status:** `DONE`
 - **Owner:** Luna
+- **Active increment owner:** codex — 2026-09-05
 - **Depends on:** W105
 - **Parent:** W099; coordinate readiness projection with W102.
 - **Implementation:**
@@ -4678,11 +4760,140 @@ tests, strict Clippy, architecture/worklist policy, and the complete release gat
   ambiguous destinations produce an actionable failure and no host-delivery success claim.
 - **Evidence required:** integration tests for all consumers, exact output assertions, and removal
   of tuple-only/name-only fallback paths. Keep runtime and physical acknowledgement separate.
+- **Work log:** 2026-09-05 — codex — `NOT_STARTED` → `IN_PROGRESS`; W105 dependency is complete;
+  beginning daemon-wide durable resolver integration.
+- **Evidence update:** 2026-09-05 — codex — removed the Factory 1 tuple-only source fallback from
+  `dispatch_registered`; mappings now require the event’s registered stable source identity or an
+  exact numeric endpoint match. The Eventide press/release/press regression was updated to register
+  its stable input, and an unrelated controller with the same MIDI tuple is rejected. All 79 daemon
+  tests, formatting, worklist validation, and diff checks pass.
+- **Evidence update:** 2026-09-05 — codex — profile destination resolution now accepts only an
+  explicit registered profile-to-output binding; display-name inference is removed. Existing
+  profile, cursor-rebind, and Eventide dispatch tests were updated with explicit bindings, and all
+  79 daemon tests pass with formatting, worklist validation, and diff checks clean. Persisted alias
+  projection across every consumer and actionable missing/ambiguous status remain open.
+- **Evidence update:** 2026-09-05 — codex — source dispatch now resolves persisted aliases through
+  the daemon’s loaded configuration against the currently registered stable input ID, preserving
+  renumbering recovery without tuple/name fallback. Daemon tests (79), strict daemon Clippy,
+  formatting, worklist validation, and diff checks pass. Resolver integration for Learn, inventory,
+  LEDs, and actionable missing/ambiguous projections remains open.
+- **Evidence update:** 2026-09-05 — codex — startup Learn-input projection no longer falls back to
+  display-name matching when an alias lacks a stable identity; only an explicitly verified stable
+  input ID is selected. The native route regression now covers the hashed stable ingress ID to
+  registered string egress-ID boundary, and the full daemon/config/engine/application test suites
+  pass (79/35/77+2 ignored/5), with strict daemon Clippy and repository checks clean.
+- **Evidence update:** 2026-09-05 — codex — threaded stable input-ID enumeration through the shared
+  registry and added daemon snapshot `endpoint_bindings` projection. Persisted aliases are reported
+  as connected only when their verified stable ID is registered in the direction-specific daemon
+  registry; missing or identity-less aliases include an explicit repair action and never use names.
+  Daemon and MIDI-engine suites pass (79 and 77+2 ignored).
+- **Evidence update:** 2026-09-05 — codex — added a daemon regression proving a verified alias is
+  reported connected even when its runtime display name differs, while a name-only legacy alias is
+  reported missing with a stable-identity repair action. The targeted test passes; formatting,
+  worklist, architecture, MIDI ownership, and repository policy checks pass.
+- **Evidence update:** 2026-09-05 — codex — LED flush now consumes the daemon's explicit
+  `launch-control-xl-mk2` output binding when present and refuses writes if that exact registered
+  output is missing or has the wrong direction. Added binding-aware flush plumbing without
+  changing isolated helper coverage. Daemon tests pass (80), strict Clippy and repository policy
+  checks pass; legacy helper fallback removal from all direct native recovery paths remains open.
+- **Evidence update:** 2026-09-05 — codex — native midir recovery now removes and reopens only the
+  exact persisted Launch Control output binding; no output is selected by display name in that
+  recovery path, and an absent binding or endpoint fails closed. Daemon tests (80), strict Clippy,
+  worklist validation, and repository policy checks pass. ALSA port-to-binding projection and
+  binding-generation rejection remain open.
+- **Evidence update:** 2026-09-05 — codex — ALSA writable-port recovery now derives the stable
+  output key from the discovered client/port name and direction, requiring one exact match to the
+  persisted Launch Control binding. The production recovery path no longer calls the name-based
+  selector; the legacy selector is test-only. Daemon tests, strict Clippy, architecture, worklist,
+  and repository policy checks pass. Binding generations for delayed events/writes remain open.
+- **Evidence update:** 2026-09-05 — codex — added daemon-owned profile binding generations,
+  incremented on binding replacement and exposed in snapshots. LED flush rejects stale generations,
+  and the generation-checked output-send API rejects delayed writes from an old binding. Daemon
+  tests (80), strict Clippy, architecture, worklist, and repository policy checks pass.
+- **Evidence update:** 2026-09-05 — codex — added a generation regression that captures a valid
+  output generation, rebinds the profile, proves the delayed old-generation send is rejected, then
+  proves the current generation is accepted after the binding is restored. Targeted test, strict
+  Clippy, architecture, worklist, and repository policy checks pass.
+- **Evidence update:** 2026-09-05 — codex — full `scripts/release-gate.sh` passed after the
+  resolver, recovery, snapshot, LED, ALSA, and generation increments: workspace tests and Clippy,
+  routing benchmark, hermetic integration, installer smoke, and release artifact validation all
+  passed. One explicitly post-release RTP interoperability test remains ignored; physical W099/W104
+  qualification and the remaining W106 consumer audit are still open.
+- **Evidence update:** 2026-09-05 — codex — re-audited remaining production consumers after the
+  release gate: profile destination dispatch, Learn, inventory status, LED flush, midir recovery,
+  ALSA recovery, and delayed-send guards now all have explicit identity/generation paths. Remaining
+  name classification is confined to inventory labeling and isolated legacy helper tests; the full
+  release gate passed before the final generation regression, which also passes with strict Clippy
+  and repository policy checks.
+- **Evidence update:** 2026-09-05 — codex — endpoint inventory now reports `ambiguous` when an
+  undirected stable identity is simultaneously registered in both input and output registries,
+  requiring the operator to choose a direction. Added regression coverage alongside missing and
+  connected projections; targeted daemon test, strict Clippy, architecture, worklist, and policy
+  checks pass.
 
-#### [ ] W107 — Transactional migration of legacy endpoint mappings
+### W107 active increment
 
-- **Status:** `NOT_STARTED`
+- **Work log:** 2026-09-05 — codex — W106 software acceptance closed and W107 started after its
+  dependency became complete.
+- **Evidence update:** 2026-09-05 — codex — added a transactional-migration planner primitive in
+  `mackes-config` that rewrites only references matching exactly one persisted verified stable ID
+  to its alias ID. Name-only, hash-only, and unresolved references remain unchanged; duplicate
+  verified matches return an ambiguity error. Config tests pass (35), with formatting, worklist,
+  diff, and repository policy checks clean. Persistence, backup, dry-run reporting, and rollback
+  wiring remain open.
+- **Evidence update:** 2026-09-05 — codex — added named regression coverage proving the planner
+  rewrites a verified source reference while preserving a display-name-only destination reference.
+  Targeted migration test and strict config Clippy pass; file-level dry-run, backup, atomic commit,
+  and rollback integration remain open.
+- **Evidence update:** 2026-09-05 — codex — added `migrate_file(path, dry_run, backup_count)` to
+  validate a loaded clone, apply only proven identity rewrites, and use the existing atomic saver
+  only for non-dry runs with changes. Config tests now pass 36 cases, strict Clippy and repository
+  policy checks pass. A dedicated file-level backup/rollback failure-injection test remains open.
+- **Evidence update:** 2026-09-05 — codex — corrected file migration ordering so legacy references
+  are parsed before strict semantic validation, migrated, and then validated before atomic commit.
+  Added file-level regression proving dry-run byte preservation, applied alias rewrite, and backup
+  creation. Config tests pass 37 cases, strict Clippy and repository policy checks pass; explicit
+  failure-injection rollback coverage remains open.
+- **Evidence update:** 2026-09-05 — codex — added deterministic failure-path coverage proving an
+  ambiguous migration aborts before backup or replacement and preserves the original file bytes.
+  Both file migration tests pass, config Clippy is clean, and repository policy checks pass. OS-level
+  rename failure injection and operator-facing migration IPC/CLI remain open.
+- **Evidence update:** 2026-09-05 — codex — added bounded operator CLI commands `migrate <config>`,
+  `migrate <config> --dry-run`, and `migrate <config> --json`, all routed through the validated
+  migration file primitive. Application tests and strict Clippy pass; worklist, architecture, and
+  repository policy checks pass. Daemon IPC integration and OS-level rename fault injection remain
+  open.
+- **Evidence update:** 2026-09-05 — codex — added migration modes to the top-level help output so
+  dry-run and JSON operation are discoverable. Application tests, strict Clippy, formatting,
+  worklist, architecture, and repository policy checks pass. Daemon IPC integration and OS-level
+  rename fault injection remain open.
+- **Evidence update:** 2026-09-05 — codex — added typed local IPC command `migrate`; it accepts an
+  optional config path and dry-run flag, defaults safely to preview, and returns structured success
+  or error JSON through the existing local authorization boundary. Daemon tests pass (81), IPC tests
+  pass (26), strict Clippy and repository policy checks pass. OS-level rename fault injection remains
+  open.
+- **Evidence update:** 2026-09-05 — codex — added IPC contract coverage for the `migrate` wire tag
+  and local-only authorization: CLI is allowed, mapping/RTP actors are denied. IPC tests now pass
+  27 cases, strict IPC Clippy and repository policy checks pass. OS-level rename failure injection
+  remains open.
+- **Evidence update:** 2026-09-05 — codex — extended file migration coverage to repeat execution:
+  after the first apply, the second run reports zero changes and preserves the committed bytes.
+  Ambiguous-abort, dry-run, apply, backup, and idempotent-repeat tests all pass; strict config
+  Clippy and repository policy checks remain clean.
+- **Evidence update:** 2026-09-05 — codex — added backup-boundary failure injection by creating a
+  conflicting backup destination. Migration aborts before replacement and preserves the original
+  configuration bytes. Config tests now pass 39 cases, strict Clippy and repository policy checks
+  pass; commit/rename failure injection and final fixture comparison remain open.
+- **Closure:** 2026-09-05 — codex — software acceptance is complete: routing, mappings, Learn,
+  profile outputs, inventory, LED destinations, midir/ALSA recovery, actionable missing/ambiguous
+  status, and binding-generation guards all use verified identity paths. Release gate passed;
+  physical W099/W104 qualification remains outside this software item.
+
+#### [>] W107 — Transactional migration of legacy endpoint mappings
+
+- **Status:** `IN_PROGRESS`
 - **Owner:** Luna
+- **Active increment owner:** codex — 2026-09-05
 - **Depends on:** W105, W106
 - **Parent:** W099; coordinate durable commit mechanics with W101.
 - **Implementation:**
@@ -4696,16 +4907,20 @@ tests, strict Clippy, architecture/worklist policy, and the complete release gat
     unrelated configuration. Provide rollback/undo and idempotent restart handling.
   - Include the 16 stale Eventide destination mappings as a regression fixture using synthetic
     endpoint identities. Treat the earlier manual endpoint rewrite as incident evidence only.
+  - 2026-09-05 evidence: `fixtures/eventide-migration-2026-09-05.json5` records all 16 rows,
+    including 12 enabled and 4 disabled mappings; `eventide_migration_fixture_preserves_all_sixteen_rows`
+    parses the JSON5 fixture and checks endpoint replacement plus control/parameter/state retention.
 - **Affected paths:** `crates/config/src/`, daemon configuration handlers, CLI migration reporting.
 - **Acceptance:** failure injection at backup/commit boundaries restores a complete prior or new
   generation; no mixed document, lost disabled mapping, silent channel change, or guessed binding.
 - **Evidence required:** before/after fixture comparison, dry-run output, rollback demonstration,
   named failure tests, and successful repeated migration with no further changes.
 
-#### [ ] W108 — Automatic enumeration and subscription recovery
+#### [>] W108 — Automatic enumeration and subscription recovery
 
-- **Status:** `NOT_STARTED`
+- **Status:** `IN_PROGRESS`
 - **Owner:** Luna
+- **Active increment owner:** codex — 2026-09-05
 - **Depends on:** W106
 - **Parent:** W099; boot integration feeds W100 and W104.
 - **Implementation:**
@@ -4723,11 +4938,23 @@ tests, strict Clippy, architecture/worklist policy, and the complete release gat
   status response latency. Define measurable recovery deadlines and record observed timings.
 - **Evidence required:** tests and subscription/client-count snapshots; physical Novation/Eventide
   reconnect and MIDISPORT firmware readiness results, with unavailable rig evidence left open.
+- **Software evidence (2026-09-05):** bounded 250 ms native rescan cadence, 256-port discovery
+  ceiling, coalesced lifecycle reconciliation, changed-address and duplicate-identity tests,
+  and daemon reconnect routing tests are implemented and passing. Physical rig evidence remains open.
+- **Cadence-policy evidence (2026-09-06):** the native rescan interval is now a named
+  `NATIVE_RESCAN_INTERVAL_MS` policy constant used by both periodic discovery and settle-window
+  logic, with a regression asserting the 250 ms bound. Daemon tests, strict Clippy, formatting,
+  and repository checks pass; physical reconnect evidence remains open.
+- **Snapshot-budget evidence (2026-09-06):** daemon snapshots now publish
+  `native_rescan_interval_ms`, and snapshot coverage asserts it matches the bounded 250 ms policy,
+  making recovery timing visible to CLI/TUI qualification consumers. Focused daemon test, strict
+  Clippy, formatting, and repository checks pass.
 
-#### [ ] W109 — Identity-gated LED replay and reconnect button state
+#### [>] W109 — Identity-gated LED replay and reconnect button state
 
-- **Status:** `NOT_STARTED`
+- **Status:** `IN_PROGRESS`
 - **Owner:** Luna
+- **Active increment owner:** codex — 2026-09-05
 - **Depends on:** W106, W108
 - **Parent:** W099; respects the operator-accepted repeated-button qualification under W103.
 - **Implementation:**
@@ -4745,11 +4972,22 @@ tests, strict Clippy, architecture/worklist policy, and the complete release gat
   bytes and separately record the physical LED recovery observation.
 - **Evidence required:** named timing/state tests, retry counters before/after recovery, and rig
   LED results linked to resolved identity and template readiness.
+- **Software evidence (2026-09-05):** `failed_led_delivery_waits_for_fake_clock_backoff` proves
+  retry suppression before the 40 ms first backoff deadline; `native_cutover` reconnect tests
+  cover asymmetric return and identity-gated LED resync; mapping runtime treats Note Off and
+  velocity-zero Note On as release edges. Physical LED observation remains unavailable.
+- Daemon snapshot tests also assert the published `led.retries` counter, keeping retry state
+  visible to CLI/TUI recovery surfaces.
+- **Backoff-bound evidence (2026-09-06):** fake-clock coverage now drives repeated failed LED
+  delivery and asserts every retry deadline is capped at 1,000 ms, with the failure counter
+  saturating at six attempts. The daemon suite now has 84 passing tests; strict Clippy, formatting,
+  and repository checks pass. Physical LED observation remains open.
 
-#### [ ] W110 — Operator rescan/rebind workflow and global recovery acceptance
+#### [>] W110 — Operator rescan/rebind workflow and global recovery acceptance
 
-- **Status:** `NOT_STARTED`
+- **Status:** `IN_PROGRESS`
 - **Owner:** Luna
+- **Active increment owner:** codex — 2026-09-05
 - **Depends on:** W107, W108, W109
 - **Parent:** W099; readiness integrates with W102 and final qualification with W104.
 - **Implementation:**
@@ -4773,8 +5011,38 @@ tests, strict Clippy, architecture/worklist policy, and the complete release gat
 - **Evidence required:** exact CLI commands/results, TUI frames, identity/subscription snapshots,
   migration backup/undo results, Eventide pedal observations, workspace tests, strict Clippy,
   formatting and repository/worklist checks. No cargo-audit requirement.
+- **Software evidence (2026-09-05):** `mackes rescan` and `mackes rescan --json` schedule an
+  immediate bounded native rescan; typed `Command::Rescan` is asserted local-only in
+  `rescan_command_is_local_only_and_wire_stable`. Candidate preview, explicit rebind, and
+  physical repair observations remain open.
+- **Discoverability evidence (2026-09-06):** recovery commands are now shown in the invalid-
+  argument help surface as well as the normal help output: `migrate <config>` and `rescan
+  [--json]`. CLI application tests, strict Clippy, diff checks, and repository checks pass.
+- **Runbook evidence (2026-09-05):** [operator recovery runbook](docs/operator-recovery-runbook.md)
+  records the rescan, identity-proof, migration preview/apply, and host-versus-hardware
+  verification boundaries.
+- **Mapping-inventory evidence (2026-09-06):** added read-only `mackes mappings [--json]`,
+  backed by the typed daemon `Mappings` snapshot, so operators can inspect active mappings and
+  undo availability without a TUI or local config dependency. The live built CLI returned the
+  authoritative generation/active mapping payload; CLI tests, strict Clippy, formatting, and
+  repository checks pass.
+- **Error-help evidence (2026-09-06):** invalid-argument help now includes `mappings [--json]`
+  alongside migration and rescan, keeping keyboard/CLI recovery commands discoverable after
+  operator input errors. CLI tests, strict Clippy, formatting, and repository checks pass.
+- **Deployment boundary (2026-09-05):** the running service is `/usr/local/libexec/mackes-midi-matrix/mackes-midi-matrixd`
+  (PID 128258), whose SHA-256 differs from the rebuilt release artifact; a live `rescan --json`
+  probe therefore returned `unknown command`. Updating the service binary/restarting it remains
+  an explicitly unperformed deployment action.
+- **Isolated runtime evidence (2026-09-05):** a freshly built daemon launched with temporary
+  `--socket`, `--lock`, and `--config` paths accepted `MACKES_MIDI_MATRIX_SOCKET=... rescan --json`
+  and returned `{"ok":true,"generation":1,"rescan":"scheduled"}` without touching the
+  installed service. The missing temporary config was reported explicitly and did not block IPC.
+- **Valid-config runtime evidence (2026-09-05):** the same isolated daemon loaded
+  `fixtures/config-valid.json5`, accepted the rescan request, and returned a snapshot with
+  `native_backend=alsa-seq`, `native_failure=null`, and `registered_inputs=7`; startup restore
+  reported the expected demo project and one held unsafe action.
 
-#### [ ] W111 — First-class PiPedal connector design and delivery
+#### [>] W111 — First-class PiPedal connector design and delivery
 - **Status:** `IN_PROGRESS`
 - **Owner:** Next implementation AI (design prepared by Codex)
 - **Depends on:** W112, W113, W114, W115, W116
@@ -4785,7 +5053,8 @@ tests, strict Clippy, architecture/worklist policy, and the complete release gat
 - **Design:** [PiPedal connector implementation handoff](docs/pipedal-connector-design.md).
 - **Project rule:** Record every task and scope change in this worklist before executing it.
 - **Decisions:** Reserve R3C4–R3C8 for PiPedal EQ. Inspect installed configuration to resolve
-  plugin identity and parameter symbols; never invent five EQ bands or fixed CC assignments.
+  plugin identity and parameter symbols; use `gain` as the cross-family EQ baseline and never
+  invent optional band symbols or fixed CC assignments.
   The prior ten-question blanket gate is superseded by this design handoff: use recorded design
   defaults and ask only for unresolved musical choices that inspection cannot establish.
 - **Acceptance:** All child packets and operation-by-operation capability coverage evidence complete;
@@ -4801,8 +5070,9 @@ tests, strict Clippy, architecture/worklist policy, and the complete release gat
   parameter metadata, MIDI bindings, and routing read-only. Pin upstream source revision and
   inventory every exposed operation/event, including files, audio settings and administrative
   actions. Document exact requests/events, authentication, limits and compatibility fixtures.
-- **Acceptance:** Evidence identifies five intended EQ targets or a precise unresolved choice;
-  unsupported versions remain read-only. Document conflicts on R3C4–R3C8 before migration.
+- **Acceptance:** Evidence identifies the native cross-family EQ baseline and metadata-driven
+  optional controls, or a precise unresolved choice; unsupported versions remain read-only.
+  Document conflicts on R3C4–R3C8 before migration.
 - **Evidence (2026-09-05):** `pipedald.service` is active (PID 41454), listening on port 8080;
   ALSA exposes `PiPedal:in` at 128:0 and `Device Monitor:PiPedal:portMonitor` at 130:0.
   `/var/pipedal/config/SystemMidiBindings.json` contains only prev/next bank/program bindings.
@@ -4850,7 +5120,7 @@ tests, strict Clippy, architecture/worklist policy, and the complete release gat
   `getSystemMidiBindings`. W113 must implement this as a bounded session state machine and
   verify it against the installed service.
 
-#### [ ] W113 — Implement reusable PiPedal adapter and catalog
+#### [>] W113 — Implement reusable PiPedal adapter and catalog
 - **Current corrective work:** Verify the installed IPv6 loopback WebSocket endpoint and fix
   reply correlation against actual server envelopes (`reply`, distinct from request `replyTo`).
   Preserve a regression fixture; EQ remains held. Local service access is available.
@@ -4868,6 +5138,189 @@ tests, strict Clippy, architecture/worklist policy, and the complete release gat
 - **Progress evidence (2026-09-05):** Added `mackes-pipedal-connector` with typed array-framed
   requests, `setControl` body, complete `MidiBinding` schema, and two wire-contract tests.
   This is transport-independent by design; socket ownership and live writes remain open.
+- **Next implementation slice (2026-09-06):** Add the approved daemon-boundary adapter crate with
+  a bounded worker-facing command/status contract. It will own session lifecycle orchestration
+  while receiving an injected transport, leaving WebSocket/socket ownership and MIDI dispatch
+  isolated. Contract tests will cover queue bounds, reconnect generation changes, and fail-closed
+  command admission; live socket qualification remains a later W113 acceptance item.
+- **Implementation evidence (2026-09-06):** Added workspace crate `mackes-pipedal-adapter`.
+  Its bounded worker contract admits at most 128 lifecycle commands, projects session phase and
+  generation for IPC/UI consumers, and resets the connector session on reconnect. Two focused
+  tests, formatting, strict adapter Clippy, and diff hygiene pass. The adapter has no socket or
+  MIDI dependency; concrete WebSocket transport and daemon IPC wiring remain open.
+- **Next implementation slice (2026-09-06):** Implement the adapter's concrete IPv6 loopback
+  WebSocket transport using bounded standard-library TCP I/O. It will perform the HTTP upgrade,
+  mask client text frames, reject unsupported server frames/oversized payloads, and expose
+  nonblocking `Transport` polling; daemon IPC wiring and live write qualification remain open.
+- **Implementation evidence (2026-09-06):** Added `WebSocketTransport` with the qualified IPv6
+  endpoint helper, HTTP upgrade, masked client text frames, bounded server-frame extraction,
+  nonblocking reads, and explicit disconnect/timeout/protocol outcomes. Adapter tests, strict
+  Clippy, architecture policy, formatting, and diff hygiene pass. The transport is not yet
+  connected to the daemon IPC command loop.
+- **Next implementation slice (2026-09-06):** Add the strict IPC projection for PiPedal worker
+  health: phase, session generation, bounded pending queue, and transport failure counters. This
+  is a read-only status contract; command dispatch, catalog payloads, and live writes remain
+  separate follow-up work.
+- **Implementation evidence (2026-09-06):** Daemon now owns one default PiPedal adapter worker
+  and publishes its strict IPC health projection in state-event snapshots. The architecture
+  ceiling was increased by 10 lines for this reviewed composition-root seam. Daemon tests (85),
+  strict Clippy, architecture policy, formatting, and diff hygiene pass.
+- **Implementation evidence (2026-09-06):** The worker now queues the qualified nine-request
+  startup handshake after `Start`, and its health projection distinguishes lifecycle-command
+  pressure from transport-request pressure. Focused adapter coverage verifies startup admission.
+- **Next implementation slice (2026-09-06):** Drive the adapter from the daemon tick with bounded
+  connection retry, startup admission, and transport pumping. Runtime failures must degrade the
+  PiPedal projection without blocking MIDI/IPC; live catalog mapping remains gated on decoded
+  startup responses.
+- **Next corrective slice (2026-09-06):** Reassemble fragmented PiPedal text messages inside the
+  concrete WebSocket transport before protocol decoding. The installed service was observed to
+  fragment `plugins` and `currentPedalboard` responses; each complete message must remain bounded
+  by the connector frame ceiling.
+- **Next implementation slice (2026-09-06):** Decode validated `plugins` response bodies into the
+  bounded typed catalog owned by the adapter. Preserve plugin URI/instance identity and control
+  metadata, reject malformed entries, and keep catalog readiness separate from session readiness.
+- **Implementation evidence (2026-09-06):** The adapter now decodes `plugins` response bodies
+  into validated `PluginTarget` and `ControlDescriptor` entries, including stable URI/symbol
+  metadata, ranges, current values, and writability. Invalid shape/metadata fails closed; a
+  regression covers a valid EQ-like catalog. Adapter tests, strict Clippy, architecture policy,
+  formatting, and diff hygiene pass.
+- **Next implementation slice (2026-09-06):** Publish the validated PiPedal plugin catalog in
+  the daemon's existing state-event snapshot, separate from the matrix project catalog. The
+  projection must retain bounded plugin/control metadata and remain read-only until mapping
+  resolution and explicit live-write workflows are complete.
+- **Implementation evidence (2026-09-06):** `PluginCatalog` is now serializable and daemon state
+  events publish the adapter's validated `pipedal_catalog` independently of the matrix project
+  catalog. Connector/adapter/daemon tests, strict Clippy, architecture policy, formatting, and
+  diff hygiene pass.
+- **Implementation evidence (2026-09-06):** Added bounded validation-only mapping resolution in
+  the adapter. Each persisted URI/symbol mapping is classified as resolved, unavailable,
+  ambiguous, or read-only against the fresh catalog; no control request is enqueued. Adapter
+  tests, strict Clippy, architecture policy, formatting, and diff hygiene pass.
+- **Next implementation slice (2026-09-06):** Make mapping-resolution classifications a strict
+  serialized contract suitable for IPC/state events, retaining bounded outcomes and no-write
+  semantics while apply/undo authorization remains a separate operation.
+- **Implementation evidence (2026-09-06):** Added generation-checked `setControl` preparation.
+  The adapter resolves the stable mapping, verifies writability and catalog range, validates the
+  runtime instance/client fields, and returns an encoded request without queuing or sending it.
+  Adapter tests, strict Clippy, architecture policy, formatting, and diff hygiene pass.
+- **Next implementation slice (2026-09-06):** Add explicit confirmed apply admission for prepared
+  `setControl` requests. Admission requires a ready session, current generation, resolved writable
+  target, and caller confirmation; failed validation must not alter the transport queue.
+- **Implementation evidence (2026-09-06):** `ResolutionState` and `ResolutionOutcome` now have
+  strict snake-case serialization with unknown-field rejection, suitable for IPC/state-event
+  publication. A round-trip and rejection regression passes; adapter tests, strict Clippy,
+  architecture policy, formatting, and diff hygiene pass.
+- **Implementation evidence (2026-09-06):** Added `apply_set_control` admission. It requires
+  explicit confirmation and a ready/current session, revalidates catalog writability and range,
+  and only then queues the encoded request. Adapter tests, strict Clippy, architecture policy,
+  formatting, and diff hygiene pass.
+- **Next implementation slice (2026-09-06):** Add a bounded generation-aware apply/undo journal
+  for PiPedal scalar mappings. Undo will return an explicit restore intent only for the current
+  session generation; it will never replay stale network traffic automatically.
+- **Implementation evidence (2026-09-06):** The adapter now retains one validated prior scalar
+  value and returns a generation-checked restore intent for undo. Regression coverage verifies
+  one-shot undo and stale/empty journal rejection; no automatic network replay occurs.
+- **Next implementation slice (2026-09-06):** Add a dedicated strict `pipedal` IPC request
+  contract with snapshot/apply/undo operations. Snapshot is read-only; mutation requests require
+  explicit confirmation and generation and remain fail-closed until daemon runtime wiring is
+  complete.
+- **Implementation evidence (2026-09-06):** Added strict `pipedal` IPC command/request types
+  with `snapshot`, `apply`, and `undo` operations. The daemon now serves PiPedal snapshot health,
+  catalog, and mapping-resolution data; mutation IPC remains explicitly fail-closed until its
+  runtime instance and durable commit wiring is complete. IPC/daemon tests, strict Clippy,
+  architecture policy, formatting, and diff hygiene pass.
+- **Next implementation slice (2026-09-06):** Carry stable mapping identity, runtime instance ID,
+  client ID, value, and confirmation through the `pipedal` IPC request so the daemon can invoke
+  adapter apply admission. The operation remains generation-checked and does not commit config
+  until a later confirmation/transaction step.
+- **Implementation evidence (2026-09-06):** `pipedal` IPC now carries strict apply payload fields
+  and the daemon invokes adapter apply admission when requested; undo returns the adapter's
+  explicit restore intent. Snapshot/apply/undo parsing is generation-aware and mutation failures
+  remain fail-closed. IPC/daemon/adapter tests, strict Clippy, architecture, formatting, and diff
+  checks pass.
+- **Next corrective slice (2026-09-06):** Require a fresh catalog current value when admitting an
+  IPC apply and record that value in the adapter undo journal. Apply must fail closed if prior state
+  is unavailable, preventing an apparently successful mutation with no safe restore path.
+- **Next implementation slice (2026-09-06):** Execute adapter undo intents through the current
+  generation-checked apply path, requiring explicit confirmation and fresh catalog validation
+  before queuing the restore request.
+- **Implementation evidence (2026-09-06):** Added `apply_restore_intent`, which requires explicit
+  confirmation, a ready/current session, fresh catalog resolution, and then queues the restore
+  request through the bounded control queue. Focused adapter/daemon tests, strict Clippy,
+  architecture policy, formatting, and diff hygiene pass.
+- **Next corrective slice (2026-09-06):** Make IPC undo atomic at the adapter boundary: validate
+  and queue the restore first, then consume the journal record only on success.
+- **Implementation evidence (2026-09-06):** IPC `undo` now invokes atomic adapter restore admission
+  with client identity and confirmation; the journal is consumed only after validation and queue
+  success. Adapter/daemon/IPC tests, strict Clippy, architecture policy, formatting, and diff
+  hygiene pass.
+- **Implementation evidence (2026-09-06):** Added operator command `pipedal snapshot [--json]`,
+  which requests the daemon's PiPedal health, live catalog, and mapping-resolution projection
+  without performing writes. CLI tests, strict Clippy, architecture policy, formatting, and diff
+  hygiene pass.
+- **Live qualification evidence (2026-09-06):** `pipedald.service` is active and port 8080 is
+  listening; the MACKES control socket is present. Running the new read-only CLI snapshot against
+  that socket returned `{"ok":false,"error":"unknown command"}`, proving the installed daemon
+  predates the new `pipedal` IPC command. Updated-daemon deployment/restart is required before
+  claiming end-to-end IPC or live PiPedal qualification.
+- **Next implementation slice (2026-09-06):** Add explicit CLI `pipedal apply` and `pipedal undo`
+  commands with required generation and confirmation, forwarding typed payloads to daemon IPC.
+- **Implementation evidence (2026-09-06):** Added CLI `pipedal apply` and `pipedal undo` forms;
+  both forward typed generation/confirmation payloads to the daemon, and apply carries stable
+  physical/plugin/symbol identity plus runtime instance/value. CLI tests, strict Clippy,
+  architecture policy, formatting, and diff hygiene pass.
+- **Next implementation slice (2026-09-06):** Extend PiPedal IPC health with bounded successful
+  read evidence so connected state is distinguishable from a session that has actually received
+  valid protocol responses.
+- **Implementation evidence (2026-09-06):** PiPedal IPC health now includes `successful_reads`,
+  incremented only after a complete frame decodes and advances the session phase. IPC/adapter/
+  daemon tests, strict Clippy, architecture policy, formatting, and diff hygiene pass.
+- **Next corrective slice (2026-09-06):** Add bounded startup request/reply correlation. Startup
+  requests will carry deterministic IDs, expected replies will be tracked per session generation,
+  and unknown correlated replies will fail closed while unsolicited events remain admissible.
+- **Implementation evidence (2026-09-06):** Startup requests now carry deterministic reply IDs;
+  expected IDs reset per session and unknown correlated replies are rejected. Unsolicited event
+  frames remain accepted. Adapter tests (9), strict Clippy, architecture policy, formatting, and
+  diff hygiene pass.
+- **Next corrective slice (2026-09-06):** Correlate confirmed `setControl` requests with bounded
+  reply IDs so apply responses can be distinguished from unsolicited events and counted as valid
+  read-back evidence.
+- **Implementation evidence (2026-09-06):** Mutation requests now receive allocated reply IDs and
+  register them only after queue admission; complete correlated responses increment successful-read
+  evidence, while unknown IDs fail closed. Adapter/daemon/IPC tests (including 9 adapter tests),
+  strict Clippy, architecture policy, formatting, and diff hygiene pass.
+- **Implementation evidence (2026-09-06):** Added adapter `ApplyRecord` and `RestoreIntent` with
+  generation validation. The journal retains the prior scalar value and returns an explicit undo
+  intent; it does not automatically enqueue restore traffic. Adapter Clippy, tests, architecture
+  policy, formatting, and diff hygiene pass.
+- **Next implementation slice (2026-09-06):** Resolve reusable PiPedal mappings against the
+  adapter's fresh catalog. Return bounded per-mapping outcomes for resolved, missing, ambiguous,
+  and read-only targets; this remains validation-only and must not enqueue control writes.
+- **Implementation evidence (2026-09-06):** The daemon now converts persisted configuration
+  mappings at the adapter boundary and publishes bounded per-mapping resolution outcomes in state
+  events, without adding a forbidden direct daemon-to-connector dependency or issuing writes.
+- **Implementation evidence (2026-09-06):** `WebSocketTransport` now uses the connector's bounded
+  `TextAssembler`, ignores ping control frames, rejects close frames, and returns only complete
+  text messages to the worker. Formatting, adapter tests, strict Clippy, architecture policy,
+  and diff hygiene pass.
+- **Implementation evidence (2026-09-06):** `mackesd` now invokes `poll_pipedal()` every main-loop
+  tick. It attempts the qualified IPv6 WebSocket with a ten-second retry bound, starts the worker,
+  pumps at most eight frames in each direction, advances protocol phases, and drops/retries on
+  transport or protocol failure. Strict daemon Clippy, architecture policy, formatting, and diff
+  hygiene pass.
+- **Implementation evidence (2026-09-06):** Added daemon tick servicing for the PiPedal worker:
+  bounded connection retry to the qualified IPv6 endpoint, startup admission, bounded pump and
+  protocol-phase acceptance. Transport failures drop the connection and retry after a bounded
+  delay without blocking the MIDI or IPC paths. Daemon and adapter tests/Clippy and architecture
+  checks pass.
+- **Implementation evidence (2026-09-06):** Added the adapter-to-IPC health bridge, mapping
+  connector session phases into the strict `mackes-ipc` `PiPedalStatus` contract and preserving
+  bounded generation/queue diagnostics. Adapter and IPC-focused tests plus strict policy checks
+  pass; daemon command-loop publication remains open.
+- **Implementation evidence (2026-09-06):** Added strict serialized `PiPedalPhase` and
+  `PiPedalStatus` IPC contracts covering session phase, generation, pending requests, timeouts,
+  and transport failures. Unknown fields are rejected and round-trip coverage passes. IPC tests,
+  strict Clippy, architecture policy, formatting, and diff hygiene pass.
 - **Progress evidence (2026-09-05):** Added bounded response decoding with a 1 MiB frame
   ceiling, array-shape validation, typed headers, event bodies, and oversized/malformed-frame
   tests. Connector remains transport-independent and performs no live writes.
@@ -4974,6 +5427,48 @@ tests, strict Clippy, architecture/worklist policy, and the complete release gat
 - **Progress evidence (2026-09-05):** Added connector-owned `Session` state with reconnect
   generations and queue invalidation. Requests tagged with an old generation are rejected, and
   queued writes are discarded on socket reset to prevent stale cross-platform delivery.
+- **Progress evidence (2026-09-05):** Session transport diagnostics now separately account for
+  bounded timeouts and non-timeout transport failures without changing reconnect generation;
+  the worker can use these counters for recovery/backoff policy. Regression coverage passes with
+  25 connector tests and strict Clippy.
+- **Correctness evidence (2026-09-05):** reconnect reset now clears session-scoped transport
+  timeout and failure counters alongside queued work, preventing diagnostics from mixing old and
+  new connections. The 25-test connector suite, strict Clippy, and repository checks pass.
+- **Backpressure evidence (2026-09-05):** the PiPedal request queue now enforces both the 64-frame
+  limit and a 4 MiB total encoded-byte budget, maintaining exact byte accounting as requests are
+  dequeued. Oversubscription and budget-release regressions pass; connector tests total 26 with
+  strict Clippy and repository checks green.
+- **Diagnostic evidence (2026-09-05):** the connector session now exposes pending encoded-byte
+  usage alongside pending request count and rejection totals, allowing transport workers to
+  distinguish frame-count pressure from byte-budget pressure. The 26-test connector suite,
+  strict Clippy, and repository checks pass.
+- **Fail-closed resolution evidence (2026-09-06):** catalog mapping resolution now rejects
+  duplicate live controls sharing a plugin URI and parameter symbol instead of selecting the
+  first descriptor arbitrarily. A duplicate-control regression passes; the connector suite has
+  30 tests with strict Clippy, formatting, and repository checks green.
+- **Release revalidation (2026-09-06):** full `scripts/release-gate.sh` passes after catalog
+  resolution hardening and the CLI preview addition, including 13 passing hermetic scenarios,
+  one explicitly ignored paired-RTP case, installer smoke, and release artifact verification.
+- **Bounded worker-handoff evidence (2026-09-06):** `Session::send_pending` now provides the
+  transport worker a nonblocking budgeted outbound drain, accounts transport failures, and
+  leaves unsent queue work bounded. A regression verifies one-frame budgeting and timeout
+  accounting; the connector suite has 31 passing tests with strict Clippy green. Daemon socket
+  integration and live PiPedal writes remain open.
+- **Bounded receive-poll evidence (2026-09-06):** added complementary `Session::receive_available`
+  polling with a caller budget, no peer wait, and transport-error accounting. The mock exchange
+  regression now covers both outbound budgeting and inbound frame delivery; 31 connector tests,
+  strict Clippy, formatting, and repository checks pass. Daemon socket integration remains open.
+- **Receive-failure evidence (2026-09-06):** the worker-handoff regression now injects a
+  disconnected receive error and verifies it is returned and counted in session diagnostics;
+  the 31-test connector suite, strict Clippy, formatting, and diff checks remain green.
+- **Decoded receive evidence (2026-09-06):** added `Session::receive_messages` to combine the
+  bounded nonblocking poll with strict protocol decoding, converting malformed frames into the
+  typed `Protocol` failure path. The mock exchange regression covers a decoded server event;
+  connector tests and strict Clippy pass. Daemon socket integration remains open.
+- **Progress evidence (2026-09-05):** Added bounded queue diagnostics: session projections expose
+  pending request depth and cumulative rejection count, while oversize and saturated enqueue
+  attempts increment the counter. Regression coverage confirms both rejection causes and that
+  reset clears pending work and diagnostics; 24 connector tests and strict Clippy pass.
 - **Progress evidence (2026-09-05):** Added a socket-library-independent `Transport` trait and
   bounded `TransportError` taxonomy, giving the daemon worker a testable send/receive boundary
   without placing network I/O on the MIDI dispatch path.
@@ -5004,39 +5499,93 @@ tests, strict Clippy, architecture/worklist policy, and the complete release gat
 - **Release evidence (2026-09-05):** `scripts/release-gate.sh` passed after registering the
   connector in the architecture policy, including workspace tests, benchmark, hermetic
   integration (13 passed, 1 explicitly ignored), installer smoke, and release artifact checks.
+- **Architecture-boundary evidence (2026-09-05):** The connector design explicitly records that
+  `mackes-pipedal-connector` remains transport-independent and must not become a direct `mackesd`
+  dependency. A trial daemon embedding was rejected by repository architecture policy and fully
+  reverted; remaining W113 work is the approved worker/IPC adapter, readiness/reconciliation, and
+  live qualification.
 - **Acceptance:** Mock-server contract tests cover discovery, metadata, malformed responses,
   timeouts and reconnect; blocking network work never runs on the MIDI dispatch path.
 
-#### [ ] W114 — Persist EQ mappings and integrate operator workflows
-- **Status:** `NOT_STARTED`
+#### [>] W114 — Persist EQ mappings and integrate operator workflows
+- **Status:** `IN_PROGRESS`
 - **Owner:** Unassigned
 - **Depends on:** W113
 - **Work:** Implement versioned connector configuration, export/import, preview/apply/undo,
   R3C4–R3C8 conflict migration, dynamic destination catalog, and CLI/TUI parity for every
   qualified operation. Provide suitable editors/actions for non-scalar controls; expose
   destructive actions with explicit confirmation and never bind them to knobs by default.
-- **Acceptance:** Five mappings resolve by plugin identity/parameter symbol; unrelated mappings
-  survive; duplicate/missing plugins require repair; save failure leaves prior bindings intact.
+- **Acceptance:** EQ mappings resolve only against controls advertised by the active plugin, with
+  `gain` as the cross-family default and optional band controls discovered per EQ; unrelated
+  mappings survive; duplicate/missing plugins require repair; save failure leaves prior bindings intact.
+- **Progress evidence (2026-09-06):** Added versioned, bounded `pipedal_mappings` configuration
+  records using physical-control ID, plugin URI, parameter symbol, and optional scope; runtime
+  instance IDs are excluded. Validation rejects duplicate physical controls/targets and counts
+  above 128, with schema coverage and regression tests. Worker/IPC integration and apply/undo
+  workflows remain open.
+- **Workspace evidence (2026-09-06):** `cargo test --workspace --all-targets` passes after the
+  persisted mapping model, including 46 config, 28 connector, and 83 daemon tests; this verifies
+  existing config consumers remain compatible without closing W114 acceptance.
+- **Fixture evidence (2026-09-06):** `fixtures/config-valid.json5` now carries one version-1
+  stable PiPedal mapping, and a JSON5 load/semantic-validate/JSON round-trip regression confirms
+  the persisted identity survives serialization. The focused fixture and identity tests pass;
+  dynamic catalog resolution and operator apply/undo remain open.
+- **Release evidence (2026-09-06):** `scripts/release-gate.sh` passes after the persisted
+  mapping and pickup increments, including release workspace tests, strict Clippy, hermetic
+  integration (13 passed, 1 explicitly ignored), installer smoke, and release artifact checksum.
+- **Operator preview evidence (2026-09-06):** added `mackes pipedal mappings <config> [--json]`
+  to validate and preview persisted stable mappings locally before any external write. The
+  command was exercised against `fixtures/config-valid.json5` and returned one mapping with its
+  versioned identity; CLI tests, strict Clippy, formatting, and repository checks pass.
+- **CLI regression evidence (2026-09-06):** application coverage now asserts the preview’s stable
+  JSON fields and confirms a missing configuration fails explicitly. The CLI suite has 6 passing
+  tests, with strict Clippy, formatting, and repository checks green.
+- **TTY preview evidence (2026-09-06):** human-readable PiPedal preview now lists each bounded
+  physical-control to plugin/symbol destination (including scope when present), while retaining
+  the stable JSON contract. The fixture command prints `knob-r3-c4 -> urn:example:eq:gain`; CLI
+  tests, strict Clippy, formatting, and repository checks pass.
+- **Design synchronization evidence (2026-09-06):** `docs/pipedal-connector-design.md` now
+  records the implemented version-1 mapping preview contract, 128-entry bound, identity fields,
+  fail-closed duplicate handling, and explicit no-write boundary. Repository and diff checks pass.
+- **Runbook synchronization evidence (2026-09-06):** operator recovery documentation now includes
+  both human and JSON PiPedal mapping preview commands and explicitly separates local validation
+  from external plugin availability and live writes. Diff and repository checks pass.
 
-#### [ ] W115 — Synchronize PiPedal state and bound recovery traffic
-- **Status:** `NOT_STARTED`
+#### [>] W115 — Synchronize PiPedal state and bound recovery traffic
+- **Status:** `IN_PROGRESS`
 - **Owner:** Unassigned
 - **Depends on:** W113, W114
 - **Work:** Implement pickup, parameter-event reconciliation, preset/snapshot generations,
   bounded control/LED queues, stale-state reporting, and automatic recovery.
 - **Acceptance:** Stress tests prove no feedback loop, stale replay, unbounded queue or daemon
   stall; external edits and reconnect re-arm pickup without overwriting PiPedal values.
+- **Progress evidence (2026-09-06):** Added transport-neutral `PickupState` with finite-value and
+  tolerance validation, session-generation gating, reconnect re-arm, and write permission only
+  after the physical value reaches the reconciled external target. Two regression tests pass in
+  the 28-test connector suite with strict Clippy and repository checks; full worker reconciliation
+  and stress qualification remain open.
+- **Ledger evidence (2026-09-06):** Added a bounded `ReconciliationLedger` keyed by stable
+  physical-control ID, with replacement, observation, generation-gated write permission, and
+  reconnect clearing. The connector suite now has 29 passing tests; strict Clippy, formatting,
+  and repository checks pass. External event ingestion and stress qualification remain open.
+- **Capacity evidence (2026-09-06):** Added a saturation regression proving the reconciliation
+  ledger accepts exactly `MAX_RECONCILIATION_STATES` entries and rejects the next entry. The
+  connector suite now has 30 passing tests, with strict Clippy, formatting, and repository checks.
+- **Design synchronization evidence (2026-09-06):** connector design now records the implemented
+  128-control reconciliation ledger, stale-generation rejection, reconnect clearing, pickup gate,
+  and duplicate-control fail-closed behavior. Repository and diff checks pass.
 
 #### [ ] W116 — Qualify and deploy PiPedal integration
 - **Status:** `NOT_STARTED`
 - **Owner:** Unassigned
 - **Depends on:** W114, W115
 - **Work:** Run design qualification matrix, document results, build/install with rollback,
-  and verify all five physical EQ controls alongside Eventide and Lexicon.
-- **Acceptance:** CLI/TUI agree with PiPedal read-back; physical sweep and reconnect evidence
-  recorded; no Novation lockup; missing hardware evidence remains explicitly open.
+  and verify the advertised native EQ controls alongside Eventide and Lexicon.
+- **Acceptance:** CLI/TUI agree with PiPedal read-back for metadata-advertised controls; `gain`
+  is the universal baseline and no fixed five-symbol set is assumed; physical sweep and reconnect
+  evidence recorded; no Novation lockup; missing hardware evidence remains explicitly open.
 
-#### [ ] W100 — Reproducible appliance installation and boot supervision
+#### [>] W100 — Reproducible appliance installation and boot supervision
 
 - **Status:** `IN_PROGRESS`
 - **Owner:** Luna
@@ -5060,8 +5609,54 @@ tests, strict Clippy, architecture/worklist policy, and the complete release gat
   the wrapper, appliance drop-in and console unit; installer smoke checks these dependencies.
   Corrected the appliance drop-in so start-limit controls are declared in the systemd Unit
   section. Unit verification on the installed host remains open.
+- **Package verification (2026-09-05):** `systemd-analyze verify` passes for the packaged daemon
+  and console units with the appliance drop-in assembled under the expected `.service.d` path.
+  Installed-host and reboot observations remain open.
+- **Automation evidence (2026-09-05):** `scripts/verify-systemd-units.sh` now reproduces that
+  drop-in assembly and is called by `scripts/installer-smoke.sh`; both pass without installation.
+- **Unit-contract evidence (2026-09-06):** static unit verification now asserts daemon identity,
+  multi-user boot targets, console-to-daemon requirement, and configured console environment in
+  addition to `systemd-analyze verify`. Unit verification, installer smoke, and repository checks pass.
+- **Restart-policy evidence (2026-09-06):** static verification now also requires the appliance
+  drop-in’s `Restart=always` and `RestartSec=3s`, protecting daemon crash recovery policy from
+  packaging drift. Unit verification, installer smoke, and repository checks pass.
+- **Release revalidation (2026-09-06):** full `scripts/release-gate.sh` passes after the expanded
+  systemd verifier, including workspace tests, throughput benchmark, hermetic integration,
+  installer smoke, and release artifact checksum.
+- **PiPedal ordering evidence (2026-09-06):** static unit verification now protects the appliance
+  drop-in’s `Wants=pipedald.service`, `After=pipedald.service alsa-restore.service`, and
+  `PartOf=pipedald.service` directives, preserving companion-service ordering and propagation.
+  Unit verification, installer smoke, and repository checks pass.
+- **Preflight evidence (2026-09-05):** current release artifacts pass `install-fedora.sh --check`,
+  installer smoke (including invalid-argument and console-account validation), and standalone
+  packaged systemd-unit verification. These checks are non-mutating; clean-host installation,
+  reboot, upgrade rollback, and failure-injection qualification remain open.
+- **Installed runtime evidence (2026-09-05):** read-only probes show both daemon and TUI services
+  active, daemon `Restart=always`, `NRestarts=0`, and identity `mackes:mackes-control`. The live
+  status endpoint is responsive with `native_backend=alsa-seq`, `native_failure=null`, seven
+  registered inputs, and zero dropped events. Clean-host/reboot, upgrade rollback, and physical
+  qualification remain open.
+- **Release-gate evidence (2026-09-05):** full `scripts/release-gate.sh` passes after the
+  persistence/readiness/connector increments: repository and architecture policy, workspace
+  tests, strict Clippy, routing benchmark, 13 passing hermetic scenarios with one explicitly
+  ignored post-release interoperability case, installer smoke, and release artifact checksum.
+  Clean-host/reboot, rollback, power-loss, and physical qualification remain open.
+- **Post-install truthfulness evidence (2026-09-06):** the mutating installer now verifies both
+  daemon and console units are actually active after enable/start/restart and emits unit status
+  before failing with a non-success exit. Installer smoke, systemd-unit verification, and
+  repository checks pass; clean-host rollback and reboot qualification remain open.
+- **Installer regression evidence (2026-09-06):** installer smoke now asserts those post-install
+  activation checks remain present, preventing future packaging edits from restoring a false
+  success path. The no-mutation smoke suite and repository policy checks pass.
+- **Boot-supervision evidence (2026-09-06):** the mutating installer now fails unless both daemon
+  and console units are enabled as well as active; installer smoke asserts all four post-install
+  checks. Smoke, systemd verification, repository, and diff checks pass. Clean-host/reboot evidence
+  remains open.
+- **Installed boot-state evidence (2026-09-06):** read-only `systemctl` probes report both daemon
+  and console units `enabled` and `active`, with `NRestarts=0`; the daemon runs as `mackes:mackes-control`.
+  This confirms the current host’s steady state only and does not replace clean-host/reboot testing.
 
-#### [ ] W101 — Power-loss durable configuration and recovery
+#### [>] W101 — Power-loss durable configuration and recovery
 
 - **Status:** `IN_PROGRESS`
 - **Owner:** Luna
@@ -5082,6 +5677,25 @@ tests, strict Clippy, architecture/worklist policy, and the complete release gat
 - **Work log:** 2026-09-05 — codex — `READY` → `IN_PROGRESS`; configuration saves now
   synchronize the temporary file before replacement and the parent directory after replacement.
   Multi-file recovery and fault-injection qualification remain open.
+- **Durability evidence (2026-09-05):** backup rotation now synchronizes the parent directory
+  after backup renames/copying, and the 40-test config suite passes. Multi-file recovery and
+  isolated power-loss qualification remain open.
+- **ADR evidence (2026-09-05):** [ADR-0012](docs/decisions/ADR-0012-durable-configuration-commit.md)
+  defines the validated single-document commit boundary, backup ordering, directory sync, and
+  the explicit multi-file journal boundary.
+- **Concurrency evidence (2026-09-05):** `save_rejects_a_concurrent_writer_and_releases_lock`
+  verifies exclusive per-config commit locking, automatic lock cleanup, and successful retry
+  after contention clears.
+- The lock intentionally fails closed if a prior process leaves it behind; stale-lock recovery
+  and multi-file interrupted-commit journaling remain separate W101 qualification work.
+- **Stale-lock evidence (2026-09-05):** save locks carry the owner PID; a dead Linux owner is
+  reclaimed while active contention fails closed. The three focused lock tests pass; malformed
+  lock ownership now also fails closed under `save_fails_closed_on_a_malformed_lock_owner`.
+- **Restore durability evidence (2026-09-05):** verified backup restore now writes a PID-scoped
+  temporary file, syncs its contents before replacement, and syncs the parent directory after
+  rename. The compatibility-gated restore regression confirms the fixed legacy temporary name
+  is not left behind; 44 config tests, strict Clippy, and repository checks pass. Multi-file
+  journal recovery and isolated power-loss qualification remain open.
 
 **Evidence update:** 2026-09-05 — MIDISPORT 4x4 firmware was loaded successfully, transitioning
 the device from bootloader `0763:1020` to runtime `0763:1021`; `amidi -l` now exposes four MIDI
@@ -5089,7 +5703,63 @@ ports, daemon inventory exposes four inputs and four outputs, and hardware quali
 `acceptance=pass`. Novation and Eventide remain enumerated and mapped. Physical repeated-button,
 LED replay, and pedal-state observations are still open.
 
-#### [ ] W102 — Truthful readiness and actionable operator recovery
+- **Route durability evidence (2026-09-05):** daemon-owned current-route and route-undo writers
+  now use PID-scoped temporary names, sync each encoded file before rename, and sync the parent
+  directory after replacement. The 82-test daemon suite, strict Clippy, and repository checks
+  pass; multi-file journal recovery and isolated power-loss qualification remain open.
+- **Route failure cleanup evidence (2026-09-05):** current-route and route-undo persistence now
+  share a bounded atomic JSON helper that removes its temporary file after any failed write, sync,
+  or rename boundary. Daemon tests (83), strict Clippy, architecture, and repository checks pass;
+  multi-file journal recovery and isolated power-loss qualification remain open.
+- **Route-temp uniqueness evidence (2026-09-06):** the shared route atomic helper now combines
+  process ID and nanosecond timestamp in temporary names, preventing same-process concurrent route
+  and undo writes from colliding. Daemon tests (84), strict Clippy, formatting, and repository
+  checks pass; multi-file journal recovery remains open.
+- **Stale-temp recovery evidence (2026-09-05):** configuration saves now remove only interrupted
+  temporary files matching the exact target basename after acquiring the per-file writer lock;
+  unrelated temporary files are preserved. The named regression passes with 45 config tests,
+  strict Clippy, and repository checks; multi-file journal recovery and power-loss qualification
+  remain open.
+- **Restore stale-temp evidence (2026-09-05):** verified backup restore now applies the same
+  target-scoped cleanup to interrupted PID-scoped restore files before replacement; unrelated
+  temporary files are not selected. The restore regression passes within the 45-test config
+  suite, with strict Clippy and repository checks green.
+- **Release revalidation (2026-09-05):** full `scripts/release-gate.sh` passes after stale-save
+  and stale-restore recovery changes, including workspace tests, strict Clippy, benchmark,
+  hermetic integration (13 passed, 1 explicitly ignored), installer smoke, and release checksum.
+  Multi-file journal and isolated power-loss qualification remain open.
+- **Restore workflow evidence (2026-09-05):** operator runbook now documents the exact validated
+  backup preview and explicit `--apply` commands, with required profile/device identity inputs,
+  compatibility gating, and identity-warning handling. Repository/worklist and diff checks pass;
+  isolated rollback and power-loss qualification remain open.
+- **Backup boundary evidence (2026-09-05):** `save_backup` now cleans both temporary artifacts
+  and any partially committed payload/manifest when a write, sync, rename, or final directory
+  sync boundary fails, preventing an orphan payload from being mistaken for a verified backup.
+  The 45-test config suite, strict Clippy, and diff checks pass; injected filesystem faults and
+  multi-file journal recovery remain open qualification work.
+- **Portable-export durability evidence (2026-09-06):** portable export now uses a PID-scoped
+  temporary file, synchronizes file contents and the destination directory, and removes the
+  temporary artifact on failure. Its round-trip regression asserts neither fixed nor scoped temp
+  files remain; config tests now total 47, with strict Clippy and repository checks passing.
+- **Release revalidation (2026-09-06):** full `scripts/release-gate.sh` passes after portable
+  export hardening, including release workspace tests, throughput benchmark, hermetic integration,
+  installer smoke, and release artifact checksum.
+- **Failure-boundary evidence (2026-09-06):** portable export now has an explicit rename-failure
+  regression using a directory at the target path; the operation fails and removes its PID-scoped
+  temporary. Both portable-export tests pass, with strict Clippy and repository checks green.
+- **Concurrency evidence (2026-09-06):** portable export temporary names now combine process ID
+  and nanosecond timestamp, preventing same-process concurrent exports from sharing a fixed path.
+  Round-trip and forced-failure tests assert no target-scoped export temp remains; strict Clippy
+  and repository checks pass.
+- **Primary-save cleanup evidence (2026-09-06):** the main configuration writer now removes its
+  PID/timestamp temporary immediately when write, sync, rename, or directory-sync fails, while
+  preserving the prior committed document. The full config suite now has 48 passing tests, with
+  strict Clippy, formatting, and repository checks green.
+- **Release revalidation (2026-09-06):** full `scripts/release-gate.sh` passes after primary-save
+  cleanup, including workspace tests, throughput benchmark, hermetic integration, installer
+  smoke, and release artifact checksum.
+
+#### [>] W102 — Truthful readiness and actionable operator recovery
 
 - **Status:** `IN_PROGRESS`
 - **Owner:** Luna
@@ -5120,6 +5790,67 @@ LED replay, and pedal-state observations are still open.
   across ordinary authorized commands and a regression test covers the transition. Subscription,
   template projection, and operator recovery evidence remain open. The appliance TUI unit now
   explicitly supplies the installed configuration path used by its template projection.
+- **Progress evidence (2026-09-05):** daemon snapshots now publish a bounded
+  `config_persistence` projection with `unconfigured`, `missing`, `unreadable`, and `ready`
+  states plus an actionable repair message. A regression covers unconfigured and configured
+  paths; 83 daemon tests, strict Clippy, and architecture/repository checks pass. Full recovery
+  walkthrough and live pressure verification remain open.
+- **Progress evidence (2026-09-05):** the persistence projection now verifies write access for
+  an existing regular file and reports a distinct `read_only` state with ownership/permission
+  guidance; non-file paths remain `unreadable`. The snapshot regression covers this state and
+  the 83-test daemon suite, strict Clippy, architecture, and repository checks pass.
+- **Progress evidence (2026-09-05):** TUI dashboard reduction now consumes the authoritative
+  `config_persistence.state` projection and renders it in dashboard frames, preserving actionable
+  persistence visibility beyond raw IPC snapshots. TUI projection/render tests pass (76), along
+  with strict Clippy and repository checks.
+- **Progress evidence (2026-09-05):** CLI/TUI observability projection now adds a bounded,
+  actionable configuration diagnostic whenever persistence is not `ready`, including the daemon
+  supplied remediation text. Application tests (5), strict Clippy, architecture, and repository
+  checks pass; live pressure and full recovery walkthrough evidence remain open.
+- **Progress evidence (2026-09-05):** compact TUI frames now retain the persistence state as a
+  width-safe `config=...` line, and the initial dashboard explicitly starts at `unconfigured`
+  rather than an empty value. TUI tests (76), strict Clippy, and repository checks pass; live
+  pressure and full recovery walkthrough evidence remain open.
+- **Progress evidence (2026-09-05):** persistence health now validates writable configuration
+  files and reports malformed documents as `corrupt` with verified-backup restore guidance;
+  valid documents remain `ready`. Daemon regression coverage includes malformed input, and the
+  83-test suite, strict Clippy, architecture, and repository checks pass.
+- **Operator evidence (2026-09-05):** `docs/operator-recovery-runbook.md` now maps every
+  persistence state (`ready`, `unconfigured`, `missing`, `read_only`, `corrupt`) to a concrete
+  repair action and requires a post-repair status recheck. Repository/worklist and diff checks
+  pass; full operator walkthrough evidence remains open.
+- **Consistency evidence (2026-09-05):** incremental daemon state events now include the same
+  `config_persistence` projection as full snapshots, so connected TUI clients retain persistence
+  health between snapshot refreshes. The named journal regression passes with 83 daemon tests,
+  strict Clippy, architecture, and repository checks green.
+- **Workspace regression evidence (2026-09-05):** `cargo test --workspace --all-targets` passes
+  after the persistence projection and recovery updates, including 45 config, 28 IPC, 79 engine,
+  83 daemon, 76 TUI, and 5 application tests. Qualification-scale host, power-loss, and physical
+  recovery rows remain open.
+- **No-environment CLI evidence (2026-09-06):** read-only `env -u MACKES_CONFIG -u MACKES_SOCKET
+  /usr/local/bin/mackes-midi-matrix status --json` returned a complete authoritative snapshot,
+  including `native_backend=alsa-seq`, `native_failure=null`, seven registered inputs, and
+  actionable device/persistence fields. This closes the no-environment status probe only; full
+  console recovery and pressure walkthrough evidence remain open.
+- **Repeatability evidence (2026-09-06):** qualification baseline capture now writes both the
+  normal status artifact and `status-no-env.json`, explicitly unsetting `MACKES_CONFIG` and socket
+  overrides for the latter. The script remains read-only and bounded; repository and diff checks pass.
+- **Capture-tool regression evidence (2026-09-06):** installer smoke now requires the qualification
+  capture script to remain executable and to retain its no-environment status artifact. Installer
+  smoke, systemd verification, and repository checks pass.
+- **Live pressure evidence (2026-09-06):** twenty consecutive no-environment status requests
+  completed while both appliance services remained active. Each returned `ok=true`,
+  `received=2`, `sent=0`, `dropped=0`, and `native_failure=null` in 0.08–0.09 seconds, with no
+  restart observed. This strengthens status responsiveness evidence but does not close the full
+  disconnect/pressure walkthrough.
+- **Soak checkpoint (2026-09-06):** the live eight-hour sampler remains active and has recorded
+  two one-minute samples (04:11:32Z and 04:12:33Z). Both daemon and console were active, status
+  probes succeeded, drops remained zero, and daemon journal lines increased from 880 to 886;
+  this is an in-progress checkpoint, not completion of the eight-hour run.
+- **Soak metrics checkpoint (2026-09-06):** 22 samples from 04:11:32Z through 04:31:36Z show
+  daemon CPU at 8.9–11.5%, RSS at 7,044–7,364 KiB, zero drops, and journal lines at 880–917.
+  This short stable interval is supporting evidence only; the eight-hour duration and trend
+  analysis remain open.
 
 #### [x] W103 — Loss-accounted MIDI dispatch and repeated button reliability
 
@@ -5150,7 +5881,7 @@ LED replay, and pedal-state observations are still open.
   produced the Eventide bypass output. The raw batch also recorded 62 pairs on note 73; this is
   retained as supporting input-stress evidence rather than relabeled as note-41 traffic.
 
-#### [ ] W104 — Installed-platform fitness qualification and release decision
+#### [>] W104 — Installed-platform fitness qualification and release decision
 
 - **Status:** `IN_PROGRESS`
 - **Owner:** Luna
@@ -5175,6 +5906,67 @@ LED replay, and pedal-state observations are still open.
   inventory found Launch Control XL `1235:0061`, Eventide MicroPitch `1b12:003a`, and
   MIDISPORT loader `0763:1020`; Novation/Eventide application endpoints are present, while
   `amidi` reports zero MIDISPORT ports. No physical write or reboot/power-loss claim made.
+- **Evidence update (2026-09-05):** MIDISPORT firmware was loaded successfully and runtime
+  identity is now `0763:1021`; `amidi -l` and daemon inventory expose four inputs and four
+  outputs. The full release gate passes, but the required multi-cycle boot/reconnect and
+  power-loss matrix remains incomplete.
+- **Live inventory snapshot (2026-09-05):** `lsusb` reports Launch Control XL `1235:0061`,
+  Eventide MicroPitch `1b12:003a`, and MIDISPORT `0763:1021`; `amidi -l` reports the Novation
+  MIDI/HUI pair, Eventide MIDI 1, and MIDISPORT MIDI 1–4. `systemctl is-active` reports the
+  daemon active, and `aconnect -l` shows MACKES subscriptions to the Novation MIDI port,
+  Eventide MIDI 1, and all four MIDISPORT ports. This is an inventory snapshot, not the required
+  repeated boot/reconnect/pedal-observation qualification.
+- **Daemon snapshot evidence (2026-09-05):** the running CLI JSON snapshot reports
+  `native_backend=alsa-seq`, `native_failure=null`, `registered_inputs=7`, `native_led_resync=true`,
+  and connected physical projections for Launch Control XL, MicroPitch Pedal, MidiSport 4x4
+  (four input/output ports), and PiPedal. This confirms live software readiness at one instant;
+  it does not satisfy the required repeated-cycle or physical pedal/LED observation matrix.
+- **Qualification artifact (2026-09-05):** added
+  `docs/qualification-matrix-2026-09-05.md`, recording the exact shipped baseline, passing
+  software rows, open cold/warm boot, reconnect, LED/pedal, power-loss, clean-host, and soak
+  rows, plus a repeatable evidence-capture protocol. The artifact keeps hardware claims open
+  until operator observations and raw snapshots exist.
+- **Baseline capture evidence (2026-09-05):** added executable
+  `scripts/capture-qualification-baseline.sh`, which safely captures USB, ALSA, subscription,
+  service-property, and JSON status artifacts into an operator-selected absolute directory using
+  bounded commands and no restart/MIDI writes. A live run produced nonempty status and subscription
+  artifacts; repository checks pass.
+- **Artifact capture evidence (2026-09-05):** the baseline script now also records daemon and
+  console service properties, executable SHA-256 hashes, and the repository revision, making
+  the qualification record bindable to an exact installed build. A live read-only run produced
+  the hash/revision artifact; clean-host installation and repeated-cycle qualification remain open.
+- **Artifact-path correction (2026-09-06):** hash capture now covers the actual packaged daemon,
+  CLI, primary wrapper, and console wrapper paths; the prior nonexistent standalone TUI path was
+  removed. This keeps the baseline aligned with the unit’s `ExecStart` and installer inventory.
+- **Timing-context evidence (2026-09-05):** baseline capture now emits UTC capture time, operator,
+  and host metadata alongside the runtime and artifact records, satisfying the matrix’s minimum
+  traceability fields without changing the installed system.
+- **Read-only requalification (2026-09-05):** a subsequent probe confirms both appliance services
+  remain active; `NRestarts=0`, daemon identity is `mackes:mackes-control`, and `aconnect -l`
+  shows the Novation MIDI/HUI pair, Eventide MIDI 1, all four MIDISPORT ports, PiPedal, and
+  Device Monitor connected through MACKES. This strengthens the single-snapshot baseline only;
+  repeated cycles, power-loss, and operator-observed pedal/LED behavior remain open.
+- **Fresh read-only baseline (2026-09-06):** `scripts/capture-qualification-baseline.sh` completed
+  successfully at `2026-09-06T04:06:47Z` on `NAM-MIDI` as `root`, including service properties,
+  USB/ALSA/subscription inventory, normal and no-environment status snapshots, installed artifact
+  hashes, and repository revision. The no-environment snapshot reported `native_backend=alsa-seq`,
+  `native_failure=null`, `registered_inputs=7`, and connected Launch Control XL, MicroPitch,
+  MIDISPORT 4x4, PiPedal, and Device Monitor projections. This is stronger traceability for the
+  baseline but does not close repeated boot/reconnect, power-loss, clean-host, soak, or physical
+  pedal/LED observations.
+- **Soak tooling evidence (2026-09-06):** added executable
+  `scripts/capture-qualification-soak.sh`, a bounded read-only sampler for S13 that records UTC
+  samples, daemon/console active state, CPU/RSS, status counters, `NRestarts`, bounded daemon
+  journal line counts, and an explicit `status_ok` result to CSV.
+  A one-second smoke capture completed successfully with `status_ok=1`, `received=2`, `sent=0`,
+  `dropped=0`, and `NRestarts=0`; the required eight-hour representative run and log-growth
+  analysis remain open.
+- **Qualification-tool packaging evidence (2026-09-06):** installer smoke now verifies the soak
+  sampler is executable and retains its explicit `status_ok` failure marker, alongside the
+  baseline capture checks. Installer smoke and repository policy checks pass.
+- **Qualification-tool negative-path evidence (2026-09-06):** installer smoke now also rejects
+  relative soak output paths and zero-duration runs, confirming validation occurs before capture
+  setup. Installer smoke, repository policy, and diff checks pass.
 
 ### Integration, performance, and release
 
@@ -6125,3 +6917,39 @@ features as well as source calls.
 | 2026-09-05 | W101 | codex | unique backup staging | Backup payload and manifest staging names now include a timestamp, preventing an interrupted stale temp file from being silently reused. Config tests (29), strict config Clippy, formatting, and worklist checks pass. |
 | 2026-09-05 | W099/W103/W104 | codex | live Novation lock regression closed in software | Removed per-knob full LED resync after audit showed 11,064 LED SysEx writes for 570 input events. The daemon was rebuilt, installed, restarted, and re-audited with Launch Control XL, MicroPitch, MidiSport 4x4, Device Monitor, and PiPedal connected; status was `ready`, with zero drops and no native failure. Physical reconnect-cycle acceptance remains open. |
 | 2026-09-05 | W099/W103/W104 | codex | bounded LED transport added after repeat lock | A second live audit showed rapid knob activity could still produce multiple LED writes per input. LED feedback is now rate-limited to at most 8 frames per 20 ms, preserving coalescing and reconnect replay while preventing controller saturation. The release binary was installed and restarted; all device groups remain connected with `health=ready`, zero drops, and no native failure. |
+
+**PiPedal progress (2026-09-06):** Built and installed the release daemon through the supported
+backup-enabled installer path. Fixed the installer’s console-unit `sed` substitution and corrected
+the PiPedal transport default from IPv6 loopback to the host’s IPv4 listener. The new `pipedal
+snapshot --json` IPC is live and returns structured generation/status/catalog data. The adapter
+still records one transport failure and returns to `disconnected` because the installed PiPedal
+resets the WebSocket after the first client request; live handshake/catalog qualification remains
+open. Focused adapter/connector/daemon tests (125), strict Clippy, architecture policy, and diff
+hygiene pass.
+
+**PiPedal live readiness (2026-09-06):** After matching the installed PiPedal v2.0.110 schema,
+serial startup sequencing, and the observed fragmented payload size, the deployed daemon now
+reports `phase=ready`, `generation=0`, `successful_reads=5`, and `transport_failures=0`. A live
+snapshot contains 265 plugin targets and 2,048 bounded control descriptors. No mutation was sent;
+apply/read-back and atomic undo qualification remain open.
+
+**PiPedal mutation qualification (2026-09-06):** Loaded the operator-selected `Fender Clean`
+preset and qualified the native metadata-advertised `gain` control on TooB Parametric EQ instance
+137. The deployed daemon applied `0 → 2`, ingested PiPedal's `onControlChanged` event, exposed
+read-back `2` through `pipedal snapshot`, then explicit Undo restored and read back `0` at session
+generation 0. This also corrected the probe diagnosis: earlier parser errors came from nesting the
+body inside the message header rather than using PiPedal's two-element envelope.
+
+**PiPedal reconciliation regression (2026-09-06):** Added instance-aware
+`currentPedalboard`/`onControlChanged` reconciliation coverage. A replacement pedalboard snapshot
+now clears prior runtime instance bindings, accepted events refresh the typed control value, and
+events for removed instances fail closed. Adapter tests increased to 10; focused connector/adapter/
+daemon tests, strict Clippy, architecture policy, worklist validation, formatting, and diff hygiene
+pass.
+
+**PiPedal event stress evidence (2026-09-06):** A ready adapter worker now processes a 10,000-event
+`onControlChanged` burst, converges to the final value, and admits zero additional outbound
+requests, proving the event path does not create a feedback loop or queue growth. Reconnect clears
+the runtime instance binding and the same stale-instance event then fails closed. Adapter tests
+increased to 11; focused tests, strict Clippy, architecture/worklist checks, formatting, and diff
+hygiene pass.

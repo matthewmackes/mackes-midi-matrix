@@ -137,11 +137,6 @@ fn main() {
                         .find(|port| {
                             port.direction == mackes_midi_engine::EndpointDirection::Input
                                 && alias.stable_id.as_deref().is_some_and(|id| id == port.id)
-                                || alias.stable_id.is_none()
-                                    && alias
-                                        .name
-                                        .as_deref()
-                                        .is_some_and(|pattern| port.name.contains(pattern))
                         })
                         .map(|port| port.id)
                 })
@@ -214,12 +209,7 @@ fn main() {
                     .iter()
                     .filter(|endpoint| {
                         endpoint.direction == mackes_midi_engine::EndpointDirection::Output
-                            && (alias.stable_id.as_deref() == Some(endpoint.id.as_str())
-                                || alias.stable_id.is_none()
-                                    && alias
-                                        .name
-                                        .as_deref()
-                                        .is_some_and(|pattern| endpoint.name.contains(pattern)))
+                            && alias.stable_id.as_deref() == Some(endpoint.id.as_str())
                     })
                     .collect::<Vec<_>>();
                 if matches.len() == 1 {
@@ -279,6 +269,7 @@ fn main() {
             }
             std::thread::sleep(std::time::Duration::from_millis(10));
         }
+        daemon.poll_pipedal();
         let mapped = daemon.process_dashboard_commands(&dashboard_bindings, 128);
         let _ = daemon.poll_and_dispatch_inputs(128);
         if !mapped.is_empty() {
