@@ -6167,6 +6167,10 @@ LED replay, and pedal-state observations are still open.
   configuration-file reads from the status path as well as the LED tick. Daemon tests (85), strict
   Clippy, architecture, worklist, formatting, and diff checks pass. MIDI-to-PiPedal dispatch,
   pickup, and live backend qualification remain open.
+- **Policy correction (2026-09-06):** Removed substring-based `eq` ownership inference from the
+  LED resolver. Only explicit `PiPedal` profile IDs receive Yellow ownership; arbitrary plugin or
+  profile names containing `eq` now use the generic fallback and cannot steal PiPedal LED state.
+  Regression coverage passes with 87 daemon tests.
 
 #### [ ] W123 — Unify device colors and overlay precedence
 
