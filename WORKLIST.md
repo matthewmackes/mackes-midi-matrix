@@ -4895,6 +4895,8 @@ tests, strict Clippy, architecture/worklist policy, and the complete release gat
   URIs without an explicit scope, preventing ambiguous EQ instance selection; regression covered.
 - **Progress evidence (2026-09-05):** Added a bounded, ordered `startup_requests` plan matching
   the verified PiPedal session sequence, with tests for hello/version ordering and catalog bounds.
+- **Validation evidence (2026-09-05):** Connector crate now has 15 passing unit tests and
+  strict Clippy coverage after the startup-plan and catalog changes.
 - **Progress evidence (2026-09-05):** Added explicit `SessionPhase::reset` behavior and
   reconnect coverage so socket loss returns the connector to `Disconnected` before a fresh
   `ehlo`/version/catalog negotiation.
