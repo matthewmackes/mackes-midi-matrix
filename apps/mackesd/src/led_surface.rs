@@ -58,6 +58,10 @@ pub struct LedDiagnostics {
     pub pending_deadline_ms: Option<u64>,
     /// Current backend-control delivery state.
     pub backend_confirmation: Option<String>,
+    /// Number of physical LED indices in the authoritative desired frame.
+    pub desired_indices: usize,
+    /// Number of desired indices not yet accepted by the host transport.
+    pub pending_indices: usize,
     /// Last successfully delivered logical backend state.
     pub backend_state: Option<String>,
     /// Last Lexicon algorithm confirmed by a selection or active-setup readback.
@@ -79,6 +83,8 @@ impl LedDiagnostics {
             template: FACTORY1_LED_TEMPLATE,
             pending_deadline_ms: None,
             backend_confirmation: None,
+            desired_indices: 0,
+            pending_indices: 0,
             backend_state: None,
             active_lexicon_algorithm: None,
             lexicon_readback_error: None,
@@ -376,6 +382,8 @@ impl LedSurface {
         for (index, state) in &desired {
             self.coalescer.set_desired(*index, *state);
         }
+        self.diagnostics.desired_indices = self.coalescer.desired_len();
+        self.diagnostics.pending_indices = self.coalescer.pending_len();
         if performance_locked {
             self.fail("LED writes blocked by performance lock");
             return;

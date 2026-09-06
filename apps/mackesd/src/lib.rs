@@ -1,4 +1,6 @@
 //! Persistent daemon lifecycle and local command boundary.
+
+#![recursion_limit = "256"]
 use mackes_config::ConfigError;
 use mackes_ipc::{authorize, AccessPolicy, Authorization, Command, LocalServer};
 use std::{
@@ -2766,6 +2768,8 @@ impl Daemon {
                 "target_id": self.led.diagnostics().target_id,
                 "template": self.led.diagnostics().template,
                 "pending_deadline_ms": self.led.diagnostics().pending_deadline_ms,
+                "desired_indices": self.led.diagnostics().desired_indices,
+                "pending_indices": self.led.diagnostics().pending_indices,
                 "backend_confirmation": self.led.diagnostics().backend_confirmation,
                 "backend_state": self.led.diagnostics().backend_state,
                 "active_lexicon_algorithm": self.lexicon_active_algorithm,
