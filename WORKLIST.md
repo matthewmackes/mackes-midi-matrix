@@ -5973,6 +5973,521 @@ LED replay, and pedal-state observations are still open.
   relative soak output paths and zero-duration runs, confirming validation occurs before capture
   setup. Installer smoke, repository policy, and diff checks pass.
 
+### Novation direct-protocol reliability epic
+
+#### [ ] W117 — First-class Novation device platform and reliable controller feedback
+
+- **Status:** `NOT_STARTED`
+- **Owner:** Unassigned
+- **Depends on:** W118, W119, W120, W121, W122, W123, W124, W125, W126, W127, W128
+- **Priority:** Critical; operator reports all knob LEDs solid and missing expected PiPedal LEDs.
+- **Outcome:** One Launch Control XL reliably displays the authoritative Eventide, Lexicon,
+  and PiPedal assignments, accepts simultaneous input without lockup, and recovers after
+  reconnect without repeated service restarts or stale animation state.
+- **Operator requirement:** Novation is a first-class platform device, not a collection of LED
+  helper functions or a PiPedal accessory. It owns a discoverable identity, versioned capability
+  description, lifecycle, input/control catalog, feedback policy, persistent configuration,
+  diagnostics, and complete supported CLI/TUI workflows. Other devices consume its physical
+  controls through shared assignment contracts rather than controller-specific shortcuts.
+- **Relationship:** This epic supplies controller protocol, scheduling, and physical recovery
+  evidence to W109, W110, W114, W115, and W116. It does not replace W111's broader PiPedal
+  feature scope or close those items automatically.
+- **Authoritative reference:** Novation's [Launch Control XL Programmer's Reference](https://fael-downloads-prod.focusrite.com/customer/prod/s3fs-public/downloads/launch-control-xl-programmers-reference-guide.pdf),
+  especially pages 3–9; obtain the current MK1/MK2 revision from the official downloads page
+  before implementation. Do not substitute the XL 3 protocol for this installed USB 1235:0061 unit.
+- **Evidence baseline:** The operator has one controller. ALSA has exposed its normal MIDI
+  port and HUI port under the same client. Previous claims of two physical controllers were
+  incorrect. Successful host sends do not establish visible LED state, valid buffer selection,
+  processor response, or absence of USB stalls. Journal `request_failed` broken-pipe messages
+  alone do not prove a stale hardware MIDI handle; trace the failing call before diagnosing it.
+- **Source findings:** The PiPedal setter previously invalidated the sent cache every LED tick;
+  the emitter drains at most eight entries in index order, allowing later entries to starve.
+  A local change now guards unchanged control lists, but interrupted build/deployment means its
+  installed status must be established. The tick also reads configuration from disk. Yellow and
+  Amber currently share an encoding; steady-state flags and blink semantics need correction.
+  A twelve-second reconnect animation and five-minute idle behavior can override mapping colors.
+- **Scope boundaries:** Preserve working musical assignments and disabled records. Do not flash
+  firmware, overwrite controller templates, reset processor presets, or change audio routing as
+  an incidental repair. Template LED/buffer reset is distinct from factory configuration reset.
+- **Execution order:** Establish W118 evidence; implement W119–W121; integrate W122/W123;
+  expose W124 diagnostics; pass W125 software qualification; then execute W126 host qualification.
+  Establish W127's device boundary before integrating consumers and complete W128 before the
+  software and host release gates. Low-level repairs alone do not satisfy first-class status.
+- **Completion rule:** All child acceptance checks and evidence artifacts must pass. Physical
+  observations that are unavailable remain open. Archive hashes, test counts, and transmission
+  counters alone cannot close the epic. Record any remaining deviations against named checks.
+
+#### [ ] W118 — Establish device, protocol, and incident evidence
+
+- **Status:** `NOT_STARTED`
+- **Owner:** Unassigned
+- **Work:** Capture the actual USB identity, ALSA client/port names and directions, stable endpoint
+  bindings, installed/source binary hashes, service executable paths, configuration generation,
+  current template evidence, and any firmware/version information the device actually exposes.
+  Identify every process or subscription capable of writing to the controller, including HUI.
+- **Protocol inventory:** Record exact source URL, revision, retrieval date, checksum and page
+  references for LED indexing, color bits, Copy/Clear flags, template selection/reporting,
+  reset, double buffering, automatic flashing, and batched LED messages. Check the MK1/MK2
+  revision for identity/port differences rather than assuming the older manual describes HUI.
+- **Incident reproduction:** Capture an idle interval, a knob movement interval, and one authorized
+  reconnect with monotonic timestamps. Compare scheduled indices, accepted sends, errors,
+  kernel events, template transitions, and operator observation. Check whether low indices repeat
+  while R3 indices 19–23 never leave the queue. Establish all-lit cause from evidence.
+- **Deliverable:** `docs/novation-protocol-audit.md`, with an observation/inference/unknown column
+  and sanitized protocol fixtures; do not label inferred firmware or buffer state as read back.
+- **Acceptance:** Every selected protocol operation has a page-level source; the two ports are
+  assigned to one physical unit; failing IPC versus MIDI paths are distinguished; deployed build
+  provenance and the interrupted local change are reconciled without losing user work.
+
+#### [ ] W119 — Implement exact LED encoding and bounded batch messages
+
+- **Status:** `NOT_STARTED`
+- **Owner:** Unassigned
+- **Depends on:** W118
+- **Work:** Keep protocol encoding in the profile/controller boundary. Support multiple index/value
+  pairs in `F0 00 20 29 02 11 78 <template> ... F7`. Validate templates 0–15, indices 0–47,
+  seven-bit data, nonempty bounded batches, and deterministic ordering. Define duplicate-index
+  behavior explicitly; reject ambiguity before transmission.
+- **Color contract:** Normal full-brightness values are Off 0x0C, Red 0x0F, Amber 0x3F,
+  Yellow 0x3E, and Green 0x3C per the reference. Define lower-intensity yellow deliberately;
+  do not silently alias it to amber. Respect red-only arrows and yellow-only utility lamps.
+- **Buffer contract:** Use Copy/Clear flags 0x0C for ordinary steady writes. Treat flashing and
+  double-buffer updates as explicit modes with their required controller setup; bit 0x04 is
+  Copy, not an independent blink command. Keep software overlays and hardware flashing coherent.
+- **Acceptance:** Golden frames cover every color, off, template boundary, all LED addresses,
+  and invalid input. R3C4–R3C8 resolve to 19–23. A full 48-LED render fits one 105-byte SysEx
+  frame, or documented bounded chunks if the transport imposes a smaller validated limit.
+  Tests assert complete bytes, including flags and termination, against manual-derived fixtures.
+
+#### [ ] W120 — Eliminate refresh starvation and unnecessary controller traffic
+
+- **Status:** `NOT_STARTED`
+- **Owner:** Unassigned
+- **Depends on:** W119
+- **Work:** Invalidate sent state only for an actual mapping, binding, template, or reconnect
+  generation change. Repeated identical PiPedal projections must not request full replay.
+  Cache validated configuration outside LED/input ticks and refresh it on accepted config changes.
+  Compose one authoritative desired frame, diff it, and send bounded batches at the existing
+  rate boundary. Preserve progress across limited drains and partial failures.
+- **Failure semantics:** Mark sent state only after transport acceptance; a failed batch remains
+  eligible for bounded retry. Reconnect invalidates old-generation work and starts from current
+  state. Do not replay obsolete input events. Bound queue length, bytes, retries, and backoff.
+- **Regression:** Repeatedly supply the same five PiPedal assignments while draining eight entries
+  per tick; all 48 indices must become delivered, including off entries and indices 19–23.
+  Then verify another 1,000 unchanged ticks transmit no LED frames and perform no config reads.
+- **Acceptance:** A stable frame completes within six eligible ticks with the existing eight-entry
+  limit, or one eligible tick when sent as one batch. New low-index changes cannot indefinitely
+  starve higher indices. Sustained knob input retains bounded output traffic and zero lost events.
+- **Implementation evidence (2026-09-06):** Guarded the PiPedal control projection so an unchanged
+  mapping list does not invalidate the LED sent-state cache on every daemon tick. Focused daemon
+  tests (85), strict Clippy, worklist validation, formatting, and diff checks pass. Full fairness,
+  traffic, and physical controller acceptance remain open under W125/W126.
+
+#### [ ] W121 — Make initialization, template changes, and reconnect deterministic
+
+- **Status:** `NOT_STARTED`
+- **Owner:** Unassigned
+- **Depends on:** W118, W119, W120
+- **Work:** Model absent, opening, initializing, ready, and retry states with one binding generation.
+  Select the verified normal MIDI port; exclude HUI from LED ownership. Distinguish a MIDI/HUI
+  pair from genuinely ambiguous same-model devices and preserve fail-closed handling for the latter.
+  On reconnect reopen the appropriate endpoint and perform one initialization sequence.
+- **Initialization contract:** Select the configured template, reset its LED buffers using the
+  documented template-scoped command (Factory 1: `B8 00 00`), and send the complete desired
+  frame including off entries. Reset is routed exclusively to the controller endpoint. Never
+  broadcast it through effect routing. Track completion before declaring the surface ready.
+- **Template policy:** Consume documented template-change notifications; report the active slot,
+  apply the selected configuration's policy, and avoid template-selection feedback loops.
+  Factory slot 8 is not user slot 0; label human and wire numbering consistently.
+- **Animation policy:** Default startup/reconnect to steady assignments. Make diagnostic animation
+  explicitly invoked, time-bounded, cancelable by normal operation, and followed by a complete
+  restore. Audit idle behavior so it cannot be mistaken for successful assignment state.
+- **Acceptance:** Simulated and host reconnect preserve identity and current mapping state;
+  normal+HUI is accepted, two indistinguishable normal ports are refused, and an absent controller
+  never reports ready. No recurring full refresh, animation restart loop, or service restart is
+  needed for ordinary USB recovery. Verify stale generations cannot write after rebinding.
+
+#### [ ] W122 — Integrate PiPedal mappings with truthful ownership and input dispatch
+
+- **Status:** `NOT_STARTED`
+- **Owner:** Unassigned
+- **Depends on:** W120, W121
+- **Work:** Project the persisted PiPedal mapping set into the shared controller surface from a
+  cached validated configuration. Distinguish configured, resolved, available, pickup-waiting,
+  and failed destinations. Lighting a configured knob must not imply its MIDI-to-PiPedal write
+  path exists or is operational; inspect and implement that path where missing.
+- **EQ contract:** Reserve R3C4–R3C8. Reconcile the design's R3C4 gain baseline with the installed
+  fixture's R3C8 gain layout and record one canonical mapping before migration. Use active Fender
+  Clean metadata and actual plugin scope; optional native symbols vary by EQ family. Reject
+  missing or ambiguous targets rather than substituting a different processor or invented band.
+- **Dispatch contract:** Bind the actual input identity/channel/control numbers, normalize using
+  native ranges and scale, and route through the bounded PiPedal worker. Arm pickup from current
+  values on activation/reconnect/preset change. Avoid simultaneous legacy MIDI/API delivery.
+- **Conflict policy:** Preserve Eventide/Lexicon destinations, R1C4 unassignment, and disabled
+  records. Detect enabled physical-control collisions explicitly before activating PiPedal.
+  Do not classify arbitrary profiles containing the substring `eq` as PiPedal ownership.
+- **Acceptance:** Each intended knob resolves to one current control, passes pickup, produces one
+  intended backend update, reconciles readback, and receives the corresponding LED state.
+  Missing EQ, duplicate instances, removed controls, and stale sessions produce actionable status.
+  Config-only records without a working dispatch path cannot be labeled active or qualified.
+
+#### [ ] W123 — Unify device colors and overlay precedence
+
+- **Status:** `NOT_STARTED`
+- **Owner:** Unassigned
+- **Depends on:** W119, W122
+- **Work:** Establish the actual device-owner palette: current host Eventide Red, Lexicon Amber,
+  and requested PiPedal Yellow; retain documented button-specific behavior. Reconcile the separate
+  effect-family UI palette so UI semantics do not accidentally change hardware owner colors.
+  Make availability, assignment focus, movement, result, error, and reconnect precedence explicit.
+- **Composition contract:** Start with all physical LED addresses off; add enabled/resolved owners,
+  then intentional overlays. PiPedal must not overwrite a higher-priority assignment/error state.
+  Off means an explicit off frame when needed. Fader proxy LEDs must not claim unrelated knobs
+  or overwrite existing button ownership. Keep selection and error visible without false success.
+- **Acceptance:** Exhaustive layout fixtures include all 24 knobs and 24 buttons. With the reviewed
+  host layout, 12 legacy knobs plus five PiPedal knobs are assigned; seven unassigned knobs stay
+  off outside explicitly requested overlays. Yellow is observably distinct from Amber in the
+  documented encoding. The user confirms the actual rendered layout during W126.
+
+#### [ ] W124 — Expose meaningful controller and PiPedal diagnostics
+
+- **Status:** `NOT_STARTED`
+- **Owner:** Unassigned
+- **Depends on:** W120, W121, W122, W123
+- **Work:** Publish connection identity/port role, binding and config generations, active/requested
+  template, initialization phase, animation/idle phase, desired/sent/pending index states, queue
+  limits, last successful batch and failure reason. Include PiPedal resolution and pickup state
+  in the operator's normal status surface as well as the dedicated PiPedal snapshot command.
+- **Truthfulness:** Name send counters as host transport acceptance; never call them hardware
+  confirmation. Distinguish backend readback from visible controller observation. Attach operation
+  context to IPC broken pipes and transport errors so one cannot be diagnosed as the other.
+- **Acceptance:** CLI and TUI expose the same authoritative generation and explain absent device,
+  HUI exclusion, ambiguous binding, unresolved EQ, initialization, pending writes, and failures.
+  Payloads and logging are bounded and idle requests do not trigger replay or backend mutation.
+- **Deliverable:** Extend the recovery runbook with exact read-only diagnostic commands and a
+  targeted resync operation whose effect and evidence limits are explicit.
+
+#### [ ] W125 — Qualify protocol, fairness, and recovery in software
+
+- **Status:** `NOT_STARTED`
+- **Owner:** Unassigned
+- **Depends on:** W119, W120, W121, W122, W123, W124, W127, W128
+- **Work:** Build a recording transport/controller-state simulator that models buffer flags,
+  template addressing, reset, and batched writes. Assert observable state from recorded bytes,
+  not merely calls to the same color helper under test. Add deterministic fault injection for
+  failed batches, disconnect mid-render, stale generation, and reconnect during input activity.
+- **Required scenarios:** Full clear/restore; bottom-row starvation reproduction; unchanged idle;
+  independent yellow/amber; normal/HUI pair; duplicate physical units; active-template change;
+  explicit animation exit; knob movement while LEDs refresh; PiPedal absent/restarting; external
+  parameter edit and pickup; conflicting mappings; repeated button press/release preservation.
+- **Gates:** Run `cargo fmt --all -- --check`, focused profiles/adapter/daemon tests, strict Clippy,
+  `python3 scripts/check-architecture.py`, `python3 scripts/check-worklist.py`, and `git diff --check`.
+  Run the full release gate before W126 deployment, recording any unavailable prerequisites.
+- **Acceptance:** Tests fail against the original starvation/buffer/color defects, pass against
+  the repair, and establish bounded traffic without weakening existing Eventide/Lexicon checks.
+  Record commands, counts, build revision and remaining physical limitations in a qualification file.
+
+#### [ ] W126 — Deploy, physically verify, and close the Novation epic
+
+- **Status:** `NOT_STARTED`
+- **Owner:** Unassigned
+- **Depends on:** W125
+- **Preparation:** Inspect any surviving interrupted build process before starting another. Produce
+  an identifiable release artifact; back up the prior binaries, configuration, and units with
+  hashes and a concrete restore procedure. Validate the preserved host config before installing.
+  Use the supported installer; record running executable hash and service health after restart.
+- **Physical matrix:** (1) startup reaches the expected 17-knob layout; (2) seven unassigned knobs
+  are off; (3) R3C4–R3C8 use the approved native assignments and Yellow; (4) each knob changes
+  only its intended parameter after pickup; (5) Eventide and Lexicon still respond; (6) ten USB
+  reconnect cycles restore the layout without restarting MACKES; (7) template switching recovers;
+  (8) PiPedal restart/external edits re-arm pickup; (9) simultaneous sweeps do not lock the board;
+  (10) thirty minutes of mixed activity has no dropped events or unbounded LED/log traffic.
+- **Evidence:** Record timestamped operator observations alongside desired/sent diagnostics,
+  processor readback, frame counts/rates, memory, CPU, kernel errors and service restart counts.
+  Inspect the actual visible result; zero send errors cannot satisfy checks 1–3. Record disconnect
+  duration and reconnect latency for every cycle; target steady restore within two seconds of
+  endpoint availability and investigate every timeout rather than hiding it with a manual restart.
+- **Rollback:** Verify the previous artifact/config can be restored if qualification fails. Preserve
+  evidence of the failed build and do not call an unverified replacement a successful release.
+- **Closure:** Write `docs/novation-controller-qualification.md` with a per-check PASS/FAIL/OPEN
+  table and artifact provenance. Update W109/W110/W114/W115/W116 only where these observations
+  satisfy their actual acceptance. Mark W117 DONE only when all children and physical checks pass.
+
+#### [ ] W127 — Establish the first-class Novation device boundary
+
+- **Status:** `NOT_STARTED`
+- **Owner:** Unassigned
+- **Depends on:** W118
+- **Architecture:** Define a daemon-owned Novation device implementation behind the platform's
+  device abstraction. Keep hardware protocol and lifecycle outside generic routing and UI code.
+  Reuse existing profile/adapter boundaries where they fit; document the ownership decision and
+  migrate scattered controller branches without creating a second competing state authority.
+- **Identity:** Represent one physical unit with role-tagged MIDI/HUI endpoints, supported model,
+  stable identity and explicit ambiguity state. Distinguish USB presence, usable MIDI connection,
+  initialization and readiness. Model multiple actual units without merging their bindings or LEDs.
+- **Capabilities:** Publish versioned, typed descriptors for knobs, faders, buttons, LED address/color
+  limitations, templates, reset/resync, template notifications, and any verified query operations.
+  Unsupported firmware queries, LED readback or template editing must be explicitly unsupported;
+  do not invent capabilities. Model-specific support must not imply XL 3 compatibility.
+- **State ownership:** Own input subscriptions, source templates, feedback generations, batching,
+  error/retry state and device shutdown in one lifecycle. Route all legitimate consumers through
+  this owner. Prevent duplicate writers and stale control references after replacement/rebind.
+- **Persistence:** Store controller selection, template policy, input assignments, feedback settings
+  and recovery preferences under a validated versioned device configuration. Preserve existing
+  Launch Control records through a tested migration with rollback and no silent reassignment.
+- **Acceptance:** The device can be discovered, inspected, configured, connected, disconnected,
+  rebound and diagnosed through the same platform contracts as other devices. Eventide, Lexicon
+  and PiPedal each use its shared control catalog. Device absence leaves persisted assignments
+  visible and repairable. Architecture tests prevent direct UI transport or parallel LED writers.
+
+#### [ ] W128 — Deliver complete Novation device and assignment workflows
+
+- **Status:** `NOT_STARTED`
+- **Owner:** Unassigned
+- **Depends on:** W127, W122, W123, W124
+- **Devices workspace:** Give Novation a dedicated device entry and detail view with model,
+  connection readiness, endpoint roles, selected/observed template, supported capabilities,
+  firmware only when known, assignment counts, and current diagnostic summary. Keep disconnected
+  devices visible with actionable reconnect/rebind guidance.
+- **Controller workspace:** Render all physical controls with stable row/column names, source
+  address, destination, enable state, pickup state and LED ownership. Show unmapped and conflicting
+  controls explicitly. Distinguish desired, host-sent, and physically unconfirmed feedback.
+- **Assignment workflow:** Select or learn a Novation control, browse available destinations,
+  preview native parameter range/scale and conflicts, commit atomically, undo, disable, remove,
+  and reload after restart. Support Eventide, Lexicon and PiPedal through the same workflow.
+  Preserve previous assignments if validation, persistence, device resolution or commit fails.
+- **Device actions:** Provide inspect, rescan, explicit rebind, template selection, feedback resync,
+  and a bounded diagnostic LED test with automatic restore. Expose only verified operations.
+  Describe disruptive template/config edits distinctly from runtime feedback reset, and retain
+  the project's established confirmation policy where applicable.
+- **CLI/IPC parity:** Provide typed operations and stable JSON responses for every supported device
+  workflow; the TUI consumes those contracts. Specify command syntax and examples in the runbook
+  during implementation, including absent-device and failed-operation examples. Avoid workflows
+  that require hand-editing JSON or root shell commands for ordinary assignment/recovery.
+- **Acceptance:** An operator can discover Novation, assign an available native PiPedal parameter,
+  inspect its LED/pickup status, undo it, restart and recover it, and repair a missing endpoint
+  through supported interfaces. CLI/TUI report identical state and generation. W125 tests the
+  workflow, and W126 records an actual walkthrough before the epic can close.
+
+### Lightweight full-platform web interface epic
+
+#### [ ] W129 — Exhaustive, nonduplicated platform web interface on port 8081
+
+- **Status:** `NOT_STARTED`
+- **Owner:** Unassigned
+- **Depends on:** W130, W131, W132, W133, W134, W135, W136, W137, W138, W139, W140, W141, W142, W143
+- **Operator requirements:** Build a lightweight web interface covering every platform feature and
+  configuration option without duplicate workflows; use port 8081; require no authentication or
+  authorization; start automatically at boot; provide polished controls and options.
+- **Mandatory design requirement:** Strict IBM Carbon Design System compliance across every page,
+  dialog, state and device workspace. Mobile-friendly means complete functional parity on phones,
+  not a reduced dashboard. This requirement governs all child packets and is a release gate.
+- **Testing scope amendment:** Accessibility compliance/testing and dedicated mobile testing are
+  removed from this epic. Retain Carbon components and their built-in behavior, strict Carbon
+  visual requirements, and mobile-friendly implementation. No WCAG certification, screen-reader
+  audit, device/browser mobile matrix, or mobile-specific release gate is required.
+- **Deliverable of this planning task:** This epic specifies implementation and qualification.
+  Its creation does not mean the web application exists or has been installed.
+- **Product outcome:** A browser can perform every supported operator workflow currently exposed
+  by CLI/TUI and the planned first-class device platform. Backend gaps are delivered explicitly.
+  The daemon remains the sole authority for MIDI, configuration and operations.
+- **Coverage contract:** One canonical editor/action owner per feature. Other workspaces may show
+  summaries or contextual links. Shared components and API contracts carry common behavior;
+  do not create separate copies of mapping, scene, device or settings logic.
+- **Navigation ownership:** Live owns performance/monitoring; Map Controls owns physical assignments;
+  Routing owns routes/transforms; Scenes & Setlists owns orchestration; Devices owns native device
+  controls/capabilities; System owns platform settings, profiles, backups and diagnostics. Advanced
+  views edit the same draft and call the same operation as their structured counterparts.
+- **Scope:** Existing and planned platform features, including all PiPedal W111 capabilities and
+  first-class Novation W117 capabilities. No EQ-only or dashboard-only substitute satisfies this epic.
+- **Deployment contract:** A separate lightweight web service, locally bundled assets, LAN-accessible
+  port 8081, no login or roles, boot enablement, independent crash recovery and supported rollback.
+- **Execution:** W130 inventory precedes architecture. W131–W133 establish contracts and shell;
+  feature packets W134–W139 and W141 can proceed in parallel against shared contracts; W140
+  establishes cross-client consistency; W142 gates W143 deployment and physical qualification.
+- **Definition of done:** Every child passes, the coverage ledger has no omissions or duplicate
+  canonical editors, port 8081 works without credentials after reboot, all configuration is
+  available through supported controls, and measured performance plus operator evidence passes.
+  A mockup, static site, iframe, CLI wrapper, or green unit suite alone cannot close the epic.
+
+#### [ ] W130 — Inventory every platform capability and assign one web home
+
+- **Status:** `NOT_STARTED`
+- **Owner:** Unassigned
+- **Implementation:** Enumerate every CLI dispatch branch, TUI workspace/action, IPC command/request/event, configuration/schema field, profile capability, scene operation, route predicate/transform, service setting, and active delivery epic. Inspect implementations rather than relying on README lists. Include Novation W117–W128 and all PiPedal W111 operations, not just EQ.
+- **Requirements:** Create docs/web-feature-coverage.md with stable capability ID, source file/symbol, availability, read/write semantics, canonical page, API contract, form/control, persistence, undo/confirmation behavior, error states, and test/evidence reference.
+- **Requirements:** Give every configuration field an editable/read-only/derived classification and a reason. Mark missing backend functionality as an implementation dependency with its own deliverable; an unavailable label cannot satisfy required working coverage.
+- **Requirements:** Enforce exactly one canonical editor per capability. Dashboard summaries, search results, device shortcuts and contextual links may navigate to that editor without duplicating implementation or state.
+- **Acceptance and evidence:** Acceptance: zero unclassified commands, fields, capabilities or platform workflows; no duplicate canonical editor IDs; reviewed gap list and dependency ownership. Add a coverage checker that detects new unclassified contracts during later development.
+
+#### [ ] W131 — Define the lightweight web architecture and daemon API boundary
+
+- **Status:** `NOT_STARTED`
+- **Owner:** Unassigned
+- **Depends on:** W130
+- **Implementation:** Implement a separate Rust web process using the existing daemon IPC boundary; keep MIDI, device lifecycle, routing, configuration commits and processor writes daemon-owned. Extract reusable application services where existing CLI actions are file-only. Never implement a second routing engine or competing configuration writer in HTTP handlers.
+- **Requirements:** Serve bundled local frontend assets and a versioned /api/v1 surface from one origin. Choose and document a small maintained HTTP stack and frontend approach after evaluating bundle size, accessibility and maintenance. No CDN, cloud account, runtime Node server, database or internet dependency is required on the host.
+- **Requirements:** Define typed requests/responses, structured field errors, operation IDs, capability discovery, cancellation, pagination, revision checks and explicit unsupported operations. Publish an API schema and generate or share client types to prevent drift.
+- **Requirements:** Use a bounded event stream for state updates, sequence/revision identifiers, heartbeat and resnapshot on gaps. Limit per-client queues and concurrent connections; disconnect slow consumers without stalling the daemon.
+- **Acceptance and evidence:** Acceptance: browser disconnect/reload does not interrupt MIDI or cancel an already accepted durable action; web process failure does not stop routing; malformed or oversized HTTP traffic remains outside the real-time path; all mutations reuse authoritative validation.
+
+#### [ ] W132 — Deliver the unauthenticated port-8081 service and boot lifecycle
+
+- **Status:** `NOT_STARTED`
+- **Owner:** Unassigned
+- **Depends on:** W131
+- **Implementation:** Default to HTTP on 0.0.0.0:8081 so the platform is accessible from another machine on the local network. Support an explicit bind-address setting and documented IPv6 policy. Keep PiPedal on its existing port 8080. Detect a port conflict and report it; do not silently choose another port.
+- **Requirements:** Require no login, password, account, role system, API key, bearer token or authorization prompt to use platform features. UI confirmations for destructive operations describe effects and are not authentication. The deployment documentation must accurately state that reachable clients can control the platform.
+- **Requirements:** Package a dedicated systemd unit enabled at boot with bounded restart/backoff, explicit service identity and the existing IPC group. Serve a useful unavailable/reconnecting screen when the daemon starts late; avoid restart coupling with PiPedal or MACKES. Bind settings and web service state belong in the supported configuration/install workflow.
+- **Requirements:** Use same-origin browser requests, non-mutating GET routes, validated Host/Origin for browser mutations and WebSocket upgrade where applicable, appropriate JSON content types, escaped output, bounded uploads and a restrictive asset policy. These transport protections must not introduce user credentials or roles.
+- **Acceptance and evidence:** Acceptance: clean boot exposes the UI on 8081 with no login from a second host; daemon-late and web-crash recovery work; PiPedal 8080 remains available; packaged service has only the filesystem/IPC privileges it needs. Document firewall handling explicitly and verify the installer-selected host policy.
+
+#### [ ] W133 — Build the responsive application shell and shared control system
+
+- **Status:** `NOT_STARTED`
+- **Owner:** Unassigned
+- **Depends on:** W130, W131
+- **Strict Carbon contract:** Use maintained Carbon components and their documented behavior;
+  pin the chosen supported release and record its official guidance. Use Carbon semantic color,
+  typography, spacing, layout, layer, focus and motion tokens, IBM Plex fonts and Carbon icons.
+  Bundle assets locally. No competing component library, arbitrary visual overrides or custom
+  lookalike controls where Carbon supplies the component. Domain faceplates/diagrams must use
+  Carbon foundations and a standard-control alternative.
+- **Official layout sources:** Follow the [Carbon 2x Grid](https://carbondesignsystem.com/elements/2x-grid/overview/)
+  and its [responsive usage guidance](https://carbondesignsystem.com/elements/2x-grid/usage/).
+  Follow the selected release's component usage and style guidance for forms,
+  tables, notifications, navigation and dialogs. Maintain a component-to-guidance checklist.
+- **Mobile contract:** Use Carbon breakpoints and grid tokens; collapse navigation,
+  stack forms, and provide responsive table/detail views backed by the same editor and state.
+  Avoid page-wide horizontal scrolling. Wide MIDI diagrams/hex data may scroll inside labeled
+  regions with an equivalent list/form workflow. Do not hide settings or actions on small screens.
+- **Touch and viewport contract:** Use at least 44-by-44 CSS-pixel touch hit areas where applicable,
+  with spacing that prevents accidental destructive actions; retain Carbon visual tokens.
+  Support portrait/landscape, safe areas, browser zoom and the on-screen keyboard without
+  obscuring focused fields or commit/cancel controls. No hover-only or drag-only operations.
+- **Design acceptance:** All workspaces and loading/error/empty/disabled states pass a Carbon
+  compliance review. Add a shared component gallery and responsive reference screenshots.
+  Performance budgets must be met through selective imports and asset optimization; do not
+  replace Carbon with approximations to meet size targets.
+- **Implementation:** Use canonical top-level workspaces: Live, Map Controls, Routing, Scenes & Setlists, Devices, and System. Routing is the one owner of route editing; Map Controls owns physical assignments; device pages link to both with context. Global search and command palette navigate to canonical actions.
+- **Requirements:** Provide responsive desktop/tablet/mobile navigation, stable deep links, browser back/forward, dirty-form protection, reconnect banner, persistent operation notifications, keyboard shortcuts with help, and user-selectable light/dark themes.
+- **Requirements:** Build accessible reusable number fields, paired slider/numeric controls, switches, selects, searchable capability pickers, editable tables, reorder lists and confirmation dialogs. Include units, native ranges, step/log scaling, reset-to-default, fine adjustment, current versus draft values and inline validation.
+- **Requirements:** Use pointer capture for sliders and touch-safe targets; avoid relying on color, dragging, hover or tiny knobs. Keyboard and numeric alternatives must perform every operation. Reduce animation when requested and retain focused input during live updates.
+- **Acceptance and evidence:** A shared Carbon control is reused across every device family rather than copied per page. Responsive layout remains an implementation requirement; dedicated accessibility and mobile testing are excluded.
+
+#### [ ] W134 — Implement live operation, monitoring, and emergency controls
+
+- **Status:** `NOT_STARTED`
+- **Owner:** Unassigned
+- **Depends on:** W133, W131
+- **Implementation:** Show authoritative active project/scene, device readiness, routing health, current activity, dropped-event counts and pending/failed operations. Distinguish configured, connected, ready, sent and independently confirmed states.
+- **Requirements:** Provide scene recall shortcuts, performance lock, and the existing panic operation with clear scope and immediate feedback. Reuse canonical scene/device actions rather than inventing parallel recall or control state.
+- **Requirements:** Build a bounded live MIDI monitor with endpoint/channel/message-class filters, pause/resume, clear-view, timestamps, decoded messages and raw bytes on demand; provide bounded downloadable capture. Pausing the view must not pause MIDI processing.
+- **Requirements:** Expose useful event rate, queue pressure and latency indicators with documented measurement boundaries. Avoid full-page refresh on every event; batch visual updates and virtualize large lists.
+- **Acceptance and evidence:** Acceptance: sustained MIDI traffic leaves the browser responsive, buffers bounded and daemon loss unchanged; panic and critical controls remain accessible during a monitor flood; stale state is visibly marked after connection loss.
+
+#### [ ] W135 — Implement complete physical-control assignment workflows
+
+- **Status:** `NOT_STARTED`
+- **Owner:** Unassigned
+- **Depends on:** W133, W131
+- **Implementation:** Provide destination-first and physical-control-first navigation into the same assignment editor. Discover and learn source identity, channel, CC/note and physical position; browse native destination parameters and display actual ranges, units, scale and evidence level.
+- **Requirements:** Support create, inspect, enable/disable, edit, replace, remove, undo, pickup/soft takeover, inversion, response curve, source/destination ranges and every additional mapping setting found in W130. Show conflicts before commit and preserve other mappings on failure.
+- **Requirements:** Render Novation's physical faceplate with text/table alternative, current owner, LED state and pickup status. Use one canonical editor when selecting a control from either the faceplate or mapping table.
+- **Requirements:** Show disappeared device/plugin targets and repair bindings without erasing the assignment. Persist through the daemon's validated atomic configuration path.
+- **Acceptance and evidence:** Acceptance: Eventide, Lexicon and PiPedal assignments can each be created, edited, disabled, restored and recovered entirely in the browser; concurrent CLI/TUI edits are detected; no manual JSON editing is required for normal operations.
+
+#### [ ] W136 — Implement routing, transformations, endpoints, and network MIDI
+
+- **Status:** `NOT_STARTED`
+- **Owner:** Unassigned
+- **Depends on:** W133, W131
+- **Implementation:** Expose the complete route model from W130: sources/destinations, enablement, priority, message/channel filters, number/value predicates, remapping, curves, cycle policy and every supported transform. Provide a searchable table as the canonical editor and a synchronized signal-flow diagram for inspection.
+- **Requirements:** Support route preview/validation, atomic apply, undo and clear explanations for feedback loops, missing endpoints and incompatible fields. Surface raw route JSON as an advanced view of the same draft, not an independent configuration store.
+- **Requirements:** Manage endpoint aliases, stable identity bindings, reconnect state, virtual endpoints and qualified RTP-MIDI/network sessions with their supported discovery, peer, connection and timing options. Implement missing service contracts identified by coverage inventory.
+- **Acceptance and evidence:** Acceptance: UI-to-config round trips retain all supported route attributes; simulated routing matches CLI behavior; invalid graphs fail without partially replacing active routes; network session failure never stalls local MIDI.
+
+#### [ ] W137 — Implement projects, scenes, setlists, and recall planning
+
+- **Status:** `NOT_STARTED`
+- **Owner:** Unassigned
+- **Depends on:** W133, W131
+- **Implementation:** Provide project and scene CRUD, duplication, selection, ordered setlists, imports/exports and dangling-reference repair according to the platform model. Preserve stable IDs across rename/reorder operations.
+- **Requirements:** Edit all scene actions with destination, payload, description, dependency ordering and existing unsafe/disruptive classification. Offer typed MIDI/device controls plus validated advanced message entry for supported actions.
+- **Requirements:** Show dry-run/plan output, unresolved dependencies, ordered execution, partial success/failure, cancellation semantics and rollback/undo where supported. Never promise a universal rollback for irreversible processor actions.
+- **Requirements:** Clearly distinguish selecting a scene, executing recall, editing a draft and persisting changes. Provide keyboard and touch alternatives for sequence ordering.
+- **Acceptance and evidence:** Acceptance: browser-authored scene plans equal CLI plans; dependency cycles and deleted references are rejected; restart preserves committed state; multi-action failures display per-action outcomes without claiming full success.
+
+#### [ ] W138 — Deliver first-class device workspaces and exhaustive PiPedal coverage
+
+- **Status:** `NOT_STARTED`
+- **Owner:** Unassigned
+- **Depends on:** W133, W131
+- **Implementation:** Use one Devices registry with model/identity, connection/readiness, capabilities, configuration, controls and diagnostics. Render device-native controls through shared components and capability contracts, including unavailable/disconnected profiles.
+- **Requirements:** Implement Novation W127/W128 workflows: endpoint roles, observed/requested template, faceplate, assignments, supported resync/test actions, feedback settings and recovery. Preserve explicit distinction between LED send acceptance and visible observation.
+- **Requirements:** Expose all qualified Eventide controls and Lexicon parameter/algorithm/query workflows, including documented evidence limitations, source role and channel settings.
+- **Requirements:** For PiPedal cover discovery, plugin controls and bypass, pedalboard structure/routing, preset/bank/snapshot management, MIDI bindings, files/properties, audio configuration and supported system settings from W111's capability matrix. Native EQ is only one use case. Add missing backend contracts as explicit work and verify each operation against the installed protocol.
+- **Requirements:** Keep PiPedal device-native preset editing here; platform scene orchestration stays in Scenes. Mapping shortcuts open Map Controls with a selected destination. Do not count an iframe or link to PiPedal's own UI as feature implementation.
+- **Acceptance and evidence:** Acceptance: each supported device operation has one usable web control with real state/readback/error handling; capability coverage has no silent omissions; destructive system/device operations explain impact; unsupported hardware capabilities are truthful and not fabricated.
+
+#### [ ] W139 — Implement SysEx, profiles, backups, and complete configuration management
+
+- **Status:** `NOT_STARTED`
+- **Owner:** Unassigned
+- **Depends on:** W133, W131
+- **Implementation:** Provide profile validation/import/export and version/capability inspection, documented queries, SysEx capture/inspection and bounded transfers with framing/checksum validation where applicable. Reuse device detail links for device-specific operations.
+- **Requirements:** Build backup list/inspect/create/export/restore workflows with manifest, identity, checksum, compatibility preview, progress and exact result. Validate uploaded files before commit, restrict paths to daemon-managed storage, bound decompressed size, and never turn a browser filename into an arbitrary host path.
+- **Requirements:** Expose every editable configuration field classified by W130 through organized forms: default providers, endpoint aliases, dashboard MIDI bindings, controller templates, mappings, project/scene settings, network and runtime options. Derived fields are explained read-only.
+- **Requirements:** Provide an advanced JSON5/schema editor backed by the same draft/validate/diff/apply service; preserve unknown-version rejection and atomic persistence. Show restart-required versus live-applied settings and recover rejected writes without losing drafts.
+- **Acceptance and evidence:** Acceptance: browser export/import round trips all supported configuration; validation errors identify fields; restore cannot silently target the wrong identity; interrupted uploads/writes retain the prior valid configuration; no duplicate independent editor state exists.
+
+#### [ ] W140 — Implement concurrency, operation lifecycle, and reliable live synchronization
+
+- **Status:** `NOT_STARTED`
+- **Owner:** Unassigned
+- **Depends on:** W131, W134, W135, W136, W137, W138, W139
+- **Implementation:** Use authoritative revision/generation checks for all mutations and operation IDs for retry-safe submission. Distinguish queued, running, applied, persisted, confirmed, failed and canceled states where relevant.
+- **Requirements:** Handle multiple tabs and simultaneous web/CLI/TUI edits with conflict explanation and reload/rebase options; never silently overwrite a newer configuration. Display external PiPedal changes without overwriting an active form or replaying stale knob input.
+- **Requirements:** Reconnect event streams through sequence-aware resnapshot; mark outdated values, discard old-generation messages and reconcile outstanding operations. Network retry must not duplicate scene recall, SysEx send or device reset.
+- **Acceptance and evidence:** Acceptance: deterministic tests cover lost response after accepted write, reordered events, daemon restart mid-operation, stale draft, slow browser and duplicate requests. Hardware-affecting actions execute at most once where the operation contract promises idempotency; otherwise expose an unknown outcome and require deliberate retry.
+
+#### [ ] W141 — Provide system diagnostics, service settings, and operator recovery
+
+- **Status:** `NOT_STARTED`
+- **Owner:** Unassigned
+- **Depends on:** W133, W131
+- **Implementation:** Expose doctor results, version/build provenance, service readiness, IPC status, bounded logs, storage/config persistence state and dependency health. Separate web health from daemon and processor health.
+- **Requirements:** Provide supported settings and scoped actions for service restart/rescan/recovery where backend contracts exist; implement explicit narrow privileged mediation if needed instead of running the web server as root or exposing a shell endpoint.
+- **Requirements:** Offer an exportable diagnostic bundle with bounded content and clear inventory; avoid collecting unrelated host files. Show actionable port-conflict, missing-device, disk-full, malformed-config and permission errors.
+- **Requirements:** Manage bind/port settings with preview of the resulting URL and required restart, and make boot-enable state visible. Default remains 8081 with no authentication.
+- **Acceptance and evidence:** Acceptance: common recovery tasks work through the browser and retain an informative page while daemon services recover; no arbitrary shell/file operations are exposed; diagnostic and settings coverage matches W130.
+
+#### [ ] W142 — Verify exhaustive coverage, usability, resource bounds, and API robustness
+
+- **Status:** `NOT_STARTED`
+- **Owner:** Unassigned
+- **Depends on:** W134, W135, W136, W137, W138, W139, W140, W141
+- **Mandatory Carbon visual gate:** Review canonical features against W133's component and visual
+  requirements, including typography/tokens, validation, notifications and both themes.
+  Shared responsive presentations must not become duplicate editors. Accessibility audits and
+  dedicated mobile testing are excluded from this gate.
+- **Implementation:** Build contract tests against shared daemon semantics and browser end-to-end tests for every capability row, not just navigation snapshots. Include hardware-independent fixtures and separate explicitly labeled hardware tests.
+- **Requirements:** Test loading/empty/error/offline states, multi-tab conflicts, slow streams, malformed requests, file limits, non-mutating GET behavior and browser-origin protections without adding login.
+- **Requirements:** Set initial acceptance budgets: compressed initial frontend assets at most 500 KiB; idle web-process RSS at most 50 MiB; steady idle CPU at most 1% of one host core; initial usable screen within two seconds on the test LAN; ordinary API response p95 under 250 ms excluding explicitly asynchronous hardware work. Record hardware/browser/network conditions and justify any revised budget before closure.
+- **Requirements:** Stress bounded event streams and large configuration catalogs while MIDI runs. Verify no meaningful MIDI latency/loss regression against an otherwise identical baseline. Test web memory/log growth over an eight-hour representative soak.
+- **Acceptance and evidence:** Acceptance: coverage checker reports zero missing canonical workflows or editable fields, all required tests pass, resource budgets are evidenced and unsupported backend work remains open rather than hidden behind disabled buttons.
+
+#### [ ] W143 — Package, boot-test, document, deploy, and qualify the web release
+
+- **Status:** `NOT_STARTED`
+- **Owner:** Unassigned
+- **Depends on:** W132, W142
+- **Implementation:** Package web binary/assets, unit, default configuration, API schema, license notices and operator docs with the existing release artifact. Embed or install version-matched assets atomically; no runtime build or download is required.
+- **Requirements:** Extend installer, upgrade, backup and rollback paths and test the extracted artifact. Record previous and new hashes; preserve platform config, port 8080 and existing controller/device behavior.
+- **Requirements:** Verify clean install, upgrade, failed upgrade rollback, cold boot, daemon-late startup, web crash recovery, daemon restart, network loss and port 8081 conflict. Confirm all browser controls work without authorization on a second LAN host.
+- **Requirements:** Document navigation ownership, complete capability coverage, browser support, keyboard controls, configuration import/restore, service management, network exposure, troubleshooting and recovery.
+- **Acceptance and evidence:** Acceptance: an operator performs representative full workflows for Novation, Eventide, Lexicon and PiPedal plus route/scene/config/backup tasks from the web interface; reboot proves unattended startup; every W130 row links to passing evidence; release notes distinguish host sends from hardware confirmation. Close the parent only after all required rows and boot/resource tests pass.
+
 ### Integration, performance, and release
 
 #### [x] W050 — Full virtual-MIDI and RTP-MIDI integration suite

@@ -136,10 +136,12 @@ impl Default for LedSurface {
 }
 
 impl LedSurface {
-    /// Sets the stable physical controls assigned to PiPedal mappings.
+    /// Sets the stable physical controls assigned to `PiPedal` mappings.
     pub fn set_pipedal_controls(&mut self, controls: Vec<String>) {
-        self.pipedal_controls = controls;
-        self.request_full_resync();
+        if self.pipedal_controls != controls {
+            self.pipedal_controls = controls;
+            self.request_full_resync();
+        }
     }
     /// Sets the daemon-resolved output identity used for LED writes.
     pub fn set_target_binding(&mut self, endpoint_id: Option<String>) {
