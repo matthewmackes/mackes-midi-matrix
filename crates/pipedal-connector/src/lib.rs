@@ -75,6 +75,11 @@ impl Session {
     pub const fn generation(&self) -> u64 {
         self.generation
     }
+    /// Whether the PiPedal catalog and system bindings are ready for delivery.
+    #[must_use]
+    pub const fn is_ready(&self) -> bool {
+        matches!(self.phase, SessionPhase::Ready)
+    }
     /// Advance the handshake state.
     pub fn accept(&mut self, message: &str) -> Result<SessionPhase, String> {
         self.phase = self.phase.accept(message)?;
@@ -801,6 +806,7 @@ mod tests {
         let mut session = Session::default();
         let generation = session.generation();
         session.connect().expect("connect");
+        assert!(!session.is_ready());
         session.enqueue(generation, b"ok".to_vec()).expect("enqueue");
         session.reset();
         assert!(session.enqueue(generation, b"stale".to_vec()).is_err());
