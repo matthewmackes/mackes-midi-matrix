@@ -6068,6 +6068,12 @@ LED replay, and pedal-state observations are still open.
   and masks values to seven bits. Golden tests cover R3C4–R3C8 indices and invalid batches;
   56 profile tests and strict profile Clippy pass. The daemon emitter still needs integration
   with this batch path.
+- **Batch emitter evidence (2026-09-06):** Integrated the batch encoder into the daemon LED
+  emitter. Pending updates now leave the coalescer as one retryable set and are sent as one
+  ordered SysEx frame per eligible tick, reducing traffic and preventing per-index retry drift.
+  Failed batches restore every pending index for retry; successful batches increment delivery
+  counters once per accepted frame. Daemon tests (85), strict Clippy, worklist validation, and
+  diff checks pass.
 
 #### [ ] W120 — Eliminate refresh starvation and unnecessary controller traffic
 

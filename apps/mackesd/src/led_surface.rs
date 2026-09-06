@@ -8,9 +8,9 @@ use mackes_midi_engine::{
     EndpointDirection, EndpointInfo, OutputRegistry,
 };
 use mackes_profiles::{
-    encode_launch_control_feedback, fader_column_led_proxy, launch_control_physical_catalog,
-    LedCoalescer, LedColor, LedFeedbackScheduler, LedState, PhysicalControlRole,
-    LAUNCH_CONTROL_DEVICE_INDEX,
+    encode_launch_control_led_batch, fader_column_led_proxy, launch_control_led_value,
+    launch_control_physical_catalog, LedCoalescer, LedColor, LedFeedbackScheduler, LedState,
+    PhysicalControlRole, LAUNCH_CONTROL_DEVICE_INDEX,
 };
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -448,31 +448,44 @@ impl LedSurface {
             let pending = self.coalescer.drain_pending_limited(LED_FLUSH_LIMIT);
             if !pending.is_empty() {
                 self.last_emit_ms = Some(now_ms);
-            }
-            for (index, state) in pending {
-                self.emit_frame(outputs, endpoint, index, state, now_ms);
+                let pairs = pending
+                    .iter()
+                    .map(|(index, state)| {
+                        (
+                            *index,
+                            launch_control_led_value(
+                                state.color,
+                                state.intensity,
+                                if state.blink { 0x08 } else { 0x0c },
+                            ),
+                        )
+                    })
+                    .collect::<Vec<_>>();
+                self.emit_batch(outputs, endpoint, &pending, &pairs);
             }
         }
     }
 
-    fn emit_frame(
+    fn emit_batch(
         &mut self,
         outputs: &mut OutputRegistry,
         endpoint: EndpointId,
-        index: u8,
-        state: LedState,
-        now_ms: u64,
+        pending: &[(u8, LedState)],
+        pairs: &[(u8, u8)],
     ) {
         self.diagnostics.attempted = self.diagnostics.attempted.saturating_add(1);
-        let Some(bytes) = encode_launch_control_feedback(FACTORY1_LED_TEMPLATE, index, state)
-        else {
-            self.coalescer.revert_sent(index);
-            self.fail("unsupported LED color or address");
+        let Some(bytes) = encode_launch_control_led_batch(FACTORY1_LED_TEMPLATE, pairs) else {
+            for (index, _) in pending {
+                self.coalescer.revert_sent(*index);
+            }
+            self.fail("invalid LED batch");
             return;
         };
         let Ok(message) = MidiMessage::from_wire(&bytes) else {
-            self.coalescer.revert_sent(index);
-            self.fail("LED SysEx framing failed");
+            for (index, _) in pending {
+                self.coalescer.revert_sent(*index);
+            }
+            self.fail("LED batch SysEx framing failed");
             return;
         };
         let event = MidiEvent { timestamp: TimestampNanos::new(0), sequence: 0, endpoint, message };
@@ -488,11 +501,10 @@ impl LedSurface {
                 return;
             }
         }
-        self.coalescer.revert_sent(index);
-        self.retry_failures = self.retry_failures.saturating_add(1).min(6);
-        let delay = LED_MIN_INTERVAL_MS.saturating_mul(1_u64 << self.retry_failures);
-        self.retry_backoff_until_ms = now_ms.saturating_add(delay.min(1_000));
-        self.fail("LED destination output is not registered");
+        for (index, _) in pending {
+            self.coalescer.revert_sent(*index);
+        }
+        self.fail("LED batch write failed");
     }
 
     fn fail(&mut self, error: &str) {
