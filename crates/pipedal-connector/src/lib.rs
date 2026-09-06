@@ -66,6 +66,27 @@ pub enum Operation {
 }
 
 impl Operation {
+    /// Return every operation currently qualified by the connector boundary.
+    #[must_use]
+    pub const fn all() -> &'static [Self] {
+        &[
+            Self::SetControl,
+            Self::PreviewControl,
+            Self::UpdateCurrentPedalboard,
+            Self::SetPedalboardItemEnable,
+            Self::SetSnapshot,
+            Self::SetSystemMidiBindings,
+            Self::SetInputVolume,
+            Self::SetOutputVolume,
+            Self::LoadPreset,
+            Self::SaveCurrentPreset,
+            Self::GetAlsaDevices,
+            Self::GetJackStatus,
+            Self::Restart,
+            Self::Shutdown,
+        ]
+    }
+
     /// Wire operation name registered by PiPedal.
     #[must_use]
     pub const fn wire_name(self) -> &'static str {
@@ -599,6 +620,8 @@ mod tests {
         assert_eq!(Operation::SetControl.wire_name(), "setControl");
         assert!(!Operation::SetControl.requires_confirmation());
         assert!(Operation::Shutdown.requires_confirmation());
+        assert_eq!(Operation::all().len(), 14);
+        assert!(Operation::all().iter().all(|operation| !operation.wire_name().is_empty()));
     }
 
     #[test]
