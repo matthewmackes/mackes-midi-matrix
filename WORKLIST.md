@@ -4823,6 +4823,9 @@ tests, strict Clippy, architecture/worklist policy, and the complete release gat
 - **Version evidence:** The installed web manifest has no release version and
   `/usr/sbin/pipedald` is not owned by a package in the local RPM database. Protocol
   compatibility remains unresolved until source revision or wire fixtures are captured.
+- **Operation inventory evidence:** The pinned `PiPedalSocket.cpp` operation registry was
+  enumerated and grouped in the qualification artifact, covering catalog, controls, presets,
+  MIDI, audio/system configuration, files/models, and administrative/network actions.
 - **Live wire evidence (2026-09-05):** A bounded TCP/WebSocket probe received `101 Switching
   Protocols` from the running PiPedal service. A direct `getSystemMidiBindings` frame timed
   out after three seconds, confirming that an initialization sequence or route-specific

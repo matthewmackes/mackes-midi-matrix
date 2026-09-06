@@ -50,6 +50,15 @@ ownership metadata is also absent for `/usr/sbin/pipedald`; protocol compatibili
 cannot be pinned from local version metadata alone. W112 must capture the matching source
 revision or equivalent wire-level fixtures before connector writes are enabled.
 
+The pinned `PiPedalSocket.cpp` registers operation families for session/catalog, controls and
+audio, pedalboard/presets, MIDI, ALSA/JACK/system configuration, files/models, and updates/
+network administration. Representative registered names include `setControl`, `previewControl`,
+`setInputVolume`, `setOutputVolume`, `getPresets`, `loadPreset`, `saveCurrentPreset`,
+`updateCurrentPedalboard`, `setPedalboardItemEnable`, `setSnapshot`, `setSnapshots`,
+`getSystemMidiBindings`, `setSystemMidiBindings`, `getAlsaDevices`, `getJackStatus`, file
+operations, and `restart`/`shutdown`. W113 must expose only operations confirmed by the
+installed version, with destructive or privileged actions requiring explicit confirmation.
+
 Live wire probe (read-only, 2026-09-05) connected to `127.0.0.1:8080` and received
 `HTTP/1.1 101 Switching Protocols` from `WebSocket++/0.8.3-dev`. A masked array-framed
 `getSystemMidiBindings` request then received no response within a three-second bounded
