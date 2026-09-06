@@ -158,6 +158,22 @@ pub enum SessionPhase {
     Ready,
 }
 
+/// The bounded read-only requests used to populate a fresh PiPedal session.
+#[must_use]
+pub const fn startup_requests() -> [&'static str; 9] {
+    [
+        "hello",
+        "version",
+        "imageList",
+        "plugins",
+        "currentPedalboard",
+        "pluginClasses",
+        "getPresets",
+        "getBankIndex",
+        "getSystemMidiBindings",
+    ]
+}
+
 impl SessionPhase {
     /// Return to the unauthenticated state after socket loss.
     #[must_use]
@@ -495,6 +511,15 @@ mod tests {
         let phase = phase.accept("plugins").expect("plugins");
         assert_eq!(phase.accept("getSystemMidiBindings").expect("bindings"), SessionPhase::Ready);
         assert_eq!(phase.reset(), SessionPhase::Disconnected);
+    }
+
+    #[test]
+    fn startup_plan_is_ordered_and_bounded() {
+        let requests = startup_requests();
+        assert_eq!(requests[0], "hello");
+        assert_eq!(requests[1], "version");
+        assert_eq!(requests.last(), Some(&"getSystemMidiBindings"));
+        assert!(requests.len() <= 16);
     }
 
     #[test]
