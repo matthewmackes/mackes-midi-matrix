@@ -1,0 +1,7 @@
+[
+  {"physical_control_id":"knob-r3-c4","plugin_uri":"http://two-play.com/plugins/toob-parametric-eq","symbol":"lfLevel","scope":null},
+  {"physical_control_id":"knob-r3-c5","plugin_uri":"http://two-play.com/plugins/toob-parametric-eq","symbol":"lmfLevel","scope":null},
+  {"physical_control_id":"knob-r3-c6","plugin_uri":"http://two-play.com/plugins/toob-parametric-eq","symbol":"hmfLevel","scope":null},
+  {"physical_control_id":"knob-r3-c7","plugin_uri":"http://two-play.com/plugins/toob-parametric-eq","symbol":"hfLevel","scope":null},
+  {"physical_control_id":"knob-r3-c8","plugin_uri":"http://two-play.com/plugins/toob-parametric-eq","symbol":"gain","scope":null}
+]
