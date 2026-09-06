@@ -42,6 +42,8 @@ pub enum Operation {
     PreviewControl,
     /// Replace the current pedalboard graph.
     UpdateCurrentPedalboard,
+    /// Select a pedalboard plugin for UI/editing context.
+    SetSelectedPedalboardPlugin,
     /// Enable or bypass one pedalboard item.
     SetPedalboardItemEnable,
     /// Select or write a snapshot.
@@ -74,6 +76,7 @@ impl Operation {
             Self::SetControl,
             Self::PreviewControl,
             Self::UpdateCurrentPedalboard,
+            Self::SetSelectedPedalboardPlugin,
             Self::SetPedalboardItemEnable,
             Self::SetSnapshot,
             Self::SetSystemMidiBindings,
@@ -95,6 +98,7 @@ impl Operation {
             Self::SetControl => "setControl",
             Self::PreviewControl => "previewControl",
             Self::UpdateCurrentPedalboard => "updateCurrentPedalboard",
+            Self::SetSelectedPedalboardPlugin => "setSelectedPedalboardPlugin",
             Self::SetPedalboardItemEnable => "setPedalboardItemEnable",
             Self::SetSnapshot => "setSnapshot",
             Self::SetSystemMidiBindings => "setSystemMidiBindings",
@@ -142,7 +146,9 @@ impl Operation {
     pub const fn family(self) -> &'static str {
         match self {
             Self::SetControl | Self::PreviewControl => "controls",
-            Self::UpdateCurrentPedalboard | Self::SetPedalboardItemEnable => "pedalboard",
+            Self::UpdateCurrentPedalboard
+            | Self::SetSelectedPedalboardPlugin
+            | Self::SetPedalboardItemEnable => "pedalboard",
             Self::SetSnapshot => "snapshots",
             Self::SetSystemMidiBindings => "midi",
             Self::SetInputVolume | Self::SetOutputVolume => "audio",
@@ -660,7 +666,7 @@ mod tests {
                 assert!(!operation.is_read_only());
             }
         }
-        assert_eq!(Operation::all().len(), 14);
+        assert_eq!(Operation::all().len(), 15);
         assert!(Operation::all().iter().all(|operation| !operation.wire_name().is_empty()));
         assert_eq!(serde_json::to_string(&Operation::SetControl).expect("json"), "\"setControl\"");
     }

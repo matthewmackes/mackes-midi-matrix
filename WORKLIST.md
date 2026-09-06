@@ -4942,6 +4942,8 @@ tests, strict Clippy, architecture/worklist policy, and the complete release gat
 - **Progress evidence (2026-09-05):** Each typed operation now carries stable family metadata
   (`controls`, `pedalboard`, `snapshots`, `midi`, `audio`, `presets`, `diagnostics`, or `host`)
   for consistent CLI/TUI grouping without duplicated wire-name logic.
+- **Progress evidence (2026-09-05):** Added the qualified `setSelectedPedalboardPlugin`
+  operation to the typed catalog and pedalboard family, bringing the enumerable set to 15.
 - **Artifact evidence (2026-09-05):** Added `docs/fixtures/pipedal-eq-r3-example.json`, a
   reusable five-knob R3C4–R3C8 mapping fixture using the qualified parametric-EQ URI and stable
   symbols (`lfLevel`, `lmfLevel`, `hmfLevel`, `hfLevel`, `gain`).
