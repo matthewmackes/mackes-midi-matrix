@@ -4893,6 +4893,8 @@ tests, strict Clippy, architecture/worklist policy, and the complete release gat
   for unavailable plugins, missing controls, and read-only parameters before runtime writes.
 - **Progress evidence (2026-09-05):** Mapping resolution now also rejects duplicate live plugin
   URIs without an explicit scope, preventing ambiguous EQ instance selection; regression covered.
+- **Progress evidence (2026-09-05):** Added a bounded, ordered `startup_requests` plan matching
+  the verified PiPedal session sequence, with tests for hello/version ordering and catalog bounds.
 - **Progress evidence (2026-09-05):** Added explicit `SessionPhase::reset` behavior and
   reconnect coverage so socket loss returns the connector to `Disconnected` before a fresh
   `ehlo`/version/catalog negotiation.
