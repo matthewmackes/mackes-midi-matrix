@@ -42,6 +42,55 @@ pub struct RequestQueue {
     pending: VecDeque<Vec<u8>>,
 }
 
+/// Connector-owned session state used to reject stale work after reconnect.
+#[derive(Debug)]
+pub struct Session {
+    phase: SessionPhase,
+    generation: u64,
+    queue: RequestQueue,
+}
+
+impl Default for Session {
+    fn default() -> Self {
+        Self { phase: SessionPhase::Disconnected, generation: 0, queue: RequestQueue::default() }
+    }
+}
+
+impl Session {
+    /// Current handshake phase.
+    #[must_use]
+    pub const fn phase(&self) -> SessionPhase {
+        self.phase
+    }
+    /// Current reconnect generation.
+    #[must_use]
+    pub const fn generation(&self) -> u64 {
+        self.generation
+    }
+    /// Advance the handshake state.
+    pub fn accept(&mut self, message: &str) -> Result<SessionPhase, String> {
+        self.phase = self.phase.accept(message)?;
+        Ok(self.phase)
+    }
+    /// Reset state and invalidate queued work after socket loss.
+    pub fn reset(&mut self) {
+        self.phase = self.phase.reset();
+        self.generation = self.generation.wrapping_add(1);
+        self.queue = RequestQueue::default();
+    }
+    /// Queue one encoded request for the current generation.
+    pub fn enqueue(&mut self, generation: u64, request: Vec<u8>) -> Result<(), String> {
+        if generation != self.generation {
+            return Err("PiPedal request belongs to an old session generation".into());
+        }
+        self.queue.push(request)
+    }
+    /// Pop the next request for transport processing.
+    pub fn pop(&mut self) -> Option<Vec<u8>> {
+        self.queue.pop()
+    }
+}
+
 impl RequestQueue {
     /// Enqueue an encoded request, rejecting oversized or saturated queues.
     pub fn push(&mut self, request: Vec<u8>) -> Result<(), String> {
@@ -734,6 +783,17 @@ mod tests {
         assert_eq!(queue.pop(), Some(b"one".to_vec()));
         assert_eq!(queue.pop(), Some(b"two".to_vec()));
         assert_eq!(queue.pop(), None);
+    }
+
+    #[test]
+    fn session_generation_invalidates_queued_work_on_reset() {
+        let mut session = Session::default();
+        let generation = session.generation();
+        session.enqueue(generation, b"ok".to_vec()).expect("enqueue");
+        session.reset();
+        assert!(session.enqueue(generation, b"stale".to_vec()).is_err());
+        assert!(session.pop().is_none());
+        assert_eq!(session.generation(), generation + 1);
     }
 
     #[test]

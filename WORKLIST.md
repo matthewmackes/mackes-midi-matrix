@@ -4963,6 +4963,9 @@ tests, strict Clippy, architecture/worklist policy, and the complete release gat
   Active W113 delivery now prioritizes the tight Novation/Eventide/PiPedal platform link:
   daemon-owned transport, readiness/reconnect lifecycle, state reconciliation, and explicit
   delivery outcomes. EQ mapping activation is deferred until that link is qualified.
+- **Progress evidence (2026-09-05):** Added connector-owned `Session` state with reconnect
+  generations and queue invalidation. Requests tagged with an old generation are rejected, and
+  queued writes are discarded on socket reset to prevent stale cross-platform delivery.
 - **Artifact evidence (2026-09-05):** Added `docs/fixtures/pipedal-eq-r3-example.json`, a
   reusable five-knob R3C4–R3C8 mapping fixture using the qualified parametric-EQ URI and stable
   symbols (`lfLevel`, `lmfLevel`, `hmfLevel`, `hfLevel`, `gain`).
