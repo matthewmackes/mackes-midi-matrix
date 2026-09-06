@@ -136,6 +136,21 @@ impl Operation {
     pub const fn is_mapping_eligible(self) -> bool {
         matches!(self, Self::SetControl | Self::SetPedalboardItemEnable | Self::SetSnapshot)
     }
+
+    /// Stable UI/diagnostic family for this operation.
+    #[must_use]
+    pub const fn family(self) -> &'static str {
+        match self {
+            Self::SetControl | Self::PreviewControl => "controls",
+            Self::UpdateCurrentPedalboard | Self::SetPedalboardItemEnable => "pedalboard",
+            Self::SetSnapshot => "snapshots",
+            Self::SetSystemMidiBindings => "midi",
+            Self::SetInputVolume | Self::SetOutputVolume => "audio",
+            Self::LoadPreset | Self::SaveCurrentPreset => "presets",
+            Self::GetAlsaDevices | Self::GetJackStatus => "diagnostics",
+            Self::Restart | Self::Shutdown => "host",
+        }
+    }
 }
 
 /// Bounded accumulator for fragmented WebSocket text messages.
@@ -637,6 +652,8 @@ mod tests {
         assert!(!Operation::SetOutputVolume.is_read_only());
         assert!(Operation::SetControl.is_mapping_eligible());
         assert!(!Operation::Restart.is_mapping_eligible());
+        assert_eq!(Operation::SetControl.family(), "controls");
+        assert_eq!(Operation::Shutdown.family(), "host");
         for operation in Operation::all() {
             if operation.is_mapping_eligible() {
                 assert!(!operation.requires_confirmation());

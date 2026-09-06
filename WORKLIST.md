@@ -4939,6 +4939,9 @@ tests, strict Clippy, architecture/worklist policy, and the complete release gat
 - **Validation evidence (2026-09-05):** Capability tests now enforce that every mapping-eligible
   operation is writable and confirmation-free, preventing accidental policy regressions when
   new PiPedal operations are added.
+- **Progress evidence (2026-09-05):** Each typed operation now carries stable family metadata
+  (`controls`, `pedalboard`, `snapshots`, `midi`, `audio`, `presets`, `diagnostics`, or `host`)
+  for consistent CLI/TUI grouping without duplicated wire-name logic.
 - **Release evidence (2026-09-05):** `scripts/release-gate.sh` passed after registering the
   connector in the architecture policy, including workspace tests, benchmark, hermetic
   integration (13 passed, 1 explicitly ignored), installer smoke, and release artifact checks.
