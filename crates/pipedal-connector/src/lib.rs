@@ -756,6 +756,20 @@ pub fn encode_request<T: Serialize>(request: &Request<T>) -> serde_json::Result<
 mod tests {
     use super::*;
 
+    struct MockTransport {
+        sent: Vec<Vec<u8>>,
+        received: Option<Vec<u8>>,
+    }
+    impl Transport for MockTransport {
+        fn send(&mut self, frame: &[u8]) -> Result<(), TransportError> {
+            self.sent.push(frame.to_vec());
+            Ok(())
+        }
+        fn receive(&mut self) -> Result<Option<Vec<u8>>, TransportError> {
+            Ok(self.received.take())
+        }
+    }
+
     #[test]
     fn set_control_uses_pipedal_wire_names() {
         let request = Request {
@@ -870,6 +884,14 @@ mod tests {
         assert!(session.is_ready());
         session.enqueue_control(generation, b"control".to_vec()).expect("control");
         assert_eq!(session.pop(), Some(b"control".to_vec()));
+    }
+
+    #[test]
+    fn transport_boundary_supports_nonblocking_mock_exchange() {
+        let mut transport = MockTransport { sent: Vec::new(), received: Some(b"reply".to_vec()) };
+        transport.send(b"request").expect("send");
+        assert_eq!(transport.sent, vec![b"request".to_vec()]);
+        assert_eq!(transport.receive().expect("receive"), Some(b"reply".to_vec()));
     }
 
     #[test]

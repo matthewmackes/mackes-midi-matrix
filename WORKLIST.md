@@ -4969,6 +4969,9 @@ tests, strict Clippy, architecture/worklist policy, and the complete release gat
 - **Progress evidence (2026-09-05):** Added a socket-library-independent `Transport` trait and
   bounded `TransportError` taxonomy, giving the daemon worker a testable send/receive boundary
   without placing network I/O on the MIDI dispatch path.
+- **Validation evidence (2026-09-05):** Added a mock transport exchange test covering the
+  send/receive boundary without sockets or hardware, keeping platform-link regression checks
+  hermetic.
 - **Progress evidence (2026-09-05):** Added an explicit idempotence-checked `Session::connect`
   transition, giving the future transport worker a single entry point into the required
   hello/version handshake.
