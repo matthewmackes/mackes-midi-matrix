@@ -382,6 +382,19 @@ pub struct SetControl {
     pub value: f32,
 }
 
+impl SetControl {
+    /// Validate the identity and numeric value before encoding a write.
+    pub fn validate(&self) -> Result<(), String> {
+        if self.client_id.is_empty() || self.client_id.len() > 128 || self.symbol.is_empty() {
+            return Err("PiPedal setControl identity is invalid".into());
+        }
+        if !self.value.is_finite() {
+            return Err("PiPedal setControl value is not finite".into());
+        }
+        Ok(())
+    }
+}
+
 /// `PiPedal` system or plugin MIDI binding metadata.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -631,6 +644,7 @@ mod tests {
         assert_eq!(value[0]["replyTo"], 7);
         assert_eq!(value[1]["instanceId"], 127);
         assert_eq!(value[1]["symbol"], "lfLevel");
+        assert!(request.body.as_ref().expect("body").validate().is_ok());
     }
 
     #[test]
