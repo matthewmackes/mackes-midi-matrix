@@ -4851,6 +4851,14 @@ tests, strict Clippy, architecture/worklist policy, and the complete release gat
   verify it against the installed service.
 
 #### [ ] W113 — Implement reusable PiPedal adapter and catalog
+- **Current corrective work:** Verify the installed IPv6 loopback WebSocket endpoint and fix
+  reply correlation against actual server envelopes (`reply`, distinct from request `replyTo`).
+  Preserve a regression fixture; EQ remains held. Local service access is available.
+- **Live corrective evidence:** IPv4 `127.0.0.1:8080` refused connection; IPv6
+  `[::1]:8080/pipedal` successfully returned hello, version (2.0.110-Release), current
+  pedalboard, and system bindings. Corrected response-header decoding to `reply` and added
+  the actual hello envelope as a regression test. All 23 connector tests and strict Clippy
+  pass. This lifts the claimed access blocker; daemon socket integration remains unfinished.
 - **Status:** `IN_PROGRESS`
 - **Owner:** Unassigned
 - **Depends on:** W112

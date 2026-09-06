@@ -405,7 +405,7 @@ pub struct MessageHeader {
     /// Message or event name.
     pub message: String,
     /// Correlation identifier for a request response.
-    #[serde(rename = "replyTo")]
+    #[serde(rename = "reply")]
     pub reply_to: Option<u64>,
 }
 
@@ -755,6 +755,17 @@ pub fn encode_request<T: Serialize>(request: &Request<T>) -> serde_json::Result<
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn installed_server_reply_preserves_request_correlation() {
+        let (header, body) = decode_message(br#"[{"reply":1,"message":"ehlo"},1]"#)
+            .expect("installed hello response");
+        assert_eq!(header.reply_to, Some(1));
+        assert_eq!(body, Some(serde_json::json!(1)));
+        let (event, _) = decode_message(br#"[{"message":"onPedalboardChanged"},{}]"#)
+            .expect("unsolicited event");
+        assert_eq!(event.reply_to, None);
+    }
 
     struct MockTransport {
         sent: Vec<Vec<u8>>,
