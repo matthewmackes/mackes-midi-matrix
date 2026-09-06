@@ -4948,6 +4948,8 @@ tests, strict Clippy, architecture/worklist policy, and the complete release gat
 - **Validation evidence (2026-09-05):** Added `scripts/check-pipedal-fixture.py` to enforce
   bounded mapping count, complete stable identities, and physical/target uniqueness; the R3
   fixture passes validation.
+- **Release evidence (2026-09-05):** The release gate now invokes the PiPedal fixture validator
+  alongside artifact checks, preventing invalid reusable mappings from entering a release.
 - **Release evidence (2026-09-05):** `scripts/release-gate.sh` passed after registering the
   connector in the architecture policy, including workspace tests, benchmark, hermetic
   integration (13 passed, 1 explicitly ignored), installer smoke, and release artifact checks.

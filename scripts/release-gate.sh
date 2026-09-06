@@ -19,6 +19,7 @@ scripts/verify-repository.sh
 printf 'release-gate: controller template artifact\n'
 python3 scripts/verify-artifacts.py
 python3 scripts/test-verify-artifacts.py
+python3 scripts/check-pipedal-fixture.py
 printf 'release-gate: locked dependency metadata\n'
 cargo metadata --locked --all-features --format-version 1 >/dev/null
 printf 'release-gate: workspace tests\n'
