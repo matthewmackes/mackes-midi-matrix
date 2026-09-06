@@ -422,7 +422,7 @@ fn daemon_assignment_result_uses_scheduler_overlay_then_restores_base() {
     assert_eq!(daemon.assignment_led_state_at(1_600).color, mackes_profiles::LedColor::Amber);
     assert_eq!(
         daemon.assignment_led_frame_at(8, 0, 1_600).expect("base frame"),
-        vec![0xf0, 0x00, 0x20, 0x29, 0x02, 0x11, 0x78, 0x08, 0x00, 0x33, 0xf7]
+        vec![0xf0, 0x00, 0x20, 0x29, 0x02, 0x11, 0x78, 0x08, 0x00, 0x3f, 0xf7]
     );
     assert!(daemon.assignment_led_frame_at(16, 24, 0).is_none());
     let _ = fs::remove_file(socket);

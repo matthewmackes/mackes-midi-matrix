@@ -6058,6 +6058,11 @@ LED replay, and pedal-state observations are still open.
   and invalid input. R3C4–R3C8 resolve to 19–23. A full 48-LED render fits one 105-byte SysEx
   frame, or documented bounded chunks if the transport imposes a smaller validated limit.
   Tests assert complete bytes, including flags and termination, against manual-derived fixtures.
+- **Implementation evidence (2026-09-06):** Corrected steady-state LED flags to `0x0C`, blink
+  flags to `0x08`, and separated full Yellow (`0x3E`) from Amber (`0x3F`) per Novation's
+  Programmer's Reference. Updated golden coverage for all 48 LED indices; profile (56) and
+  daemon (85) tests, strict Clippy, worklist validation, and diff checks pass. Batched transport,
+  buffer reset, and physical color observation remain open.
 
 #### [ ] W120 — Eliminate refresh starvation and unnecessary controller traffic
 

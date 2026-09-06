@@ -1454,7 +1454,7 @@ pub struct LedState {
 /// Encodes the Launch Control XL's documented red/green brightness byte.
 #[must_use]
 pub const fn launch_control_led_value(color: LedColor, intensity: u8, flags: u8) -> u8 {
-    let level = match intensity {
+    let level: u8 = match intensity {
         0 => 0,
         1..=42 => 1,
         43..=84 => 2,
@@ -1463,7 +1463,10 @@ pub const fn launch_control_led_value(color: LedColor, intensity: u8, flags: u8)
     let (red, green) = match color {
         LedColor::Red => (level, 0),
         LedColor::Green => (0, level),
-        LedColor::Amber | LedColor::Yellow => (level, level),
+        LedColor::Amber => (level, level),
+        // The XL distinguishes full yellow (0x3e) from full amber (0x3f)
+        // by reducing the red component one step.
+        LedColor::Yellow => (level.saturating_sub(1), level),
         LedColor::Off | LedColor::Unknown => (0, 0),
     };
     ((green << 4) | red | (flags & 0x0C)) & 0x7F
@@ -1489,7 +1492,11 @@ pub fn encode_launch_control_feedback(template: u8, index: u8, state: LedState) 
     encode_launch_control_led(
         template,
         index,
-        launch_control_led_value(state.color, state.intensity, if state.blink { 0x04 } else { 0 }),
+        launch_control_led_value(
+            state.color,
+            state.intensity,
+            if state.blink { 0x08 } else { 0x0c },
+        ),
     )
 }
 
@@ -1509,7 +1516,7 @@ pub fn launch_control_led_test_pattern(template: u8) -> Option<Vec<Vec<u8>>> {
                     encode_launch_control_led(
                         template,
                         index,
-                        launch_control_led_value(color, 127, 0),
+                        launch_control_led_value(color, 127, 0x0c),
                     )
                 })
                 .collect::<Option<Vec<_>>>()
@@ -1539,7 +1546,7 @@ pub fn launch_control_led_demo_frames(template: u8) -> Option<Vec<Vec<Vec<u8>>>>
                             encode_launch_control_led(
                                 template,
                                 index,
-                                launch_control_led_value(state.color, state.intensity, 0),
+                                launch_control_led_value(state.color, state.intensity, 0x0c),
                             )
                         })
                         .collect::<Option<Vec<_>>>()

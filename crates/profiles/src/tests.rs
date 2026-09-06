@@ -585,10 +585,11 @@ fn launch_control_mk1_led_protocol_matches_programmers_reference() {
     assert_eq!(launch_control_index_label(39).as_deref(), Some("Bottom channel button 8"));
     assert_eq!(launch_control_index_label(43).as_deref(), Some("Record Arm"));
     assert_eq!(launch_control_index_label(48), None);
-    assert_eq!(launch_control_led_value(LedColor::Off, 127, 0), 0);
-    assert_eq!(launch_control_led_value(LedColor::Red, 127, 0), 3);
-    assert_eq!(launch_control_led_value(LedColor::Green, 127, 0), 0x30);
+    assert_eq!(launch_control_led_value(LedColor::Off, 127, 0x0c), 0x0c);
+    assert_eq!(launch_control_led_value(LedColor::Red, 127, 0x0c), 0x0f);
+    assert_eq!(launch_control_led_value(LedColor::Green, 127, 0x0c), 0x3c);
     assert_eq!(launch_control_led_value(LedColor::Amber, 127, 0x0c), 0x3f);
+    assert_eq!(launch_control_led_value(LedColor::Yellow, 127, 0x0c), 0x3e);
     let labels: std::collections::BTreeSet<_> =
         (0..48).map(|index| launch_control_index_label(index).expect("documented index")).collect();
     assert_eq!(labels.len(), 48);
@@ -641,11 +642,11 @@ fn launch_control_mk1_led_protocol_matches_programmers_reference() {
 fn factory1_led_feedback_golden_bytes_cover_every_index_and_reject_unknown() {
     for index in 0..48_u8 {
         for (color, value) in [
-            (LedColor::Off, 0_u8),
-            (LedColor::Red, 0x03),
-            (LedColor::Green, 0x30),
-            (LedColor::Amber, 0x33),
-            (LedColor::Yellow, 0x33),
+            (LedColor::Off, 0x0c_u8),
+            (LedColor::Red, 0x0f),
+            (LedColor::Green, 0x3c),
+            (LedColor::Amber, 0x3f),
+            (LedColor::Yellow, 0x3e),
         ] {
             assert_eq!(
                 encode_launch_control_feedback(8, index, LedState::new(color, 127, false)),
@@ -667,7 +668,7 @@ fn factory1_led_feedback_golden_bytes_cover_every_index_and_reject_unknown() {
 fn scheduled_feedback_uses_profile_owned_led_address_and_value_encoding() {
     let frame = encode_launch_control_feedback(0, 24, LedState::new(LedColor::Green, 127, true))
         .expect("valid feedback frame");
-    assert_eq!(frame, vec![0xf0, 0x00, 0x20, 0x29, 0x02, 0x11, 0x78, 0x00, 0x18, 0x34, 0xf7]);
+    assert_eq!(frame, vec![0xf0, 0x00, 0x20, 0x29, 0x02, 0x11, 0x78, 0x00, 0x18, 0x38, 0xf7]);
     assert!(
         encode_launch_control_feedback(16, 24, LedState::new(LedColor::Red, 127, false)).is_none()
     );
@@ -704,8 +705,8 @@ fn led_test_and_demo_modes_are_bounded_and_deterministic() {
     let demo = launch_control_led_demo_frames(0).expect("valid template");
     assert_eq!(demo.len(), 4);
     assert_eq!(demo.iter().map(Vec::len).collect::<Vec<_>>(), vec![48; 4]);
-    assert_eq!(demo[0][0][9], 0);
-    assert_eq!(demo[1][0][9], 0x30);
+    assert_eq!(demo[0][0][9], 0x0c);
+    assert_eq!(demo[1][0][9], 0x3c);
 }
 
 #[allow(clippy::too_many_lines)]
