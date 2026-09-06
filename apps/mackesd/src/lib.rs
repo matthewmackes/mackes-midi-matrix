@@ -2759,6 +2759,7 @@ impl Daemon {
                 self.config_path.as_deref(),
             ),
             "led": {
+                "phase": self.led.diagnostics().phase,
                 "attempted": self.led.diagnostics().attempted,
                 "sent": self.led.diagnostics().sent,
                 "coalesced": self.led.diagnostics().coalesced,

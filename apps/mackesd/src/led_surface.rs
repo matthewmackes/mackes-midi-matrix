@@ -38,6 +38,8 @@ struct BackendConfirmation {
 /// Counters and identity published on the daemon snapshot.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct LedDiagnostics {
+    /// Current controller feedback lifecycle phase.
+    pub phase: &'static str,
     /// Frames the surface attempted to write.
     pub attempted: u64,
     /// Frames accepted by a registered unique output.
@@ -73,6 +75,7 @@ pub struct LedDiagnostics {
 impl LedDiagnostics {
     const fn new() -> Self {
         Self {
+            phase: "absent",
             attempted: 0,
             sent: 0,
             coalesced: 0,
@@ -322,6 +325,15 @@ impl LedSurface {
         performance_locked: bool,
     ) {
         self.sync_session(session, captured, mappings, now_ms);
+        self.diagnostics.phase = if self.target_binding.is_none() {
+            "absent"
+        } else if self.template_reselect_pending {
+            "initializing"
+        } else if self.reconnect_show_started_ms.is_some() {
+            "animating"
+        } else {
+            "ready"
+        };
         let mut desired = compose_desired(
             mappings,
             session,
