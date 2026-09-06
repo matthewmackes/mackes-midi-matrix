@@ -412,6 +412,19 @@ impl LedSurface {
         self.retry_backoff_until_ms = 0;
         self.diagnostics.target_id = Some(selected.1);
         if self.template_reselect_pending {
+            let reset_sent = mackes_profiles::encode_launch_control_reset(
+                mackes_profiles::LAUNCH_CONTROL_MK2_FACTORY1_SLOT,
+            )
+            .and_then(|bytes| MidiMessage::from_wire(&bytes).ok())
+            .is_some_and(|message| {
+                let event = MidiEvent {
+                    timestamp: TimestampNanos::new(0),
+                    sequence: 0,
+                    endpoint: selected.0,
+                    message,
+                };
+                outputs.send_to_endpoint(selected.0, event).is_ok()
+            });
             if let Some(bytes) = mackes_profiles::encode_launch_control_template(
                 mackes_profiles::LAUNCH_CONTROL_MK2_FACTORY1_SLOT,
             ) {
@@ -422,7 +435,7 @@ impl LedSurface {
                         endpoint: selected.0,
                         message,
                     };
-                    if outputs.send_to_endpoint(selected.0, event).is_ok() {
+                    if reset_sent && outputs.send_to_endpoint(selected.0, event).is_ok() {
                         self.template_reselect_pending = false;
                     }
                 }

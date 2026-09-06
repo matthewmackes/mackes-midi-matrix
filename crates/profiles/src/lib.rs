@@ -1349,6 +1349,16 @@ pub fn encode_launch_control_template(template: u8) -> Option<[u8; 9]> {
     (template < 16).then_some([0xF0, 0x00, 0x20, 0x29, 0x02, 0x11, 0x77, template, 0xF7])
 }
 
+/// Encodes the template-scoped Launch Control XL reset command.
+#[must_use]
+pub const fn encode_launch_control_reset(template: u8) -> Option<[u8; 3]> {
+    if template < 16 {
+        Some([0xB0 | template, 0x00, 0x00])
+    } else {
+        None
+    }
+}
+
 /// Returns the documented Mk1 frame selecting User 1 (template slot zero).
 #[must_use]
 pub const fn launch_control_user1_selection_frame() -> [u8; 9] {

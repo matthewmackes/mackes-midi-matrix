@@ -6122,6 +6122,11 @@ LED replay, and pedal-state observations are still open.
   normal+HUI is accepted, two indistinguishable normal ports are refused, and an absent controller
   never reports ready. No recurring full refresh, animation restart loop, or service restart is
   needed for ordinary USB recovery. Verify stale generations cannot write after rebinding.
+- **Implementation evidence (2026-09-06):** Added the documented template-scoped reset encoder
+  and send it before template selection on reconnect, so stale LED state is cleared before the
+  complete desired render. Exact reset-frame coverage, 56 profile tests, 85 daemon tests, strict
+  Clippy, worklist validation, and diff checks pass. Live deployment and physical reset behavior
+  remain open.
 
 #### [ ] W122 — Integrate PiPedal mappings with truthful ownership and input dispatch
 
