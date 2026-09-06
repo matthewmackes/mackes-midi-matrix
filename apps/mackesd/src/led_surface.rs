@@ -107,6 +107,7 @@ pub struct LedSurface {
     active_lexicon_algorithm: Option<u8>,
     diagnostics: LedDiagnostics,
     target_binding: Option<String>,
+    pipedal_controls: Vec<String>,
 }
 
 impl Default for LedSurface {
@@ -129,11 +130,17 @@ impl Default for LedSurface {
             active_lexicon_algorithm: None,
             diagnostics: LedDiagnostics::new(),
             target_binding: None,
+            pipedal_controls: Vec::new(),
         }
     }
 }
 
 impl LedSurface {
+    /// Sets the stable physical controls assigned to PiPedal mappings.
+    pub fn set_pipedal_controls(&mut self, controls: Vec<String>) {
+        self.pipedal_controls = controls;
+        self.request_full_resync();
+    }
     /// Sets the daemon-resolved output identity used for LED writes.
     pub fn set_target_binding(&mut self, endpoint_id: Option<String>) {
         self.target_binding = endpoint_id;
@@ -316,6 +323,11 @@ impl LedSurface {
             self.result_started_ms,
             self.active_lexicon_algorithm,
         );
+        for control_id in &self.pipedal_controls {
+            if let Some(index) = led_index(control_id) {
+                desired.insert(index, LedState::new(LedColor::Yellow, 127, false));
+            }
+        }
         if let Some(started) = self.reconnect_show_started_ms {
             let elapsed = now_ms.saturating_sub(started);
             if elapsed < RECONNECT_SHOW_MS && session.phase == AssignmentPhase::Idle {
@@ -658,6 +670,13 @@ fn owner_led_color(profile: &str) -> LedColor {
 
 fn owner_state(profile: &str) -> LedState {
     LedState::new(owner_led_color(profile), 127, false)
+}
+
+fn led_index(control_id: &str) -> Option<u8> {
+    launch_control_physical_catalog()
+        .into_iter()
+        .find(|control| control.id.as_str() == control_id)
+        .and_then(|control| control.feedback_address)
 }
 
 fn owner_state_for_control(profile: &str, role: PhysicalControlRole) -> LedState {

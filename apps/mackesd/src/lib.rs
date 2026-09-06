@@ -983,6 +983,21 @@ impl Daemon {
             .find(|(profile, _)| profile == "launch-control-xl-mk2")
             .map(|(_, endpoint)| endpoint.clone());
         self.led.set_target_binding(target);
+        let pipedal_controls = self
+            .config_path
+            .as_deref()
+            .and_then(|path| mackes_config::load(path).ok())
+            .map(|document| {
+                document
+                    .settings
+                    .pipedal_mappings
+                    .mappings
+                    .into_iter()
+                    .map(|mapping| mapping.physical_control_id)
+                    .collect()
+            })
+            .unwrap_or_default();
+        self.led.set_pipedal_controls(pipedal_controls);
         self.led.flush(
             now_ms,
             &self.mapping_store,
