@@ -193,7 +193,8 @@ cannot satisfy W111. Record any proposed deferral for operator decision instead 
 this scope implicitly.
 
 The current typed connector catalog exposes the following qualified wire operations:
-`setControl`, `previewControl`, `updateCurrentPedalboard`, `setPedalboardItemEnable`,
+`setControl`, `previewControl`, `updateCurrentPedalboard`, `setSelectedPedalboardPlugin`,
+`setPedalboardItemEnable`,
 `setSnapshot`, `setSystemMidiBindings`, `setInputVolume`, `setOutputVolume`, `loadPreset`,
 `saveCurrentPreset`, `getAlsaDevices`, `getJackStatus`, `restart`, and `shutdown`. The
 catalog is enumerable and serializes each capability using its exact wire name. Persistent,
