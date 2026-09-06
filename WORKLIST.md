@@ -4942,6 +4942,9 @@ tests, strict Clippy, architecture/worklist policy, and the complete release gat
 - **Progress evidence (2026-09-05):** Each typed operation now carries stable family metadata
   (`controls`, `pedalboard`, `snapshots`, `midi`, `audio`, `presets`, `diagnostics`, or `host`)
   for consistent CLI/TUI grouping without duplicated wire-name logic.
+- **Artifact evidence (2026-09-05):** Added `docs/fixtures/pipedal-eq-r3-example.json`, a
+  reusable five-knob R3C4–R3C8 mapping fixture using the qualified parametric-EQ URI and stable
+  symbols (`lfLevel`, `lmfLevel`, `hmfLevel`, `hfLevel`, `gain`).
 - **Release evidence (2026-09-05):** `scripts/release-gate.sh` passed after registering the
   connector in the architecture policy, including workspace tests, benchmark, hermetic
   integration (13 passed, 1 explicitly ignored), installer smoke, and release artifact checks.
