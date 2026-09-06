@@ -623,6 +623,12 @@ fn launch_control_mk1_led_protocol_matches_programmers_reference() {
     assert_eq!(encode_launch_control_led(16, 0, 0), None);
     assert_eq!(encode_launch_control_led(0, 48, 0), None);
     assert_eq!(
+        encode_launch_control_led_batch(8, &[(0, 0x0c), (19, 0x3e), (23, 0x3f)]),
+        Some(vec![0xf0, 0x00, 0x20, 0x29, 0x02, 0x11, 0x78, 8, 0, 0x0c, 19, 0x3e, 23, 0x3f, 0xf7])
+    );
+    assert!(encode_launch_control_led_batch(8, &[(19, 1), (19, 2)]).is_none());
+    assert!(encode_launch_control_led_batch(8, &[(23, 1), (19, 2)]).is_none());
+    assert_eq!(
         encode_launch_control_toggle(2, 7, true),
         Some(vec![0xf0, 0x00, 0x20, 0x29, 0x02, 0x11, 0x7b, 0x02, 0x07, 0x7f, 0xf7])
     );

@@ -1320,6 +1320,29 @@ pub fn encode_launch_control_led(template: u8, index: u8, value: u8) -> Option<V
     })
 }
 
+/// Encodes one bounded background update containing multiple LED index/value pairs.
+///
+/// Callers must provide pairs in deterministic index order. Duplicate indices are
+/// rejected so one frame cannot contain competing states for the same control.
+#[must_use]
+pub fn encode_launch_control_led_batch(template: u8, pairs: &[(u8, u8)]) -> Option<Vec<u8>> {
+    if template >= 16 || pairs.is_empty() || pairs.len() > 48 {
+        return None;
+    }
+    let mut bytes = LAUNCH_CONTROL_XL_SYSEX_HEADER.to_vec();
+    bytes.extend_from_slice(&[0x78, template]);
+    let mut previous = None;
+    for (index, value) in pairs {
+        if *index >= 48 || previous.is_some_and(|prior| *index <= prior) {
+            return None;
+        }
+        bytes.extend_from_slice(&[*index, *value & 0x7F]);
+        previous = Some(*index);
+    }
+    bytes.push(0xF7);
+    Some(bytes)
+}
+
 /// Encodes the documented Mk1 template-selection `SysEx` message.
 #[must_use]
 pub fn encode_launch_control_template(template: u8) -> Option<[u8; 9]> {

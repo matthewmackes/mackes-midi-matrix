@@ -6063,6 +6063,11 @@ LED replay, and pedal-state observations are still open.
   Programmer's Reference. Updated golden coverage for all 48 LED indices; profile (56) and
   daemon (85) tests, strict Clippy, worklist validation, and diff checks pass. Batched transport,
   buffer reset, and physical color observation remain open.
+- **Batch encoder evidence (2026-09-06):** Added a bounded deterministic multi-index SysEx
+  encoder that accepts ordered unique indices 0–47, rejects empty/duplicate/out-of-order input,
+  and masks values to seven bits. Golden tests cover R3C4–R3C8 indices and invalid batches;
+  56 profile tests and strict profile Clippy pass. The daemon emitter still needs integration
+  with this batch path.
 
 #### [ ] W120 — Eliminate refresh starvation and unnecessary controller traffic
 
