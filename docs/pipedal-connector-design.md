@@ -201,3 +201,11 @@ catalog is enumerable and serializes each capability using its exact wire name. 
 host-wide, or disruptive mutations carry an explicit confirmation requirement; ordinary
 parameter control remains immediate. Operations outside this qualified set remain pending
 until an installed-version fixture supplies their request and response contracts.
+
+## Current delivery priority
+
+The EQ R3 mapping is intentionally held while the platform link is completed. Priority is the
+daemon-owned PiPedal session and transport boundary: bounded request queuing, handshake and
+reconnect state, catalog/event reconciliation, explicit delivery outcomes, and separation of
+MIDI dispatch from network I/O. Physical mappings should consume this stable link only after
+transport readiness and destination identity are proven.
