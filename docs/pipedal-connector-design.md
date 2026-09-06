@@ -191,3 +191,12 @@ Qualify safe representative live operations and report destructive paths tested 
 or an isolated instance. Deliver the completed capability matrix with W116; EQ-only operation
 cannot satisfy W111. Record any proposed deferral for operator decision instead of reducing
 this scope implicitly.
+
+The current typed connector catalog exposes the following qualified wire operations:
+`setControl`, `previewControl`, `updateCurrentPedalboard`, `setPedalboardItemEnable`,
+`setSnapshot`, `setSystemMidiBindings`, `setInputVolume`, `setOutputVolume`, `loadPreset`,
+`saveCurrentPreset`, `getAlsaDevices`, `getJackStatus`, `restart`, and `shutdown`. The
+catalog is enumerable and serializes each capability using its exact wire name. Persistent,
+host-wide, or disruptive mutations carry an explicit confirmation requirement; ordinary
+parameter control remains immediate. Operations outside this qualified set remain pending
+until an installed-version fixture supplies their request and response contracts.

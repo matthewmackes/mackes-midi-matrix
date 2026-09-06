@@ -4927,6 +4927,9 @@ tests, strict Clippy, architecture/worklist policy, and the complete release gat
 - **Progress evidence (2026-09-05):** Operation capabilities now serialize using their exact
   PiPedal wire names, allowing persisted mappings and UI capability payloads to round-trip
   without a second name translation table.
+- **Documentation evidence (2026-09-05):** Design documentation now records the complete
+  14-operation qualified catalog, its confirmation policy, and the explicit pending boundary
+  for operations lacking installed-version wire fixtures.
 - **Release evidence (2026-09-05):** `scripts/release-gate.sh` passed after registering the
   connector in the architecture policy, including workspace tests, benchmark, hermetic
   integration (13 passed, 1 explicitly ignored), installer smoke, and release artifact checks.
