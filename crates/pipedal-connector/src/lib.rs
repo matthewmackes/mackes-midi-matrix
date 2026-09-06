@@ -88,6 +88,9 @@ impl Session {
     }
     /// Queue one encoded request for the current generation.
     pub fn enqueue(&mut self, generation: u64, request: Vec<u8>) -> Result<(), String> {
+        if self.phase == SessionPhase::Disconnected {
+            return Err("PiPedal session is disconnected".into());
+        }
         if generation != self.generation {
             return Err("PiPedal request belongs to an old session generation".into());
         }
@@ -797,11 +800,13 @@ mod tests {
     fn session_generation_invalidates_queued_work_on_reset() {
         let mut session = Session::default();
         let generation = session.generation();
+        session.connect().expect("connect");
         session.enqueue(generation, b"ok".to_vec()).expect("enqueue");
         session.reset();
         assert!(session.enqueue(generation, b"stale".to_vec()).is_err());
         assert!(session.pop().is_none());
         assert_eq!(session.generation(), generation + 1);
+        assert!(Session::default().enqueue(0, b"blocked".to_vec()).is_err());
     }
 
     #[test]
