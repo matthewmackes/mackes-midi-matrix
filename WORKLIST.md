@@ -4966,6 +4966,9 @@ tests, strict Clippy, architecture/worklist policy, and the complete release gat
 - **Progress evidence (2026-09-05):** Added connector-owned `Session` state with reconnect
   generations and queue invalidation. Requests tagged with an old generation are rejected, and
   queued writes are discarded on socket reset to prevent stale cross-platform delivery.
+- **Progress evidence (2026-09-05):** Added a socket-library-independent `Transport` trait and
+  bounded `TransportError` taxonomy, giving the daemon worker a testable send/receive boundary
+  without placing network I/O on the MIDI dispatch path.
 - **Progress evidence (2026-09-05):** Added an explicit idempotence-checked `Session::connect`
   transition, giving the future transport worker a single entry point into the required
   hello/version handshake.

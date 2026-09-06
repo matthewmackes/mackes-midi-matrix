@@ -36,6 +36,25 @@ pub const MAX_SYSTEM_MIDI_BINDINGS: usize = 128;
 /// Maximum requests waiting for the PiPedal transport worker.
 pub const MAX_PENDING_REQUESTS: usize = 64;
 
+/// Transport-facing error categories kept independent of socket libraries.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TransportError {
+    /// The peer closed or the connection was otherwise lost.
+    Disconnected,
+    /// The transport exceeded its bounded deadline.
+    Timeout,
+    /// A frame or protocol contract was invalid.
+    Protocol,
+}
+
+/// Minimal transport boundary for the daemon-owned PiPedal worker.
+pub trait Transport {
+    /// Send one already-encoded client frame.
+    fn send(&mut self, frame: &[u8]) -> Result<(), TransportError>;
+    /// Receive one complete server frame, if available without blocking MIDI dispatch.
+    fn receive(&mut self) -> Result<Option<Vec<u8>>, TransportError>;
+}
+
 /// Bounded handoff queue between MIDI/control callers and the PiPedal transport worker.
 #[derive(Debug, Default)]
 pub struct RequestQueue {
