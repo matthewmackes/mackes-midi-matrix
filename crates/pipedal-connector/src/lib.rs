@@ -637,6 +637,12 @@ mod tests {
         assert!(!Operation::SetOutputVolume.is_read_only());
         assert!(Operation::SetControl.is_mapping_eligible());
         assert!(!Operation::Restart.is_mapping_eligible());
+        for operation in Operation::all() {
+            if operation.is_mapping_eligible() {
+                assert!(!operation.requires_confirmation());
+                assert!(!operation.is_read_only());
+            }
+        }
         assert_eq!(Operation::all().len(), 14);
         assert!(Operation::all().iter().all(|operation| !operation.wire_name().is_empty()));
         assert_eq!(serde_json::to_string(&Operation::SetControl).expect("json"), "\"setControl\"");

@@ -4936,6 +4936,9 @@ tests, strict Clippy, architecture/worklist policy, and the complete release gat
 - **Progress evidence (2026-09-05):** Added an explicit mapping-eligibility policy: only
   parameter, item-enable, and snapshot operations may be assigned to physical controls;
   restart, shutdown, graph, preset, and discovery actions are excluded by construction.
+- **Validation evidence (2026-09-05):** Capability tests now enforce that every mapping-eligible
+  operation is writable and confirmation-free, preventing accidental policy regressions when
+  new PiPedal operations are added.
 - **Release evidence (2026-09-05):** `scripts/release-gate.sh` passed after registering the
   connector in the architecture policy, including workspace tests, benchmark, hermetic
   integration (13 passed, 1 explicitly ignored), installer smoke, and release artifact checks.
