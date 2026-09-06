@@ -48,6 +48,8 @@ pub enum Operation {
     SetPedalboardItemEnable,
     /// Toggle whether a pedalboard item uses its plugin UI.
     SetPedalboardItemUseModUi,
+    /// Rename a pedalboard item.
+    SetPedalboardItemTitle,
     /// Select or write a snapshot.
     SetSnapshot,
     /// Write system MIDI bindings.
@@ -81,6 +83,7 @@ impl Operation {
             Self::SetSelectedPedalboardPlugin,
             Self::SetPedalboardItemEnable,
             Self::SetPedalboardItemUseModUi,
+            Self::SetPedalboardItemTitle,
             Self::SetSnapshot,
             Self::SetSystemMidiBindings,
             Self::SetInputVolume,
@@ -104,6 +107,7 @@ impl Operation {
             Self::SetSelectedPedalboardPlugin => "setSelectedPedalboardPlugin",
             Self::SetPedalboardItemEnable => "setPedalboardItemEnable",
             Self::SetPedalboardItemUseModUi => "setPedalboardItemUseModUi",
+            Self::SetPedalboardItemTitle => "setPedalboardItemTitle",
             Self::SetSnapshot => "setSnapshot",
             Self::SetSystemMidiBindings => "setSystemMidiBindings",
             Self::SetInputVolume => "setInputVolume",
@@ -154,6 +158,7 @@ impl Operation {
             | Self::SetSelectedPedalboardPlugin
             | Self::SetPedalboardItemEnable => "pedalboard",
             Self::SetPedalboardItemUseModUi => "pedalboard",
+            Self::SetPedalboardItemTitle => "pedalboard",
             Self::SetSnapshot => "snapshots",
             Self::SetSystemMidiBindings => "midi",
             Self::SetInputVolume | Self::SetOutputVolume => "audio",
@@ -671,7 +676,7 @@ mod tests {
                 assert!(!operation.is_read_only());
             }
         }
-        assert_eq!(Operation::all().len(), 16);
+        assert_eq!(Operation::all().len(), 17);
         assert!(Operation::all().iter().all(|operation| !operation.wire_name().is_empty()));
         assert_eq!(serde_json::to_string(&Operation::SetControl).expect("json"), "\"setControl\"");
     }
