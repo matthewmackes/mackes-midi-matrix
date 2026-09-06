@@ -5584,6 +5584,11 @@ tests, strict Clippy, architecture/worklist policy, and the complete release gat
 - **Acceptance:** CLI/TUI agree with PiPedal read-back for metadata-advertised controls; `gain`
   is the universal baseline and no fixed five-symbol set is assumed; physical sweep and reconnect
   evidence recorded; no Novation lockup; missing hardware evidence remains explicitly open.
+- **Deployment evidence (2026-09-06):** Built and installed the release daemon after adding the
+  PiPedal LED projection. The host configuration now contains Fender Clean R3C4–R3C8 mappings
+  for the native TooB Parametric EQ symbols `lfLevel`, `lmfLevel`, `hmfLevel`, `hfLevel`, and
+  `gain`; the daemon reports ready and successfully emits LED frames to the recovered Launch
+  Control XL MIDI output. Physical LED appearance remains open pending operator confirmation.
 
 #### [>] W100 — Reproducible appliance installation and boot supervision
 
