@@ -101,6 +101,13 @@ impl Session {
         }
         self.queue.push(request)
     }
+    /// Queue a platform control request only after PiPedal is fully ready.
+    pub fn enqueue_control(&mut self, generation: u64, request: Vec<u8>) -> Result<(), String> {
+        if !self.is_ready() {
+            return Err("PiPedal platform is not ready for control delivery".into());
+        }
+        self.enqueue(generation, request)
+    }
     /// Pop the next request for transport processing.
     pub fn pop(&mut self) -> Option<Vec<u8>> {
         self.queue.pop()
@@ -808,6 +815,7 @@ mod tests {
         session.connect().expect("connect");
         assert!(!session.is_ready());
         session.enqueue(generation, b"ok".to_vec()).expect("enqueue");
+        assert!(session.enqueue_control(generation, b"control".to_vec()).is_err());
         session.reset();
         assert!(session.enqueue(generation, b"stale".to_vec()).is_err());
         assert!(session.pop().is_none());
