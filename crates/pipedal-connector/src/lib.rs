@@ -31,6 +31,8 @@ pub const MAX_FRAME_BYTES: usize = 1_048_576;
 pub const MAX_MAPPINGS: usize = 128;
 /// Maximum discovered plugin controls in one catalog snapshot.
 pub const MAX_CATALOG_CONTROLS: usize = 2_048;
+/// Maximum system MIDI bindings accepted in one PiPedal update.
+pub const MAX_SYSTEM_MIDI_BINDINGS: usize = 128;
 
 /// PiPedal operations that the connector may expose after capability discovery.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -398,6 +400,38 @@ pub struct MidiBinding {
     pub switch_control_type: i32,
 }
 
+/// Bounded body for `setSystemMidiBindings`.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct SystemMidiBindings {
+    /// Complete replacement binding set.
+    pub bindings: Vec<MidiBinding>,
+}
+
+impl SystemMidiBindings {
+    /// Validate the replacement set size and numeric ranges.
+    pub fn validate(&self) -> Result<(), String> {
+        if self.bindings.len() > MAX_SYSTEM_MIDI_BINDINGS {
+            return Err("PiPedal MIDI binding set exceeds configured limit".into());
+        }
+        for binding in &self.bindings {
+            if binding.channel < -1
+                || binding.channel > 15
+                || binding.control < 0
+                || binding.control > 127
+            {
+                return Err("PiPedal MIDI binding address is invalid".into());
+            }
+            if !binding.min_value.is_finite()
+                || !binding.max_value.is_finite()
+                || binding.min_value > binding.max_value
+            {
+                return Err("PiPedal MIDI binding range is invalid".into());
+            }
+        }
+        Ok(())
+    }
+}
+
 /// Stable identity for a discovered PiPedal plugin instance.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PluginTarget {
@@ -617,6 +651,25 @@ mod tests {
         };
         let encoded = serde_json::to_vec(&binding).expect("encode");
         assert_eq!(serde_json::from_slice::<MidiBinding>(&encoded).expect("decode"), binding);
+    }
+
+    #[test]
+    fn system_midi_binding_payload_is_bounded_and_validated() {
+        let binding = MidiBinding {
+            symbol: "gain".into(),
+            channel: -1,
+            binding_type: 0,
+            note: 0,
+            control: 74,
+            min_control_value: 0,
+            max_control_value: 127,
+            min_value: -1.0,
+            max_value: 1.0,
+            rotary_scale: 1.0,
+            linear_control_type: 0,
+            switch_control_type: 0,
+        };
+        assert!(SystemMidiBindings { bindings: vec![binding] }.validate().is_ok());
     }
 
     #[test]
