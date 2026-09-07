@@ -8607,6 +8607,9 @@ Known risks and next checkpoint: Resolve prerequisite contracts and source gaps 
 - **Empty scene-state increment (2026-09-07):** Scenes & Setlists now visibly reports when the
   daemon's authoritative catalog contains no scenes, setlists, or projects instead of hiding the
   board. It does not fabricate actions; asset, coverage, worklist, and diff checks pass.
+- **Empty scene-state deployment evidence (2026-09-07):** rebuilt and installed `mackes-web`,
+  restarted the service, and verified `/assets/app.js` on the LAN endpoint contains the explicit
+  no-authoritative-scenes message. The served release matches the checked-in behavior.
 - **Capability reconciliation (2026-09-07):** the live `/api/v1/capabilities` projection reports ten
   operation families with no partial labels and explicitly names remaining mutation coverage as
   `W138-W139`. This keeps the System/feature boards truthful; those mutation families remain open.
