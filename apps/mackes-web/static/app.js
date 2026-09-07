@@ -775,8 +775,8 @@ document.querySelector('#pipedal-operation').addEventListener('click', async () 
     request.instance_id = pipedalInstanceId.value.trim();
     request.value = Number(pipedalValue.value);
     if (!request.instance_id) { operation.textContent = 'PiPedal instance ID is required.'; return; }
-    if (!Number.isFinite(request.value) || request.value < 0 || request.value > 1) {
-      operation.textContent = 'PiPedal value must be a finite normalized number from 0 to 1.';
+    if (!Number.isFinite(request.value)) {
+      operation.textContent = 'PiPedal value must be a finite control-domain number.';
       return;
     }
   }

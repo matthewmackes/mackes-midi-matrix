@@ -225,12 +225,11 @@ user-facing workflow without needing an independent button; require a documented
 - The matching client invokes a reply handler twice and retains its reservation until reconnect.
   MACKES must dispatch a correlation exactly once and release it on reply, timeout, cancellation,
   or disconnect.
-- The current MACKES web field labels `pipedal-value` as normalized and constrains it to `0..1`,
-  while `PiPedalRequest.value` is documented as “normalized/control-domain” and the adapter's
-  `setControl` validation compares directly with the discovered native `min_value`/`max_value`.
-  For a plugin range such as `-12..12`, the current path therefore has an unresolved unit contract.
-  W150 must choose and document one conversion boundary, add a range-aware fixture, and keep the
-  UI label, IPC schema, and adapter validation consistent before claiming value correctness.
+- The web control now labels `pipedal-value` as a native control-domain value, removes the false
+  `0..1` constraint, and the IPC field documents the same native-domain contract. The adapter
+  remains the authoritative range validator against discovered `min_value`/`max_value`. A
+  range-aware mapping editor and fixture remain open because the current resolution payload does
+  not yet return plugin URI/range metadata for each persisted mapping.
 
 ## Requirements to close the newly discovered gap
 

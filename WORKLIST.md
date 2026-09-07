@@ -8428,11 +8428,11 @@ finds 65 direct `Reply(replyTo, ...)` emitters and 39 handlers without a direct 
 no-reply handlers invoke the model and two are protocol helpers. W150 must map those no-reply
 paths to authoritative events/subscription completion or classify them as internal before browser
 exposure; a missing direct reply is not treated as an ACK failure or silently ignored.
-PiPedal value-domain gap (2026-09-07): source review found the web `pipedal-value` field labeled
-normalized with a `0..1` constraint, while the adapter validates `setControl` directly against
-native catalog ranges and the IPC field says “normalized/control-domain.” W150 must resolve this
-unit boundary with one documented conversion, a range-aware fixture, and consistent UI/IPC/adapter
-contracts before claiming value correctness; no speculative conversion was added.
+PiPedal value-domain correction (2026-09-07): changed the web `pipedal-value` field to an
+explicit native control-domain value, removed the false `0..1` constraint, and aligned the IPC
+documentation. The adapter remains the authoritative native-range validator. A range-aware
+mapping editor/fixture remains open because mapping resolution does not yet return plugin URI and
+range metadata per persisted mapping.
 ```
 
 #### [>] W146 — Specify capability contracts and lossless visual drafts

@@ -419,7 +419,7 @@ pub struct PiPedalRequest {
     /// Client identity used by `PiPedal`.
     #[serde(default)]
     pub client_id: Option<String>,
-    /// Requested normalized/control-domain value.
+    /// Requested native plugin control-domain value.
     #[serde(default)]
     pub value: Option<f32>,
 }
