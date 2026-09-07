@@ -8415,12 +8415,14 @@ home directory names that checkout, and a dry-run `pipedald` build reports no wo
 local source/build/install provenance without claiming clean-room reproducibility. Per-operation
 source/fixture reconciliation remains before W145 closure; browser delivery remains W150.
 PiPedal source-first increment (2026-09-07): pinned the matching developer architecture and
-TypeScript model/socket sources with hashes and evidence boundaries. The client exposes at least
-87 request/send names, confirms numeric reply-ID correlation, and records four textual reply-name
-mismatches that remain fixture-specific. It also contains duplicate reply-handler dispatch and
-reservations retained until reconnect; MACKES must dispatch once and release pending correlations
-on every terminal path. This follows the source-provenance rule: vendor/developer documentation
-and matching source precede binary inspection or reverse engineering.
+TypeScript model/socket sources with hashes and evidence boundaries. A source comparison finds
+104 server handlers, 103 client request/send names, 102 exact-name overlaps, two dynamic helper
+emissions (`setControl`, `previewControl`), and one case mismatch (`downloadModelsFromTone3000` /
+`DownloadModelsFromTone3000`). The client confirms numeric reply-ID correlation and records four
+textual reply-name mismatches that remain fixture-specific. It also contains duplicate
+reply-handler dispatch and reservations retained until reconnect; MACKES must dispatch once and
+release pending correlations on every terminal path. This follows the source-provenance rule:
+vendor/developer documentation and matching source precede binary inspection or reverse engineering.
 ```
 
 #### [>] W146 — Specify capability contracts and lossless visual drafts

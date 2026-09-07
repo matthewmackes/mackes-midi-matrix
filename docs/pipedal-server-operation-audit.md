@@ -204,10 +204,13 @@ user-facing workflow without needing an independent button; require a documented
   saveCurrentPresetsAs. Preserve protocol spelling in version-specific fixtures.
 - Selecting a plugin changes UI context; enabling it changes audio behavior. Distinguish those
   operation semantics in the visual editor and undo/persistence policy.
-- The matching client exposes at least 87 distinct request/send names and is the primary
-  serializer/reply-consumer reference for this release. Server-only registrations require
-  classification as internal, obsolete, or another-client operations; absence from this client
-  is not evidence of product unsupport.
+- A source-derived comparison of the 104 server handlers with the matching TypeScript client
+  finds 103 client request/send names, 102 exact-name overlaps, two server registrations emitted
+  through dynamic helpers (`setControl`, `previewControl`), and one case-mismatched client name
+  (`downloadModelsFromTone3000` versus server `DownloadModelsFromTone3000`). This is an exact
+  coverage checkpoint for the pinned revisions, not browser acceptance. Server-only registrations
+  still require classification as internal, obsolete, or another-client operations; absence from
+  this client is not evidence of product unsupport.
 - Replies are correlated by numeric `reply` ID; textual reply names are not validated. Current
   source contains `saveCurrentPresetsAs`, `setJackserverSettings`,
   `GetFilePropertydirectoryTree`, and a `getKnownWifiNetworks` reply named `getWifiChannels`.
