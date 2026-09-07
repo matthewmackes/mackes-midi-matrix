@@ -3,14 +3,61 @@
 Research checkpoint for W145/W150, 2026-09-07. Enumerated all 104 message
 registrations in local src/PiPedalSocket.cpp, compared with 18 connector Operation variants.
 This file inventories exposed handlers, not qualified end-to-end functionality.
-HTTP endpoints, outbound notifications and plugin-specific metadata still need separate review.
+Plugin-specific metadata still needs separate review. The HTTP route and outbound-notification
+surfaces are inventoried below; their payload and browser qualification remain W150 work.
 
 Source: sibling pipedal checkout commit 859183d0d9614372318680433326e6c94c0251e5.
 PiPedalSocket.cpp has no local changes and SHA-256
 09691576451b502849db9028c4e22fbba2a9f9b2105b40f01ad049c8d7ccdc61.
 Connector source SHA-256:
 097c255dca356a6a882f7507013c35e595694cb0f0dbe7fa73f6d9a2198fc2bf.
-The installed server version has not been matched to this source revision.
+The locally installed `/usr/bin/pipedald` is not owned by an RPM. Its SHA-256 is
+`08b54c4f5f4f87c9c1ac732e7b5db8f0367bee4a03d6f1f9227e7b58f5b758ba`, and its embedded
+version strings are `PiPedal v2.0.110-Release` and `PiPedal v2.0.110`. This matches the pinned
+checkout's CMake project/display version (`2.0.110` / `PiPedal v2.0.110-Release`), but the
+binary hash does not prove that it was built from commit `859183d`; source-to-binary provenance
+therefore remains unverified.
+
+## HTTP and server-event inventory
+
+`src/WebServerConfig.cpp` SHA-256
+`28e860b4d5e86604c7366872faf8e5bfe72abfaa6931c46191605ab1c3954917` contains 24 distinct
+path segments handled outside the WebSocket request catalog:
+
+```text
+AudioMetadata, GetBank, GetPluginInfo, GetPluginPresets, GetPreset, NextAudioFile,
+PluginBank, PluginBanks, PluginPreset, PluginPresets, PreviousAudioFile, Thumbnail,
+displayMediaFile, downloadBank, downloadMediaFile, downloadPluginPresets, downloadPreset,
+t3k_response.html, t3k_uploadAsset, tone3000_thumbnail, uploadBank, uploadPluginPresets,
+uploadPreset, uploadUserFile
+```
+
+These routes cover media inspection/navigation, thumbnails, preset/plugin-preset/bank
+import/export, user-file upload/download, and Tone3000 assets. Upload, import, and persistent
+library actions require explicit confirmation, bounded payloads, path validation, and
+non-production fixtures before W150 may expose them. Download/display and metadata operations
+must retain the server's upload-directory and `..` rejection boundaries.
+
+The pinned `PiPedalSocket.cpp` contains 37 distinct unsolicited `on*` event names:
+
+```text
+onAlsaSequencerConfigurationChanged, onBanksChanged, onChannelSelectionChanged,
+onControlChanged, onErrorMessage, onFavoritesChanged, onGovernorSettingsChanged,
+onHasWifiChanged, onInputVolumeChanged, onItemEnabledChanged, onJackConfigurationChanged,
+onJackServerSettingsChanged, onLoadPluginPreset, onLv2PluginsChanging, onLv2StateChanged,
+onNetworkChanging, onNotifyMidiListener, onNotifyPathPatchPropertyChanged,
+onOutputVolumeChanged, onPatchPropertyChanged, onPedalboardChanged,
+onPluginPresetsChanged, onPresetChanged, onPresetsChanged, onSelectedSnapshotChanged,
+onShowStatusMonitorChanged, onSnapshotModified, onSystemMidiBindingsChanged,
+onTone3000DownloadComplete, onTone3000DownloadError, onTone3000DownloadProgress,
+onTone3000DownloadStarted, onUpdateStatusChanged, onUseItemModUiChanged,
+onVst3ControlChanged, onWifiConfigSettingsChanged, onWifiDirectConfigSettingsChanged
+```
+
+This closes the inventory omission, not the behavioral qualification. W150 must correlate each
+user-addressable request with its direct reply (if any), authoritative event(s), subscription
+lifetime, reconnect behavior, and bounded queue policy. In particular, control and volume writes
+may converge through events rather than direct replies; browser state must not fabricate an ACK.
 
 ## Per-operation inventory
 
@@ -155,6 +202,5 @@ during this read-only audit.
 For each row add payload schema, response/event, value domain, persistence, confirmation and
 idempotency rules, canonical editor/control and browser evidence. Test subscriptions with
 unsubscribe/reconnect and bounded queues. Test library operations with non-production fixtures
-and path validation. Inspect HTTP upload/download routes separately before declaring the device
-inventory exhaustive. External account workflows require actual account authorization at execution.
-
+and path validation. Qualify the inventoried HTTP upload/download routes before declaring the
+device inventory exhaustive. External account workflows require actual account authorization at execution.

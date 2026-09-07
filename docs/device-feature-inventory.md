@@ -75,15 +75,17 @@ No production protocol change is authorized by a speculative physical-unit conve
 |---|---|---|---|
 | Novation | Compare programmer guide, Factory-1 manifest and input/LED encoders | One row per control/operation with exact model and page | W145/W148 |
 | Reflex | Reconcile every codec operation and algorithm table against vendor revision | Parameter domains, patch/task/dump inventory and fixture links | W145/W149 |
-| PiPedal | Compare each Operation variant with matching local server handlers and client model | Installed/source revision pin and per-operation payload/readback examples | W145/W150 |
+| PiPedal | Reconcile each inventoried handler/HTTP route/event with client serializers and model side effects | Per-operation payload/readback examples and source-to-binary provenance | W145/W150 |
 | Firebox | Reconcile capture-backed semantics with connector operations | Parameter identity/range/persistence evidence; unsupported transfer framing | W145/W150 |
 | MIDISPORT | Find matching manufacturer manual and driver provenance | Port/firmware identity matrix | W145/W151 |
 | RTP/generic MIDI | Reconcile typed route/session domains and RFC sources | All message/transform/session feature rows | W145/W151 |
 | Retired C.A.B. M+ | Preserve archived research reference and retirement | No active implementation task without scope change | W145 |
 
 PiPedal checkpoint: [per-handler audit](pipedal-server-operation-audit.md) inventories the complete
-message-registration list in the pinned local server source, including operations absent from the
-18-item connector catalog. HTTP routes, notifications and installed-version matching remain open.
+message-registration list, 24 HTTP path segments, and 37 outbound event names in the pinned local
+server source, including operations absent from the 18-item connector catalog. The installed
+binary and checkout both identify as PiPedal 2.0.110; the installed binary hash is pinned, but
+source-to-binary provenance and per-operation payload/readback qualification remain open.
 
 Next checkpoint: complete source pins and expand grouped research rows before W145 can close.
 Unknown or unreviewed operations are not classified as product-unsupported.
