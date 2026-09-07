@@ -139,8 +139,11 @@ function renderCapabilityBoard(body) {
 }
 function renderSceneBoard(body) {
   const scenes = Array.isArray(body?.scenes) ? body.scenes : [];
+  const catalog = body?.catalog || {};
+  const setlists = Array.isArray(catalog.setlists) ? catalog.setlists : [];
+  const projects = Array.isArray(catalog.projects) ? catalog.projects : [];
   const activeScene = body?.active_scene || body?.activeScene || '';
-  sceneBoard.replaceChildren(); sceneBoard.hidden = !scenes.length;
+  sceneBoard.replaceChildren(); sceneBoard.hidden = !(scenes.length || setlists.length || projects.length);
   scenes.forEach((scene, index) => {
     const card = document.createElement('article'); card.className = 'scene-card';
     const id = typeof scene === 'string' ? scene : (scene.id || `scene-${index + 1}`);
@@ -154,6 +157,12 @@ function renderSceneBoard(body) {
       card.append(actions);
     }
     const select = document.createElement('button'); select.type = 'button'; select.textContent = 'Select scene'; select.dataset.sceneId = id; select.addEventListener('click', () => { document.querySelector('#scene-id').value = id; }); card.append(select);
+    sceneBoard.append(card);
+  });
+  [...setlists.map(item => ['Setlist', item]), ...projects.map(item => ['Project', item])].forEach(([kind, entry]) => {
+    const card = document.createElement('article'); card.className = 'scene-card';
+    const title = document.createElement('h3'); title.textContent = typeof entry === 'string' ? entry : (entry.name || entry.id || kind); card.append(title);
+    const meta = document.createElement('p'); meta.textContent = `${kind} · authoritative catalog entry`; card.append(meta);
     sceneBoard.append(card);
   });
 }
