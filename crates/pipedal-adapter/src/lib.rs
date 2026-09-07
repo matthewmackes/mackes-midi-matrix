@@ -324,13 +324,13 @@ impl Worker {
         let requests = startup_requests();
         let Some(message) = requests.get(self.startup_next) else { return };
         let reply_to = u64::try_from(self.startup_next + 1).unwrap_or(u64::MAX);
-        self.expected_replies.push(reply_to);
         let request =
             Request { message: (*message).to_owned(), reply_to: Some(reply_to), body: None::<()> };
         match encode_request(&request) {
             Ok(frame) => {
                 let generation = self.session.generation();
                 if self.session.enqueue(generation, frame).is_ok() {
+                    self.expected_replies.push(reply_to);
                     self.startup_next += 1;
                 } else {
                     self.last_error = Some(TransportError::Protocol);
@@ -1407,6 +1407,19 @@ mod tests {
         };
         worker.apply_restore_intent(&intent, 2, Some(91), true).expect("restore queues");
         assert!(worker.accept_frame(br#"[{"reply":91,"message":"setControl"}]"#).is_ok());
+    }
+
+    #[test]
+    fn failed_startup_queue_admission_does_not_reserve_reply_id() {
+        let mut worker = Worker::default();
+        worker.session.connect().expect("connect");
+        for _ in 0..mackes_pipedal_connector::MAX_PENDING_REQUESTS {
+            worker.session.enqueue(0, vec![0]).expect("fill queue");
+        }
+        worker.queue_startup_request();
+        assert!(worker.expected_replies.is_empty());
+        assert_eq!(worker.startup_next, 0);
+        assert_eq!(worker.last_error, Some(TransportError::Protocol));
     }
 
     struct NoopTransport;

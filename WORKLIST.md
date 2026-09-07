@@ -8539,6 +8539,10 @@ Known risks and next checkpoint: Resolve prerequisite contracts and source gaps 
   `replyTo` could be rejected as an unknown reply. Added regression
   `restore_with_reply_id_tracks_the_correlated_response`; `cargo fmt --check` and
   `cargo test -p mackes-pipedal-adapter` pass (17 tests).
+- **PiPedal startup-correlation correction (2026-09-07):** startup reply IDs are now reserved only
+  after successful frame encoding and bounded queue admission; failed startup admission cannot
+  leave a phantom expected reply. Added regression
+  `failed_startup_queue_admission_does_not_reserve_reply_id`; focused adapter tests pass (18 tests).
 
 ```text
 Item / subtask: W150; split numbered substeps at claim without reducing acceptance.
