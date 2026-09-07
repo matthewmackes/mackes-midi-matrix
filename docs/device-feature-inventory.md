@@ -76,7 +76,7 @@ No production protocol change is authorized by a speculative physical-unit conve
 | Novation | Reconcile browser coverage with the pinned Factory-1 and LED inventory | Browser-to-daemon assignment/template/pickup/reconnect scenarios and physical LED observation | W148 |
 | Reflex | Reconcile typed browser editors with the pinned codec/algorithm inventory | Browser-to-codec scenarios, busy/storage lifecycle and physical readback | W149 |
 | PiPedal | Reconcile each inventoried handler/HTTP route/event with client serializers and model side effects | Per-operation payload/readback examples and source-to-binary provenance | W145/W150 |
-| MIDISPORT | Find matching manufacturer manual and driver provenance | Port/firmware identity matrix | W145/W151 |
+| MIDISPORT | Reconcile browser cards with the pinned manufacturer/Fedora/runtime matrix | Per-port activity, route membership and cable-state browser evidence | W151 |
 | RTP/generic MIDI | Reconcile browser controls with the pinned route/session inventory | Browser request/response, reconnect, conflict, and peer-interoperability scenarios | W151 |
 
 PiPedal checkpoint: [per-handler audit](pipedal-server-operation-audit.md) inventories the complete
@@ -218,6 +218,28 @@ visual inventory must therefore show eight direction-specific port capabilities 
 activity; it must not collapse the interface into one generic MIDI endpoint. Reproducibility pin:
 retrieved 2026-09-07, downloaded HTML SHA-256
 `56e32867f16370b47f65e3690de677824b685e1a860f3a4022ac953ce737947c` (35,869 bytes).
+
+Fedora 44 loader provenance was recorded from installed, RPM-verified packages on 2026-09-07:
+
+| Layer | Authority and exact evidence | Meaning |
+|---|---|---|
+| Firmware package | `midisport-firmware-1.2-38.fc44.noarch`, Fedora-signed source RPM `midisport-firmware-1.2-38.fc44.src.rpm` | Owns the loader image, 4x4 image and udev rule |
+| Loader package | `fxload-2008_10_13-34.fc44.x86_64`, Fedora-signed source RPM `fxload-2008_10_13-34.fc44.src.rpm` | Udev helper for Cypress FX/FX2 firmware download |
+| Udev rule | `/usr/lib/udev/rules.d/42-midisport-firmware.rules`, SHA-256 `e8dca7f55a0220690c0ddff721beb6ec7f71bff5a2c31110250a4c39929adca7` | On USB `0763:1020`, invokes `fxload` with the loader and 4x4 images |
+| Loader image | `/usr/lib/firmware/MidiSportLoader.ihx`, SHA-256 `7c2f261aef1a09091ee16e04fc38898066ecfc81a83b8f9f3791635cb0574b3d` | First-stage firmware supplied by the Fedora package |
+| 4x4 image | `/usr/lib/firmware/MidiSport4x4.ihx`, SHA-256 `275cc317c9f2a162eb15bdf1a7b07627e1ab87f95e00b9a8ae661668ea7cd3e2` | Device-specific runtime firmware supplied by the Fedora package |
+| Loader binary | `/usr/bin/fxload`, SHA-256 `17535593e2257bbc852b7f655001cd8b293de65bf236c7fd86123286f3503237` | Executable referenced by the udev rule (`/sbin` resolves compatibly on Fedora) |
+| Application identity | `MIDISPORT_4X4_LOADER_USB=0763:1020`, `MIDISPORT_4X4_RUNTIME_USB=0763:1021` | Exact pre/post identities; no name-only inference |
+| Live device | USB `0763:1021`, device revision 1.30, no serial string; ALSA client 28 ports 0–3 | Firmware transition completed; all four logical ports enumerated |
+| Native driver | Fedora RT kernel `7.1.13-300.vanilla.fc44.x86_64+rt`, `snd-usb-audio` | Kernel owns the class-compliant runtime ALSA endpoints |
+
+`rpm -V fxload midisport-firmware` produced no differences. Runtime enumeration exposed MIDI 1–4,
+each subscribed to the daemon application input. This proves loader/runtime and port enumeration,
+not cable continuity or external-device response. Serial-less durable identity remains an explicit
+operator binding with logical port and direction; four ports must never collapse to one alias.
+
+This closes W145's MIDISPORT manufacturer/driver/firmware provenance row. W151 retains visual
+per-port activity, route membership, repair and cable-state acceptance.
 
 ### RTP-MIDI and generic MIDI
 

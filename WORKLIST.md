@@ -8388,6 +8388,11 @@ Retired-device audit increment (2026-09-07): pinned the official C.A.B. M+ manua
 that profiles, schemas, commands, and the browser expose no active product identity or write path.
 Removed the final commented `RetiredEditorMap` implementation/test residue from `mackes-config`;
 historical ledger entries remain append-only under W027 and do not create release capability.
+MIDISPORT provenance increment (2026-09-07): reconciled the manufacturer capability source with
+Fedora 44 package provenance (`midisport-firmware-1.2-38`, `fxload-2008_10_13-34`), exact udev/
+loader/4x4 image hashes, profile loader/runtime IDs `0763:1020` → `0763:1021`, RT-kernel driver,
+and live four-port ALSA enumeration. `rpm -V` is clean. This closes W145's source/firmware matrix;
+per-port browser activity, repair, route membership, and cable truth remain W151.
 ```
 
 #### [>] W146 — Specify capability contracts and lossless visual drafts
