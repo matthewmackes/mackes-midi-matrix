@@ -8594,6 +8594,9 @@ Known risks and next checkpoint: Resolve prerequisite contracts and source gaps 
   service, web API, and recovery-catalog fields as readable cards while retaining the raw
   authoritative payload. Asset, coverage, worklist, and diff checks pass; editable settings and
   browser acceptance remain open.
+- **System projection deployment evidence (2026-09-07):** rebuilt and installed `mackes-web`,
+  restarted `mackes-web.service`, confirmed it active, and verified the LAN-served shell contains
+  the `system-board` projection container. Runtime interaction and editable settings remain open.
 - **Routing endpoint-picker increment (2026-09-07):** the daemon route projection now publishes an
   authoritative direction-aware endpoint catalog with each stable numeric route ID, and the web route
   cards render named input/output selectors while preserving unknown/current IDs. `cargo fmt` and
