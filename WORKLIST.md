@@ -8617,6 +8617,10 @@ Known risks and next checkpoint: Resolve prerequisite contracts and source gaps 
   authoritative `Idle` phase at generation 0 with one device, preset, effect, and type choice plus
   15 parameter choices. No browser-side selection is inferred; full capture/commit/reconnect
   qualification remains open under W135/W148.
+- **Device live reconciliation (2026-09-07):** LAN probes returned 31 discovered endpoints; the
+  Novation projection identifies Mk2 with 56 physical controls and 48 LEDs, while its live LED
+  phase is `absent` and `led_readback=false`. The UI preserves this distinction rather than claiming
+  visible hardware confirmation; native reconnect/LED qualification remains open.
 - **Live workspace smoke matrix (2026-09-07):** after the release deployment, unauthenticated LAN
   GET probes for health, state, mappings, assignment, routes, scenes, devices, endpoints,
   capabilities, diagnostics, PiPedal, monitor, backups, and configuration each returned HTTP 200.
