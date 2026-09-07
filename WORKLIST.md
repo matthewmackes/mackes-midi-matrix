@@ -7769,6 +7769,8 @@ not a native USB or visual hardware claim.
   The web boundary rejects non-JSON, oversized, unconfirmed, and empty mutation payloads before IPC;
   daemon validation and atomic persistence remain authoritative. Web tests, strict Clippy, coverage,
   and worklist checks pass.
+- **Configuration-write admission regression (2026-09-07):** added a web test proving unconfirmed
+  and empty configuration writes are rejected before daemon IPC; focused test and strict Clippy pass.
 - **Validation-surface evidence (2026-09-06):** Added daemon-backed read-only `GET
   /api/v1/validation`, with capability discovery, API documentation, and WEB-023 coverage aligned
   to the existing `Command::Validate` contract. Browser editing and import/restore workflows remain
