@@ -8087,6 +8087,9 @@ not a native USB or visual hardware claim.
 - **Requirements:** Set initial acceptance budgets: compressed initial frontend assets at most 500 KiB; idle web-process RSS at most 50 MiB; steady idle CPU at most 1% of one host core; initial usable screen within two seconds on the test LAN; ordinary API response p95 under 250 ms excluding explicitly asynchronous hardware work. Record hardware/browser/network conditions and justify any revised budget before closure.
 - **Requirements:** Stress bounded event streams and large configuration catalogs while MIDI runs. Verify no meaningful MIDI latency/loss regression against an otherwise identical baseline. Test web memory/log growth over an eight-hour representative soak.
 - **Acceptance and evidence:** Acceptance: coverage checker reports zero missing canonical workflows or editable fields, all required tests pass, resource budgets are evidenced and unsupported backend work remains open rather than hidden behind disabled buttons.
+- **Operator qualification disposition (2026-09-07):** browser visual/usability and native-device
+  qualification are accepted by operator assumption for progression; automated coverage, resource,
+  and unsupported-backend boundaries remain authoritative.
 - **Malformed-route evidence (2026-09-06):** Tightened event polling to accept only the exact
   endpoint or a query-string form, rejecting prefix collisions such as `/api/v1/eventsfoo`.
   A focused regression covers the 404 behavior; web tests, strict Clippy, and repository checks
@@ -8222,6 +8225,9 @@ not a native USB or visual hardware claim.
   web systemd unit, and versioned web API schema are present in the generated archive, preventing
   a daemon-only package from passing web-release verification. The updated gate passes.
 - **Acceptance and evidence:** Acceptance: an operator performs representative full workflows for Novation, Eventide, Lexicon and PiPedal plus route/scene/config/backup tasks from the web interface; reboot proves unattended startup; every W130 row links to passing evidence; release notes distinguish host sends from hardware confirmation. Close the parent only after all required rows and boot/resource tests pass.
+- **Operator qualification disposition (2026-09-07):** the operator authorizes assumed browser and
+  native qualification for progression; release-gate, deployment, boot/service, and capability
+  evidence remain required and are not replaced by this assumption.
 
 ### Integration, performance, and release
 
@@ -8347,6 +8353,11 @@ not a native USB or visual hardware claim.
 - **Scope approval:** Operator request 2026-09-07; reuse W129–W143 owners/contracts, preserve prior device retirement and acceptance-waiver records. No existing task is closed by this epic.
 - **Acceptance:** All child acceptance criteria and specification completion evidence proven. Planning completion does not mean product implementation completion.
 - **Evidence:** Initial epic, product/source inventory, WYSIWYG web shell, connected/disconnected feature catalog, product-specific editor entry points, route draft safeguards, responsive faceplate, endpoint picker, and installed LAN release are delivered. Child tasks W145–W152 now carry per-area evidence and remaining acceptance gaps. Parent completion remains open until every child criterion and the epic’s browser/physical acceptance evidence is proven.
+- **Operator qualification assumption (2026-09-07):** the operator instructed the project to assume
+  browser visual/workflow and native hardware qualification for planning and closure, without
+  inventing measurements. This removes qualification evidence as a release blocker; unsupported
+  backend implementation gaps and explicitly unimplemented operation families remain open and must
+  stay visible in capability/coverage records.
 
 #### [>] W145 — Audit every product feature and pin technical sources
 
