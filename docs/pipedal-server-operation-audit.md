@@ -33,6 +33,13 @@ Evidence order for this audit is manufacturer/vendor documentation where availab
 developer documentation and matching source, then read-only fixtures. Binary inspection is used
 only for version/build provenance; undocumented message semantics are not inferred from it.
 
+Runtime boundary observed 2026-09-07: the pinned PiPedal 2.0.110 service auto-restarted after a
+plain HTTP request to its WebSocket endpoint (`/pipedal`) caused
+`std::filesystem::filesystem_error: cannot get file size: /etc/pipedal/react/pipedal` in
+`WebServerImpl::on_http`. This is vendor/runtime evidence from `journalctl`, not a MACKES
+protocol claim; normal MACKES health and bounded IPC behavior recovered after systemd restart.
+Do not use a raw HTTP probe as a PiPedal WebSocket fixture.
+
 ## HTTP and server-event inventory
 
 `src/WebServerConfig.cpp` SHA-256

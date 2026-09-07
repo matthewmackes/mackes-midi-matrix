@@ -8616,6 +8616,12 @@ Known risks and next checkpoint: Resolve prerequisite contracts and source gaps 
   with a bounded 1,528-byte JSON snapshot. The live snapshot exposed 18 supported operations and
   mapping-resolution entries with plugin URI/symbol fields; the currently empty catalog reported
   mappings as unavailable, preserving truthful readiness rather than fabricating controls.
+- **PiPedal runtime boundary (2026-09-07):** a deliberately read-only plain-HTTP probe against
+  PiPedal's WebSocket endpoint triggered the vendor 2.0.110 process to abort on missing
+  `/etc/pipedal/react/pipedal`; systemd auto-restarted it and both MACKES services remained active.
+  This is recorded as vendor/runtime evidence only. Future fixtures must perform the documented
+  WebSocket handshake, never treat raw HTTP behavior as protocol support, and must preserve the
+  source-first boundary.
 
 ```text
 Item / subtask: W152; split numbered substeps at claim without reducing acceptance.
