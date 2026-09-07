@@ -7774,6 +7774,9 @@ not a native USB or visual hardware claim.
 - **Configuration-write deployment evidence (2026-09-07):** rebuilt and installed `mackes-web`,
   restarted the service, and sent an unconfirmed setlist write to the LAN endpoint; it returned
   HTTP 400 before any daemon mutation. The accepted path remains daemon-authoritative and bounded.
+- **Configuration capability discovery (2026-09-07):** capability discovery now advertises the
+  bounded configuration mutation bridge explicitly while retaining W139's remaining unsupported
+  configuration families. The 42-test web suite, strict Clippy, and coverage checks pass.
 - **Validation-surface evidence (2026-09-06):** Added daemon-backed read-only `GET
   /api/v1/validation`, with capability discovery, API documentation, and WEB-023 coverage aligned
   to the existing `Command::Validate` contract. Browser editing and import/restore workflows remain
