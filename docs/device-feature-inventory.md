@@ -78,7 +78,7 @@ No production protocol change is authorized by a speculative physical-unit conve
 | PiPedal | Reconcile each inventoried handler/HTTP route/event with client serializers and model side effects | Per-operation payload/readback examples and source-to-binary provenance | W145/W150 |
 | Firebox | Reconcile capture-backed semantics with connector operations | Parameter identity/range/persistence evidence; unsupported transfer framing | W145/W150 |
 | MIDISPORT | Find matching manufacturer manual and driver provenance | Port/firmware identity matrix | W145/W151 |
-| RTP/generic MIDI | Reconcile typed route/session domains and RFC sources | All message/transform/session feature rows | W145/W151 |
+| RTP/generic MIDI | Reconcile browser controls with the pinned route/session inventory | Browser request/response, reconnect, conflict, and peer-interoperability scenarios | W151 |
 | Retired C.A.B. M+ | Preserve archived research reference and retirement | No active implementation task without scope change | W145 |
 
 PiPedal checkpoint: [per-handler audit](pipedal-server-operation-audit.md) inventories the complete
@@ -175,6 +175,48 @@ number/value predicates, SysEx masks, realtime predicates, priority, curve, cycl
 enabled state. The session inspector exposes peer identity, allowlist status, lifecycle,
 sequence/reorder disposition, packet counters, reconnect backoff and last-seen time. Handshake
 state is distinct from message delivery; rejected network input never reaches routing.
+
+Reproducibility pins (retrieved 2026-09-07): IETF/RFC Editor
+[RFC 6295](https://www.rfc-editor.org/rfc/rfc6295.html), SHA-256 of the canonical text
+`a6d0a020308f205fd37bf5e2d76c0ef1d1ae7871df8efab205fa9c865ddeafe0`; and
+[RFC 3550](https://www.rfc-editor.org/rfc/rfc3550.html), SHA-256 of the canonical text
+`4c210e9434b5b4c029e8536ad8991f3709bc3cbfa0999e951bcb4c2143c539e8`.
+RFC 3550 is authoritative for RTP v2 framing, sequence, timestamp and SSRC fields. RFC 6295 is
+authoritative for the MIDI command section, running status, System Common/Realtime commands,
+SysEx segmentation/cancellation and recovery journals. `AppleMIDI` invitation/synchronization
+commands are implemented from fixture-backed compatibility behavior, not claimed as RFC 6295.
+
+Local source pins: `crates/domain/src/lib.rs`
+`9eed54c1b1aa1f61528d53876c79b9afa83290ea9a29756781e7a86b3ba27624`;
+`crates/midi-engine/src/lib.rs`
+`9669f3798d5ebc3ef42845370ce4cd912cc8e019008fc2528730e9ce953c7510`; and
+`crates/midi-engine/src/rtp.rs`
+`d5d93e249c5afd2ab97ca757e6ade50d5c7cbf60013384934234793c3bb29d6e`.
+
+| Feature ID | Current authoritative contract | Required visual control / state | Evidence boundary |
+|---|---|---|---|
+| `midi.endpoint` | Stable alias/ID, input or output direction; volatile ALSA address is runtime-only | Named direction-aware endpoint picker, live address and repair state | Durable identity and reconnect tests; never persist enumeration order |
+| `midi.message-class` | Note on/off, poly pressure, CC, program, channel pressure, pitch bend, SysEx, System Common and Realtime | Typed class selector; show only fields valid for that class | Domain enum and decoder tests |
+| `route.channel-class` | Optional channel and message-class filters | Optional channel 1–16 and typed class selectors | Router compound-filter test |
+| `route.number-range` | Inclusive 0–127 note/controller/program range | Paired bounded numeric inputs | `router_applies_number_value_realtime_and_masked_sysex_predicates` |
+| `route.value-range` | Inclusive 0–16,383 velocity/pressure/value/pitch range | Metadata-bounded paired numeric inputs | Same predicate regression; class determines meaningful maximum |
+| `route.realtime` | Clock, Start, Continue, Stop, Active Sensing or Reset exact match | Enumerated selector with transport-impact label | Domain enum plus exact-match router regression |
+| `route.sysex-mask` | Equal-length 1–1,024-byte 7-bit pattern and mask; framing excluded | Hex pattern/mask editor with length and 7-bit validation | Masked SysEx router regression; no hardware transmission in editor tests |
+| `route.priority` | Lower `u16` values execute first | Bounded priority input and ordering preview | Router enabled/priority regression |
+| `route.curve` | Linear, square or square-root CC shaping | Three-choice curve selector and before/after preview | Endpoint-preservation and curve-order tests |
+| `route.cycle` | Disabled by default; explicit cycles remain bounded by hop limit | Hazard-labelled opt-in plus cycle/path preview | Cycle rejection/bounded-cycle regression |
+| `route.enabled` | Disabled routes do not evaluate | Toggle with explicit disabled state | Router enabled/priority regression |
+| `rtp.peer-policy` | Explicit nonempty, duplicate-free allowlist; maximum 64 peers | Peer/address list with rejection reason | `PeerAllowlist` validation and inbound-policy tests |
+| `rtp.session` | Disconnected, Invited or Established; token, remote SSRC/name | Lifecycle timeline with identity and reconnect action | `RtpMidiPeer` identity/reset tests; delivery is not handshake success |
+| `rtp.packet` | RTP v2 header plus bounded nonempty MIDI payload | Packet counters and malformed/drop diagnostics | RFC 3550/6295 parsers and golden framing tests |
+| `rtp.sequence` | In-order, forward gap, duplicate or late within a 1–1,024 packet window | Counters and last disposition; no silent loss | `SequenceTracker` wrap/gap/late/duplicate tests |
+| `rtp.jitter` | Capacity-bounded timestamp/sequence ordering | Capacity, depth, overflow and drain state | `JitterBuffer` ordering/overflow tests |
+| `rtp.sysex` | Complete or segmented SysEx, bounded locally to 4,096 bytes | Progress/abort/error state; never present partial data as applied | RFC 6295 plus reassembler/framing tests |
+| `rtp.recovery-journal` | RFC-defined feature, not implemented by the current engine | Explicit unsupported capability; no toggle | Source absence is an implementation gap owned by W151 |
+
+This inventory closes W145's grouped RTP/generic-MIDI research row. It does not prove that the
+current browser exposes these contracts: lossless editors, stale-save conflict handling, runtime
+session projection and independent-peer interoperability remain W151/W152 acceptance work.
 
 ### Retired Two Notes C.A.B. M+
 

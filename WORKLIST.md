@@ -8364,6 +8364,12 @@ embedded 2.0.110 version, matching the checkout's declared version while explici
 source-to-binary provenance unproven. Inventoried 24 HTTP path segments and 37 unsolicited server
 events with source hashes and safety/qualification boundaries in
 `docs/pipedal-server-operation-audit.md`. Per-operation payload/readback qualification remains W150.
+RTP/generic-MIDI audit increment (2026-09-07): pinned RFC 3550 and RFC 6295 canonical-text hashes
+and the local domain/router/transport source hashes; expanded the grouped research row into 18
+feature contracts covering endpoints, message/filter domains, route behavior, peer/session state,
+packet sequencing/jitter/SysEx, and the explicit unimplemented recovery-journal capability.
+Browser/runtime/interoperability qualification remains W151/W152 rather than being inferred from
+the source inventory.
 ```
 
 #### [>] W146 — Specify capability contracts and lossless visual drafts
