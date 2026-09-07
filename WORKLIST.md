@@ -7973,6 +7973,9 @@ not a native USB or visual hardware claim.
   hermetic integration (15 passed / 1 ignored), installer smoke, and archive checksum all pass.
 - **Reconnectable SSE evidence (2026-09-07):** Added `GET /api/v1/events/stream?after_sequence=N`
   as a five-minute Server-Sent Events session backed by the daemon's existing sequence-aware poll;
+- **SSE handshake recheck (2026-09-07):** A live LAN request with `after_sequence=0` returned
+  `HTTP/1.1 200 OK`, `Content-Type: text/event-stream`, no-cache headers, and bounded connection
+  behavior. No event was fabricated when the stream had no new sequence data.
   it emits event IDs, heartbeats, and an explicit resnapshot event on sequence gaps, then relies on
   client reconnect with the last ID. Same-origin validation and client-disconnect handling are
   bounded; the 39-test web suite, strict Clippy, asset, worklist, and diff checks pass.
