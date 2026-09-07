@@ -7764,6 +7764,11 @@ not a native USB or visual hardware claim.
 - **Work log:** 2026-09-06 — codex — `NOT_STARTED` → `IN_PROGRESS`; daemon-backed web validation
   surface is implemented and documented; full configuration, backup, profile, and SysEx browser
   workflows remain open.
+- **Configuration-write seam (2026-09-07):** added a bounded, confirmation-gated `POST
+  /api/v1/configuration` bridge for the daemon's existing typed setlist and learned-mapping writes.
+  The web boundary rejects non-JSON, oversized, unconfirmed, and empty mutation payloads before IPC;
+  daemon validation and atomic persistence remain authoritative. Web tests, strict Clippy, coverage,
+  and worklist checks pass.
 - **Validation-surface evidence (2026-09-06):** Added daemon-backed read-only `GET
   /api/v1/validation`, with capability discovery, API documentation, and WEB-023 coverage aligned
   to the existing `Command::Validate` contract. Browser editing and import/restore workflows remain

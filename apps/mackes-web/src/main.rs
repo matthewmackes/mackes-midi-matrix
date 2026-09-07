@@ -347,6 +347,7 @@ fn route(request: &HttpRequest, socket: &PathBuf, origin: &str) -> HttpResponse 
         ("GET", "/api/v1/backups") => Command::Backups,
         ("POST", "/api/v1/backups") => return backup_operation(request, socket),
         ("GET", "/api/v1/configuration") => Command::Configuration,
+        ("POST", "/api/v1/configuration") => return configuration_operation(request, socket),
         ("GET", "/api/v1/validation") => Command::Validate,
         ("GET", "/api/v1/mappings") => Command::Mappings,
         ("GET", "/api/v1/pipedal") => return pipedal_snapshot(socket),
@@ -503,6 +504,70 @@ fn sysex_operation(request: &HttpRequest, socket: &PathBuf) -> HttpResponse {
             .expect("valid reconnect policy");
     match LocalClient::request_with_policy(socket, policy, &envelope) {
         Ok((body, _)) => HttpResponse::new(200, body, true).expect("bounded SysEx response"),
+        Err(error) => HttpResponse::new(
+            503,
+            serde_json::json!({"code":"daemon_unavailable","message":error})
+                .to_string()
+                .into_bytes(),
+            true,
+        )
+        .expect("bounded unavailable response"),
+    }
+}
+
+fn configuration_operation(request: &HttpRequest, socket: &PathBuf) -> HttpResponse {
+    let json = request.headers.iter().find(|(name, _)| name == "content-type").is_some_and(
+        |(_, value)| {
+            value
+                .split(';')
+                .next()
+                .is_some_and(|kind| kind.trim().eq_ignore_ascii_case("application/json"))
+        },
+    );
+    if !json || request.body.len() > 1024 * 1024 {
+        return HttpResponse::new(
+            400,
+            br#"{"code":"invalid_configuration_request"}"#.to_vec(),
+            true,
+        )
+        .expect("bounded configuration error");
+    }
+    let mut value = match serde_json::from_slice::<serde_json::Value>(&request.body) {
+        Ok(value) if value.is_object() => value,
+        _ => {
+            return HttpResponse::new(
+                400,
+                br#"{"code":"invalid_configuration_request"}"#.to_vec(),
+                true,
+            )
+            .expect("bounded configuration error")
+        }
+    };
+    if value.get("confirm").and_then(serde_json::Value::as_bool) != Some(true)
+        || (value.get("setlists").is_none() && value.get("learned_mappings").is_none())
+    {
+        return HttpResponse::new(
+            400,
+            br#"{"code":"configuration_confirmation_required"}"#.to_vec(),
+            true,
+        )
+        .expect("bounded configuration confirmation error");
+    }
+    value.as_object_mut().expect("configuration object").remove("confirm");
+    let envelope = Envelope {
+        version: ProtocolVersion::current(),
+        request_id: RequestId::new(NEXT_REQUEST_ID.fetch_add(1, Ordering::Relaxed).max(1))
+            .expect("nonzero request ID"),
+        command: Command::Configuration,
+        payload: serde_json::to_vec(&value).expect("configuration payload serializes"),
+    };
+    let policy =
+        mackes_ipc::ReconnectPolicy::new(3, Duration::from_millis(25), Duration::from_millis(250))
+            .expect("valid reconnect policy");
+    match LocalClient::request_with_policy(socket, policy, &envelope) {
+        Ok((body, _)) => {
+            HttpResponse::new(200, body, true).expect("bounded configuration response")
+        }
         Err(error) => HttpResponse::new(
             503,
             serde_json::json!({"code":"daemon_unavailable","message":error})
