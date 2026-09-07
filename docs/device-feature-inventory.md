@@ -92,15 +92,15 @@ No production protocol change is authorized by a speculative physical-unit conve
 PiPedal checkpoint: [per-handler audit](pipedal-server-operation-audit.md) inventories the complete
 message-registration list, 24 HTTP path segments, and 37 outbound event names in the pinned local
 server source, including operations absent from the 18-item connector catalog. The installed
-binary and checkout both identify as PiPedal 2.0.110; the installed binary hash is pinned, but
-source-to-binary provenance and per-operation payload/readback qualification remain open.
+binary and checkout both identify as PiPedal 2.0.110. The installed executable is byte-identical
+to the current Release build artifact, and Ninja reports that artifact current against the clean
+pinned checkout. Per-operation payload/readback qualification remains open.
 
 Eventide System Setup and Device Manager groups are now decomposed above. The official QRG proves
 their user-facing behavior but publishes no remote protocol for them; that is an explicit
 manual-only or protocol-research-pending disposition, not an omitted feature.
 
-Next checkpoint: finish PiPedal source-to-binary provenance and per-operation reconciliation
-before W145 can close.
+Next checkpoint: finish PiPedal per-operation source/fixture reconciliation before W145 can close.
 Unknown or unreviewed operations are not classified as product-unsupported.
 
 ## Live endpoint reconciliation checkpoint

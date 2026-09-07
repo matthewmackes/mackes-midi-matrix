@@ -8400,7 +8400,14 @@ through the documented physical power-up setup flow; firmware update, whole-devi
 factory reset, system editing, preset transfer, and preset editing are named Device Manager
 capabilities whose protocol/file formats are not published by the QRG. None are inferred as MIDI
 operations. Eventide's remaining browser/fixture qualification stays with W149; W145's remaining
-source reconciliation is PiPedal provenance and per-operation qualification.
+source reconciliation is PiPedal per-operation qualification.
+PiPedal provenance increment (2026-09-07): the systemd executable (`/usr/sbin/pipedald`, the same
+inode as `/usr/bin/pipedald`) is byte-for-byte identical to the pinned checkout's Release artifact:
+SHA-256 `08b54c4f5f4f87c9c1ac732e7b5db8f0367bee4a03d6f1f9227e7b58f5b758ba` and GNU build ID
+`357ed0938b81b0530351ccc38cfa66cd770ba2ab`. The tracked checkout is clean at `859183d`, CMake's
+home directory names that checkout, and a dry-run `pipedald` build reports no work. This closes
+local source/build/install provenance without claiming clean-room reproducibility. Per-operation
+source/fixture reconciliation remains before W145 closure; browser delivery remains W150.
 ```
 
 #### [>] W146 — Specify capability contracts and lossless visual drafts

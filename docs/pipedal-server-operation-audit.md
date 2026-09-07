@@ -11,12 +11,16 @@ PiPedalSocket.cpp has no local changes and SHA-256
 09691576451b502849db9028c4e22fbba2a9f9b2105b40f01ad049c8d7ccdc61.
 Connector source SHA-256:
 097c255dca356a6a882f7507013c35e595694cb0f0dbe7fa73f6d9a2198fc2bf.
-The locally installed `/usr/bin/pipedald` is not owned by an RPM. Its SHA-256 is
+The locally installed `/usr/bin/pipedald` (the same inode as systemd's `/usr/sbin/pipedald`)
+is not owned by an RPM. Its SHA-256 is
 `08b54c4f5f4f87c9c1ac732e7b5db8f0367bee4a03d6f1f9227e7b58f5b758ba`, and its embedded
 version strings are `PiPedal v2.0.110-Release` and `PiPedal v2.0.110`. This matches the pinned
-checkout's CMake project/display version (`2.0.110` / `PiPedal v2.0.110-Release`), but the
-binary hash does not prove that it was built from commit `859183d`; source-to-binary provenance
-therefore remains unverified.
+checkout's CMake project/display version (`2.0.110` / `PiPedal v2.0.110-Release`). The checkout's
+Release build artifact at `build/src/pipedald` is byte-for-byte identical to the installed
+executable, including GNU build ID `357ed0938b81b0530351ccc38cfa66cd770ba2ab`; the tracked
+checkout is clean, CMake records that checkout as `CMAKE_HOME_DIRECTORY`, and a dry-run build
+reports `ninja: no work to do`. This establishes local build-tree-to-installed-binary provenance
+at commit `859183d`. It is not a clean-room reproducible-build claim.
 
 ## HTTP and server-event inventory
 
