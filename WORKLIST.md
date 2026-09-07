@@ -8600,6 +8600,9 @@ Known risks and next checkpoint: Resolve prerequisite contracts and source gaps 
 - **System projection runtime evidence (2026-09-07):** the live diagnostics route supplies seven
   service fields, four web/API fields, and five named recovery entries; asset, coverage, and worklist
   checks pass. The System cards consume these authoritative fields without adding unsupported writes.
+- **Capability reconciliation (2026-09-07):** the live `/api/v1/capabilities` projection reports ten
+  operation families with no partial labels and explicitly names remaining mutation coverage as
+  `W138-W139`. This keeps the System/feature boards truthful; those mutation families remain open.
 - **Routing endpoint-picker increment (2026-09-07):** the daemon route projection now publishes an
   authoritative direction-aware endpoint catalog with each stable numeric route ID, and the web route
   cards render named input/output selectors while preserving unknown/current IDs. `cargo fmt` and
