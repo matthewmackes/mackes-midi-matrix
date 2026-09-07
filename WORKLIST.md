@@ -8560,6 +8560,9 @@ Known risks and next checkpoint: Resolve prerequisite contracts and source gaps 
   `min_value`/`max_value` metadata and validates control-domain input. Adapter tests (18), web
   asset budget, web coverage, worklist, and diff checks pass. A non-normalized browser fixture
   remains required.
+- **Release-gate evidence (2026-09-07):** full `scripts/release-gate.sh` passed after this
+  increment, including the native-range fixture, workspace tests, strict Clippy, Novation
+  emulator, throughput benchmark, hermetic integration, installer smoke, and release checksum.
 
 ```text
 Item / subtask: W150; split numbered substeps at claim without reducing acceptance.
@@ -8605,7 +8608,7 @@ Known risks and next checkpoint: Resolve prerequisite contracts and source gaps 
 - **Depends on:** W148, W149, W150, W151
 - **Implementation:** Reconcile every inventory row with browser/runtime scenarios and sources; run changed-family integration, emulator and repository gates; build/install web release using established packaging and verify LAN assets/version.
 - **Acceptance:** Browser evidence covers every supported operation family, failure and recovery; no unresolved addressable feature hidden by status labels; installed web serves verified assets; remaining product limitations documented.
-- **Evidence:** Software and delivery verification is complete for the current checkpoint: full `scripts/release-gate.sh` passes, including repository/worklist policy, 39 web capabilities, API schema/assets, workspace tests, strict Clippy, Novation emulator, throughput, hermetic integration (16 passed/1 ignored), installer smoke, and release checksum. The release is installed and LAN-accessible on port 8081. Remaining: exhaustive inventory-to-browser reconciliation, human visual acceptance at required widths/themes, native physical reconnect/LED observation, and closure of W146–W151 product gaps.
+- **Evidence:** Software and delivery verification is complete for the current checkpoint: full `scripts/release-gate.sh` passed on 2026-09-07, including repository/worklist policy, 39 web capabilities, API schema/assets, workspace tests, strict Clippy, Novation emulator, throughput, hermetic integration (16 passed/1 ignored), installer smoke, the PiPedal native-range fixture, and release checksum. The release is installed and LAN-accessible on port 8081. Remaining: exhaustive inventory-to-browser reconciliation, human visual acceptance at required widths/themes, native physical reconnect/LED observation, and closure of W146–W151 product gaps.
 
 ```text
 Item / subtask: W152; split numbered substeps at claim without reducing acceptance.
