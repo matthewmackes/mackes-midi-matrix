@@ -8393,6 +8393,14 @@ Fedora 44 package provenance (`midisport-firmware-1.2-38`, `fxload-2008_10_13-34
 loader/4x4 image hashes, profile loader/runtime IDs `0763:1020` → `0763:1021`, RT-kernel driver,
 and live four-port ALSA enumeration. `rpm -V` is clean. This closes W145's source/firmware matrix;
 per-port browser activity, repair, route membership, and cable truth remain W151.
+Eventide source-reconciliation increment (2026-09-07): verified the pinned official QRG hash and
+decomposed its grouped System Setup and Device Manager gaps into eleven independently dispositioned
+features. MIDI channel, MIDI clock, bypass mode, catch-up, and expression-jack selection are stored
+through the documented physical power-up setup flow; firmware update, whole-device backup/restore,
+factory reset, system editing, preset transfer, and preset editing are named Device Manager
+capabilities whose protocol/file formats are not published by the QRG. None are inferred as MIDI
+operations. Eventide's remaining browser/fixture qualification stays with W149; W145's remaining
+source reconciliation is PiPedal provenance and per-operation qualification.
 ```
 
 #### [>] W146 — Specify capability contracts and lossless visual drafts

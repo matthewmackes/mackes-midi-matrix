@@ -9,7 +9,8 @@ W151 (transport/platform). All browser acceptance evidence below is pending.
 EV-QRG: [MicroPitch QRG](https://cdn.eventideaudio.com/uploads/2021/10/MicroPitchDelay-QRG-Web.pdf),
 part 141347 Rev A, firmware v1.0+, retrieved 2026-09-07. SHA-256
 `99030f8a3da3f3c88745ee5f207065661814fc9e4af8c89427132d4b6ecab110`.
-Page 3 supplies MIDI mapping.
+Page 3 supplies MIDI mapping; pages 4–6 distinguish power-up System Setup, preset behavior,
+and Device Manager-only operations.
 NOV-QRG: [Launch Control XL Programmer Reference](https://fael-downloads-prod.focusrite.com/customer/prod/s3fs-public/downloads/launch-control-xl-programmers-reference-guide.pdf),
 retrieved 2026-09-07. SHA-256
 `98b6183c4d03fcf7b64a8db2f33f50f63ab192af689613a3b633372d814be0fe`.
@@ -62,8 +63,17 @@ Physical-unit conversion remains a separate research requirement.
 | eventide.preset-store | Save mode changes PC semantics | Separate storage action and mode preconditions; never auto-retry uncertain save | EV-QRG pp.3,5; W149 |
 | eventide.parameter-domains | Generic range used for all CC definitions | Add units, conversion functions, enum thresholds and mode-dependent bounds only with source proof | EV-CODE; W145/W146 |
 | eventide.feedback | Queries/replies empty | Show requested/sent-unverified state; research any supported observation API | EV-CODE; W145 |
-| eventide.system-setup | Remote addressing not established by current profile | Inspect channel/clock/jack/bypass-mode/catch-up setup individually; split into feature rows with remote/manual disposition | EV-QRG p.4; W145 |
-| eventide.device-manager | Extended editor operations not represented | Inventory firmware, backup/restore, reset, system editing and preset transfer independently; qualify protocol before enabling | EV-QRG p.6; W145 |
+| eventide.system.midi-channel | Omni or channel 1–16; changed in power-up System Setup and stored as changed | Manual-only configuration in current evidence; do not expose as a MIDI-addressable editor control | EV-QRG p.4; audited W145 |
+| eventide.system.midi-clock | On/off, factory default off; changed in power-up System Setup and stored as changed | Manual-only configuration in current evidence; its receive/send semantics are not specified sufficiently for a browser control | EV-QRG p.4; audited W145 |
+| eventide.system.bypass-mode | Buffered/relay/DSP+FX/kill-dry toggles; factory default buffered | Manual-only configuration in current evidence; do not conflate it with CC 14 active/bypass | EV-QRG pp.3–4; audited W145 |
+| eventide.system.catch-up | On/off, factory default off; suppresses knob changes until the physical knob reaches the stored value | Manual-only configuration in current evidence; document its effect on physical editing, not as remote value readback | EV-QRG pp.4–5; audited W145 |
+| eventide.system.expression-jack | EXP, EXP+AUX, triple AUX, MIDI box, or MIDI TRS | Manual-only configuration in current evidence; surface transport/setup guidance only, with no inferred detection or mutation | EV-QRG p.4; audited W145 |
+| eventide.manager.firmware-update | Device Manager can update pedal firmware; a TAP button + TAP footswitch boot chord enters software-update mode | Protocol unpublished; exclude from the MIDI profile and require a separately qualified Device Manager integration before enabling | EV-QRG p.6; audited W145 |
+| eventide.manager.backup-restore | Device Manager can back up/restore the entire device to a file | Protocol and file format unpublished; research pending, no browser operation authorized | EV-QRG p.6; audited W145 |
+| eventide.manager.factory-reset | Device Manager can restore factory settings; ACTIVE footswitch + ACTIVE button at boot is also documented | Destructive and protocol unpublished; no browser operation authorized without protocol, confirmation, and physical recovery evidence | EV-QRG p.6; audited W145 |
+| eventide.manager.system-edit | Device Manager can edit system settings | Protocol unpublished; this does not make the five System Setup settings MIDI-addressable | EV-QRG pp.4,6; audited W145 |
+| eventide.manager.preset-transfer | Device Manager can import/export presets | Protocol and file format unpublished; keep separate from documented MIDI PC load/store semantics | EV-QRG pp.3,6; audited W145 |
+| eventide.manager.preset-editor | Device Manager can view, edit, and organize presets | Protocol unpublished; no arbitrary query/write behavior may be inferred from the application feature | EV-QRG p.6; audited W145 |
 
 The current profile encodes every CC as a numeric control. The visual editor must distinguish
 triggers and toggle thresholds from continuous values rather than rendering sixteen identical sliders.
@@ -85,7 +95,12 @@ server source, including operations absent from the 18-item connector catalog. T
 binary and checkout both identify as PiPedal 2.0.110; the installed binary hash is pinned, but
 source-to-binary provenance and per-operation payload/readback qualification remain open.
 
-Next checkpoint: complete source pins and expand grouped research rows before W145 can close.
+Eventide System Setup and Device Manager groups are now decomposed above. The official QRG proves
+their user-facing behavior but publishes no remote protocol for them; that is an explicit
+manual-only or protocol-research-pending disposition, not an omitted feature.
+
+Next checkpoint: finish PiPedal source-to-binary provenance and per-operation reconciliation
+before W145 can close.
 Unknown or unreviewed operations are not classified as product-unsupported.
 
 ## Live endpoint reconciliation checkpoint
