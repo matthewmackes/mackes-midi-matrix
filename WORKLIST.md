@@ -8423,6 +8423,11 @@ textual reply-name mismatches that remain fixture-specific. It also contains dup
 reply-handler dispatch and reservations retained until reconnect; MACKES must dispatch once and
 release pending correlations on every terminal path. This follows the source-provenance rule:
 vendor/developer documentation and matching source precede binary inspection or reverse engineering.
+PiPedal response-semantics increment (2026-09-07): a source census of all 104 pinned handlers
+finds 65 direct `Reply(replyTo, ...)` emitters and 39 handlers without a direct reply; 37 of the
+no-reply handlers invoke the model and two are protocol helpers. W150 must map those no-reply
+paths to authoritative events/subscription completion or classify them as internal before browser
+exposure; a missing direct reply is not treated as an ACK failure or silently ignored.
 ```
 
 #### [>] W146 — Specify capability contracts and lossless visual drafts

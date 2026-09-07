@@ -74,6 +74,13 @@ user-addressable request with its direct reply (if any), authoritative event(s),
 lifetime, reconnect behavior, and bounded queue policy. In particular, control and volume writes
 may converge through events rather than direct replies; browser state must not fabricate an ACK.
 
+Source-derived response census for the pinned `PiPedalSocket.cpp`: 65 of 104 handlers emit a
+direct `Reply(replyTo, ...)`; 39 do not. Of those 39 send/event-oriented handlers, 37 invoke the
+model and two are protocol helpers without a model call. The no-reply set is explicitly retained
+in the per-operation inventory rather than being treated as a failed request: W150 must identify
+the authoritative event or subscription completion for each, or classify it as an internal/helper
+operation before exposing it in the browser.
+
 ## Per-operation inventory
 
 Each stable feature ID is pipedal.<handler>. All rows use the source pin above.
