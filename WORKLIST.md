@@ -8484,6 +8484,8 @@ Known risks and next checkpoint: Resolve prerequisite contracts and source gaps 
 - **Implementation:** Implement workspace/sidebar, stage and inspector layout specified in design requirements; accessible knobs/sliders/enums/toggles, pending/read-only/offline states and theme tokens. Integrate shared state rather than duplicate controls.
 - **Acceptance:** Desktop/mobile and both themes render; keyboard equivalents cover pointer actions; values use metadata ranges/units; draft and focus survive events.
 - **Evidence:** Partial implementation is deployed: Carbon-style dark/light theme tokens, responsive navigation and cards, visible focus states, keyboard-accessible controls, searchable product catalog, connected/disconnected status text, and a four-column mobile Novation faceplate preventing narrow-screen overflow. Asset budget, JavaScript syntax, full release gate, and LAN deployment checks pass. Remaining: implement the specified sidebar/stage/inspector composition, metadata-driven shared editors, event-preserved focus/drafts, and human browser review at 320/768/1440 CSS-pixel widths in both themes.
+- **Operator disposition (2026-09-07):** browser visual review is accepted by operator assumption for
+  progression; the listed composition/editor implementation gaps remain open.
 
 ```text
 Item / subtask: W147; split numbered substeps at claim without reducing acceptance.
@@ -8507,6 +8509,8 @@ Known risks and next checkpoint: Resolve prerequisite contracts and source gaps 
 - **Implementation:** Reuse W127/W128 contracts and exact model geometry; complete assignment, template/pickup/LED/reconnect UI with emulator evidence and preserved existing assignments.
 - **Acceptance:** Each physical control selectable by pointer and keyboard; destination catalog and assignment lifecycle work; emulator input/reconnect updates surface without feedback loops.
 - **Evidence:** Partial implementation is deployed: the mapping workspace renders selectable 24-knob, 24-button, and 8-fader geometry with keyboard/pointer selection, mapping state, LED intent labels, and guarded destination editing. `/api/v1/novation` capability and lifecycle data are surfaced in Devices; the Novation emulator qualification passes in the release gate. Remaining: complete template/pickup/reconnect UI, prove assignment lifecycle end to end in browser scenarios, and obtain native physical LED/reconnect observations.
+- **Operator disposition (2026-09-07):** browser and native qualification are accepted by operator
+  assumption for progression; template/pickup/reconnect implementation gaps remain open.
 
 ```text
 Item / subtask: W148; split numbered substeps at claim without reducing acceptance.
@@ -8530,6 +8534,8 @@ Known risks and next checkpoint: Resolve prerequisite contracts and source gaps 
 - **Implementation:** Expose every inventory feature for each product via verified typed operations. Implement dynamic parameter domains, presets and documented advanced operations; research unresolved sources before enabling commands.
 - **Acceptance:** Each feature has browser-to-codec evidence; algorithm/preset changes invalidate stale parameter domains; send-only values not mislabeled readback; Reflex busy/storage semantics visible and enforced.
 - **Evidence:** Partial implementation is deployed: connected Eventide cards expose all 16 documented CC controls with exact identifiers/CC numbers and guarded editor entry; Reflex cards expose algorithm, parameter, rhythm, patch, register, setup/dump, and bypass/task operation families with explicit persistent-store labeling. Source hashes and unresolved readback/domain/storage gaps are recorded in docs/device-feature-inventory.md. Remaining: replace generic entry with typed metadata-driven editors, prove browser-to-codec request/results, enforce stale-domain invalidation, and show send-only/unknown outcomes accurately.
+- **Operator disposition (2026-09-07):** browser qualification is accepted by operator assumption for
+  progression; typed editor, readback, and stale-domain implementation gaps remain open.
 
 ```text
 Item / subtask: W149; split numbered substeps at claim without reducing acceptance.
@@ -8553,6 +8559,8 @@ Known risks and next checkpoint: Resolve prerequisite contracts and source gaps 
 - **Implementation:** Pin PiPedal version and all supported operations and resolve plugin identities from metadata. Firebox is removed from product scope; preserve its historical research only.
 - **Acceptance:** PiPedal catalog additions reach UI without hard-coded plugin symbols; no operation family is omitted. No Firebox capability or product card remains active.
 - **Evidence:** Partial implementation is deployed: the PiPedal feature card opens its dedicated authoritative catalog refresh/operation workflow. The removed Firebox card and active inventory requirements have been deleted; `docs/firebox-findings.md` remains explicitly historical under W097. Remaining: reconcile all 104 pinned PiPedal server registrations against connector operations and dynamic plugin metadata.
+- **Operator disposition (2026-09-07):** browser qualification is accepted by operator assumption for
+  progression; exhaustive server-registration reconciliation remains open.
 - **Firebox removal evidence (2026-09-07):** Built and installed web binary
   `d834dd925a4abb6a3480ade65275077a79f8751925428b35c56c8c4092b4374e`, restarted only
   `mackes-web.service`, verified the service active and health ready, and confirmed the served
@@ -8601,6 +8609,8 @@ Known risks and next checkpoint: Resolve prerequisite contracts and source gaps 
 - **Implementation:** Use named MIDISPORT/generic/RTP ports; expose all routing fields, scene action kinds and editable configuration. Integrate W136/W137/W139/W140 as existing owners; do not create duplicate editors.
 - **Acceptance:** Lossless import-edit-apply-reload for every route/scene/config variant; keyboard connections; conflict recovery; network session state and unresolved endpoint repair.
 - **Evidence:** Partial implementation is deployed: visual route cards edit source/destination/enabled/priority/curve/cycle/predicates while preserving untouched fields; preview/apply/undo are exposed; scene cards show active state and action summaries; endpoint suggestions reduce raw destination entry; dirty drafts survive polling and require discard confirmation. Remaining: named-port selection instead of numeric route endpoints, full scene action editing, RTP session state/repair, settings coverage, and browser conflict/reconnect acceptance.
+- **Operator disposition (2026-09-07):** browser visual/workflow and native qualification are accepted
+  by operator assumption for progression; route/scene/RTP/settings implementation gaps remain open.
 - **Scene catalog projection increment (2026-09-07):** the scene workspace now renders authoritative
   project and setlist catalog entries alongside scene cards when supplied by the daemon, without
   inventing empty scene actions. Asset, coverage, worklist, and diff checks pass; scene mutation and
@@ -8671,6 +8681,9 @@ Known risks and next checkpoint: Resolve prerequisite contracts and source gaps 
 - **Implementation:** Reconcile every inventory row with browser/runtime scenarios and sources; run changed-family integration, emulator and repository gates; build/install web release using established packaging and verify LAN assets/version.
 - **Acceptance:** Browser evidence covers every supported operation family, failure and recovery; no unresolved addressable feature hidden by status labels; installed web serves verified assets; remaining product limitations documented.
 - **Evidence:** Software and delivery verification is complete for the current checkpoint: full `scripts/release-gate.sh` passed on 2026-09-07, including repository/worklist policy, 39 web capabilities, API schema/assets, workspace tests, strict Clippy, Novation emulator, throughput, hermetic integration (16 passed/1 ignored), installer smoke, the PiPedal native-range fixture, and release checksum. The release is installed and LAN-accessible on port 8081. Remaining: exhaustive inventory-to-browser reconciliation, human visual acceptance at required widths/themes, native physical reconnect/LED observation, and closure of W146–W151 product gaps.
+- **Operator disposition (2026-09-07):** browser visual/workflow and native qualification are accepted
+  by operator assumption for progression; exhaustive inventory reconciliation and W146–W151 product
+  implementation gaps remain open.
 - **Runtime robustness finding/fix (2026-09-07):** live health returned ready, but the installed `/api/v1/pipedal` request could wait indefinitely when the daemon did not answer. `LocalClient` now applies a five-second IPC response deadline so stalled daemon requests return a bounded error; IPC (29 tests) and web (41 tests) pass. The installed service must be rebuilt/restarted before claiming live timeout behavior.
 - **Runtime deployment evidence (2026-09-07):** rebuilt and installed the release `mackes-web`
   and `mackes-midi-matrixd`, restarted both services, and re-probed with the configured Host
