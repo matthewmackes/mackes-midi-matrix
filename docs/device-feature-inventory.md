@@ -78,7 +78,6 @@ No production protocol change is authorized by a speculative physical-unit conve
 | PiPedal | Reconcile each inventoried handler/HTTP route/event with client serializers and model side effects | Per-operation payload/readback examples and source-to-binary provenance | W145/W150 |
 | MIDISPORT | Find matching manufacturer manual and driver provenance | Port/firmware identity matrix | W145/W151 |
 | RTP/generic MIDI | Reconcile browser controls with the pinned route/session inventory | Browser request/response, reconnect, conflict, and peer-interoperability scenarios | W151 |
-| Retired C.A.B. M+ | Preserve archived research reference and retirement | No active implementation task without scope change | W145 |
 
 PiPedal checkpoint: [per-handler audit](pipedal-server-operation-audit.md) inventories the complete
 message-registration list, 24 HTTP path segments, and 37 outbound event names in the pinned local
@@ -272,6 +271,13 @@ session projection and independent-peer interoperability remain W151/W152 accept
 
 ### Retired Two Notes C.A.B. M+
 
-The product remains an archived inventory entry. The interface may show its documented Remote/USB
-boundary and why raw HID writes are unavailable. It must not expose the older C.A.B. MIDI map or
-imply that generic USB provides control semantics. Reactivation requires a new scope decision.
+The product remains retired and has no active interface entry. Its official
+[C.A.B. M+ user guide](https://media.two-notes.com/product_manuals/en/legacy/hardware/torpedo/torpedo_cab_m_plus_user_guide.pdf)
+was retrieved 2026-09-07 (1,847,759 bytes; SHA-256
+`d758529e08c33bdfeecbdd30f4c5049a1494269d9cc763f5fc7155fda6d7326b`). The manual records the
+Remote/USB product boundary but is not a protocol authorization. Current profiles, schemas,
+commands and the browser contain no C.A.B. product identity, older C.A.B. MIDI map, or raw-HID
+write path. Reactivation requires an explicit scope decision and new protocol qualification.
+
+This closes W145's retirement-record check. Historical WORKLIST entries remain append-only audit
+history and W027 remains the authoritative removal task.

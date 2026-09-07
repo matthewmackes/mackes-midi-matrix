@@ -8384,6 +8384,10 @@ register/all-register frames, setup/patch fields, packing/checksum, and typed de
 also found and fixed silent 7-bit masking: packed/nibblized parameter IDs above 127 and store/recall
 arguments above 127 now fail closed with regression coverage. Browser lifecycle and physical
 readback remain W149 rather than being inferred from codec tests.
+Retired-device audit increment (2026-09-07): pinned the official C.A.B. M+ manual hash and verified
+that profiles, schemas, commands, and the browser expose no active product identity or write path.
+Removed the final commented `RetiredEditorMap` implementation/test residue from `mackes-config`;
+historical ledger entries remain append-only under W027 and do not create release capability.
 ```
 
 #### [>] W146 — Specify capability contracts and lossless visual drafts

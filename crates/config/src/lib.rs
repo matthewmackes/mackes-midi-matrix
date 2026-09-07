@@ -819,85 +819,6 @@ impl LaunchControlAssignmentConfig {
     }
 }
 
-/*
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct RetiredEditorMap {
-    /// Stable profile identity required by the importer.
-    pub profile_id: String,
-    /// Firmware identity the map was exported from.
-    pub firmware: String,
-    /// SHA-256 digest of the raw editor artifact.
-    pub artifact_sha256: String,
-    /// Bounded documented control assignments.
-    #[serde(default)]
-    pub assignments: Vec<LaunchControlAssignmentConfig>,
-}
-
-impl RetiredEditorMap {
-    /// Validates identity, digest, bounds, and duplicate assignments.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error when identity, firmware, digest, or assignment bounds are invalid.
-    pub fn validate(&self) -> Result<(), String> {
-        if self.profile_id != "retired.device"
-            || self.firmware.trim().is_empty()
-            || self.artifact_sha256.len() != 64
-            || !self.artifact_sha256.bytes().all(|byte| byte.is_ascii_hexdigit())
-            || self.assignments.len() > 48
-        {
-            return Err("retired editor map identity or artifact metadata is invalid".into());
-        }
-        let mut indices = std::collections::BTreeSet::new();
-        for assignment in &self.assignments {
-            if assignment.index >= 48
-                || assignment.channel >= 16
-                || assignment.number > 127
-                || !matches!(assignment.kind.as_str(), "cc" | "note")
-                || !indices.insert(assignment.index)
-            {
-                return Err("retired editor map assignment is invalid or duplicated".into());
-            }
-        }
-        Ok(())
-    }
-
-    /// Verifies the map's artifact digest before import.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error when the artifact digest differs from the declared digest.
-    pub fn verify_artifact(&self, artifact: &[u8]) -> Result<(), String> {
-        if BackupManifest::digest(artifact) == self.artifact_sha256 {
-            Ok(())
-        } else {
-            Err("retired editor artifact hash does not match map".into())
-        }
-    }
-
-    /// Validates this map against an expected firmware, requiring explicit approval for drift.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error for an invalid map or an unapproved firmware mismatch.
-    pub fn validate_for_firmware(
-        &self,
-        expected_firmware: &str,
-        approve_mismatch: bool,
-    ) -> Result<(), String> {
-        self.validate()?;
-        if self.firmware != expected_firmware && !approve_mismatch {
-            return Err(format!(
-                "retired device firmware mismatch: map={} expected={} (approval required)",
-                self.firmware, expected_firmware
-            ));
-        }
-        Ok(())
-    }
-}
-
-*/
 /// Persisted MIDI trigger kind for a dashboard action.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
@@ -3250,25 +3171,6 @@ mod tests {
         invalid.sha256 = "z".repeat(64);
         assert!(invalid.validate().is_err());
     }
-
-    /* #[test]
-    fn retired_editor_map_requires_identity_and_artifact_hash() {
-        let artifact = br"editor-export";
-        let map = RetiredEditorMap {
-            profile_id: "retired.device".into(),
-            firmware: "1.0".into(),
-            artifact_sha256: BackupManifest::digest(artifact),
-            assignments: vec![],
-        };
-        assert!(map.validate().is_ok());
-        assert!(map.validate_for_firmware("1.0", false).is_ok());
-        assert!(map.validate_for_firmware("2.0", false).is_err());
-        assert!(map.validate_for_firmware("2.0", true).is_ok());
-        assert!(map.verify_artifact(artifact).is_ok());
-        assert!(map.verify_artifact(b"tampered").is_err());
-        let invalid = RetiredEditorMap { profile_id: "unknown".into(), ..map };
-        assert!(invalid.validate().is_err());
-    } */
 
     #[test]
     fn backup_storage_writes_payload_and_manifest_sidecar() {
