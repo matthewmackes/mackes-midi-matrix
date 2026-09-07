@@ -8590,6 +8590,10 @@ Known risks and next checkpoint: Resolve prerequisite contracts and source gaps 
   project and setlist catalog entries alongside scene cards when supplied by the daemon, without
   inventing empty scene actions. Asset, coverage, worklist, and diff checks pass; scene mutation and
   browser acceptance remain open.
+- **System projection increment (2026-09-07):** the System workspace now renders daemon-provided
+  service, web API, and recovery-catalog fields as readable cards while retaining the raw
+  authoritative payload. Asset, coverage, worklist, and diff checks pass; editable settings and
+  browser acceptance remain open.
 - **Routing endpoint-picker increment (2026-09-07):** the daemon route projection now publishes an
   authoritative direction-aware endpoint catalog with each stable numeric route ID, and the web route
   cards render named input/output selectors while preserving unknown/current IDs. `cargo fmt` and
