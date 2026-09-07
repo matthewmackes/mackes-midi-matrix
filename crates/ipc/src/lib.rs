@@ -1452,6 +1452,9 @@ pub struct LocalClient {
     stream: UnixStream,
 }
 
+/// Maximum time a request/response IPC exchange may wait for the daemon.
+pub const IPC_RESPONSE_TIMEOUT: Duration = Duration::from_secs(5);
+
 #[cfg(unix)]
 impl LocalClient {
     /// Connects to a daemon control socket.
@@ -1476,7 +1479,10 @@ impl LocalClient {
         let mut last_error = None;
         for attempt in 1..=policy.attempts() {
             match Self::connect(path) {
-                Ok(client) => return Ok((client, attempt)),
+                Ok(client) => {
+                    client.stream.set_read_timeout(Some(IPC_RESPONSE_TIMEOUT))?;
+                    return Ok((client, attempt));
+                }
                 Err(error) => {
                     last_error = Some(error);
                     if policy.permits_retry(attempt) {
