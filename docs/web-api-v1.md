@@ -49,6 +49,9 @@ committed through the daemon's atomic configuration writer.
 `POST /api/v1/sysex` forwards a confirmed framed request with a bounded destination alias and
 1–1024 seven-bit data bytes; malformed, unconfirmed, or oversized payloads are rejected before IPC.
 `GET /api/v1/validation` forwards the daemon's read-only configuration validation command.
+`POST /api/v1/configuration` accepts a confirmed JSON mutation containing daemon-owned `setlists`
+and/or `learned_mappings`; the request is size-bounded and validated before IPC, while schema
+validation and atomic persistence remain daemon responsibilities.
 `GET /api/v1/diagnostics` reports web build/API/IPC configuration and explicitly separates web
 limitations from daemon health, which is returned by `/api/v1/health`.
 The response also exposes the effective configured origin and the supported service settings
