@@ -137,6 +137,20 @@ function renderCapabilityBoard(body) {
   const unsupported = body?.unsupported?.remaining_mutations;
   if (unsupported) { const note = document.createElement('p'); note.className = 'capability-gap'; note.textContent = `Remaining mutation coverage: ${unsupported}`; capabilityBoard.append(note); }
 }
+function renderSystemBoard(body) {
+  const board = document.querySelector('#system-board'); board.replaceChildren();
+  const sections = [['Service', body?.service], ['Web API', body?.web], ['Recovery', body?.recovery_catalog]];
+  sections.forEach(([name, values]) => {
+    if (!values || typeof values !== 'object') return;
+    const card = document.createElement('article'); card.className = 'feature-card';
+    const heading = document.createElement('h3'); heading.textContent = name; card.append(heading);
+    const list = document.createElement('dl'); Object.entries(values).forEach(([key, value]) => {
+      const term = document.createElement('dt'); term.textContent = key.replaceAll('_', ' ');
+      const detail = document.createElement('dd'); detail.textContent = typeof value === 'string' ? value : JSON.stringify(value); list.append(term, detail);
+    }); card.append(list); board.append(card);
+  });
+  board.hidden = !board.children.length;
+}
 function renderSceneBoard(body) {
   const scenes = Array.isArray(body?.scenes) ? body.scenes : [];
   const catalog = body?.catalog || {};
@@ -254,6 +268,7 @@ async function load(view) {
       } catch (error) {
         body.daemon_health = { code: 'daemon_unavailable', message: String(error) };
       }
+      renderSystemBoard(body);
     }
     if (Number.isInteger(body.generation)) currentGeneration = body.generation;
     if (view === 'routes') {
@@ -384,6 +399,7 @@ document.querySelectorAll('[data-view]').forEach(button => button.addEventListen
   assignmentControls.hidden = button.dataset.view !== 'mappings';
   routingControls.hidden = button.dataset.view !== 'routes';
   sceneControls.hidden = button.dataset.view !== 'scenes';
+  document.querySelector('#system-board').hidden = button.dataset.view !== 'system';
 }));
 document.querySelector('#pause-monitor').addEventListener('click', event => {
   monitorPaused = !monitorPaused;
