@@ -8,9 +8,7 @@ use std::{
 
 const MAX_PAIR_JOURNAL_BYTES: u64 = 256 * 1024;
 
-pub(crate) fn endpoint_catalog(
-    endpoints: &[mackes_midi_engine::EndpointInfo],
-) -> serde_json::Value {
+pub fn endpoint_catalog(endpoints: &[mackes_midi_engine::EndpointInfo]) -> serde_json::Value {
     serde_json::Value::Array(
         endpoints
             .iter()
