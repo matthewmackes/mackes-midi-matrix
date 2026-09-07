@@ -1432,6 +1432,23 @@ mod tests {
         }
     }
 
+    #[test]
+    fn configuration_boundary_rejects_unconfirmed_or_empty_writes_before_ipc() {
+        for body in
+            [br#"{"confirm":false,"setlists":[]}"#.as_slice(), br#"{"confirm":true}"#.as_slice()]
+        {
+            let request = HttpRequest::parse(format!(
+                "POST /api/v1/configuration HTTP/1.1\r\nHost: localhost:8081\r\nOrigin: http://localhost:8081\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+                body.len(),
+                std::str::from_utf8(body).expect("JSON")
+            ).as_bytes()).expect("request");
+            assert_eq!(
+                configuration_operation(&request, &PathBuf::from("/never-open")).status,
+                400
+            );
+        }
+    }
+
     #[cfg(unix)]
     #[test]
     fn sysex_route_forwards_confirmed_payload_to_daemon() {
