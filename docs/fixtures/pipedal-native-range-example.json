@@ -1,0 +1,29 @@
+{
+  "catalog": {
+    "controls": [
+      {
+        "plugin_uri": "urn:example:eq",
+        "symbol": "gain",
+        "min_value": -12.0,
+        "max_value": 12.0,
+        "value": 0.0,
+        "writable": true
+      }
+    ]
+  },
+  "mapping_resolution": [
+    {
+      "physical_control_id": "knob-r3-c4",
+      "plugin_uri": "urn:example:eq",
+      "symbol": "gain",
+      "state": "resolved",
+      "detail": "target is available and writable"
+    }
+  ],
+  "expected": {
+    "input_min": -12.0,
+    "input_max": 12.0,
+    "accepted_value": 6.0,
+    "rejected_value": 13.0
+  }
+}

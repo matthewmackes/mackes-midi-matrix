@@ -8432,7 +8432,9 @@ PiPedal value-domain correction (2026-09-07): changed the web `pipedal-value` fi
 explicit native control-domain value, removed the false `0..1` constraint, and aligned the IPC
 documentation. The adapter remains the authoritative native-range validator. A range-aware
 mapping editor now joins resolution plugin URI/symbol to catalog min/max metadata; a browser
-fixture exercising a non-normalized range remains open.
+fixture `docs/fixtures/pipedal-native-range-example.json` plus
+`scripts/check-pipedal-range-fixture.py` now proves a `-12..12` native range join and accepted /
+rejected values. Interactive browser observation remains open.
 ```
 
 #### [>] W146 — Specify capability contracts and lossless visual drafts

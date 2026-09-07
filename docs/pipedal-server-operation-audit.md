@@ -229,7 +229,9 @@ user-facing workflow without needing an independent button; require a documented
   `0..1` constraint, and the IPC field documents the same native-domain contract. Resolution
   entries now carry plugin URI and symbol, allowing the editor to join each persisted mapping to
   catalog `min_value`/`max_value`; the adapter remains the authoritative validator. A browser
-  fixture exercising a non-normalized range remains open.
+  The deterministic fixture `docs/fixtures/pipedal-native-range-example.json` and
+  `scripts/check-pipedal-range-fixture.py` cover a `-12..12` gain range; interactive browser
+  observation remains separate acceptance evidence.
 
 ## Requirements to close the newly discovered gap
 
