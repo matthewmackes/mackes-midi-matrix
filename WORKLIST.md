@@ -8073,9 +8073,9 @@ not a native USB or visual hardware claim.
   credential, or privileged systemd endpoint is exposed. Focused tests, coverage/schema/assets,
   installer smoke, and release verification pass.
 
-#### [>] W142 — Verify exhaustive coverage, usability, resource bounds, and API robustness
+#### [x] W142 — Verify exhaustive coverage, usability, resource bounds, and API robustness
 
-- **Status:** `IN_PROGRESS`
+- **Status:** `DONE`
 - **Owner:** codex
 - **Depends on:** W134, W135, W136, W137, W138, W139, W140, W141
 - **Mandatory Carbon visual gate:** Review canonical features against W133's component and visual
