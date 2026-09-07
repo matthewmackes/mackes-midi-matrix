@@ -7725,6 +7725,10 @@ not a native USB or visual hardware claim.
 - **PiPedal catalog deployment evidence (2026-09-07):** Rebuilt and installed the current web
   binary, restarted only `mackes-web.service`, and verified the LAN shell contains the PiPedal
   catalog control while `/api/v1/health` returns `ok=true`, `health=ready`, generation 3659.
+- **PiPedal live reconciliation (2026-09-07):** the installed `/api/v1/pipedal` snapshot currently
+  reports 18 qualified operations, 3,076 native catalog controls, and five mapping-resolution
+  entries. This proves dynamic catalog transport; the remaining server-registration families and
+  browser mutation/readback qualification stay open under W138/W150.
 - **Assignment-boundary regression evidence (2026-09-06):** Web coverage now includes direct
   rejection tests for invalid assignment JSON and non-JSON media types before daemon IPC; the
   service suite has 25 passing tests with strict Clippy and repository checks green,
