@@ -273,7 +273,7 @@ fn route(request: &HttpRequest, socket: &PathBuf, origin: &str) -> HttpResponse 
                     "api": "v1",
                     "port": 8081,
                     "reads": ["health", "state", "capabilities", "endpoints", "routes", "scenes", "devices", "novation", "assignment", "mappings", "pipedal", "monitor", "backups", "configuration", "validation", "diagnostics", "diagnostics_bundle"],
-                    "operations": {"rescan": "implemented", "panic": "implemented_with_confirmation", "device_control": "implemented_with_confirmation", "sysex": "implemented_with_confirmation", "assignment": "implemented_as_typed_ipc", "mappings": "implemented_as_typed_ipc", "routes": "implemented_as_daemon_validated", "scenes": "implemented_as_daemon_validated", "pipedal": "implemented_as_typed_ipc", "events": "implemented_as_poll_and_sse"},
+                    "operations": {"rescan": "implemented", "panic": "implemented_with_confirmation", "device_control": "implemented_with_confirmation", "sysex": "implemented_with_confirmation", "assignment": "implemented_as_typed_ipc", "mappings": "implemented_as_typed_ipc", "routes": "implemented_as_daemon_validated", "scenes": "implemented_as_daemon_validated", "configuration": "implemented_as_bounded_daemon_ipc", "pipedal": "implemented_as_typed_ipc", "events": "implemented_as_poll_and_sse"},
                     "unsupported": {"remaining_mutations": "W138-W139"}
                 })
                 .to_string()
