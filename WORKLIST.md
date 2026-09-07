@@ -8629,6 +8629,9 @@ Known risks and next checkpoint: Resolve prerequisite contracts and source gaps 
   with a bounded JSON snapshot. A fresh live snapshot exposes 3,076 catalog controls and 18
   supported operations; mapping-resolution entries include plugin URI/symbol fields, and the
   empty mapping set is reported as unavailable rather than fabricating assignments.
+- **Post-gate deployment recheck (2026-09-07):** installed the release-gate binaries and restarted
+  both services. LAN probes returned healthy responses; `/api/v1/routes` returned three routes and
+  31 endpoint-catalog entries, while `/api/v1/scenes` returned an authoritative empty scene catalog.
 - **PiPedal runtime boundary (2026-09-07):** a deliberately read-only plain-HTTP probe against
   PiPedal's WebSocket endpoint triggered the vendor 2.0.110 process to abort on missing
   `/etc/pipedal/react/pipedal`; systemd auto-restarted it and both MACKES services remained active.
