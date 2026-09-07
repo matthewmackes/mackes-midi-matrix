@@ -8613,6 +8613,10 @@ Known risks and next checkpoint: Resolve prerequisite contracts and source gaps 
 - **Capability reconciliation (2026-09-07):** the live `/api/v1/capabilities` projection reports ten
   operation families with no partial labels and explicitly names remaining mutation coverage as
   `W138-W139`. This keeps the System/feature boards truthful; those mutation families remain open.
+- **Live workspace smoke matrix (2026-09-07):** after the release deployment, unauthenticated LAN
+  GET probes for health, state, mappings, assignment, routes, scenes, devices, endpoints,
+  capabilities, diagnostics, PiPedal, monitor, backups, and configuration each returned HTTP 200.
+  This verifies route availability only; browser interaction and mutation/readback acceptance remain.
 - **Routing endpoint-picker increment (2026-09-07):** the daemon route projection now publishes an
   authoritative direction-aware endpoint catalog with each stable numeric route ID, and the web route
   cards render named input/output selectors while preserving unknown/current IDs. `cargo fmt` and
