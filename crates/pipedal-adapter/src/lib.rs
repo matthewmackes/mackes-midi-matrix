@@ -814,6 +814,9 @@ impl Worker {
         if !self.session.is_ready() || intent.generation != self.session.generation() {
             return Err("PiPedal restore session is stale or not ready".into());
         }
+        if reply_to.is_some() && self.expected_replies.len() >= 128 {
+            return Err("PiPedal reply tracking capacity is full".into());
+        }
         let frame = self.prepare_set_control(
             intent.generation,
             &intent.mapping,
@@ -822,7 +825,11 @@ impl Worker {
             reply_to,
             intent.value,
         )?;
-        self.session.enqueue_control(intent.generation, frame)
+        self.session.enqueue_control(intent.generation, frame)?;
+        if let Some(reply_to) = reply_to {
+            self.expected_replies.push(reply_to);
+        }
+        Ok(())
     }
 
     /// Validates and queues restoration of the latest apply atomically.
@@ -1364,6 +1371,42 @@ mod tests {
             .expect_err("an empty catalog cannot provide an undo value");
         assert_eq!(error, "PiPedal fresh prior value is unavailable");
         assert!(worker.undo_apply(0).is_err());
+    }
+
+    #[test]
+    fn restore_with_reply_id_tracks_the_correlated_response() {
+        let mut worker = Worker::default();
+        worker.session.connect().expect("connect");
+        worker.session.accept("ehlo").expect("ehlo");
+        worker.session.accept("version").expect("version");
+        worker.session.accept("getSystemMidiBindings").expect("ready");
+        worker.catalog.targets.push(mackes_pipedal_connector::PluginTarget {
+            uri: "urn:eq".into(),
+            instance_id: 7,
+            name: "EQ".into(),
+        });
+        worker.catalog.controls.push(mackes_pipedal_connector::ControlDescriptor {
+            plugin_uri: "urn:eq".into(),
+            symbol: "gain".into(),
+            label: "Gain".into(),
+            min_value: -12.0,
+            max_value: 12.0,
+            value: Some(0.0),
+            writable: true,
+        });
+        let intent = RestoreIntent {
+            mapping: MappingIdentity {
+                physical_control_id: "knob-r3-c4".into(),
+                plugin_uri: "urn:eq".into(),
+                symbol: "gain".into(),
+                scope: None,
+            },
+            instance_id: 7,
+            value: -3.0,
+            generation: 0,
+        };
+        worker.apply_restore_intent(&intent, 2, Some(91), true).expect("restore queues");
+        assert!(worker.accept_frame(br#"[{"reply":91,"message":"setControl"}]"#).is_ok());
     }
 
     struct NoopTransport;

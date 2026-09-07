@@ -8534,6 +8534,11 @@ Known risks and next checkpoint: Resolve prerequisite contracts and source gaps 
   `d834dd925a4abb6a3480ade65275077a79f8751925428b35c56c8c4092b4374e`, restarted only
   `mackes-web.service`, verified the service active and health ready, and confirmed the served
   shell contains no Firebox/Atomic catalog text.
+- **PiPedal lifecycle correction (2026-09-07):** `apply_restore_intent` now records correlated
+  reply IDs after queue admission, matching `apply_set_control`; previously a restore carrying a
+  `replyTo` could be rejected as an unknown reply. Added regression
+  `restore_with_reply_id_tracks_the_correlated_response`; `cargo fmt --check` and
+  `cargo test -p mackes-pipedal-adapter` pass (17 tests).
 
 ```text
 Item / subtask: W150; split numbered substeps at claim without reducing acceptance.
