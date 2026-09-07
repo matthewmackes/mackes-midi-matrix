@@ -8586,6 +8586,10 @@ Known risks and next checkpoint: Resolve prerequisite contracts and source gaps 
 - **Implementation:** Use named MIDISPORT/generic/RTP ports; expose all routing fields, scene action kinds and editable configuration. Integrate W136/W137/W139/W140 as existing owners; do not create duplicate editors.
 - **Acceptance:** Lossless import-edit-apply-reload for every route/scene/config variant; keyboard connections; conflict recovery; network session state and unresolved endpoint repair.
 - **Evidence:** Partial implementation is deployed: visual route cards edit source/destination/enabled/priority/curve/cycle/predicates while preserving untouched fields; preview/apply/undo are exposed; scene cards show active state and action summaries; endpoint suggestions reduce raw destination entry; dirty drafts survive polling and require discard confirmation. Remaining: named-port selection instead of numeric route endpoints, full scene action editing, RTP session state/repair, settings coverage, and browser conflict/reconnect acceptance.
+- **Scene catalog projection increment (2026-09-07):** the scene workspace now renders authoritative
+  project and setlist catalog entries alongside scene cards when supplied by the daemon, without
+  inventing empty scene actions. Asset, coverage, worklist, and diff checks pass; scene mutation and
+  browser acceptance remain open.
 - **Routing endpoint-picker increment (2026-09-07):** the daemon route projection now publishes an
   authoritative direction-aware endpoint catalog with each stable numeric route ID, and the web route
   cards render named input/output selectors while preserving unknown/current IDs. `cargo fmt` and
