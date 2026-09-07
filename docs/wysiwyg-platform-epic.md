@@ -20,7 +20,7 @@ Device-wide “complete” requires reconciliation against the pinned product fe
 ## Initial resource review and product boundaries
 
 Reviewed repository sources: docs/web-feature-coverage.md, docs/novation-protocol-audit.md,
-docs/firebox-findings.md, docs/pipedal-connector-design.md, WORKLIST.md §§2.3–2.4,
+docs/pipedal-connector-design.md, WORKLIST.md §§2.3–2.4,
 crates/profiles/src/lib.rs and the existing browser shell. This is an initial review, not an
 exhaustive audit of every vendor document or the installed product versions.
 
@@ -30,7 +30,6 @@ exhaustive audit of every vendor document or the installed product versions.
 | Eventide MicroPitch Delay | [Official QRG](https://cdn.eventideaudio.com/uploads/2021/10/MicroPitchDelay-QRG-Web.pdf), firmware v1.0+, part 141347 Rev A, opened 2026-09-07; eventide_micropitch.rs | Primary/secondary parameters, expression, tap, bypass, FLEX and presets. Inventory USB/TRS distinctions and Device Manager features separately. QRG identifies CC 4/9/14/15/20–31 and PC presets; it does not prove arbitrary query or Device Manager protocol support. Persist/save mode semantics need explicit handling. |
 | Lexicon Reflex | Vendor-authored MIDI Implementation Details, part 070-10748 Rev 1; source-copy hash and protocol requirements in WORKLIST §2.3; lexicon_reflex.rs | Algorithm-dependent parameters, base/effective values, patches, presets, setup, queries, dumps and system tasks. Verify every operation against source pages and fixtures; independently reconcile algorithm tables. Busy intervals and persistent storage writes belong in the editor lifecycle. Mirror provenance requires verification; do not treat it as a new vendor publication. |
 | PiPedal | Local sibling pipedal source; [official architecture](https://github.com/rerdavies/pipedal/blob/main/docs/Architecture.md); connector design and connector/adapter operation enums | Actual pedalboard/plugin metadata, control types/ranges/units, enablement, snapshots, presets, MIDI bindings, levels, hardware/status and service operations. Pin local/source/server revisions before claiming compatibility. Compare every operation in web-feature-coverage.md with server handlers; browser currently exposing three choices is not exhaustive. |
-| Atomic Ampli-Firebox V1 | docs/firebox-findings.md, connector source/captures; [official support](https://atomicamps.com/atomic-amps-support/) re-opened 2026-09-07 | Show qualified passive controls/state and connection diagnostics. Investigate editor sync, parameters, presets, IR and firmware separately. Existing frame/ACK observations do not establish a complete semantic write map. Preserve exact V1 transport/version distinction and visible unknown state. |
 | M-Audio MIDISPORT 4x4 | Existing runtime/loader observations and native ALSA implementation; obtain matching official manual and firmware/driver provenance | Stable per-port identity/direction, aliases, connections, activity, reconnect and firmware readiness. It is a MIDI transport; do not invent DSP controls. Reconcile advertised port count with discovered input/output endpoints. |
 | RTP-MIDI / generic MIDI | Existing MIDI engine, IPC and endpoint schemas; RFC 6295 and qualified AppleMIDI session reference required | Peer/session lifecycle, routing, channel/message filters, transforms, timing/health and reconnection. Keep session addresses separate from persisted identity. Inventory all supported message classes, not only CC. |
 | Two Notes C.A.B. M+ | [Official manual](https://media.two-notes.com/product_manuals/en/legacy/hardware/torpedo/torpedo_cab_m_plus_user_guide.pdf) opened 2026-09-07; worklist explicitly retires this device | Retired inventory record only unless reintroduced by operator. Archive Remote/USB research and known gaps; do not enable older C.A.B. MIDI commands on M+. This epic does not silently reverse retirement. |
@@ -167,9 +166,6 @@ Reflex: per-algorithm names/domains, base versus modulation-adjusted values, fou
 supported query/dump/setup/system tasks, busy guards and distinct temporary versus stored edits.
 PiPedal: dynamic plugin metadata, version-qualified full operation catalog, target re-resolution
 after pedalboard changes and explicit ambiguous/missing instance repair.
-Firebox: semantic identity/range/readback/persistence proof for each decoded HID field or command;
-read-only correlated telemetry stays labeled until verified. Preset/IR/firmware features require
-separate framing/transfer/recovery research, not extrapolation from a parameter ACK.
 MIDISPORT/RTP/generic endpoints: direction-aware port aliases, stable reattachment, message-class
 coverage, session health and endpoint repair. Do not imply a configured logical destination proves
 a cable is connected.
@@ -223,6 +219,6 @@ explicitly; an absent mutation control is not evidence that the product has no a
 
 Frontend reproducibility pins for this checkpoint: `index.html`
 `0ea4718dbcc2d55a7dee7ea3f1e1309b56ba6c4ffc95f7580424691195a1861b`, `app.js`
-`94bf2a46351b787d3ed7182a25a580f5afd8a363f57be44ced0c8dffc7b1c61b`, `app.css`
+`8b78a00bc6d0643f52356d36cd97661e2061f4bd4576a56cd4bfb09f802009cb`, `app.css`
 `21ae2a9bd48c1e66858e9d636bb0776a87b5e31701be300abd7b73ac81a90fe9`, and current release binary
-`e3b42ed9fa5016b23a2bce94bc649965d6173ba4d20912689e975adaf8b26163`.
+`d834dd925a4abb6a3480ade65275077a79f8751925428b35c56c8c4092b4374e`.

@@ -1,7 +1,7 @@
 # Device feature inventory
 
 W145 research checkpoint, 2026-09-07. Partial inventory; not a completeness declaration.
-Canonical delivery owners: W149 (Eventide), W150 (PiPedal/Firebox), W148 (Novation),
+Canonical delivery owners: W149 (Eventide), W150 (PiPedal), W148 (Novation),
 W151 (transport/platform). All browser acceptance evidence below is pending.
 
 ## Source register
@@ -24,8 +24,6 @@ NOVATION-FACTORY1: docs/mackes-launch-control-xl-mk2-factory1-manifest.json, SHA
 `31bb2516c070290e8a8fd1a14ac750d49351f097e47e040127509964a3333829` (contract 1.0.1).
 PP-CODE: crates/pipedal-connector/src/lib.rs Operation enum and catalog.
 SHA-256 `097c255dca356a6a882f7507013c35e595694cb0f0dbe7fa73f6d9a2198fc2bf`.
-FIREBOX-CODE: docs/firebox-findings.md, SHA-256
-`a6150f3420d15584c68d7fb6d5bba1dc3a094e8f717a60e028b3907c6c16a36d`.
 Sources describe different evidence: code proves available definitions, vendor documentation
 describes device behavior; neither proves browser-to-device execution.
 
@@ -78,7 +76,6 @@ No production protocol change is authorized by a speculative physical-unit conve
 | Novation | Reconcile browser coverage with the pinned Factory-1 and LED inventory | Browser-to-daemon assignment/template/pickup/reconnect scenarios and physical LED observation | W148 |
 | Reflex | Reconcile typed browser editors with the pinned codec/algorithm inventory | Browser-to-codec scenarios, busy/storage lifecycle and physical readback | W149 |
 | PiPedal | Reconcile each inventoried handler/HTTP route/event with client serializers and model side effects | Per-operation payload/readback examples and source-to-binary provenance | W145/W150 |
-| Firebox | Reconcile capture-backed semantics with connector operations | Parameter identity/range/persistence evidence; unsupported transfer framing | W145/W150 |
 | MIDISPORT | Find matching manufacturer manual and driver provenance | Port/firmware identity matrix | W145/W151 |
 | RTP/generic MIDI | Reconcile browser controls with the pinned route/session inventory | Browser request/response, reconnect, conflict, and peer-interoperability scenarios | W151 |
 | Retired C.A.B. M+ | Preserve archived research reference and retirement | No active implementation task without scope change | W145 |
@@ -100,8 +97,7 @@ Read-only LAN probes on 2026-09-07, using the configured Host header, returned `
 MACKES virtual/monitor endpoints. The Novation projection reported identity `Mk2`, 56 physical
 controls, 48 LEDs, template selection, and `led_readback=false`; its LED phase was `absent`, so
 the UI must distinguish configured target state from physical observation. Lexicon Reflex and
-Firebox were not present in this runtime inventory; their feature cards remain source-defined
-and are not presented as connected hardware. This proves inventory reconciliation and truthful
+the retired Firebox was not present in this runtime inventory or active product catalog. This proves inventory reconciliation and truthful
 absence handling, not exhaustive per-device operation coverage.
 
 ## Reflex feature reconciliation
@@ -207,16 +203,7 @@ each external document. For every table row, link a fixture or browser request/r
 Grouped statements such as “supports presets” are insufficient when load, save, recall, reset,
 query, feedback, and persistence have different semantics.
 
-## Firebox, MIDISPORT, network, and retired-device requirements
-
-### Atomic Ampli-Firebox V1
-
-The current evidence identifies a vendor HID connection and read-only report monitoring. The UI
-must show USB identity, hidraw path, report freshness, reconnect state, raw-report capture and
-correlated fields with an “observed correlation” label. It must not expose writable parameters,
-presets, IR, firmware, or factory-reset actions until each has a source-backed request, reply,
-value domain, persistence effect, and recovery procedure. The known parameter ACK proves transport
-only; it does not prove semantic identity or readback.
+## MIDISPORT, network, and retired-device requirements
 
 ### M-Audio MIDISPORT 4x4
 

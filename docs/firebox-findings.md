@@ -1,5 +1,9 @@
 # Atomic Ampli-Firebox V1 transport research
 
+> **Retired product record:** Firebox has been removed from MACKES product scope. This file is
+> preserved only as historical research under W097. No current profile, connector, command,
+> capability, web card, or future implementation task is authorized by the notes below.
+
 ## Outcome
 
 The original Atomic Ampli-Firebox should not be modeled as an ordinary MIDI endpoint. The V1
@@ -14,8 +18,9 @@ HID transport. On the local Fedora host the connected unit confirms that design:
 - USB endpoints: interrupt IN `0x81` and interrupt OUT `0x01`, each 64 bytes at interval `1`
 - ALSA MIDI endpoint: none observed
 
-The platform therefore has a discovery-only `atomic.ampli-firebox.v1` profile using
-`ControlTransport::UsbVendor`. It exposes no controls and authorizes no writes.
+The former prototype proposed a discovery-only `atomic.ampli-firebox.v1` profile using
+`ControlTransport::UsbVendor`. Neither that profile nor a Firebox connector exists in the current
+workspace or release.
 
 ## Realtime communication requirement
 
@@ -86,16 +91,13 @@ The official Mac editor was also obtained from Atomic’s V1 support link. Its M
 `AmplifireUSBPacketIO.cpp` diagnostics and protocol error strings as the Windows build, but is
 stripped and exposes no additional command semantics or standalone firmware image.
 
-## Linux connector status
+## Historical Linux prototype status
 
-`mackes-firebox` provides a raw hidraw connector with passive capture and an
-evidence-gated stateful request/response session, plus the
-`firebox-capture` utility. Its tab-separated output is:
+The untracked `mackes-firebox` prototype previously provided raw hidraw capture and experimental
+request/response tools. W097 removed it. The following describes historical output only:
 
-The installed `firebox-monitor [hidraw-path]` provides continuous read-only
-monitoring with bounded reconnect reopening. It emits timestamps, changed
-offsets, currently correlated analog/switch deltas, and the complete raw
-report; it never opens the Firebox writer or sends an output report.
+The former `firebox-monitor` emitted timestamps, changed offsets, correlated analog/switch deltas,
+and complete raw reports without opening a writer. It is not an installed product command.
 
 1. report sequence;
 2. monotonic elapsed microseconds;
@@ -114,9 +116,9 @@ editor path for preset editing, cabinet-IR upload, and firmware, and does not do
 interface for the Firebox. These documented identities do not yet establish their raw HID byte
 offsets or position encodings.
 
-### Operator usage
+### Retired prototype commands
 
-With the unit connected, the connector auto-discovers its hidraw node:
+These historical commands are unavailable and must not be presented as operator instructions:
 
 ```text
 cargo run -p mackes-firebox --bin firebox-capture -- 100
@@ -124,14 +126,13 @@ cargo run -p mackes-firebox --bin firebox-sync
 cargo run -p mackes-firebox --bin firebox-request -- c5w:01:000000
 ```
 
-`firebox-raw` accepts a complete 128-character hexadecimal report for replay of a recovered
-editor frame. These tools preserve the full response and do not claim a semantic write succeeded
-unless a later capture demonstrates the corresponding device-state change.
+The former `firebox-raw` accepted a complete 128-character hexadecimal report. No current release
+contains this tool or authorizes report replay.
 
 The official editor trace also captured one reversible parameter transaction: the editor logged
 `setParameterValue(113, 21.360001)`, emitted `C7 08 71 00 00 00 48 E1 AA 41` (zero-padded to the
-64-byte HID report), and received a `C0 01 C7` acknowledgment. Linux replay is available as
-`firebox-request -- c7f:71:41aae148`; this confirms frame and acknowledgment transport only. The
+64-byte HID report), and received a `C0 01 C7` acknowledgment. Historical prototype replay used
+`firebox-request -- c7f:71:41aae148`; this confirmed frame and acknowledgment transport only. The
 parameter identity, complete range map, and persistence semantics remain unassigned, so the
 global vendor-write authorization stays disabled.
 
