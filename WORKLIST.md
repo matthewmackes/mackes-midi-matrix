@@ -8597,6 +8597,9 @@ Known risks and next checkpoint: Resolve prerequisite contracts and source gaps 
 - **System projection deployment evidence (2026-09-07):** rebuilt and installed `mackes-web`,
   restarted `mackes-web.service`, confirmed it active, and verified the LAN-served shell contains
   the `system-board` projection container. Runtime interaction and editable settings remain open.
+- **System projection runtime evidence (2026-09-07):** the live diagnostics route supplies seven
+  service fields, four web/API fields, and five named recovery entries; asset, coverage, and worklist
+  checks pass. The System cards consume these authoritative fields without adding unsupported writes.
 - **Routing endpoint-picker increment (2026-09-07):** the daemon route projection now publishes an
   authoritative direction-aware endpoint catalog with each stable numeric route ID, and the web route
   cards render named input/output selectors while preserving unknown/current IDs. `cargo fmt` and
