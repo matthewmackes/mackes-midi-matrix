@@ -8433,7 +8433,6 @@ vendor/developer documentation and matching source precede binary inspection or 
 - **Implementation:** Define versioned capability metadata, tagged typed values, stable identities, snapshots/events, generation-checked mutations, persistence and error states. Fix route round-trip loss and polling draft overwrite before extending editors.
 - **Acceptance:** Unknown/advanced route fields survive untouched; rejected edits preserve drafts; two-client stale saves conflict; sent, acknowledged and observed states stay distinct.
 - **Evidence:** Partial implementation is present: route cards merge edited fields into the original route object; polling does not overwrite a dirty route draft; explicit refresh/navigation requires discard confirmation; rejected apply preserves the draft. Remaining: publish and enforce the versioned capability/value/draft/mutation/event schemas, prove two-client stale-save conflicts, and distinguish all operation lifecycle states in browser acceptance.
-- **Evidence:** Partial implementation is present: route cards merge edited fields into the original route object; polling does not overwrite a dirty route draft; explicit refresh/navigation requires discard confirmation; rejected apply preserves the draft. Remaining: publish and enforce the versioned capability/value/draft/mutation/event schemas, prove two-client stale-save conflicts, and distinguish all operation lifecycle states in browser acceptance.
 
 ```text
 Item / subtask: W146; split numbered substeps at claim without reducing acceptance.
