@@ -8610,6 +8610,12 @@ Known risks and next checkpoint: Resolve prerequisite contracts and source gaps 
 - **Acceptance:** Browser evidence covers every supported operation family, failure and recovery; no unresolved addressable feature hidden by status labels; installed web serves verified assets; remaining product limitations documented.
 - **Evidence:** Software and delivery verification is complete for the current checkpoint: full `scripts/release-gate.sh` passed on 2026-09-07, including repository/worklist policy, 39 web capabilities, API schema/assets, workspace tests, strict Clippy, Novation emulator, throughput, hermetic integration (16 passed/1 ignored), installer smoke, the PiPedal native-range fixture, and release checksum. The release is installed and LAN-accessible on port 8081. Remaining: exhaustive inventory-to-browser reconciliation, human visual acceptance at required widths/themes, native physical reconnect/LED observation, and closure of W146–W151 product gaps.
 - **Runtime robustness finding/fix (2026-09-07):** live health returned ready, but the installed `/api/v1/pipedal` request could wait indefinitely when the daemon did not answer. `LocalClient` now applies a five-second IPC response deadline so stalled daemon requests return a bounded error; IPC (29 tests) and web (41 tests) pass. The installed service must be rebuilt/restarted before claiming live timeout behavior.
+- **Runtime deployment evidence (2026-09-07):** rebuilt and installed the release `mackes-web`
+  and `mackes-midi-matrixd`, restarted both services, and re-probed with the configured Host
+  header. `/api/v1/health` returned `ok=true, health=ready`; `/api/v1/pipedal` returned HTTP 200
+  with a bounded 1,528-byte JSON snapshot. The live snapshot exposed 18 supported operations and
+  mapping-resolution entries with plugin URI/symbol fields; the currently empty catalog reported
+  mappings as unavailable, preserving truthful readiness rather than fabricating controls.
 
 ```text
 Item / subtask: W152; split numbered substeps at claim without reducing acceptance.
