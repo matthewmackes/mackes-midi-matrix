@@ -8377,6 +8377,13 @@ the release verifier to require every exact ordered knob/button/fader number lis
 negative stale-layout regression. The feature inventory now reconciles all 56 input controls,
 48 feedback addresses, and ten implemented operation families; browser workflow and native LED
 appearance remain W148/W126.
+Reflex source-reconciliation increment (2026-09-07): reconciled every public codec family against
+the normative Rev. 1 contract and named profile evidence, covering algorithms/domains, normalized
+values, translations, five request kinds, both parameter encodings, three system tasks, active/
+register/all-register frames, setup/patch fields, packing/checksum, and typed decoding. The audit
+also found and fixed silent 7-bit masking: packed/nibblized parameter IDs above 127 and store/recall
+arguments above 127 now fail closed with regression coverage. Browser lifecycle and physical
+readback remain W149 rather than being inferred from codec tests.
 ```
 
 #### [>] W146 — Specify capability contracts and lossless visual drafts

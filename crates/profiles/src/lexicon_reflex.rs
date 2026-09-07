@@ -1372,8 +1372,11 @@ pub fn encode_nibblized_parameter(
     parameter: u8,
     value: u16,
 ) -> Result<Vec<u8>, &'static str> {
+    if parameter > 127 {
+        return Err("Reflex parameter is not MIDI data");
+    }
     let mut frame = header(5, channel)?.to_vec();
-    frame.push(parameter & 0x7F);
+    frame.push(parameter);
     frame.extend(nibblize(value));
     frame.push(0xF7);
     Ok(frame)
@@ -1409,11 +1412,14 @@ pub fn encode_packed_parameter(
     parameter: u8,
     value: u16,
 ) -> Result<Vec<u8>, &'static str> {
+    if parameter > 127 {
+        return Err("Reflex parameter is not MIDI data");
+    }
     let header = header(2, channel)?;
     let bytes = value.to_le_bytes();
     let packed = pack(&bytes);
     let mut frame = header.to_vec();
-    frame.push(parameter & 0x7F);
+    frame.push(parameter);
     frame.extend(packed);
     frame.push(0xF7);
     Ok(frame)
@@ -1448,10 +1454,13 @@ pub fn encode_task(channel: u8, task: u8, argument: u8) -> Result<[u8; 7], &'sta
     if !matches!(task, TASK_STORE | TASK_RECALL | TASK_BYPASS) {
         return Err("unsupported Reflex task");
     }
+    if argument > 127 {
+        return Err("Reflex task argument is not MIDI data");
+    }
     if task == TASK_BYPASS && argument > 1 {
         return Err("invalid bypass argument");
     }
-    Ok([header[0], header[1], header[2], header[3], task, argument & 0x7F, 0xF7])
+    Ok([header[0], header[1], header[2], header[3], task, argument, 0xF7])
 }
 
 /// Decodes and validates a type-6 system-task frame.

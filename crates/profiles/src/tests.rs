@@ -811,6 +811,10 @@ fn reflex_packing_checksum_and_nibbles_match_contract() {
         lexicon_reflex::decode_packed_parameter(&packed_parameter).expect("packed decode"),
         (2, 7, 0xABCD)
     );
+    assert_eq!(
+        lexicon_reflex::encode_packed_parameter(2, 128, 0xABCD),
+        Err("Reflex parameter is not MIDI data")
+    );
     let dump = lexicon_reflex::encode_setup_dump(&[0; lexicon_reflex::SETUP_BYTES]).expect("dump");
     assert_eq!(dump.len(), 65);
     assert_eq!(dump.last().copied(), Some(0));
@@ -854,6 +858,10 @@ fn reflex_packing_checksum_and_nibbles_match_contract() {
         (2, 7, 0xABCD)
     );
     assert_eq!(
+        lexicon_reflex::encode_nibblized_parameter(2, 128, 0xABCD),
+        Err("Reflex parameter is not MIDI data")
+    );
+    assert_eq!(
         lexicon_reflex::decode_message(&active).expect("typed active"),
         lexicon_reflex::DecodedMessage::ActiveSetup { channel: 2, setup: vec![0x80; 49] }
     );
@@ -878,6 +886,10 @@ fn reflex_packing_checksum_and_nibbles_match_contract() {
     let task = lexicon_reflex::encode_task(1, lexicon_reflex::TASK_RECALL, 7).expect("task");
     assert_eq!(lexicon_reflex::decode_task(&task), Ok((1, lexicon_reflex::TASK_RECALL, 7)));
     assert_eq!(lexicon_reflex::decode_task(&[0; 7]), Err("invalid Reflex task frame"));
+    assert_eq!(
+        lexicon_reflex::encode_task(1, lexicon_reflex::TASK_RECALL, 128),
+        Err("Reflex task argument is not MIDI data")
+    );
     assert_eq!(
         lexicon_reflex::encode_request(0, lexicon_reflex::REQUEST_ACTIVE, 0).expect("request"),
         [0xF0, 6, 2, 0x30, 0x60, 0, 0xF7]

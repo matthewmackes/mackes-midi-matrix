@@ -17,7 +17,7 @@ EV-CODE: crates/profiles/src/eventide_micropitch.rs, profile() and cc_control(),
 inspected 2026-09-07 in dirty worktree; SHA-256
 `27389ca0a288c53898ab37d4437e6c4b4113068aa8d7f5f9c08ff3f634db2b5a`.
 REFLEX-CODE: crates/profiles/src/lexicon_reflex.rs, SHA-256
-`6efe5a71d694c5ca5a2b85fdb21f399ec71d21d0ce84ddc1ccec6471c649de48`.
+`6e765c65a1fad621b9e636ba7c38efb11791ff838f35cc779b8fd32c4f0958d8`.
 NOVATION-CODE: crates/profiles/src/lib.rs, SHA-256
 `d61d72fec8d85580846b26be39c8ceb7f129fb061f9fe1fea61517e1bf3c0d58`.
 NOVATION-FACTORY1: docs/mackes-launch-control-xl-mk2-factory1-manifest.json, SHA-256
@@ -76,7 +76,7 @@ No production protocol change is authorized by a speculative physical-unit conve
 | Product | Next concrete evidence action | Missing artifact | Owner |
 |---|---|---|---|
 | Novation | Reconcile browser coverage with the pinned Factory-1 and LED inventory | Browser-to-daemon assignment/template/pickup/reconnect scenarios and physical LED observation | W148 |
-| Reflex | Reconcile every codec operation and algorithm table against vendor revision | Parameter domains, patch/task/dump inventory and fixture links | W145/W149 |
+| Reflex | Reconcile typed browser editors with the pinned codec/algorithm inventory | Browser-to-codec scenarios, busy/storage lifecycle and physical readback | W149 |
 | PiPedal | Reconcile each inventoried handler/HTTP route/event with client serializers and model side effects | Per-operation payload/readback examples and source-to-binary provenance | W145/W150 |
 | Firebox | Reconcile capture-backed semantics with connector operations | Parameter identity/range/persistence evidence; unsupported transfer framing | W145/W150 |
 | MIDISPORT | Find matching manufacturer manual and driver provenance | Port/firmware identity matrix | W145/W151 |
@@ -122,6 +122,32 @@ range, effective steps and current base/effective value. Unused parameters remai
 | Active/all-register setup | Read-only dump inspector and guarded import/export | 49 raw / 56 packed bytes per setup; all-register writes are hazardous |
 | Bypass and tasks | Explicit bypass toggle and task status | Prefer task `72`; direct input-level writes are hazardous |
 | Setup/algorithm selection | Advanced settings disclosure | Preserve unknown bytes; unsupported values fail closed |
+
+The normative per-algorithm names, used/unused parameter slots, polarity, ranges, effective steps,
+documented wire steps, Echo Rhythm enum, patch domains, busy intervals and safety classes are
+fully enumerated in WORKLIST §2.3. The following table reconciles every public codec family to
+that source contract and its focused profile evidence:
+
+| Codec family | Supported domain | Named evidence and UI boundary |
+|---|---|---|
+| Algorithm registry/selection | Algorithms 1–8; algorithm-specific legal parameters and initialized active setup | `reflex_algorithm_registry_matches_manual_order_and_numbers`, `reflex_parameter_metadata_excludes_unused_slots_and_bounds_values`; browser must discard stale parameter domains |
+| Controller normalization | Normalized 0–127 input snapped to documented range/step | `pcm70_translation_values_are_on_reflex_wire_steps`; never send unused slots |
+| PCM70 translations | Five named, bounded translations projected as complete active setups | `pcm70_catalog_translates_to_valid_named_reflex_setups_and_sysex`; label as translations, not native Reflex presets |
+| Request type 3 | Active, register 0–127, packed/nibblized parameter 0–127, all-register bank | `reflex_packing_checksum_and_nibbles_match_contract`; query is read-only and silence is not a typed device error |
+| Packed parameter type 2 | Channel 0–15, parameter 0–127, 16-bit packed value | Same codec regression; encoder now rejects parameter 128 instead of masking it |
+| Nibblized parameter type 5 | Channel 0–15, parameter 0–127, four MIDI-safe nibbles | Same codec regression; preferred write form and oversized parameter rejection |
+| System task type 6 | Store/recall register 0–127; bypass 0/1 | Same codec regression; all oversized arguments reject instead of wrapping; store is persistent/hazardous |
+| Active setup type 0 | Exactly 49 raw / 56 packed setup bytes plus checksum | Packing/setup round-trip and hardware-active-setup fixture; sent state is not observed state |
+| Stored register type 1 | Register 0–127 plus one complete setup | Register-frame round-trip; stored-register writes require busy/storage lifecycle |
+| All registers type 4 | Exactly 128 × 49 raw / 7,168 packed bytes | Register-bank and all-frame round-trip; destructive write requires backup/arm/15-second busy guard |
+| Setup fields | Algorithm, ten little-endian values, 16-byte name, four patch sources/destinations/scales | `ReflexSetup`/`ReflexPatch` round-trip in codec regression; preserve unknown name bytes |
+| MIDI patches | Four source/destination/signed-scale rows | Patch round-trip and domain rejection; show base and effective values separately |
+| Packing/checksum | Seven raw bytes per MSB group; `sum(packed) & 0x7f` | Packing corpus, corrupt checksum, length and non-MIDI rejection |
+| Typed decoder | Active/register/all-register setup, packed/nibblized parameter and task variants | `decode_message` assertions in codec regression; malformed/unknown frames remain errors |
+
+This closes W145's Reflex source/operation reconciliation. It does not close W149: typed browser
+editors, algorithm-change invalidation, operation results, persistent-store confirmation, busy
+projection and physical readback remain required there.
 
 ## Novation feature reconciliation
 
