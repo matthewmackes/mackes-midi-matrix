@@ -39,7 +39,7 @@ recorded as UNKNOWN rather than inferred resolved.
 | LED geometry | Indices 0–47 map to four 8-control rows plus utility controls | Fader proxy behavior is platform policy | Guide pp. 3–4 |
 | Template selection | Template byte is bounded to 0–15 by the encoder contract | Current selected template is not independently read back | Guide pp. 5–6 |
 | Reset | Template-scoped reset is encoded as bounded MIDI reset data | Firmware buffer/reset semantics are not read back | Guide pp. 6–7 |
-| Input layout | Factory-1 profile maps knobs, faders, buttons, and utility controls to stable IDs | A different controller template must fail closed | Host captures; profile contract |
+| Input layout | Factory-1 profile maps knobs, faders, buttons, and utility controls to stable IDs; channel buttons use captured banks 41–44, 57–60, 73–76, and 89–92 | A different controller template must fail closed | Host captures; profile contract |
 | HUI separation | HUI is observed as a distinct endpoint role | HUI is not evidence of a second physical unit | Host qualification |
 
 ## Incident observations
@@ -53,3 +53,11 @@ recorded as UNKNOWN rather than inferred resolved.
 
 The emulator gate is recorded separately in `docs/novation-controller-qualification.md`. Physical
 faceplate, reconnect-latency, paired-processor, and soak checks remain OPEN under W126.
+
+## Artifact reconciliation (2026-09-07)
+
+The versioned Factory-1 JSON and ADR previously retained the pre-capture contiguous channel-button
+claim (41–48 and 57–64), contradicting the production profile and the physical captures cited by
+ADR-0010. They now use the captured four-bank layout. The artifact verifier checks exact ordered
+knob, button, and fader MIDI-number lists, and its negative suite rejects the stale button layout.
+This proves source consistency and fail-closed release validation, not hardware LED appearance.

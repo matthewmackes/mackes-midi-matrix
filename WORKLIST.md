@@ -8370,6 +8370,13 @@ feature contracts covering endpoints, message/filter domains, route behavior, pe
 packet sequencing/jitter/SysEx, and the explicit unimplemented recovery-journal capability.
 Browser/runtime/interoperability qualification remains W151/W152 rather than being inferred from
 the source inventory.
+Novation source-reconciliation increment (2026-09-07): found that the release Factory-1 manifest
+and ADR still claimed channel-button notes `41–48/57–64`, contradicting the sole runtime profile
+and recorded physical captures (`41–44/57–60/73–76/89–92`). Corrected both artifacts, strengthened
+the release verifier to require every exact ordered knob/button/fader number list, and added a
+negative stale-layout regression. The feature inventory now reconciles all 56 input controls,
+48 feedback addresses, and ten implemented operation families; browser workflow and native LED
+appearance remain W148/W126.
 ```
 
 #### [>] W146 — Specify capability contracts and lossless visual drafts

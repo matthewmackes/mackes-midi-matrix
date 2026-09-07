@@ -52,7 +52,7 @@ def check_factory1_manifest(path: pathlib.Path = FACTORY1_MANIFEST) -> None:
         manifest.get("target_model") != "Novation Launch Control XL"
         or manifest.get("target_generation") != "Mk2"
         or manifest.get("template_name") != "Factory Template 1"
-        or manifest.get("template_version") != "1.0.0"
+        or manifest.get("template_version") != "1.0.1"
         or manifest.get("template_slot") != 1
         or manifest.get("midi_channel") != 8
     ):
@@ -63,6 +63,13 @@ def check_factory1_manifest(path: pathlib.Path = FACTORY1_MANIFEST) -> None:
     tuples: set[tuple[str, int]] = set()
     physical_ids: set[str] = set()
     expected_counts = {"knobs": 24, "channel_buttons": 16, "faders": 8}
+    expected_numbers = {
+        "knobs": list(range(13, 21)) + list(range(29, 37)) + list(range(49, 57)),
+        "channel_buttons": [
+            41, 42, 43, 44, 57, 58, 59, 60, 73, 74, 75, 76, 89, 90, 91, 92
+        ],
+        "faders": list(range(77, 85)),
+    }
     for name, expected in expected_counts.items():
         item = inventory.get(name)
         if not isinstance(item, dict) or item.get("count") != expected:
@@ -70,6 +77,8 @@ def check_factory1_manifest(path: pathlib.Path = FACTORY1_MANIFEST) -> None:
         numbers = item.get("numbers")
         if not isinstance(numbers, list) or len(numbers) != expected:
             raise SystemExit(f"Factory 1 manifest has an invalid {name} MIDI inventory")
+        if numbers != expected_numbers[name]:
+            raise SystemExit(f"Factory 1 manifest has incorrect {name} MIDI numbers")
         expected_kind = "note" if name == "channel_buttons" else "cc"
         if item.get("midi_kind") != expected_kind:
             raise SystemExit(f"Factory 1 manifest has an invalid {name} message kind")

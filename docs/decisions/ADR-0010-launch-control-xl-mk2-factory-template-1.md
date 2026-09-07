@@ -13,10 +13,11 @@ define, or claim a Novation Components User template. The target is USB model
 
 The profile-owned `launch_control_mk2_factory1_layout` table is the sole runtime source
 of truth. All controls use zero-based MIDI channel 8 (wire channel 9). Knobs use CC
-13–20, 29–36, and 49–56; faders use CC 77–84; channel buttons use notes 41–48 and
-57–64. Device, Mute, Solo, and Record Arm use notes 105–108. Up, Down, Left, and Right
-use CC 104–107. Continuous controls accept values 0–127. Buttons use nonzero press and
-zero release semantics. The stable physical IDs remain those defined by ADR-0005.
+13–20, 29–36, and 49–56; faders use CC 77–84; channel buttons use notes 41–44,
+57–60, 73–76, and 89–92. Device, Mute, Solo, and Record Arm use notes 105–108. Up,
+Down, Left, and Right use CC 104–107. Continuous controls accept values 0–127. Buttons
+use nonzero press and zero release semantics. The stable physical IDs remain those
+defined by ADR-0005.
 
 Knob and channel-button feedback addresses remain the documented indices 0–39.
 Utility feedback uses indices 40–47. Faders have no individual LED address; their proxy

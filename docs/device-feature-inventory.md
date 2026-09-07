@@ -20,6 +20,8 @@ REFLEX-CODE: crates/profiles/src/lexicon_reflex.rs, SHA-256
 `6efe5a71d694c5ca5a2b85fdb21f399ec71d21d0ce84ddc1ccec6471c649de48`.
 NOVATION-CODE: crates/profiles/src/lib.rs, SHA-256
 `d61d72fec8d85580846b26be39c8ceb7f129fb061f9fe1fea61517e1bf3c0d58`.
+NOVATION-FACTORY1: docs/mackes-launch-control-xl-mk2-factory1-manifest.json, SHA-256
+`31bb2516c070290e8a8fd1a14ac750d49351f097e47e040127509964a3333829` (contract 1.0.1).
 PP-CODE: crates/pipedal-connector/src/lib.rs Operation enum and catalog.
 SHA-256 `097c255dca356a6a882f7507013c35e595694cb0f0dbe7fa73f6d9a2198fc2bf`.
 FIREBOX-CODE: docs/firebox-findings.md, SHA-256
@@ -73,7 +75,7 @@ No production protocol change is authorized by a speculative physical-unit conve
 
 | Product | Next concrete evidence action | Missing artifact | Owner |
 |---|---|---|---|
-| Novation | Compare programmer guide, Factory-1 manifest and input/LED encoders | One row per control/operation with exact model and page | W145/W148 |
+| Novation | Reconcile browser coverage with the pinned Factory-1 and LED inventory | Browser-to-daemon assignment/template/pickup/reconnect scenarios and physical LED observation | W148 |
 | Reflex | Reconcile every codec operation and algorithm table against vendor revision | Parameter domains, patch/task/dump inventory and fixture links | W145/W149 |
 | PiPedal | Reconcile each inventoried handler/HTTP route/event with client serializers and model side effects | Per-operation payload/readback examples and source-to-binary provenance | W145/W150 |
 | Firebox | Reconcile capture-backed semantics with connector operations | Parameter identity/range/persistence evidence; unsupported transfer framing | W145/W150 |
@@ -134,6 +136,43 @@ Acceptance requires every catalog control to be selectable by keyboard and point
 targets to come from the qualified catalog, and emulator input/reconnect/LED scenarios to update
 the surface without opening a competing writer. Native LED or reconnect observations remain
 operator evidence and cannot be inferred from emulator or daemon counters.
+
+The profile table is the sole runtime Factory-1 input authority. Its exact ordered groups are:
+
+| Physical controls | Input tuple on zero-based channel 8 | Behavior | Feedback address |
+|---|---|---|---|
+| `knob-r1-c1` … `knob-r1-c8` | CC 13–20 | continuous 0–127 | LED 0–7 |
+| `knob-r2-c1` … `knob-r2-c8` | CC 29–36 | continuous 0–127 | LED 8–15 |
+| `knob-r3-c1` … `knob-r3-c8` | CC 49–56 | continuous 0–127 | LED 16–23 |
+| `button-r1-c1` … `button-r1-c4` | Note 41–44 | nonzero press / zero release | LED 24–27 |
+| `button-r1-c5` … `button-r1-c8` | Note 57–60 | nonzero press / zero release | LED 28–31 |
+| `button-r2-c1` … `button-r2-c4` | Note 73–76 | nonzero press / zero release | LED 32–35 |
+| `button-r2-c5` … `button-r2-c8` | Note 89–92 | nonzero press / zero release | LED 36–39 |
+| `fader-1` … `fader-8` | CC 77–84 | continuous 0–127 | none; proxy policy only |
+| `utility-1` … `utility-4` | Note 105–108 | nonzero press / zero release | LED 40–43 |
+| `utility-5` … `utility-8` | CC 104–107 | nonzero press / zero release | LED 44–47 |
+
+The audit found and corrected a stale manifest/ADR claim that used contiguous button notes
+41–48 and 57–64. Physical captures and the production profile instead establish the four banks
+above. `scripts/verify-artifacts.py` now checks every ordered MIDI-number list, so an artifact
+with the old numbers cannot pass merely because its count and tuples are unique.
+
+| Operation | Exact software contract | Evidence / remaining boundary |
+|---|---|---|
+| Identify model | USB `1235:0061` is Mk2; Launchpad/HUI roles do not own this surface | Classifier and endpoint-role tests; replacement/ambiguity stays fail-closed |
+| Select Factory 1 | Hardware slot 1 corresponds to wire template byte 8 | Profile constant and manifest; selected template has no readback |
+| Decode input | Exact unique tuple resolves to stable physical ID; zero-value release is not an activation | Complete-layout and every-control resolver tests |
+| Background LED | Bounded template 0–15, index 0–47, 7-bit value | NOV-QRG pp. 3–4 and golden encoder tests; host send is not visible confirmation |
+| Batch LED | One template and 1–48 unique bounded index/value pairs | Batch golden/rejection tests; bounded worker delivery required |
+| Traditional Note/CC LED | Template-local Note On/Off or CC update | NOV-QRG; kept distinct from background SysEx |
+| Toggle state | Template 0–15, button index 0–23, explicit on/off | NOV-QRG and golden tests |
+| Reset | Template-scoped controller reset message | NOV-QRG; no device state readback |
+| Desired-state replay | Coalesced desired frame survives disconnect and invalidates sent cache | LED surface/reconnect tests; native appearance remains W126 |
+| Assignment/pickup overlay | Error > result > pressed > pickup > base priority | Overlay policy tests; browser lifecycle remains W148 |
+
+This closes the W145 source reconciliation for all 56 physical inputs, 48 feedback addresses,
+and the implemented operation families. W148 retains browser workflow/emulator acceptance and
+W126 retains native faceplate/reconnect observation.
 
 ## Source and implementation pin requirements
 

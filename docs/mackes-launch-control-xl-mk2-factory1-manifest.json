@@ -1,6 +1,6 @@
 {
   "template_name": "Factory Template 1",
-  "template_version": "1.0.0",
+  "template_version": "1.0.1",
   "target_model": "Novation Launch Control XL",
   "target_generation": "Mk2",
   "template_slot": 1,
@@ -8,7 +8,7 @@
   "midi_channel": 8,
   "assignable_inventory": {
     "knobs": {"count": 24, "physical_id_pattern": "knob-r{row}-c{column}", "midi_kind": "cc", "numbers": [13,14,15,16,17,18,19,20,29,30,31,32,33,34,35,36,49,50,51,52,53,54,55,56]},
-    "channel_buttons": {"count": 16, "physical_id_pattern": "button-r{row}-c{column}", "midi_kind": "note", "numbers": [41,42,43,44,45,46,47,48,57,58,59,60,61,62,63,64]},
+    "channel_buttons": {"count": 16, "physical_id_pattern": "button-r{row}-c{column}", "midi_kind": "note", "numbers": [41,42,43,44,57,58,59,60,73,74,75,76,89,90,91,92]},
     "faders": {"count": 8, "physical_id_pattern": "fader-{column}", "midi_kind": "cc", "numbers": [77,78,79,80,81,82,83,84]}
   },
   "reserved_controls": ["utility-1", "utility-2", "utility-3", "utility-4", "utility-5", "utility-6", "utility-7", "utility-8"],

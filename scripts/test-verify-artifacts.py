@@ -27,6 +27,16 @@ def main() -> int:
             "wrong-model": {**valid, "target_model": "Other Controller"},
             "wrong-slot": {**valid, "template_slot": 2},
             "modified": {**valid, "assignable_inventory": {**valid["assignable_inventory"], "faders": {**valid["assignable_inventory"]["faders"], "numbers": [77]}}},
+            "wrong_button_numbers": {
+                **valid,
+                "assignable_inventory": {
+                    **valid["assignable_inventory"],
+                    "channel_buttons": {
+                        **valid["assignable_inventory"]["channel_buttons"],
+                        "numbers": list(range(41, 49)) + list(range(57, 65)),
+                    },
+                },
+            },
         }
         for name, value in cases.items():
             path = directory / f"{name}.json"
