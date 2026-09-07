@@ -9,6 +9,13 @@ surfaces are inventoried below; their payload and browser qualification remain W
 Source: sibling pipedal checkout commit 859183d0d9614372318680433326e6c94c0251e5.
 PiPedalSocket.cpp has no local changes and SHA-256
 09691576451b502849db9028c4e22fbba2a9f9b2105b40f01ad049c8d7ccdc61.
+Source-first developer evidence: `docs/Architecture.md` at the same checkout commit, SHA-256
+`54e3c6f68b9c8d397d88d7dee6af978e927f86b9ce7bf006b6e0b70b8011278a`, documents the
+asynchronous JSON-over-WebSocket request/event model and privileged service split. Matching
+client sources `vite/src/pipedal/PiPedalModel.tsx` and `vite/src/pipedal/PiPedalSocket.tsx`
+have SHA-256 `af961447f794aad616c61e75385b81e80027e4061c8eb221bf89ec638030a1a4` and
+`29c93095aa8623b1650bcf745fe711cc8061c9c2427ea1542b4b06347b62286b`. These are
+source-derived facts; they do not prove hardware/plugin readback or browser acceptance.
 Connector source SHA-256:
 097c255dca356a6a882f7507013c35e595694cb0f0dbe7fa73f6d9a2198fc2bf.
 The locally installed `/usr/bin/pipedald` (the same inode as systemd's `/usr/sbin/pipedald`)
@@ -21,6 +28,10 @@ executable, including GNU build ID `357ed0938b81b0530351ccc38cfa66cd770ba2ab`; t
 checkout is clean, CMake records that checkout as `CMAKE_HOME_DIRECTORY`, and a dry-run build
 reports `ninja: no work to do`. This establishes local build-tree-to-installed-binary provenance
 at commit `859183d`. It is not a clean-room reproducible-build claim.
+
+Evidence order for this audit is manufacturer/vendor documentation where available, then
+developer documentation and matching source, then read-only fixtures. Binary inspection is used
+only for version/build provenance; undocumented message semantics are not inferred from it.
 
 ## HTTP and server-event inventory
 
@@ -193,6 +204,17 @@ user-facing workflow without needing an independent button; require a documented
   saveCurrentPresetsAs. Preserve protocol spelling in version-specific fixtures.
 - Selecting a plugin changes UI context; enabling it changes audio behavior. Distinguish those
   operation semantics in the visual editor and undo/persistence policy.
+- The matching client exposes at least 87 distinct request/send names and is the primary
+  serializer/reply-consumer reference for this release. Server-only registrations require
+  classification as internal, obsolete, or another-client operations; absence from this client
+  is not evidence of product unsupport.
+- Replies are correlated by numeric `reply` ID; textual reply names are not validated. Current
+  source contains `saveCurrentPresetsAs`, `setJackserverSettings`,
+  `GetFilePropertydirectoryTree`, and a `getKnownWifiNetworks` reply named `getWifiChannels`.
+  Preserve these in versioned fixtures, but do not treat mismatches as general aliases.
+- The matching client invokes a reply handler twice and retains its reservation until reconnect.
+  MACKES must dispatch a correlation exactly once and release it on reply, timeout, cancellation,
+  or disconnect.
 
 ## Requirements to close the newly discovered gap
 

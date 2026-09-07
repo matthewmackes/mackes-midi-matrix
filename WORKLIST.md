@@ -98,6 +98,12 @@ tracked in §6.1 and must not be represented as an unresolved blocker for this r
 - **Hardware truth:** never guess SysEx bytes, CC assignments, LED messages, checksum
   formulas, or reply semantics. Cite the vendor document revision in code comments and
   validate against captured fixtures or physical hardware.
+- **Source provenance:** whenever research establishes a product, protocol, runtime, or
+  implementation fact, record it in the owning audit/inventory document before relying on it.
+  Include authority and URL/path, revision or commit, retrieval date, SHA-256 (or another
+  immutable identifier), exact page/section/symbol, evidence class, and remaining boundary.
+  Prefer manufacturer/vendor documentation, developer documentation, and matching source before
+  binary inspection or reverse engineering; later work must link the existing record.
 - **Safety:** tests that can overwrite hardware presets, send bulk dumps, or emit dense
   MIDI traffic are `#[ignore]`, require an explicit device/port argument, display the
   exact operation, and require `--arm-hardware-write`.
@@ -8408,6 +8414,13 @@ SHA-256 `08b54c4f5f4f87c9c1ac732e7b5db8f0367bee4a03d6f1f9227e7b58f5b758ba` and G
 home directory names that checkout, and a dry-run `pipedald` build reports no work. This closes
 local source/build/install provenance without claiming clean-room reproducibility. Per-operation
 source/fixture reconciliation remains before W145 closure; browser delivery remains W150.
+PiPedal source-first increment (2026-09-07): pinned the matching developer architecture and
+TypeScript model/socket sources with hashes and evidence boundaries. The client exposes at least
+87 request/send names, confirms numeric reply-ID correlation, and records four textual reply-name
+mismatches that remain fixture-specific. It also contains duplicate reply-handler dispatch and
+reservations retained until reconnect; MACKES must dispatch once and release pending correlations
+on every terminal path. This follows the source-provenance rule: vendor/developer documentation
+and matching source precede binary inspection or reverse engineering.
 ```
 
 #### [>] W146 — Specify capability contracts and lossless visual drafts
