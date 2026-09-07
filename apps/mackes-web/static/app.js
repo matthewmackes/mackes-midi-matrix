@@ -157,7 +157,12 @@ function renderSceneBoard(body) {
   const setlists = Array.isArray(catalog.setlists) ? catalog.setlists : [];
   const projects = Array.isArray(catalog.projects) ? catalog.projects : [];
   const activeScene = body?.active_scene || body?.activeScene || '';
-  sceneBoard.replaceChildren(); sceneBoard.hidden = !(scenes.length || setlists.length || projects.length);
+  sceneBoard.replaceChildren(); sceneBoard.hidden = false;
+  if (!(scenes.length || setlists.length || projects.length)) {
+    const empty = document.createElement('p'); empty.className = 'empty-state';
+    empty.textContent = 'No authoritative scenes, setlists, or projects are configured.';
+    sceneBoard.append(empty);
+  }
   scenes.forEach((scene, index) => {
     const card = document.createElement('article'); card.className = 'scene-card';
     const id = typeof scene === 'string' ? scene : (scene.id || `scene-${index + 1}`);
