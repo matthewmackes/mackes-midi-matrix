@@ -8621,6 +8621,9 @@ Known risks and next checkpoint: Resolve prerequisite contracts and source gaps 
   Novation projection identifies Mk2 with 56 physical controls and 48 LEDs, while its live LED
   phase is `absent` and `led_readback=false`. The UI preserves this distinction rather than claiming
   visible hardware confirmation; native reconnect/LED qualification remains open.
+- **Device recheck (2026-09-07):** a subsequent live probe reports Novation lifecycle `Ready`,
+  but LED phase remains `absent` with `led_readback=false`; services are active and worklist checks
+  pass. Readiness is therefore not promoted to visible LED confirmation.
 - **Live workspace smoke matrix (2026-09-07):** after the release deployment, unauthenticated LAN
   GET probes for health, state, mappings, assignment, routes, scenes, devices, endpoints,
   capabilities, diagnostics, PiPedal, monitor, backups, and configuration each returned HTTP 200.
