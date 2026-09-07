@@ -458,7 +458,22 @@ fn command_ack(
                 })
                 .collect::<Vec<_>>();
             let encoded = serde_json::to_string(&payload).unwrap_or_else(|_| "[]".to_owned());
-            format!("{{\"ok\":true,\"generation\":{generation},\"routes\":{encoded},\"route_generation\":{}}}\n", route_generation.unwrap_or(0))
+            let endpoint_catalog = endpoints
+                .iter()
+                .filter_map(|endpoint| {
+                    mackes_midi_engine::numeric_endpoint_id(&endpoint.id).map(|numeric| {
+                        serde_json::json!({
+                            "id": numeric.get(),
+                            "stable_id": endpoint.id,
+                            "name": endpoint.name,
+                            "direction": format!("{:?}", endpoint.direction).to_lowercase(),
+                        })
+                    })
+                })
+                .collect::<Vec<_>>();
+            let endpoint_encoded =
+                serde_json::to_string(&endpoint_catalog).unwrap_or_else(|_| "[]".to_owned());
+            format!("{{\"ok\":true,\"generation\":{generation},\"routes\":{encoded},\"endpoint_catalog\":{endpoint_encoded},\"route_generation\":{}}}\n", route_generation.unwrap_or(0))
         }
         Command::Learn => {
             format!("{{\"ok\":true,\"generation\":{generation},\"learn\":true}}\n")

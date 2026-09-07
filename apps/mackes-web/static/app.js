@@ -171,7 +171,15 @@ function renderRoutingBoard(routes) {
     header.append(title, remove); card.append(header);
     [['source', 'Source'], ['destination', 'Destination']].forEach(([key, label]) => {
       const field = document.createElement('label'); field.textContent = label;
-      const input = document.createElement('input'); input.type = 'number'; input.min = '0'; input.max = '65535'; input.value = Number.isFinite(route[key]) ? route[key] : ''; input.dataset.routeKey = key; field.append(input); card.append(field);
+      const input = document.createElement('select'); input.dataset.routeKey = key;
+      const direction = key === 'source' ? 'input' : 'output';
+      const choices = routeEndpointCatalog.filter(endpoint => !endpoint.direction || endpoint.direction === direction);
+      if (choices.length) choices.forEach(endpoint => input.add(new Option(`${endpoint.name} (${endpoint.direction})`, endpoint.id)));
+      else input.add(new Option('Refresh endpoints to choose a named port', ''));
+      const current = Number.isFinite(route[key]) ? String(route[key]) : '';
+      if (current && !choices.some(endpoint => String(endpoint.id) === current)) input.add(new Option(`Current endpoint ${current}`, current));
+      input.value = Number.isFinite(route[key]) ? String(route[key]) : '';
+      field.append(input); card.append(field);
     });
     const priority = document.createElement('label'); priority.textContent = 'Priority';
     const priorityInput = document.createElement('input'); priorityInput.type = 'number'; priorityInput.min = '-32768'; priorityInput.max = '32767'; priorityInput.value = Number.isInteger(route.priority) ? route.priority : 0; priorityInput.dataset.routeKey = 'priority'; priority.append(priorityInput); card.append(priority);
@@ -240,6 +248,7 @@ async function load(view) {
     }
     if (Number.isInteger(body.generation)) currentGeneration = body.generation;
     if (view === 'routes') {
+      routeEndpointCatalog = Array.isArray(body.endpoint_catalog) ? body.endpoint_catalog : [];
       const routes = routeListFromBody(body);
       if (!routeDraftDirty) { renderRoutingBoard(routes); routesJson.value = JSON.stringify(routes, null, 2); }
     }
@@ -338,6 +347,7 @@ let selectedPhysicalControlId = '';
 let mappingRegistry = [];
 let selectedMappingId = '';
 let sceneCatalog = null;
+let routeEndpointCatalog = [];
 const routingControls = document.querySelector('#routing-controls');
 const sceneControls = document.querySelector('#scene-controls');
 const pipedalOperationChoice = document.querySelector('#pipedal-operation-choice');
