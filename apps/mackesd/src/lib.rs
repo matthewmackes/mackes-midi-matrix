@@ -3780,7 +3780,7 @@ impl Daemon {
                     )
                 }
                 Some(command) => {
-                    let endpoints = if command == Command::Endpoints {
+                    let endpoints = if matches!(command, Command::Endpoints | Command::Routes) {
                         self.discover_endpoints().unwrap_or_default()
                     } else {
                         Vec::new()

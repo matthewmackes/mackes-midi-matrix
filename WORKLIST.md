@@ -8591,6 +8591,10 @@ Known risks and next checkpoint: Resolve prerequisite contracts and source gaps 
   cards render named input/output selectors while preserving unknown/current IDs. `cargo fmt` and
   web asset/coverage/worklist checks pass. Browser interaction and full daemon qualification remain
   open; the native-cutover test remains environment-dependent on the host ALSA backend.
+- **Routing endpoint-picker deployment evidence (2026-09-07):** rebuilt and installed both release
+  services, restarted them, and queried the LAN web route endpoint. The live response returned three
+  routes plus 31 direction-labelled endpoint catalog entries, including stable IDs and numeric route
+  IDs. This verifies daemon-to-web projection; browser interaction and lossless apply/reload remain.
 
 ```text
 Item / subtask: W151; split numbered substeps at claim without reducing acceptance.
