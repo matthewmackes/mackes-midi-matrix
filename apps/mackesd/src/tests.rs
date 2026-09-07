@@ -1587,7 +1587,7 @@ fn command_acknowledgments_are_stable_and_operation_specific() {
     );
     assert_eq!(
         command_ack(Command::Routes, Health::Ready, 6, &[], Some(0), &[]),
-        "{\"ok\":true,\"generation\":6,\"routes\":[],\"route_generation\":0}\n"
+        "{\"ok\":true,\"generation\":6,\"routes\":[],\"endpoint_catalog\":[],\"route_generation\":0}\n"
     );
     assert_eq!(
         command_ack(Command::Learn, Health::Ready, 7, &[], None, &[]),

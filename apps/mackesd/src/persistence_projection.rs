@@ -8,6 +8,24 @@ use std::{
 
 const MAX_PAIR_JOURNAL_BYTES: u64 = 256 * 1024;
 
+pub(crate) fn endpoint_catalog(
+    endpoints: &[mackes_midi_engine::EndpointInfo],
+) -> serde_json::Value {
+    serde_json::Value::Array(
+        endpoints
+            .iter()
+            .filter_map(|endpoint| {
+                mackes_midi_engine::numeric_endpoint_id(&endpoint.id).map(|numeric| {
+                    serde_json::json!({
+                        "id": numeric.get(), "stable_id": endpoint.id, "name": endpoint.name,
+                        "direction": format!("{:?}", endpoint.direction).to_lowercase(),
+                    })
+                })
+            })
+            .collect(),
+    )
+}
+
 /// Persists one JSON document with cleanup on every failed commit boundary.
 pub fn persist_json_atomic(path: &Path, value: &serde_json::Value, suffix: &str) -> io::Result<()> {
     let stamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_nanos();
