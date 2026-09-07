@@ -7771,6 +7771,9 @@ not a native USB or visual hardware claim.
   and worklist checks pass.
 - **Configuration-write admission regression (2026-09-07):** added a web test proving unconfirmed
   and empty configuration writes are rejected before daemon IPC; focused test and strict Clippy pass.
+- **Configuration-write deployment evidence (2026-09-07):** rebuilt and installed `mackes-web`,
+  restarted the service, and sent an unconfirmed setlist write to the LAN endpoint; it returned
+  HTTP 400 before any daemon mutation. The accepted path remains daemon-authoritative and bounded.
 - **Validation-surface evidence (2026-09-06):** Added daemon-backed read-only `GET
   /api/v1/validation`, with capability discovery, API documentation, and WEB-023 coverage aligned
   to the existing `Command::Validate` contract. Browser editing and import/restore workflows remain
