@@ -8613,6 +8613,10 @@ Known risks and next checkpoint: Resolve prerequisite contracts and source gaps 
 - **Capability reconciliation (2026-09-07):** the live `/api/v1/capabilities` projection reports ten
   operation families with no partial labels and explicitly names remaining mutation coverage as
   `W138-W139`. This keeps the System/feature boards truthful; those mutation families remain open.
+- **Assignment live reconciliation (2026-09-07):** the installed assignment endpoint reports the
+  authoritative `Idle` phase at generation 0 with one device, preset, effect, and type choice plus
+  15 parameter choices. No browser-side selection is inferred; full capture/commit/reconnect
+  qualification remains open under W135/W148.
 - **Live workspace smoke matrix (2026-09-07):** after the release deployment, unauthenticated LAN
   GET probes for health, state, mappings, assignment, routes, scenes, devices, endpoints,
   capabilities, diagnostics, PiPedal, monitor, backups, and configuration each returned HTTP 200.
