@@ -8431,8 +8431,8 @@ exposure; a missing direct reply is not treated as an ACK failure or silently ig
 PiPedal value-domain correction (2026-09-07): changed the web `pipedal-value` field to an
 explicit native control-domain value, removed the false `0..1` constraint, and aligned the IPC
 documentation. The adapter remains the authoritative native-range validator. A range-aware
-mapping editor/fixture remains open because mapping resolution does not yet return plugin URI and
-range metadata per persisted mapping.
+mapping editor now joins resolution plugin URI/symbol to catalog min/max metadata; a browser
+fixture exercising a non-normalized range remains open.
 ```
 
 #### [>] W146 — Specify capability contracts and lossless visual drafts
@@ -8552,6 +8552,11 @@ Known risks and next checkpoint: Resolve prerequisite contracts and source gaps 
   recorded in commits `5f38922` and `43f3166`; restore and startup correlation fixes are recorded
   in `a7cd169` and `e9cb72e`. These are software-contract evidence only; exhaustive handler
   payload/event fixtures and browser acceptance remain open.
+- **PiPedal range metadata increment (2026-09-07):** mapping-resolution entries now carry the
+  persisted plugin URI and symbol; the web editor joins those fields to catalog native
+  `min_value`/`max_value` metadata and validates control-domain input. Adapter tests (18), web
+  asset budget, web coverage, worklist, and diff checks pass. A non-normalized browser fixture
+  remains required.
 
 ```text
 Item / subtask: W150; split numbered substeps at claim without reducing acceptance.

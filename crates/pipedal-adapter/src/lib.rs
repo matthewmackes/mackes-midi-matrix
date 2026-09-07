@@ -171,6 +171,10 @@ pub enum ResolutionState {
 pub struct ResolutionOutcome {
     /// Stable physical control identity.
     pub physical_control_id: String,
+    /// Stable plugin URI used to join this result with catalog metadata.
+    pub plugin_uri: String,
+    /// Stable plugin parameter symbol used to join this result with catalog metadata.
+    pub symbol: String,
     /// Resolution state.
     pub state: ResolutionState,
     /// Short operator-facing detail.
@@ -631,6 +635,8 @@ impl Worker {
                 };
                 ResolutionOutcome {
                     physical_control_id: mapping.physical_control_id.clone(),
+                    plugin_uri: mapping.plugin_uri.clone(),
+                    symbol: mapping.symbol.clone(),
                     state,
                     detail,
                 }
@@ -1298,6 +1304,8 @@ mod tests {
     fn resolution_outcome_is_strictly_serializable() {
         let outcome = ResolutionOutcome {
             physical_control_id: "knob-r3-c4".into(),
+            plugin_uri: "urn:eq".into(),
+            symbol: "gain".into(),
             state: ResolutionState::Unavailable,
             detail: "target is unavailable".into(),
         };

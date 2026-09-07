@@ -226,10 +226,10 @@ user-facing workflow without needing an independent button; require a documented
   MACKES must dispatch a correlation exactly once and release it on reply, timeout, cancellation,
   or disconnect.
 - The web control now labels `pipedal-value` as a native control-domain value, removes the false
-  `0..1` constraint, and the IPC field documents the same native-domain contract. The adapter
-  remains the authoritative range validator against discovered `min_value`/`max_value`. A
-  range-aware mapping editor and fixture remain open because the current resolution payload does
-  not yet return plugin URI/range metadata for each persisted mapping.
+  `0..1` constraint, and the IPC field documents the same native-domain contract. Resolution
+  entries now carry plugin URI and symbol, allowing the editor to join each persisted mapping to
+  catalog `min_value`/`max_value`; the adapter remains the authoritative validator. A browser
+  fixture exercising a non-normalized range remains open.
 
 ## Requirements to close the newly discovered gap
 

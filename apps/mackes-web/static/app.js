@@ -346,6 +346,20 @@ const pipedalInstanceId = document.querySelector('#pipedal-instance-id');
 const pipedalValue = document.querySelector('#pipedal-value');
 const pipedalConfirm = document.querySelector('#pipedal-confirm');
 let pipedalMappings = [];
+let pipedalCatalogControls = [];
+function updatePipedalValueDomain() {
+  const selected = pipedalMappings.find(entry => entry.physical_control_id === pipedalMappingChoice.value);
+  const control = selected && pipedalCatalogControls.find(item => item && item.plugin_uri === selected.plugin_uri && item.symbol === selected.symbol);
+  if (control && Number.isFinite(Number(control.min_value)) && Number.isFinite(Number(control.max_value))) {
+    pipedalValue.min = String(control.min_value);
+    pipedalValue.max = String(control.max_value);
+    pipedalValue.title = `Range ${control.min_value} to ${control.max_value}`;
+  } else {
+    pipedalValue.removeAttribute('min');
+    pipedalValue.removeAttribute('max');
+    pipedalValue.removeAttribute('title');
+  }
+}
 document.querySelectorAll('[data-view]').forEach(button => button.addEventListener('click', () => {
   deviceControl.hidden = button.dataset.view !== 'devices';
   assignmentControls.hidden = button.dataset.view !== 'mappings';
@@ -746,6 +760,7 @@ document.querySelector('#pipedal-refresh').addEventListener('click', async () =>
     if (Number.isInteger(body.generation)) currentGeneration = body.generation;
     state.textContent = JSON.stringify(body, null, 2);
     pipedalMappings = Array.isArray(body.mapping_resolution) ? body.mapping_resolution.filter(entry => entry && entry.physical_control_id) : [];
+    pipedalCatalogControls = body.catalog && Array.isArray(body.catalog.controls) ? body.catalog.controls : [];
     pipedalMappingChoice.replaceChildren(new Option('Choose a persisted mapping', ''));
     for (const entry of pipedalMappings) {
       const label = `${entry.physical_control_id} → ${entry.symbol || 'parameter'} (${entry.status || 'unknown'})`;
@@ -759,12 +774,14 @@ document.querySelector('#pipedal-refresh').addEventListener('click', async () =>
     for (const value of supported) pipedalOperationChoice.add(new Option(value, value));
     if (supported.includes(selectedOperation)) pipedalOperationChoice.value = selectedOperation;
     if (!pipedalOperationChoice.value && supported.length) pipedalOperationChoice.value = supported[0];
+    updatePipedalValueDomain();
     const count = Array.isArray(body.supported_operations) ? body.supported_operations.length : 0;
     operation.textContent = response.ok
       ? `PiPedal catalog refreshed (${count} qualified operations).`
       : `PiPedal unavailable (${response.status})`;
   } catch (error) { operation.textContent = `PiPedal unavailable: ${error}`; }
 });
+pipedalMappingChoice.addEventListener('change', updatePipedalValueDomain);
 document.querySelector('#pipedal-operation').addEventListener('click', async () => {
   const operationName = pipedalOperationChoice.value;
   const request = { operation: operationName, generation: currentGeneration, confirm: pipedalConfirm.checked };
@@ -775,7 +792,9 @@ document.querySelector('#pipedal-operation').addEventListener('click', async () 
     request.instance_id = pipedalInstanceId.value.trim();
     request.value = Number(pipedalValue.value);
     if (!request.instance_id) { operation.textContent = 'PiPedal instance ID is required.'; return; }
-    if (!Number.isFinite(request.value)) {
+    const min = pipedalValue.min === '' ? Number.NEGATIVE_INFINITY : Number(pipedalValue.min);
+    const max = pipedalValue.max === '' ? Number.POSITIVE_INFINITY : Number(pipedalValue.max);
+    if (!Number.isFinite(request.value) || request.value < min || request.value > max) {
       operation.textContent = 'PiPedal value must be a finite control-domain number.';
       return;
     }
