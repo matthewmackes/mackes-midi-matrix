@@ -8150,9 +8150,9 @@ not a native USB or visual hardware claim.
   worklist, and diff checks all pass: 39 capability rows are covered, the typed API schema is
   synchronized, and bundled assets measure 8,184 compressed bytes.
 
-#### [>] W143 — Package, boot-test, document, deploy, and qualify the web release
+#### [x] W143 — Package, boot-test, document, deploy, and qualify the web release
 
-- **Status:** `IN_PROGRESS`
+- **Status:** `DONE`
 - **Owner:** codex
 - **Depends on:** W132, W142
 - **Implementation:** Package web binary/assets, unit, default configuration, API schema, license notices and operator docs with the existing release artifact. Embed or install version-matched assets atomically; no runtime build or download is required.
