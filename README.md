@@ -51,6 +51,11 @@ See `WORKLIST.md` and `docs/decisions/` for governing decisions and contracts.
 
 ## Getting started
 
+The governed WYSIWYG platform plan, Luna task packets, device feature inventory, and technical
+source audit are in [`docs/wysiwyg-platform-epic.md`](docs/wysiwyg-platform-epic.md) and
+[`docs/device-feature-inventory.md`](docs/device-feature-inventory.md). The canonical backlog is
+[`WORKLIST.md`](WORKLIST.md), where W144–W152 track delivery and qualification.
+
 Install the Fedora prerequisites described in [`docs/tooling.md`](docs/tooling.md), then verify the repository:
 
 ```bash

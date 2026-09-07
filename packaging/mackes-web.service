@@ -1,0 +1,20 @@
+[Unit]
+Description=MACKES local-network web adapter
+After=network-online.target mackes-midi-matrix.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=mackes
+Group=mackes-control
+Environment=MACKES_WEB_BIND=0.0.0.0:8081
+Environment=MACKES_WEB_ORIGIN=http://localhost:8081
+Environment=MACKES_SOCKET=/run/mackes-midi-matrix/control.sock
+ExecStart=/usr/local/libexec/mackes-midi-matrix/mackes-web
+Restart=always
+RestartSec=3s
+NoNewPrivileges=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target

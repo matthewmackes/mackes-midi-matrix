@@ -1,0 +1,18 @@
+[package]
+name = "mackes-web"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+mackes-ipc = { path = "../../crates/ipc" }
+mackes-web-contract = { path = "../../crates/web-contract" }
+serde_json.workspace = true
+
+[lints]
+workspace = true
+
+[[bin]]
+name = "mackes-web"
+path = "src/main.rs"

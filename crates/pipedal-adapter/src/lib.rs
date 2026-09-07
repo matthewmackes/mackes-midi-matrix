@@ -5,7 +5,7 @@
 //! projection so network work cannot run on the MIDI dispatch path.
 
 use std::io::{self, Read, Write};
-use std::net::{Ipv4Addr, SocketAddr, TcpStream};
+use std::net::{Ipv6Addr, SocketAddr, TcpStream};
 use std::time::Duration;
 
 use mackes_pipedal_connector::{
@@ -18,10 +18,16 @@ pub const MAX_PENDING_COMMANDS: usize = 128;
 /// Maximum mapping outcomes retained in one resolution report.
 pub const MAX_RESOLUTION_OUTCOMES: usize = 128;
 
+/// Returns the connector operations that are qualified for discovery by API clients.
+#[must_use]
+pub const fn supported_operations() -> &'static [mackes_pipedal_connector::Operation] {
+    mackes_pipedal_connector::Operation::all()
+}
+
 /// Returns the default qualified `PiPedal` control endpoint.
 #[must_use]
 pub const fn default_endpoint() -> SocketAddr {
-    SocketAddr::new(std::net::IpAddr::V4(Ipv4Addr::LOCALHOST), 8080)
+    SocketAddr::new(std::net::IpAddr::V6(Ipv6Addr::LOCALHOST), 8080)
 }
 
 /// A small, nonblocking WebSocket transport for the qualified `PiPedal` endpoint.
@@ -44,7 +50,7 @@ impl WebSocketTransport {
             .map_err(|_| TransportError::Disconnected)?;
         stream.set_nonblocking(false).map_err(|_| TransportError::Disconnected)?;
         stream
-            .write_all(b"GET /pipedal HTTP/1.1\r\nHost: 127.0.0.1:8080\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: bWFja2VzLXBpcGVkYWw=\r\n\r\n")
+            .write_all(b"GET /pipedal HTTP/1.1\r\nHost: [::1]:8080\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: bWFja2VzLXBpcGVkYWw=\r\n\r\n")
             .map_err(|_| TransportError::Disconnected)?;
         let mut response = Vec::with_capacity(512);
         let mut chunk = [0_u8; 256];
@@ -470,6 +476,24 @@ impl Worker {
         Ok(())
     }
 
+    /// Arms newly discovered persisted mappings against the current catalog.
+    ///
+    /// Existing targets are left untouched so repeated daemon ticks cannot reset a physical
+    /// control that has already moved toward pickup. Targets without a fresh catalog value are
+    /// skipped and will be retried after the next catalog update.
+    pub fn reconcile_pickup_targets(&mut self, mappings: &[MappingIdentity]) {
+        for mapping in mappings.iter().take(mackes_pipedal_connector::MAX_MAPPINGS) {
+            if self
+                .pickup_targets
+                .iter()
+                .any(|(physical, _, _)| physical == &mapping.physical_control_id)
+            {
+                continue;
+            }
+            let _ = self.arm_pickup(mapping);
+        }
+    }
+
     /// Records a physical value and reports whether pickup permits delivery.
     ///
     /// # Errors
@@ -489,6 +513,97 @@ impl Worker {
     #[must_use]
     pub const fn catalog(&self) -> &mackes_pipedal_connector::PluginCatalog {
         &self.catalog
+    }
+
+    /// Resolves the current runtime instance for a persisted mapping.
+    ///
+    /// An explicit `instance:<id>` scope is honored; otherwise exactly one current
+    /// instance for the plugin URI is required. Ambiguous or missing targets fail closed.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the scope is malformed or the target is unavailable or ambiguous.
+    pub fn resolve_instance_id(&self, mapping: &MappingIdentity) -> Result<u64, String> {
+        let candidates = if self.runtime_targets.is_empty() {
+            self.catalog
+                .targets
+                .iter()
+                .map(|target| (target.instance_id, target.uri.as_str()))
+                .collect::<Vec<_>>()
+        } else {
+            self.runtime_targets
+                .iter()
+                .map(|(instance_id, uri)| (*instance_id, uri.as_str()))
+                .collect::<Vec<_>>()
+        };
+        if let Some(scope) = mapping.scope.as_deref() {
+            let instance_id = scope
+                .strip_prefix("instance:")
+                .ok_or("PiPedal mapping scope must use instance:<id>")?
+                .parse::<u64>()
+                .map_err(|_| "PiPedal mapping instance scope is invalid")?;
+            if instance_id == 0 {
+                return Err("PiPedal mapping instance scope is invalid".into());
+            }
+            return candidates
+                .iter()
+                .find(|(candidate, uri)| *candidate == instance_id && *uri == mapping.plugin_uri)
+                .map(|(candidate, _)| *candidate)
+                .ok_or_else(|| "PiPedal mapping instance is unavailable".into());
+        }
+        let matches = candidates
+            .iter()
+            .filter(|(_, uri)| *uri == mapping.plugin_uri)
+            .map(|(instance_id, _)| *instance_id)
+            .collect::<Vec<_>>();
+        match matches.as_slice() {
+            [instance_id] => Ok(*instance_id),
+            [] => Err("PiPedal mapping plugin is unavailable".into()),
+            _ => Err("PiPedal mapping plugin is ambiguous; select an instance".into()),
+        }
+    }
+
+    /// Converts one normalized controller value and admits its matching `PiPedal` write.
+    ///
+    /// Pickup is evaluated before queue admission, so a physical control cannot jump a
+    /// parameter after discovery or reconnect. `Ok(false)` means pickup is still waiting.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the mapping, pickup state, runtime instance, session, or queue is
+    /// unavailable or invalid.
+    pub fn apply_physical_control(
+        &mut self,
+        generation: u64,
+        mapping: &MappingIdentity,
+        normalized_value: u8,
+        tolerance: f32,
+    ) -> Result<bool, String> {
+        let connector_mapping = mackes_pipedal_connector::ControlMapping {
+            physical_control_id: mapping.physical_control_id.clone(),
+            plugin_uri: mapping.plugin_uri.clone(),
+            symbol: mapping.symbol.clone(),
+            scope: mapping.scope.clone(),
+        };
+        let control = self.catalog.resolve_mapping(&connector_mapping)?;
+        let value = (control.max_value - control.min_value)
+            .mul_add(f32::from(normalized_value) / f32::from(u8::MAX), control.min_value);
+        if !self.observe_pickup(&mapping.physical_control_id, generation, value, tolerance)? {
+            return Ok(false);
+        }
+        let instance_id = self.resolve_instance_id(mapping)?;
+        let client_id = self.pipedal_client_id.ok_or("PiPedal client identity is unavailable")?;
+        let reply_to = self.allocate_reply_id();
+        self.apply_set_control(
+            generation,
+            mapping,
+            instance_id,
+            client_id,
+            Some(reply_to),
+            value,
+            true,
+        )?;
+        Ok(true)
     }
 
     /// Resolves persisted mappings against the current catalog without performing I/O.
@@ -599,6 +714,47 @@ impl Worker {
             self.expected_replies.push(reply_to);
         }
         Ok(())
+    }
+
+    /// Applies a control only when a fresh catalog value is available, retaining that value for
+    /// an immediately safe undo. The journal is updated only after queue admission succeeds.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the catalog value is stale or unavailable, confirmation is absent,
+    /// the session is not ready, or queue admission fails.
+    #[allow(clippy::too_many_arguments)]
+    pub fn apply_set_control_with_record(
+        &mut self,
+        generation: u64,
+        mapping: &MappingIdentity,
+        instance_id: u64,
+        client_id: u64,
+        reply_to: Option<u64>,
+        value: f32,
+        confirmed: bool,
+    ) -> Result<(), String> {
+        let previous_value = self
+            .catalog
+            .find_control(&mapping.plugin_uri, &mapping.symbol)
+            .and_then(|control| control.value)
+            .filter(|value| value.is_finite())
+            .ok_or("PiPedal fresh prior value is unavailable")?;
+        self.apply_set_control(
+            generation,
+            mapping,
+            instance_id,
+            client_id,
+            reply_to,
+            value,
+            confirmed,
+        )?;
+        self.record_apply(ApplyRecord {
+            mapping: mapping.clone(),
+            instance_id,
+            previous_value,
+            generation,
+        })
     }
 
     /// Allocates a bounded reply identifier for a future correlated mutation.
@@ -951,6 +1107,45 @@ mod tests {
     }
 
     #[test]
+    fn runtime_instance_resolution_is_unique_or_explicit_and_fail_closed() {
+        let mut worker = Worker::default();
+        worker.catalog.targets = vec![
+            mackes_pipedal_connector::PluginTarget {
+                uri: "urn:eq".into(),
+                instance_id: 7,
+                name: "EQ one".into(),
+            },
+            mackes_pipedal_connector::PluginTarget {
+                uri: "urn:reverb".into(),
+                instance_id: 8,
+                name: "Reverb".into(),
+            },
+        ];
+        let mapping = MappingIdentity {
+            physical_control_id: "knob-r3-c4".into(),
+            plugin_uri: "urn:reverb".into(),
+            symbol: "mix".into(),
+            scope: None,
+        };
+        assert_eq!(worker.resolve_instance_id(&mapping), Ok(8));
+        let explicit = MappingIdentity {
+            scope: Some("instance:7".into()),
+            plugin_uri: "urn:eq".into(),
+            ..mapping.clone()
+        };
+        assert_eq!(worker.resolve_instance_id(&explicit), Ok(7));
+        let ambiguous = MappingIdentity { plugin_uri: "urn:eq".into(), ..mapping };
+        worker.catalog.targets.push(mackes_pipedal_connector::PluginTarget {
+            uri: "urn:eq".into(),
+            instance_id: 9,
+            name: "EQ two".into(),
+        });
+        assert!(worker.resolve_instance_id(&ambiguous).is_err());
+        let wrong_scope = MappingIdentity { scope: Some("instance:8".into()), ..explicit };
+        assert!(worker.resolve_instance_id(&wrong_scope).is_err());
+    }
+
+    #[test]
     fn start_queues_the_bounded_qualified_handshake() {
         let mut worker = Worker::default();
         worker.enqueue(Command::Start).expect("capacity");
@@ -971,6 +1166,34 @@ mod tests {
         worker.accept_frame(br#"[{"message":"plugins"},[{"uri":"urn:eq","instanceId":7,"name":"EQ","controls":[{"symbol":"gain","minValue":-12,"maxValue":12,"value":0,"writable":true}]}]]"#).expect("catalog");
         assert_eq!(worker.catalog().targets.len(), 1);
         assert_eq!(worker.catalog().controls[0].symbol, "gain");
+    }
+
+    #[test]
+    fn physical_control_bridge_enforces_pickup_and_queues_one_native_range_write() {
+        let mut worker = Worker::default();
+        worker.enqueue(Command::Start).expect("capacity");
+        worker.process(&mut NoopTransport, 1);
+        worker.accept_frame(br#"[{"message":"ehlo"},1]"#).expect("hello");
+        worker
+            .accept_frame(br#"[{"message":"version"},{"serverVersion":"PiPedal v2"}]"#)
+            .expect("version");
+        worker.accept_frame(br#"[{"message":"plugins"},[{"uri":"urn:eq","instanceId":7,"name":"EQ","controls":[{"symbol":"gain","minValue":-12,"maxValue":12,"value":0,"writable":true}]}]]"#).expect("catalog");
+        worker.accept_frame(br#"[{"message":"currentPedalboard"},{"items":[{"instanceId":7,"uri":"urn:eq","controlValues":[{"key":"gain","value":0}]}]}]"#).expect("pedalboard");
+        worker.accept_frame(br#"[{"message":"getSystemMidiBindings"},[]]"#).expect("midi bindings");
+        while worker.session.pop().is_some() {}
+        let mapping = MappingIdentity {
+            physical_control_id: "knob-r3-c4".into(),
+            plugin_uri: "urn:eq".into(),
+            symbol: "gain".into(),
+            scope: None,
+        };
+        worker.reconcile_pickup_targets(std::slice::from_ref(&mapping));
+        let generation = worker.health().generation;
+        assert_eq!(worker.apply_physical_control(generation, &mapping, 0, 0.01), Ok(false));
+        assert_eq!(worker.apply_physical_control(generation, &mapping, 64, 100.0), Ok(true));
+        let frame = worker.session.pop().expect("queued setControl");
+        assert!(frame.len() > 14, "setControl frame should contain an encoded request");
+        assert!(worker.session.pop().is_none());
     }
 
     #[test]
@@ -1036,7 +1259,7 @@ mod tests {
             symbol: "gain".into(),
             scope: None,
         };
-        worker.arm_pickup(&mapping).expect("arm pickup");
+        worker.reconcile_pickup_targets(std::slice::from_ref(&mapping));
         assert!(worker.observe_pickup("knob-r3-c4", 0, 0.0, 0.01).expect("initial pickup"));
         let pending_before = worker.health().pending_requests;
 
@@ -1091,6 +1314,20 @@ mod tests {
     }
 
     #[test]
+    fn default_endpoint_is_the_qualified_ipv6_loopback() {
+        assert_eq!(default_endpoint(), "[::1]:8080".parse().expect("socket address"));
+    }
+
+    #[test]
+    fn supported_operations_are_nonempty_and_unique() {
+        let operations = supported_operations();
+        assert!(!operations.is_empty());
+        for (index, operation) in operations.iter().enumerate() {
+            assert!(!operations[..index].contains(operation));
+        }
+    }
+
+    #[test]
     fn apply_journal_returns_current_generation_restore_intent() {
         let mut worker = Worker::default();
         let mapping = MappingIdentity {
@@ -1110,6 +1347,22 @@ mod tests {
         let intent = worker.undo_apply(0).expect("undo");
         assert_eq!(intent.mapping, mapping);
         assert!((intent.value + 3.0).abs() < f32::EPSILON);
+        assert!(worker.undo_apply(0).is_err());
+    }
+
+    #[test]
+    fn apply_with_record_requires_a_fresh_catalog_value() {
+        let mut worker = Worker::default();
+        let mapping = MappingIdentity {
+            physical_control_id: "knob-r3-c4".into(),
+            plugin_uri: "urn:eq".into(),
+            symbol: "gain".into(),
+            scope: None,
+        };
+        let error = worker
+            .apply_set_control_with_record(0, &mapping, 7, 2, None, 0.5, true)
+            .expect_err("an empty catalog cannot provide an undo value");
+        assert_eq!(error, "PiPedal fresh prior value is unavailable");
         assert!(worker.undo_apply(0).is_err());
     }
 

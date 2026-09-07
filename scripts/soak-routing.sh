@@ -19,6 +19,6 @@ while (( $(date +%s) < deadline )); do
   fi
 done
 ended=$(date +%s)
-printf 'scenario=routing-soak\nduration_seconds=%s\niterations=%s\nfailures=%s\nelapsed_seconds=%s\n' \
+printf 'scenario=routing-soak\ncontroller=virtual-launch-control-xl\nduration_seconds=%s\niterations=%s\nfailures=%s\nelapsed_seconds=%s\n' \
   "$duration" "$iterations" "$failures" "$((ended - started))"
 (( failures == 0 ))

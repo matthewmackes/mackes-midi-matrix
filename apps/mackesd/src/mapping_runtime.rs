@@ -77,6 +77,13 @@ pub fn destination_value(
     Some(if state.1 { 127 } else { 0 })
 }
 
+/// Clears physical press state after an input disconnect so the next press is a fresh edge.
+pub fn reset_button_states(states: &mut HashMap<String, (bool, bool)>) {
+    for state in states.values_mut() {
+        state.0 = false;
+    }
+}
+
 #[cfg(target_os = "linux")]
 impl super::Daemon {
     /// Returns the authoritative assignment LED state at a fake-clock instant.
@@ -104,6 +111,13 @@ impl super::Daemon {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn reset_button_states_rearms_held_toggle_after_disconnect() {
+        let mut states = HashMap::from([(String::from("mapping"), (true, true))]);
+        reset_button_states(&mut states);
+        assert_eq!(states["mapping"], (false, true));
+    }
 
     fn algorithm_mapping() -> mackes_config::ControlMapping {
         mackes_config::ControlMapping {

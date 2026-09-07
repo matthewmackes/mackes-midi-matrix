@@ -808,6 +808,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "mackes-web"
+version = "0.1.11"
+dependencies = [
+ "mackes-ipc",
+ "mackes-web-contract",
+ "serde_json",
+]
+
+[[package]]
+name = "mackes-web-contract"
+version = "0.1.11"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "mackesd"
 version = "0.1.11"
 dependencies = [

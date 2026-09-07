@@ -246,9 +246,9 @@ pub enum ControlTransport {
 /// Supported controller identity for the Launch Control profile gate.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum LaunchControlIdentity {
-    /// Novation Launch Control XL Mk2, the platform template identity.
-    Mk1,
     /// Retained as a compatibility identity for explicit Mk1 hardware.
+    Mk1,
+    /// Novation Launch Control XL Mk2, the supported platform identity.
     Mk2,
     /// A Launchpad-family device, not Launch Control XL.
     LaunchpadFamily,
@@ -275,12 +275,66 @@ pub struct LaunchControlCapabilityDescriptor {
     pub led_readback: bool,
 }
 
+/// Lifecycle phase exposed by the first-class Novation device boundary.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub enum LaunchControlLifecycle {
+    /// No matching physical unit is currently visible.
+    Absent,
+    /// A matching unit is visible but its MIDI endpoints are not usable yet.
+    Present,
+    /// The normal MIDI endpoint is open and the device is being initialized.
+    Initializing,
+    /// The device is usable for input and daemon-owned feedback.
+    Ready,
+    /// More than one indistinguishable unit prevents safe binding.
+    Ambiguous,
+}
+
+/// Stable endpoint role in a Launch Control MIDI/HUI pair.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub enum LaunchControlEndpointRole {
+    /// Normal MIDI input/output used by routing and feedback.
+    Midi,
+    /// HUI compatibility endpoint; never used for LED ownership.
+    Hui,
+}
+
+/// Daemon-facing identity and lifecycle projection for one Novation unit.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct LaunchControlDeviceSnapshot {
+    /// Contract version for this snapshot.
+    pub version: u16,
+    /// Stable persisted identity, when one has been verified.
+    pub stable_id: Option<String>,
+    /// Supported model identity.
+    pub identity: LaunchControlIdentity,
+    /// Current lifecycle phase.
+    pub lifecycle: LaunchControlLifecycle,
+    /// Current binding generation guarding delayed work.
+    pub binding_generation: u64,
+    /// Role-tagged endpoint identities currently associated with the unit.
+    pub endpoints: Vec<(LaunchControlEndpointRole, String)>,
+}
+
+/// Returns an unbound snapshot with the supported contract and fail-closed state.
+#[must_use]
+pub const fn launch_control_device_snapshot() -> LaunchControlDeviceSnapshot {
+    LaunchControlDeviceSnapshot {
+        version: 1,
+        stable_id: None,
+        identity: LaunchControlIdentity::Mk2,
+        lifecycle: LaunchControlLifecycle::Absent,
+        binding_generation: 0,
+        endpoints: Vec::new(),
+    }
+}
+
 /// Returns the supported Launch Control XL capability contract.
 #[must_use]
 pub const fn launch_control_capability_descriptor() -> LaunchControlCapabilityDescriptor {
     LaunchControlCapabilityDescriptor {
         version: 1,
-        identity: LaunchControlIdentity::Mk1,
+        identity: LaunchControlIdentity::Mk2,
         physical_control_count: 56,
         led_count: 48,
         factory1_template: LAUNCH_CONTROL_MK2_FACTORY1_SLOT,
@@ -3029,7 +3083,6 @@ pub enum EndpointState {
     /// Matching requires operator resolution.
     Ambiguous,
 }
-
 /// A state transition emitted by the alias registry monitor.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct StateTransition {
@@ -3040,13 +3093,11 @@ pub struct StateTransition {
     /// New state.
     pub current: EndpointState,
 }
-
 /// Tracks endpoint state and emits only actual changes.
 #[derive(Clone, Debug, Default)]
 pub struct StateTracker {
     states: std::collections::BTreeMap<String, EndpointState>,
 }
-
 impl StateTracker {
     /// Records a state and returns a transition when it changed.
     pub fn update(
@@ -3059,7 +3110,6 @@ impl StateTracker {
         (previous != Some(current)).then_some(StateTransition { alias, previous, current })
     }
 }
-
 /// Resolves aliases with serial, then VID/PID/interface/name precedence.
 #[must_use]
 pub fn resolve_alias<'a>(
@@ -3085,7 +3135,6 @@ pub fn resolve_alias<'a>(
         .collect();
     resolve(candidates)
 }
-
 fn resolve(matches: Vec<&ObservedEndpoint>) -> (Resolution, Vec<&ObservedEndpoint>) {
     match matches.len() {
         0 => (Resolution::Missing, matches),
@@ -3093,13 +3142,11 @@ fn resolve(matches: Vec<&ObservedEndpoint>) -> (Resolution, Vec<&ObservedEndpoin
         _ => (Resolution::Ambiguous, matches),
     }
 }
-
 /// Capped reconnect backoff state for hot-plug recovery.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct ReconnectBackoff {
     attempt: u32,
 }
-
 impl ReconnectBackoff {
     /// Returns the next delay and advances the failure counter.
     #[must_use]
@@ -3108,20 +3155,17 @@ impl ReconnectBackoff {
         self.attempt = self.attempt.saturating_add(1);
         delay.min(10_000)
     }
-
     /// Resets backoff after a stable connection.
     pub const fn reset(&mut self) {
         self.attempt = 0;
     }
 }
-
 /// Small deterministic reconnect coordinator used by the daemon monitor.
 #[derive(Clone, Debug, Default)]
 pub struct ReconnectController {
     backoff: ReconnectBackoff,
     state: Option<EndpointState>,
 }
-
 impl ReconnectController {
     /// Observes alias resolution and emits a state transition plus retry delay
     /// when the endpoint is missing or ambiguous.
@@ -3152,6 +3196,5 @@ impl ReconnectController {
         (transition, retry)
     }
 }
-
 #[cfg(test)]
 mod tests;

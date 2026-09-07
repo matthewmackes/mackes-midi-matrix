@@ -674,9 +674,35 @@ pub struct Settings {
     /// Optional imported Launch Control XL template assignments.
     #[serde(default)]
     pub launch_control_template: Option<LaunchControlTemplateConfig>,
+    /// Persisted Novation device selection and recovery policy.
+    #[serde(default)]
+    pub novation_device: Option<NovationDeviceConfig>,
     /// Versioned stable `PiPedal` mappings; runtime instance IDs are deliberately excluded.
     #[serde(default)]
     pub pipedal_mappings: PiPedalMappingConfig,
+}
+
+/// Validated, versioned Novation device policy independent of volatile ALSA ports.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct NovationDeviceConfig {
+    /// Configuration format version.
+    pub version: u16,
+    /// Verified stable identity selected by the operator.
+    #[serde(default)]
+    pub stable_id: Option<String>,
+    /// Wire template slot to select on initialization.
+    pub template: u8,
+    /// Reapply the selected template and feedback after reconnect.
+    #[serde(default = "default_true")]
+    pub auto_reapply: bool,
+    /// Allow daemon-owned LED feedback writes.
+    #[serde(default = "default_true")]
+    pub feedback_enabled: bool,
+}
+
+const fn default_true() -> bool {
+    true
 }
 
 /// Persisted `PiPedal` mapping set using plugin URI and parameter symbol identity.
@@ -1869,7 +1895,20 @@ impl std::error::Error for ConfigError {}
 pub fn load(path: &Path) -> Result<ConfigDocument, ConfigError> {
     let text = fs::read_to_string(path)
         .map_err(|source| ConfigError::Io { path: path.to_owned(), source })?;
-    let value: ConfigDocument = json5::from_str(&text).map_err(|error| ConfigError::Parse {
+    parse(&text, path)
+}
+
+/// Parses and semantically validates a portable configuration document.
+///
+/// The caller supplies the logical source path solely for bounded, actionable errors; no
+/// filesystem access is performed by this function.
+///
+/// # Errors
+///
+/// Returns an error when the document is malformed, uses an unsupported schema version, or
+/// fails semantic validation.
+pub fn parse(text: &str, path: &Path) -> Result<ConfigDocument, ConfigError> {
+    let value: ConfigDocument = json5::from_str(text).map_err(|error| ConfigError::Parse {
         path: path.to_owned(),
         message: error.to_string(),
     })?;
@@ -2081,6 +2120,17 @@ pub fn validate(document: &ConfigDocument) -> Result<(), String> {
             {
                 return Err("Launch Control assignment is invalid or duplicated".into());
             }
+        }
+    }
+    if let Some(device) = &document.settings.novation_device {
+        if device.version == 0
+            || device.template >= 16
+            || device
+                .stable_id
+                .as_deref()
+                .is_some_and(|id| id.trim().is_empty() || id.len() > 128 || id != id.trim())
+        {
+            return Err("Novation device configuration is invalid".into());
         }
     }
     if let Some(alias) = document.settings.learn_input_alias.as_deref() {
@@ -2431,6 +2481,18 @@ fn rotate_backups(path: &Path, backup_count: usize) -> io::Result<()> {
     if backup_count == 0 {
         return Ok(());
     }
+    for index in 1..=backup_count {
+        let source = path.with_extension(format!("json5.bak{index}"));
+        let destination = path.with_extension(format!("json5.bak{}", index + 1));
+        for candidate in [&source, &destination] {
+            if candidate.exists() && !candidate.is_file() {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    format!("backup path is not a regular file: {}", candidate.display()),
+                ));
+            }
+        }
+    }
     for index in (1..=backup_count).rev() {
         let source = path.with_extension(format!("json5.bak{index}"));
         let destination = path.with_extension(format!("json5.bak{}", index + 1));
@@ -2487,6 +2549,7 @@ mod tests {
                 learn_input_alias: None,
                 dashboard_midi_bindings: Vec::new(),
                 launch_control_template: None,
+                novation_device: None,
                 pipedal_mappings: PiPedalMappingConfig::default(),
             },
             endpoints: vec![],
@@ -2531,6 +2594,23 @@ mod tests {
         let encoded = serde_json::to_string(&value).expect("encode");
         let decoded: ConfigDocument = serde_json::from_str(&encoded).expect("decode");
         assert_eq!(decoded.profiles[0].endpoint_alias.as_deref(), Some("reflex-port"));
+    }
+
+    #[test]
+    fn novation_device_policy_round_trips_and_rejects_invalid_template() {
+        let mut value = document();
+        value.settings.novation_device = Some(NovationDeviceConfig {
+            version: 1,
+            stable_id: Some("novation-xl-serial-1".into()),
+            template: 8,
+            auto_reapply: true,
+            feedback_enabled: true,
+        });
+        let encoded = serde_json::to_value(&value.settings).expect("settings JSON");
+        let decoded: Settings = serde_json::from_value(encoded).expect("settings round trip");
+        assert_eq!(decoded, value.settings);
+        value.settings.novation_device.as_mut().expect("device").template = 16;
+        assert!(validate(&value).is_err());
     }
 
     #[test]
@@ -3053,6 +3133,40 @@ mod tests {
         fs::write(&lock, b"unknown-owner\n").expect("malformed lock fixture");
         assert!(save(&path, &document(), 0).is_err());
         fs::remove_file(&lock).expect("remove lock fixture");
+    }
+
+    #[test]
+    fn save_replace_failure_preserves_existing_target_and_cleans_temporary() {
+        let path = std::env::temp_dir()
+            .join(format!("mackes-replace-failure-{}.json5", std::process::id()));
+        fs::create_dir(&path).expect("directory target");
+        let result = save(&path, &document(), 0);
+        assert!(result.is_err());
+        assert!(path.is_dir());
+        let temporary_prefix = format!(".{}.", path.file_name().unwrap().to_string_lossy());
+        let leftovers = fs::read_dir(path.parent().unwrap())
+            .expect("temporary directory")
+            .filter_map(Result::ok)
+            .any(|entry| entry.file_name().to_string_lossy().starts_with(&temporary_prefix));
+        assert!(!leftovers);
+        fs::remove_dir(&path).expect("remove directory target");
+    }
+
+    #[test]
+    fn backup_rotation_failure_preserves_existing_configuration() {
+        let path = std::env::temp_dir()
+            .join(format!("mackes-backup-failure-{}.json5", std::process::id()));
+        let backup = path.with_extension("json5.bak1");
+        let blocking_destination = path.with_extension("json5.bak2");
+        save(&path, &document(), 0).expect("initial config");
+        fs::write(&backup, b"prior backup").expect("prior backup");
+        fs::create_dir(&blocking_destination).expect("directory rotation collision");
+        let before = fs::read(&path).expect("original config");
+        assert!(save(&path, &document(), 1).is_err());
+        assert_eq!(fs::read(&path).expect("preserved config"), before);
+        fs::remove_file(&backup).expect("remove prior backup");
+        fs::remove_dir(&blocking_destination).expect("remove rotation collision");
+        fs::remove_file(&path).expect("remove config");
     }
 
     #[test]
@@ -3591,6 +3705,11 @@ mod tests {
         assert_eq!(migrate_verified_endpoint_references(&mut document).expect("migration"), 1);
         assert_eq!(document.control_mappings[0].source_endpoint, "input-alias");
         assert_eq!(document.control_mappings[0].destination_endpoint, "display-name-only");
+        assert_eq!(
+            migrate_verified_endpoint_references(&mut document).expect("idempotent migration"),
+            0
+        );
+        assert_eq!(document.control_mappings[0].source_endpoint, "input-alias");
     }
 
     #[test]

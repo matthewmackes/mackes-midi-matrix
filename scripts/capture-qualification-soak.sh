@@ -45,4 +45,24 @@ while (( SECONDS < deadline )); do
   remaining=$((deadline - SECONDS))
   (( remaining <= 0 )) || sleep "$(( interval < remaining ? interval : remaining ))"
 done
+awk -F, '
+  NR == 1 { next }
+  NR == 2 { min_rss=$6; max_rss=$6; min_cpu=$5; max_cpu=$5; first_log=$12; last_log=$12; first_restart=$11; last_restart=$11 }
+  NR > 1 {
+    samples++
+    if ($6 < min_rss) min_rss=$6
+    if ($6 > max_rss) max_rss=$6
+    if ($5 < min_cpu) min_cpu=$5
+    if ($5 > max_cpu) max_cpu=$5
+    if ($12 < first_log) first_log=$12
+    if ($12 > last_log) last_log=$12
+    if ($11 < first_restart) first_restart=$11
+    if ($11 > last_restart) last_restart=$11
+    if ($10 > max_dropped) max_dropped=$10
+    if ($7 != 1) status_failures++
+  }
+  END {
+    printf "samples=%d\nmin_cpu_percent=%s\nmax_cpu_percent=%s\nmin_rss_kib=%s\nmax_rss_kib=%s\nmax_dropped=%s\nstatus_failures=%d\nrestart_count_first=%s\nrestart_count_last=%s\njournal_lines_first=%s\njournal_lines_last=%s\n", samples, min_cpu, max_cpu, min_rss, max_rss, max_dropped + 0, status_failures + 0, first_restart, last_restart, first_log, last_log
+  }
+' "$output_dir/samples.csv" >"$output_dir/summary.txt"
 printf 'qualification soak samples captured in %s\n' "$output_dir"

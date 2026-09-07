@@ -410,6 +410,9 @@ pub struct PiPedalRequest {
     /// Stable mapping identity for apply requests.
     #[serde(default)]
     pub mapping: Option<PiPedalMappingTarget>,
+    /// Persisted physical-control identity to resolve against daemon configuration.
+    #[serde(default)]
+    pub physical_control_id: Option<String>,
     /// Fresh runtime plugin instance ID for apply requests.
     #[serde(default)]
     pub instance_id: Option<u64>,
@@ -687,6 +690,8 @@ pub enum AssignmentPhase {
 /// Typed assignment-session action shared by hardware and keyboard input.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum AssignmentAction {
+    /// Read the current assignment session without changing it.
+    Snapshot,
     /// Begin from the prior TUI location.
     Start,
     /// Accept a unique physical control.
@@ -2108,5 +2113,19 @@ mod tests {
         }
         .validate()
         .is_err());
+        let snapshot = AssignmentRequest {
+            generation: 42,
+            action: AssignmentAction::Snapshot,
+            physical_control_id: None,
+            destination_profile: None,
+            destination_effect: None,
+            destination_parameter: None,
+        };
+        let encoded = serde_json::to_vec(&snapshot).expect("snapshot encode");
+        assert_eq!(
+            serde_json::from_slice::<AssignmentRequest>(&encoded).expect("snapshot decode"),
+            snapshot
+        );
+        assert!(snapshot.validate().is_ok());
     }
 }

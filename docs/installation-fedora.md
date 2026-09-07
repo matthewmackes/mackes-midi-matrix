@@ -32,7 +32,25 @@ The installer enables and starts the service automatically:
 
 ```text
 systemctl status mackes-midi-matrix.service
+systemctl status mackes-web.service
+curl http://127.0.0.1:8081/api/v1/health
 ```
+
+The independent `mackes-web.service` serves the bundled browser shell and versioned API on
+`0.0.0.0:8081` without login or authorization. Reachable LAN clients can operate the exposed
+controls; apply the host firewall policy appropriate for the installation. The web process uses
+the daemon's local IPC socket and does not own MIDI, configuration writes, or processor state.
+It restarts independently from the daemon:
+
+```text
+sudo systemctl restart mackes-web.service
+sudo systemctl enable mackes-web.service
+```
+
+Use `mackes-web --bind ADDRESS --origin ORIGIN` for a one-off explicit policy, or configure
+`MACKES_WEB_BIND`, `MACKES_WEB_ORIGIN`, and `MACKES_SOCKET` in a systemd drop-in for a persistent
+installation. A bind or port conflict is reported at startup rather than silently selecting
+another port.
 
 For local testing from a shell that has not yet refreshed its group membership, launch the
 TUI through the installed session wrapper:
@@ -73,6 +91,10 @@ scripts/soak-routing.sh 3600
 scripts/release-gate.sh
 scripts/integration-suite.sh
 ```
+
+`benchmark-routing.sh`, `soak-routing.sh`, and the release-gate routing benchmark use the
+in-memory `VirtualLaunchControlXl` fixture; they do not require a physical Novation controller
+or ALSA access. Use `qualify-hardware.sh` separately for host/device observation.
 
 The hardware report is observation-only and never sends MIDI. Physical vendor-map
 validation and long-duration soak evidence must be recorded separately before release.

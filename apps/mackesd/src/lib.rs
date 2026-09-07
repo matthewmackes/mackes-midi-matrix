@@ -1,5 +1,4 @@
 //! Persistent daemon lifecycle and local command boundary.
-
 #![recursion_limit = "256"]
 use mackes_config::ConfigError;
 use mackes_ipc::{authorize, AccessPolicy, Authorization, Command, LocalServer};
@@ -212,6 +211,7 @@ pub struct Daemon {
     profile_bindings: Vec<(String, String)>,
     binding_generation: u64,
     config_path: Option<std::path::PathBuf>,
+    novation_device_policy: Option<mackes_config::NovationDeviceConfig>,
     /// Cached `PiPedal` physical control IDs used by the real-time LED composer.
     /// This must be refreshed at configuration boundaries, never from the LED tick.
     pipedal_controls: Vec<String>,
@@ -342,18 +342,6 @@ fn routes_undo_path(config_path: &std::path::Path) -> std::path::PathBuf {
 #[cfg(target_os = "linux")]
 fn persist_routes(config_path: &std::path::Path, routes: &serde_json::Value) -> io::Result<()> {
     persistence_projection::persist_json_atomic(&routes_path(config_path), routes, "routes.json")
-}
-
-#[cfg(target_os = "linux")]
-fn persist_routes_undo(
-    config_path: &std::path::Path,
-    routes: &serde_json::Value,
-) -> io::Result<()> {
-    persistence_projection::persist_json_atomic(
-        &routes_undo_path(config_path),
-        routes,
-        "routes.undo.json",
-    )
 }
 
 #[cfg(target_os = "linux")]
@@ -591,6 +579,7 @@ impl Daemon {
             profile_bindings: Vec::new(),
             binding_generation: 0,
             config_path: None,
+            novation_device_policy: None,
             pipedal_controls: Vec::new(),
             pipedal_mappings: Vec::new(),
             mapping_store: mackes_config::ControlMappingStore::default(),
@@ -1008,12 +997,18 @@ impl Daemon {
             );
             return;
         }
+        if self.novation_device_policy.as_ref().is_some_and(|policy| !policy.feedback_enabled) {
+            return;
+        }
         let target = self
             .profile_bindings
             .iter()
             .find(|(profile, _)| profile == "launch-control-xl-mk2")
             .map(|(_, endpoint)| endpoint.clone());
         self.led.set_target_binding(target);
+        if let Some(policy) = self.novation_device_policy.as_ref() {
+            self.led.set_template(policy.template);
+        }
         self.led.set_pipedal_controls(self.pipedal_controls.clone());
         self.led.flush(
             now_ms,
@@ -1053,6 +1048,14 @@ impl Daemon {
         let mut applied = false;
         let mut reason = None;
         let mut request = request;
+        if request.action == mackes_ipc::AssignmentAction::Snapshot {
+            return mackes_ipc::AssignmentResult {
+                generation: self.assignment_generation,
+                session: self.assignment_session.clone(),
+                applied: true,
+                reason: None,
+            };
+        }
         if request.action == mackes_ipc::AssignmentAction::ControlCaptured {
             if let Some(control) = request.physical_control_id.clone() {
                 self.assignment_session.catalog.captured_control_id = Some(control);
@@ -1481,12 +1484,11 @@ impl Daemon {
                     stable_endpoint.as_deref(),
                 ) {
                 event.endpoint
-            } else if let Some(source_endpoint) =
-                mackes_midi_engine::numeric_endpoint_id(&mapping.source_endpoint)
-            {
-                if source_endpoint != event.endpoint {
-                    continue;
-                }
+            } else if let Some(source_endpoint) = binding_generation::legacy_source_endpoint(
+                &mapping.source_endpoint,
+                stable_endpoint.as_deref(),
+                event.endpoint,
+            ) {
                 source_endpoint
             } else {
                 continue;
@@ -2094,6 +2096,25 @@ impl Daemon {
                 processed += 1;
                 continue;
             }
+            if let Some(control_id) = Self::launch_control_factory1_control_id(&event) {
+                if let mackes_domain::MidiMessage::ControlChange { value, .. } = &event.message {
+                    let mappings = self
+                        .pipedal_mappings
+                        .iter()
+                        .filter(|mapping| mapping.physical_control_id == control_id)
+                        .cloned()
+                        .collect::<Vec<_>>();
+                    let generation = self.pipedal_worker.health().generation;
+                    for mapping in mappings {
+                        let _ = self.pipedal_worker.apply_physical_control(
+                            generation,
+                            &mapping,
+                            value.as_u8(),
+                            0.01,
+                        );
+                    }
+                }
+            }
             let (event_sent, event_unmatched) = self.dispatch_registered(&event);
             processed += 1;
             sent += event_sent;
@@ -2102,7 +2123,6 @@ impl Daemon {
         self.flush_controller_leds();
         (processed, sent, unmatched)
     }
-
     #[cfg(test)]
     fn is_launch_control_factory1_device_press(event: &mackes_domain::MidiEvent) -> bool {
         matches!(Self::launch_control_factory1_control_id(event).as_deref(), Some("utility-1"))
@@ -2534,7 +2554,6 @@ impl Daemon {
     pub fn end_rtp_peer(&mut self, token: u32, ssrc: u32) -> Result<(), &'static str> {
         self.rtp_peer.end_session(token, ssrc)
     }
-
     /// Executes a compiled scene plan through the scene engine's deterministic
     /// dependency and safety policy. This boundary never transmits hardware
     /// bytes by itself; device actions are supplied by a future output adapter.
@@ -2547,7 +2566,6 @@ impl Daemon {
     ) -> Vec<(String, mackes_scene_engine::ActionResult)> {
         plan.execute(unsafe_armed, cancelled)
     }
-
     /// Executes a scene plan with a caller-provided device action executor.
     #[must_use]
     pub fn execute_scene_with<F>(
@@ -2564,7 +2582,6 @@ impl Daemon {
         self.publish_activation_result(&results);
         results
     }
-
     /// Executes startup restore through the ordinary planner with unsafe mode disarmed.
     #[must_use]
     pub fn execute_startup_restore<F>(
@@ -2577,7 +2594,6 @@ impl Daemon {
     {
         self.execute_scene_with(plan, false, false, execute_action)
     }
-
     /// Executes a scene through the daemon boundary with a monotonic deadline.
     #[must_use]
     pub fn execute_scene_with_deadline<F>(
@@ -2597,7 +2613,6 @@ impl Daemon {
         self.publish_activation_result(&results);
         results
     }
-
     fn publish_activation_result(
         &mut self,
         results: &[(String, mackes_scene_engine::ActionResult)],
@@ -2614,7 +2629,6 @@ impl Daemon {
         ));
         self.record_state_event(Command::Scenes);
     }
-
     /// Discovers ALSA MIDI endpoints without opening a device or transmitting MIDI.
     ///
     /// # Errors
@@ -2624,7 +2638,6 @@ impl Daemon {
     pub fn discover_endpoints(&self) -> Result<Vec<mackes_midi_engine::EndpointInfo>, String> {
         mackes_midi_engine::enumerate_midir_ports()
     }
-
     fn record_state_event(&mut self, command: Command) {
         self.state_sequence = self.state_sequence.saturating_add(1);
         let payload = serde_json::to_vec(&serde_json::json!({
@@ -2649,11 +2662,13 @@ impl Daemon {
             "catalog": self.catalog,
             "physical_devices": self.physical_devices,
             "novation_capabilities": mackes_profiles::launch_control_capability_descriptor(),
+            "novation_device": self.novation_device_snapshot(),
             "config_persistence": persistence_projection::config_persistence(
                 self.config_path.as_deref(),
             ),
             "pipedal": self.pipedal_worker.ipc_status(),
             "pipedal_catalog": self.pipedal_worker.catalog(),
+            "pipedal_operations": mackes_pipedal_adapter::supported_operations(),
             "pipedal_mapping_resolution": self.pipedal_mapping_resolution(),
             "health": match self.health {
                 Health::Starting => "starting",
@@ -2669,7 +2684,6 @@ impl Daemon {
         self.state_events
             .push_back(mackes_ipc::StateEvent { sequence: self.state_sequence, payload });
     }
-
     fn authorize_route_mutation(&mut self, action: &str) -> Result<(), &'static str> {
         let decision = self.safety.authorize_and_record(
             self.state_sequence,
@@ -2689,7 +2703,6 @@ impl Daemon {
             .then_some(())
             .ok_or("route mutation denied by performance lock")
     }
-
     fn audit_projection(&self) -> Vec<serde_json::Value> {
         self.audit
             .newest_first()
@@ -2708,7 +2721,6 @@ impl Daemon {
             })
             .collect()
     }
-
     fn record_physical_send(&mut self, destination: &str, action: impl Into<String>) {
         self.sent_events = self.sent_events.saturating_add(1);
         self.audit.append(mackes_scene_engine::AuditRecord {
@@ -2723,7 +2735,14 @@ impl Daemon {
         });
         self.record_state_event(Command::Monitor);
     }
-
+    fn novation_device_snapshot(&self) -> mackes_profiles::LaunchControlDeviceSnapshot {
+        novation_snapshot::device_snapshot(
+            &self.physical_devices,
+            &self.profile_bindings,
+            self.binding_generation,
+            self.novation_device_policy.as_ref(),
+        )
+    }
     fn snapshot_response(&self) -> String {
         serde_json::json!({
             "ok": true,
@@ -2747,6 +2766,7 @@ impl Daemon {
             "catalog": self.catalog,
             "physical_devices": self.physical_devices,
             "novation_capabilities": mackes_profiles::launch_control_capability_descriptor(),
+            "novation_device": self.novation_device_snapshot(),
             "endpoint_bindings": self.endpoint_binding_projection(),
             "binding_generation": self.binding_generation,
             "native_backend": if cfg!(feature = "alsa-seq-backend") {
@@ -2833,7 +2853,6 @@ impl Daemon {
                 .collect(),
         )
     }
-
     fn pipedal_mapping_resolution(&self) -> serde_json::Value {
         serde_json::to_value(self.pipedal_worker.resolve_mappings(&self.pipedal_mappings))
             .unwrap_or_else(|_| serde_json::json!([]))
@@ -2880,6 +2899,7 @@ impl Daemon {
                 serde_json::json!({
                     "id": mapping.id,
                     "enabled": mapping.enabled,
+                    "controller_profile": mapping.controller_profile, "physical_control_id": mapping.physical_control_id, "source_endpoint": mapping.source_endpoint, "source_kind": mapping.source_kind, "source_channel": mapping.source_channel, "destination_channel": mapping.destination_channel, "source_number": mapping.source_number, "destination_endpoint": mapping.destination_endpoint, "destination_profile": mapping.destination_profile, "destination_effect": mapping.destination_effect, "destination_parameter": mapping.destination_parameter, "behavior": mapping.behavior, "profile_version": mapping.profile_version,
                     "physical_control": mapping.physical_control_id,
                     "physical_role": control.map(|item| format!("{:?}", item.role)),
                     "input": {"endpoint": mapping.source_endpoint, "kind": mapping.source_kind, "channel": mapping.source_channel + 1, "number": mapping.source_number},
@@ -2889,7 +2909,6 @@ impl Daemon {
             })
             .collect()
     }
-
     fn subscribe_response(&self, request: &[u8]) -> String {
         let after = serde_json::from_slice::<serde_json::Value>(request)
             .ok()
@@ -3125,23 +3144,24 @@ impl Daemon {
                             .and_then(|value| value.get("routes").cloned());
                         let encoded = serde_json::to_vec(route_values).map_err(io::Error::other)?;
                         if let Some(path) = self.config_path.as_deref() {
-                            if let Err(error) =
+                            if let Some(previous) = current_routes.clone() {
+                                if let Err(error) = persistence_projection::persist_json_pair_atomic(
+                                    &routes_path(path),
+                                    &serde_json::json!({"routes": route_values}),
+                                    &routes_undo_path(path),
+                                    &previous,
+                                    &path.with_extension("routes.commit.json"),
+                                ) {
+                                    return stream.write_all(
+                                        format!("{{\"ok\":false,\"error\":\"route pair persistence failed: {error}\"}}\n").as_bytes(),
+                                    );
+                                }
+                            } else if let Err(error) =
                                 persist_routes(path, &serde_json::json!({"routes": route_values}))
                             {
                                 return stream.write_all(
                                     format!("{{\"ok\":false,\"error\":\"route persistence failed: {error}\"}}\n").as_bytes(),
                                 );
-                            }
-                            if let Some(previous) = current_routes.clone() {
-                                if let Err(error) = persist_routes_undo(path, &previous) {
-                                    let _ = persist_routes(
-                                        path,
-                                        &serde_json::json!({"routes": previous}),
-                                    );
-                                    return stream.write_all(
-                                        format!("{{\"ok\":false,\"error\":\"route undo persistence failed: {error}\"}}\n").as_bytes(),
-                                    );
-                                }
                             }
                         }
                         if let Err(error) =
@@ -3494,6 +3514,11 @@ impl Daemon {
                 }
                 Some(Command::Subscribe) => self.subscribe_response(&request),
                 Some(Command::Scenes) => self.scenes_response(),
+                Some(Command::Backups) => persistence_projection::backup_response(
+                    self.generation,
+                    self.config_path.as_deref(),
+                    Some(&request_payload),
+                ),
                 Some(Command::PiPedal) => {
                     let parsed =
                         serde_json::from_slice::<mackes_ipc::PiPedalRequest>(&request_payload).ok();
@@ -3509,6 +3534,7 @@ impl Daemon {
                                 "generation": self.generation,
                                 "pipedal": self.pipedal_worker.ipc_status(),
                                 "catalog": self.pipedal_worker.catalog(),
+                                "supported_operations": mackes_pipedal_adapter::supported_operations(),
                                 "mapping_resolution": self.pipedal_mapping_resolution(),
                             })
                             .to_string()
@@ -3517,50 +3543,38 @@ impl Daemon {
                         Some(request)
                             if matches!(request.operation, mackes_ipc::PiPedalOperation::Apply) =>
                         {
-                            let Some(target) = request.mapping else {
-                                return stream.write_all(
-                                    b"{\"ok\":false,\"error\":\"PiPedal mapping is required\"}\n",
-                                );
-                            };
-                            let (Some(instance_id), Some(value), Some(client_id)) = (
+                            let target = match (request.mapping, request.physical_control_id) {
+                                (Some(target), None) => target,
+                                (None, Some(control_id)) => {
+                                    let matches = self.pipedal_mappings.iter().filter(|mapping| mapping.physical_control_id == control_id).collect::<Vec<_>>();
+                                    if matches.len() != 1 { let error = if matches.is_empty() { "Persisted PiPedal mapping was not found" } else { "Persisted PiPedal mapping is ambiguous" }; return stream.write_all(serde_json::json!({"ok": false, "error": error}).to_string().as_bytes()).and_then(|()| stream.write_all(b"\n")); }
+                                    mackes_ipc::PiPedalMappingTarget { physical_control_id: matches[0].physical_control_id.clone(), plugin_uri: matches[0].plugin_uri.clone(), symbol: matches[0].symbol.clone(), scope: matches[0].scope.clone() }
+                                }
+                                (Some(_), Some(_)) => return stream.write_all(b"{\"ok\":false,\"error\":\"Choose either mapping or physical_control_id\"}\n"),
+                                (None, None) => return stream.write_all(b"{\"ok\":false,\"error\":\"PiPedal mapping or physical_control_id is required\"}\n"),
+                            }; let (Some(instance_id), Some(value), Some(client_id)) = (
                                 request.instance_id,
                                 request.value,
                                 self.pipedal_worker.pipedal_client_id(),
                             ) else {
                                 return stream.write_all(b"{\"ok\":false,\"error\":\"PiPedal apply target fields are required\"}\n");
-                            };
-                            let mapping = mackes_pipedal_adapter::MappingIdentity {
+                            }; let mapping = mackes_pipedal_adapter::MappingIdentity {
                                 physical_control_id: target.physical_control_id,
                                 plugin_uri: target.plugin_uri,
                                 symbol: target.symbol,
                                 scope: target.scope,
                             };
-                            let Some(previous_value) = self
-                                .pipedal_worker
-                                .catalog()
-                                .find_control(&mapping.plugin_uri, &mapping.symbol)
-                                .and_then(|control| control.value)
-                            else {
-                                return stream.write_all(b"{\"ok\":false,\"error\":\"PiPedal prior value is unavailable\"}\n");
-                            };
-                            match self.pipedal_worker.apply_set_control(
+                            let reply_to = self.pipedal_worker.allocate_reply_id();
+                            match self.pipedal_worker.apply_set_control_with_record(
                                 request.generation,
                                 &mapping,
                                 instance_id,
                                 client_id,
-                                None,
+                                Some(reply_to),
                                 value,
                                 request.confirm,
                             ) {
                                 Ok(()) => {
-                                    let _ = self.pipedal_worker.record_apply(
-                                        mackes_pipedal_adapter::ApplyRecord {
-                                            mapping,
-                                            instance_id,
-                                            previous_value,
-                                            generation: request.generation,
-                                        },
-                                    );
                                     serde_json::json!({"ok": true, "applied": true, "generation": request.generation}).to_string() + "\n"
                                 }
                                 Err(error) => {
@@ -3575,10 +3589,11 @@ impl Daemon {
                             let Some(client_id) = self.pipedal_worker.pipedal_client_id() else {
                                 return stream.write_all(b"{\"ok\":false,\"error\":\"PiPedal client identity is unavailable\"}\n");
                             };
+                            let reply_to = self.pipedal_worker.allocate_reply_id();
                             match self.pipedal_worker.restore_last_apply(
                                 request.generation,
                                 client_id,
-                                None,
+                                Some(reply_to),
                                 request.confirm,
                             ) {
                                 Ok(()) => {
@@ -3591,8 +3606,7 @@ impl Daemon {
                             }
                         }
                         _ => {
-                            "{\"ok\":false,\"error\":\"PiPedal mutation IPC is not yet enabled\"}\n"
-                                .to_owned()
+                            "{\"ok\":false,\"error\":\"unsupported PiPedal operation\",\"code\":\"unsupported_operation\",\"work_item\":\"W113\"}\n".to_owned()
                         }
                     }
                 }
@@ -3799,7 +3813,6 @@ impl Daemon {
     pub const fn health(&self) -> Health {
         self.health
     }
-
     /// Services the bounded `PiPedal` worker without running network I/O on MIDI dispatch.
     pub fn poll_pipedal(&mut self) {
         let now = Instant::now();
@@ -3830,6 +3843,7 @@ impl Daemon {
                     self.pipedal_retry_at = Instant::now() + Duration::from_secs(10);
                     break;
                 }
+                self.pipedal_worker.reconcile_pickup_targets(&self.pipedal_mappings);
             }
         } else {
             self.pipedal_transport = None;
@@ -3854,7 +3868,6 @@ impl Daemon {
         let Some(next) = discovered.as_array() else {
             return;
         };
-
         // Retain the last bounded record for a disconnected device so mappings
         // keep their stable identity across an ALSA refresh. Reconnected
         // devices replace the retained record with fresh endpoint state.
@@ -3889,7 +3902,6 @@ impl Daemon {
         merged.truncate(MAX_PHYSICAL_DEVICE_RECORDS);
         self.physical_devices = serde_json::Value::Array(merged);
     }
-
     /// Installs validated profile-to-output bindings from persistent configuration.
     ///
     /// # Errors
@@ -3914,8 +3926,17 @@ impl Daemon {
     /// Sets the daemon-owned configuration path for authorized persistence.
     pub fn set_config_path(&mut self, path: impl Into<std::path::PathBuf>) {
         let path = path.into();
+        if let Err(error) =
+            persistence_projection::recover_json_pair(&path.with_extension("routes.commit.json"))
+        {
+            eprint!(
+                "{}",
+                structured_log_line("error", "route_pair_recovery_failed", &error.to_string())
+            );
+        }
         match mackes_config::load(&path) {
             Ok(document) => {
+                self.novation_device_policy.clone_from(&document.settings.novation_device);
                 self.cache_pipedal_mappings(&document);
                 match mackes_config::ControlMappingStore::from_document(&document) {
                     Ok(store) => {
@@ -3949,11 +3970,12 @@ impl Daemon {
             }
         }
         self.config_path = Some(path);
-        if !self.outputs.is_empty() {
+        if !self.outputs.is_empty()
+            && self.novation_device_policy.as_ref().is_none_or(|policy| policy.auto_reapply)
+        {
             self.replay_controller_leds();
         }
     }
-
     fn sync_assignment_catalog(&mut self) {
         let profiles =
             profile_bindings::catalog_ids(&self.physical_devices, &self.profile_bindings);
@@ -3967,7 +3989,6 @@ impl Daemon {
             profile_bindings::stable_destination(&self.outputs, &self.profile_bindings, profile)
                 .or_else(|| Some(profile.to_owned()));
     }
-
     fn scenes_response(&self) -> String {
         serde_json::json!({
             "ok": true,
@@ -3981,7 +4002,6 @@ impl Daemon {
             + "\n"
     }
 }
-
 mod startup_restore;
 pub use startup_restore::startup_restore;
 #[cfg(target_os = "linux")]
@@ -3992,6 +4012,7 @@ mod binding_generation;
 mod led_surface;
 #[cfg(all(test, target_os = "linux"))]
 mod native_cutover;
+mod novation_snapshot;
 mod persistence_projection;
 mod profile_bindings;
 #[cfg(test)]

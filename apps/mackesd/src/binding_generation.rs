@@ -1,5 +1,20 @@
 use super::Daemon;
 
+const fn legacy_numeric_binding_allowed(stable_id: Option<&str>) -> bool {
+    stable_id.is_none()
+}
+
+pub fn legacy_source_endpoint(
+    source: &str,
+    stable_id: Option<&str>,
+    event: mackes_domain::EndpointId,
+) -> Option<mackes_domain::EndpointId> {
+    if !legacy_numeric_binding_allowed(stable_id) {
+        return None;
+    }
+    mackes_midi_engine::numeric_endpoint_id(source).filter(|candidate| *candidate == event)
+}
+
 impl Daemon {
     pub(super) fn apply_native_transitions(
         &mut self,
@@ -13,7 +28,7 @@ impl Daemon {
                         | mackes_midi_engine::PhysicalDeviceState::Ambiguous
                 )
             {
-                self.button_toggle_state.values_mut().for_each(|state| state.0 = false);
+                super::mapping_runtime::reset_button_states(&mut self.button_toggle_state);
             }
             if let Some(failure) = transition.failure {
                 self.last_native_failure = Some(failure);

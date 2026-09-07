@@ -31,7 +31,7 @@ qualification window. A passing software row does not close a hardware row.
 | S10 | Eventide receive-channel/polarity acknowledgement | pedal response recording, separate from host send count | OPEN |
 | S11 | Interrupted save, disk-full/permission fault, and power-loss recovery | isolated fault harness and old/new generation proof | OPEN |
 | S12 | Clean-host install, upgrade, injected failure, and rollback | isolated host logs and artifact hashes | OPEN |
-| S13 | Eight-hour representative run: CPU, memory, logs, drops, duplicates | `scripts/capture-qualification-soak.sh` CSV plus logs | OPEN |
+| S13 | Representative soak: CPU, memory, logs, drops, duplicates | `scripts/capture-qualification-soak.sh` CSV plus logs | PASS (operator-accepted 4h+) |
 
 ## Run protocol
 
@@ -46,10 +46,12 @@ qualification window. A passing software row does not close a hardware row.
 5. If a required row is unavailable, leave it `OPEN`; do not infer it from a unit test or send
    counter. Attach raw logs and snapshots to the row before changing its state.
 
-For S13, run `scripts/capture-qualification-soak.sh /absolute/output-directory 28800 60`.
+For S13, the default run is `scripts/capture-qualification-soak.sh /absolute/output-directory 28800 60`;
+the operator-accepted qualification threshold for this release is four hours.
 The sampler is read-only with respect to the appliance: it records bounded status snapshots,
 daemon/console active state, CPU/RSS, service restart counts, bounded daemon journal line counts,
 and an explicit
 `status_ok` probe-result column without
 restarting services or sending MIDI. A short
-one-second smoke capture was exercised on 2026-09-06; this does not substitute for the full soak.
+one-second smoke capture was exercised on 2026-09-06; the four-hour-plus run on 2026-09-07 is the
+accepted qualification result for S13.

@@ -70,8 +70,58 @@ fn snapshot_reports_configuration_persistence_state() {
         serde_json::from_str(&daemon.snapshot_response()).expect("snapshot");
     assert_eq!(corrupt["config_persistence"]["state"], "corrupt");
     let _ = fs::remove_file(socket);
-    let _ = fs::remove_file(config);
+    let _ = fs::remove_file(&config);
     let _ = fs::remove_dir(directory);
+}
+
+#[test]
+fn snapshot_mapping_registry_exposes_strict_replace_fields() {
+    let socket =
+        std::env::temp_dir().join(format!("mackes-mapping-registry-{}.sock", std::process::id()));
+    let mut daemon = Daemon::bind(&socket).expect("daemon");
+    daemon.mapping_store.active.push(mackes_config::ControlMapping {
+        id: "registry-map".into(),
+        controller_profile: "launch-control-xl-mk2".into(),
+        physical_control_id: "knob-r1-c1".into(),
+        source_endpoint: "controller".into(),
+        source_kind: "cc".into(),
+        source_channel: 0,
+        destination_channel: None,
+        source_number: 21,
+        destination_endpoint: "processor".into(),
+        destination_profile: "lexicon.reflex".into(),
+        destination_effect: "algorithm-1".into(),
+        destination_parameter: "reflex.parameter-1".into(),
+        behavior: mackes_config::MappingBehavior {
+            source_range: (0, 127),
+            destination_range: (0, 127),
+            invert: false,
+            curve: "linear".into(),
+        },
+        enabled: true,
+        profile_version: 1,
+    });
+    let snapshot: serde_json::Value =
+        serde_json::from_str(&daemon.snapshot_response()).expect("snapshot");
+    let mapping = &snapshot["mapping_registry"][0];
+    for field in [
+        "controller_profile",
+        "physical_control_id",
+        "source_endpoint",
+        "source_kind",
+        "source_channel",
+        "source_number",
+        "destination_endpoint",
+        "destination_profile",
+        "destination_effect",
+        "destination_parameter",
+        "behavior",
+        "profile_version",
+    ] {
+        assert!(!mapping[field].is_null(), "missing {field}");
+    }
+    drop(daemon);
+    let _ = fs::remove_file(socket);
 }
 
 #[test]
@@ -108,7 +158,7 @@ fn snapshot_projects_identity_only_endpoint_binding_status() {
     assert_eq!(bindings[2]["state"], "missing");
     assert!(bindings[2]["action"].as_str().expect("action").contains("stable device identity"));
     let _ = fs::remove_file(socket);
-    let _ = fs::remove_file(config);
+    let _ = fs::remove_file(&config);
 }
 
 #[test]
@@ -1262,6 +1312,28 @@ fn physical_device_refresh_retains_disconnected_identity() {
     let _ = fs::remove_file(path);
 }
 
+#[test]
+fn novation_snapshot_preserves_midi_hui_roles_and_ambiguity() {
+    let path =
+        std::env::temp_dir().join(format!("mackes-novation-snapshot-{}.sock", std::process::id()));
+    let mut daemon = Daemon::bind(&path).expect("daemon");
+    daemon.physical_devices = serde_json::json!([{
+        "name": "Launch Control XL Mk2",
+        "state": "ambiguous",
+        "inputs": ["xl-midi-in", "xl-hui-in"],
+        "outputs": ["xl-midi-out", "xl-hui-out"]
+    }]);
+    let snapshot: serde_json::Value =
+        serde_json::from_str(&daemon.snapshot_response()).expect("snapshot");
+    assert_eq!(snapshot["novation_device"]["lifecycle"], "Ambiguous");
+    assert!(snapshot["novation_device"]["endpoints"]
+        .as_array()
+        .expect("endpoint roles")
+        .iter()
+        .any(|endpoint| endpoint[0] == "Hui" && endpoint[1] == "xl-hui-out"));
+    let _ = std::fs::remove_file(path);
+}
+
 #[cfg(target_os = "linux")]
 #[test]
 fn daemon_state_journal_supports_snapshot_replay_and_gap_detection() {
@@ -1726,6 +1798,42 @@ fn configured_route_store_restores_after_daemon_rebind() {
     assert_eq!(daemon.router.routes().len(), 1);
     assert_eq!(daemon.route_generation(), Some(1));
     let _ = fs::remove_file(persisted);
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn configured_route_store_replays_interrupted_pair_journal_before_restore() {
+    let config =
+        std::env::temp_dir().join(format!("mackes-route-journal-{}.json5", std::process::id()));
+    let socket =
+        std::env::temp_dir().join(format!("mackes-route-journal-{}.sock", std::process::id()));
+    let journal = config.with_extension("routes.commit.json");
+    fs::write(&config, b"{}\n").expect("config");
+    fs::write(
+        &journal,
+        serde_json::to_vec(&serde_json::json!({
+            "first_name": "mackes-route-journal-{}.routes.json",
+            "first": {"routes": [{"source": 5, "destination": 6, "class": "Note"}]},
+            "second_name": "mackes-route-journal-{}.routes.undo.json",
+            "second": {"routes": [{"source": 1, "destination": 2, "class": "Note"}]}
+        }))
+        .expect("journal"),
+    )
+    .expect("prepared journal");
+    let first_name = config.file_name().expect("config name").to_string_lossy();
+    let journal_text = fs::read_to_string(&journal)
+        .expect("journal text")
+        .replace("mackes-route-journal-{}.routes", &first_name.replace(".json5", ".routes"));
+    fs::write(&journal, journal_text).expect("named journal");
+    let mut daemon = Daemon::bind(&socket).expect("daemon");
+    daemon.set_config_path(&config);
+    assert_eq!(daemon.router.routes().len(), 1);
+    assert!(daemon.route_undo.is_some());
+    assert!(!journal.exists());
+    let _ = fs::remove_file(socket);
+    let _ = fs::remove_file(&config);
+    let _ = fs::remove_file(config.with_extension("routes.json"));
+    let _ = fs::remove_file(config.with_extension("routes.undo.json"));
 }
 
 #[test]

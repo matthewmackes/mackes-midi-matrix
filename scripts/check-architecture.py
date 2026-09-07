@@ -14,13 +14,16 @@ MAX_LINES = {
     # Novation XL protocol, LED batch encoding, and first-class controller
     # capability descriptors remain in the profile boundary pending extraction.
     "crates/profiles/src/lib.rs": 3200,
-    "crates/midi-engine/src/lib.rs": 3100,
+    # The bounded virtual-controller injection API keeps benchmark fixtures on the shared
+    # endpoint contract; its small addition is explicitly accounted for here.
+    "crates/midi-engine/src/lib.rs": 3120,
     "crates/tui/src/lib.rs": 4200,
     # The daemon's composition root retains a small amount of wiring while the
     # remaining service modules are extracted incrementally.  Keep this ceiling
     # explicit and reviewed rather than silently allowing unbounded growth.
-    # PiPedal worker publication adds a small, reviewed composition-root seam.
-    "apps/mackesd/src/lib.rs": 4000,
+    # PiPedal worker publication and the bounded physical-control dispatch bridge add a
+    # small, reviewed composition-root seam pending the next module extraction.
+    "apps/mackesd/src/lib.rs": 4020,
     "apps/mackes/src/main.rs": 840,
 }
 
@@ -41,6 +44,10 @@ ALLOWED_LOCAL_DEPS = {
     # The daemon-boundary adapter may depend on the transport-independent
     # connector; the daemon itself remains insulated from both packages.
     "mackes-pipedal-adapter": {"mackes-ipc", "mackes-pipedal-connector"},
+    # Shared, transport-neutral HTTP/API value contracts.
+    "mackes-web-contract": set(),
+    # Same-origin HTTP adapter; all authoritative state remains daemon-owned over IPC.
+    "mackes-web": {"mackes-ipc", "mackes-web-contract"},
 }
 
 

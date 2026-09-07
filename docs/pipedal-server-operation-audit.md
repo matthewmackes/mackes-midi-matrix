@@ -1,0 +1,160 @@
+# PiPedal server operation audit
+
+Research checkpoint for W145/W150, 2026-09-07. Enumerated all 104 message
+registrations in local src/PiPedalSocket.cpp, compared with 18 connector Operation variants.
+This file inventories exposed handlers, not qualified end-to-end functionality.
+HTTP endpoints, outbound notifications and plugin-specific metadata still need separate review.
+
+Source: sibling pipedal checkout commit 859183d0d9614372318680433326e6c94c0251e5.
+PiPedalSocket.cpp has no local changes and SHA-256
+09691576451b502849db9028c4e22fbba2a9f9b2105b40f01ad049c8d7ccdc61.
+Connector source SHA-256:
+097c255dca356a6a882f7507013c35e595694cb0f0dbe7fa73f6d9a2198fc2bf.
+The installed server version has not been matched to this source revision.
+
+## Per-operation inventory
+
+Each stable feature ID is pipedal.<handler>. All rows use the source pin above.
+“Catalogued” means enum membership only; payload, compatibility, permissions, persistence,
+notifications and browser acceptance remain to be reconciled individually.
+UI destination below is a proposed design home. Technical helper operations may support a
+user-facing workflow without needing an independent button; require a documented disposition.
+
+| Handler / feature suffix | Connector catalog | Proposed UI home | Qualification |
+|---|---|---|---|
+| setControl | catalogued | Pedalboard and parameter inspector | pending W150 |
+| makeTone3000Pkce | missing | Device assets/library | pending W150 |
+| writeTone3000Readme | missing | Device assets/library | pending W150 |
+| sha256Base64url | missing | Device assets/library | pending W150 |
+| previewControl | catalogued | Pedalboard and parameter inspector | pending W150 |
+| setInputVolume | catalogued | Pedalboard and parameter inspector | pending W150 |
+| setOutputVolume | catalogued | Pedalboard and parameter inspector | pending W150 |
+| previewInputVolume | missing | Pedalboard and parameter inspector | pending W150 |
+| previewOutputVolume | missing | Pedalboard and parameter inspector | pending W150 |
+| listenForMidiEvent | missing | Monitoring and MIDI | pending W150 |
+| cancelListenForMidiEvent | missing | Monitoring and MIDI | pending W150 |
+| monitorPatchProperty | missing | Monitoring and MIDI | pending W150 |
+| cancelMonitorPatchProperty | missing | Monitoring and MIDI | pending W150 |
+| getUpdateStatus | missing | Device system settings | pending W150 |
+| getHasWifi | missing | Device system settings | pending W150 |
+| updateNow | missing | Device system settings | pending W150 |
+| getJackStatus | catalogued | Device system settings | pending W150 |
+| getAlsaDevices | catalogued | Device system settings | pending W150 |
+| getKnownWifiNetworks | missing | Device system settings | pending W150 |
+| getWifiChannels | missing | Device system settings | pending W150 |
+| getPluginPresets | missing | Presets and snapshots | pending W150 |
+| loadPluginPreset | missing | Presets and snapshots | pending W150 |
+| setJackServerSettings | missing | Device system settings | pending W150 |
+| setGovernorSettings | missing | Device system settings | pending W150 |
+| setWifiConfigSettings | missing | Device system settings | pending W150 |
+| getWifiConfigSettings | missing | Device system settings | pending W150 |
+| setWifiDirectConfigSettings | missing | Device system settings | pending W150 |
+| getWifiDirectConfigSettings | missing | Device system settings | pending W150 |
+| getGovernorSettings | missing | Device system settings | pending W150 |
+| getJackServerSettings | missing | Device system settings | pending W150 |
+| getBankIndex | missing | Presets and snapshots | pending W150 |
+| getJackConfiguration | missing | Device system settings | pending W150 |
+| getJackSettings | missing | Device system settings | pending W150 |
+| saveCurrentPreset | catalogued | Presets and snapshots | pending W150 |
+| saveCurrentPresetAs | missing | Presets and snapshots | pending W150 |
+| setSelectedPedalboardPlugin | catalogued | Pedalboard and parameter inspector | pending W150 |
+| savePluginPresetAs | missing | Presets and snapshots | pending W150 |
+| getPresets | missing | Presets and snapshots | pending W150 |
+| setPedalboardItemEnable | catalogued | Pedalboard and parameter inspector | pending W150 |
+| setPedalboardItemUseModUi | catalogued | Pedalboard and parameter inspector | pending W150 |
+| updateCurrentPedalboard | catalogued | Pedalboard and parameter inspector | pending W150 |
+| setSnapshot | catalogued | Presets and snapshots | pending W150 |
+| setSnapshots | catalogued | Presets and snapshots | pending W150 |
+| currentPedalboard | missing | Pedalboard and parameter inspector | pending W150 |
+| plugins | missing | Pedalboard and parameter inspector | pending W150 |
+| pluginClasses | missing | Pedalboard and parameter inspector | pending W150 |
+| hello | missing | Device session/preferences | pending W150 |
+| setShowStatusMonitor | missing | Monitoring and MIDI | pending W150 |
+| getShowStatusMonitor | missing | Monitoring and MIDI | pending W150 |
+| version | missing | Device session/preferences | pending W150 |
+| loadPreset | catalogued | Presets and snapshots | pending W150 |
+| updatePresets | missing | Presets and snapshots | pending W150 |
+| updatePluginPresets | missing | Presets and snapshots | pending W150 |
+| moveBank | missing | Presets and snapshots | pending W150 |
+| shutdown | catalogued | Device system settings | pending W150 |
+| restart | catalogued | Device system settings | pending W150 |
+| deletePresetItems | missing | Presets and snapshots | pending W150 |
+| deleteBankItem | missing | Presets and snapshots | pending W150 |
+| renameBank | missing | Presets and snapshots | pending W150 |
+| openBank | missing | Presets and snapshots | pending W150 |
+| saveBankAs | missing | Presets and snapshots | pending W150 |
+| nextBank | missing | Presets and snapshots | pending W150 |
+| previousBank | missing | Presets and snapshots | pending W150 |
+| nextPreset | missing | Presets and snapshots | pending W150 |
+| previousPreset | missing | Presets and snapshots | pending W150 |
+| renamePresetItem | missing | Presets and snapshots | pending W150 |
+| copyPreset | missing | Presets and snapshots | pending W150 |
+| copyPluginPreset | missing | Presets and snapshots | pending W150 |
+| setPatchProperty | missing | Pedalboard and parameter inspector | pending W150 |
+| setPedalboardItemTitle | catalogued | Pedalboard and parameter inspector | pending W150 |
+| getPatchProperty | missing | Pedalboard and parameter inspector | pending W150 |
+| monitorPort | missing | Monitoring and MIDI | pending W150 |
+| unmonitorPort | missing | Monitoring and MIDI | pending W150 |
+| addVuSubscription | missing | Monitoring and MIDI | pending W150 |
+| removeVuSubscription | missing | Monitoring and MIDI | pending W150 |
+| imageList | missing | Device assets/library | pending W150 |
+| getFavorites | missing | Device session/preferences | pending W150 |
+| setFavorites | missing | Device session/preferences | pending W150 |
+| setUpdatePolicy | missing | Device system settings | pending W150 |
+| forceUpdateCheck | missing | Device system settings | pending W150 |
+| setSystemMidiBindings | catalogued | Monitoring and MIDI | pending W150 |
+| getSystemMidiBindings | missing | Monitoring and MIDI | pending W150 |
+| requestFileList | missing | Device assets/library | pending W150 |
+| requestFileList2 | missing | Device assets/library | pending W150 |
+| newPreset | missing | Presets and snapshots | pending W150 |
+| deleteUserFile | missing | Device assets/library | pending W150 |
+| createNewSampleDirectory | missing | Device assets/library | pending W150 |
+| renameFilePropertyFile | missing | Device assets/library | pending W150 |
+| copyFilePropertyFile | missing | Device assets/library | pending W150 |
+| getFilePropertyDirectoryTree | missing | Device assets/library | pending W150 |
+| moveAudioFile | missing | Device assets/library | pending W150 |
+| setOnboarding | missing | Device system settings | pending W150 |
+| getWifiRegulatoryDomains | missing | Device system settings | pending W150 |
+| setAlsaSequencerConfiguration | missing | Device system settings | pending W150 |
+| getAlsaSequencerConfiguration | missing | Device system settings | pending W150 |
+| getAlsaSequencerPorts | missing | Device system settings | pending W150 |
+| requestBankPresets | missing | Presets and snapshots | pending W150 |
+| importPresetsFromBank | missing | Presets and snapshots | pending W150 |
+| copyPresetsToBank | missing | Presets and snapshots | pending W150 |
+| getChannelRouterSettings | missing | Device session/preferences | pending W150 |
+| setChannelRouterSettings | missing | Device session/preferences | pending W150 |
+| DownloadModelsFromTone3000 | missing | Device assets/library | pending W150 |
+| cancelTone3000Download | missing | Device assets/library | pending W150 |
+| pingTone3000Server | missing | Device assets/library | pending W150 |
+
+## Concrete semantic findings
+
+- setControl and previewControl read ControlChangedBody and call distinct model functions.
+  The inspected handlers do not issue a direct Reply. W150 must identify the actual notification
+  path and correlation rules; awaiting a fabricated per-request ACK would hang.
+- setSnapshot reads a scalar int64 index; setSnapshots reads SetSnapshotsBody.
+  They cannot share a generic object payload without a verified adapter conversion.
+- setInputVolume and setOutputVolume read scalar float values. Range and unit must come
+  from the model/client metadata, not a blanket normalized 0–1 browser input.
+- saveCurrentPreset supplies the server client ID to the model, with no direct Reply in this
+  handler. Save-as uses a structured payload and returns a preset identity.
+- saveCurrentPresetAs and savePluginPresetAs reply with the observed name
+  saveCurrentPresetsAs. Preserve protocol spelling in version-specific fixtures.
+- Selecting a plugin changes UI context; enabling it changes audio behavior. Distinguish those
+  operation semantics in the visual editor and undo/persistence policy.
+
+## Requirements to close the newly discovered gap
+
+W150 must reconcile every row against client serializers, server body types, model side effects,
+reply/event emission and matching-version fixtures. Extend the connector for user-addressable
+operations missing from its catalog. Record internal helper operations with the workflow that uses
+them; do not classify the entire missing catalog as unsupported. Keep service changes, file
+deletion, imports, downloads and preset writes explicit user actions. No such action was run
+during this read-only audit.
+
+For each row add payload schema, response/event, value domain, persistence, confirmation and
+idempotency rules, canonical editor/control and browser evidence. Test subscriptions with
+unsubscribe/reconnect and bounded queues. Test library operations with non-production fixtures
+and path validation. Inspect HTTP upload/download routes separately before declaring the device
+inventory exhaustive. External account workflows require actual account authorization at execution.
+

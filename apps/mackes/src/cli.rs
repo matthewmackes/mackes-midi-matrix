@@ -1,6 +1,19 @@
 //! Daemon-backed operator CLI helpers.
 #![allow(clippy::redundant_pub_crate)]
 
+pub(crate) const fn pipedal_snapshot_request() -> mackes_ipc::PiPedalRequest {
+    mackes_ipc::PiPedalRequest {
+        operation: mackes_ipc::PiPedalOperation::Snapshot,
+        generation: 0,
+        confirm: false,
+        mapping: None,
+        physical_control_id: None,
+        instance_id: None,
+        client_id: None,
+        value: None,
+    }
+}
+
 pub(crate) fn reflex_pcm70_preset(
     preset_id: &str,
     destination: Option<&str>,
@@ -34,6 +47,86 @@ pub(crate) fn reflex_pcm70_preset(
     } else {
         Err(format!("Reflex preset send failed: {response}"))
     }
+}
+
+pub(crate) fn novation_command(args: &[String]) -> ! {
+    let result = match args {
+        [action, endpoint] if action == "candidates" => {
+            print_learn(endpoint, 128);
+            std::process::exit(0)
+        }
+        [action, endpoint, limit] if action == "candidates" => {
+            print_learn(endpoint, limit.parse().unwrap_or(0));
+            std::process::exit(0)
+        }
+        [action, path, stable_id] if action == "bind" => {
+            bind_novation_cli(path, stable_id, None).map(|()| format!("bound {stable_id}"))
+        }
+        [action, path, stable_id, template] if action == "bind" => {
+            bind_novation_cli(path, stable_id, Some(template))
+                .map(|()| format!("bound {stable_id}"))
+        }
+        [action] if action == "status" => Ok(novation_status(false)),
+        [action, flag] if action == "status" && flag == "--json" => Ok(novation_status(true)),
+        [action] if action == "rescan" || action == "rebind" => Ok(rescan_cli(false)),
+        [action] => novation_assignment(action, 0, None),
+        [action, generation] => generation.parse::<u64>().map_or_else(
+            |_| Err("invalid assignment generation".to_owned()),
+            |generation| novation_assignment(action, generation, None),
+        ),
+        [action, generation, physical] if action == "capture" => {
+            generation.parse::<u64>().map_or_else(
+                |_| Err("invalid assignment generation".to_owned()),
+                |generation| novation_assignment(action, generation, Some(physical)),
+            )
+        }
+        [action, generation, physical, profile, effect, parameter] if action == "commit" => {
+            generation.parse::<u64>().map_or_else(
+                |_| Err("invalid assignment generation".to_owned()),
+                |generation| novation_commit(generation, physical, profile, effect, parameter),
+            )
+        }
+        _ => Err("invalid novation command".to_owned()),
+    };
+    match result {
+        Ok(response) => {
+            println!("{response}");
+            std::process::exit(0);
+        }
+        Err(error) => {
+            eprintln!("novation command failed: {error}");
+            std::process::exit(2);
+        }
+    }
+}
+
+/// Persists an explicit Novation identity without matching by display name or ALSA address.
+pub(crate) fn bind_novation_cli(
+    path: &str,
+    stable_id: &str,
+    template: Option<&str>,
+) -> Result<(), String> {
+    if stable_id.is_empty() || stable_id.len() > 128 || stable_id != stable_id.trim() {
+        return Err("stable Novation identity must be a non-empty bounded token".into());
+    }
+    let template = template
+        .map(|value| value.parse::<u8>().map_err(|_| "template must be 0..15".to_owned()))
+        .transpose()?
+        .unwrap_or(mackes_profiles::LAUNCH_CONTROL_MK2_FACTORY1_SLOT);
+    if template >= 16 {
+        return Err("template must be 0..15".into());
+    }
+    let path = std::path::Path::new(path);
+    let mut document = mackes_config::load(path).map_err(|error| error.to_string())?;
+    document.settings.novation_device = Some(mackes_config::NovationDeviceConfig {
+        version: 1,
+        stable_id: Some(stable_id.to_owned()),
+        template,
+        auto_reapply: true,
+        feedback_enabled: true,
+    });
+    mackes_config::validate(&document)?;
+    mackes_config::save(path, &document, 10).map_err(|error| error.to_string())
 }
 
 pub(crate) fn set_default_provider_cli(
@@ -515,6 +608,123 @@ pub(crate) fn daemon_status(json: bool) -> String {
             "{\"daemon\":\"unavailable\",\"reason\":\"runtime IPC is not connected\"}".into()
         }
         (false, None) => "daemon=unavailable (runtime IPC is not connected)".into(),
+    }
+}
+
+/// Prints the daemon-owned first-class Novation device projection.
+pub(crate) fn novation_status(json: bool) -> String {
+    let response = daemon_status(true);
+    let Ok(value) = serde_json::from_str::<serde_json::Value>(&response) else {
+        return response;
+    };
+    novation_status_projection(&value, json)
+}
+
+pub(crate) fn novation_status_projection(value: &serde_json::Value, json: bool) -> String {
+    let device = value.get("novation_device").cloned().unwrap_or(serde_json::Value::Null);
+    let bindings = value.get("endpoint_bindings").cloned().unwrap_or(serde_json::json!([]));
+    if json {
+        return serde_json::json!({"ok": value.get("ok"), "generation": value.get("generation"), "novation_device": device, "endpoint_bindings": bindings}).to_string();
+    }
+    let issues = bindings
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|binding| {
+            binding.get("state").and_then(serde_json::Value::as_str) != Some("connected")
+        })
+        .map(|binding| {
+            format!(
+                "{}: {}",
+                binding.get("alias").and_then(serde_json::Value::as_str).unwrap_or("unknown-alias"),
+                binding
+                    .get("action")
+                    .and_then(serde_json::Value::as_str)
+                    .unwrap_or("inspect binding")
+            )
+        })
+        .collect::<Vec<_>>();
+    let suffix =
+        if issues.is_empty() { String::new() } else { format!(" issues={}", issues.join("; ")) };
+    format!(
+        "Novation: lifecycle={} identity={} generation={} bindings={}{}",
+        device.get("lifecycle").and_then(serde_json::Value::as_str).unwrap_or("unknown"),
+        device.get("stable_id").and_then(serde_json::Value::as_str).unwrap_or("unbound"),
+        device.get("binding_generation").and_then(serde_json::Value::as_u64).unwrap_or(0),
+        bindings.as_array().map_or(0, Vec::len),
+        suffix
+    )
+}
+
+/// Sends one bounded assignment-session action through daemon IPC.
+pub(crate) fn novation_assignment(
+    action: &str,
+    generation: u64,
+    physical_control_id: Option<&str>,
+) -> Result<String, String> {
+    let action = match action {
+        "snapshot" => mackes_ipc::AssignmentAction::Snapshot,
+        "start" => mackes_ipc::AssignmentAction::Start,
+        "capture" => mackes_ipc::AssignmentAction::ControlCaptured,
+        "up" => mackes_ipc::AssignmentAction::Up,
+        "down" => mackes_ipc::AssignmentAction::Down,
+        "enter" => mackes_ipc::AssignmentAction::Enter,
+        "back" => mackes_ipc::AssignmentAction::Back,
+        "confirm-replace" => mackes_ipc::AssignmentAction::ConfirmReplace,
+        "retry" => mackes_ipc::AssignmentAction::Retry,
+        "resume" => mackes_ipc::AssignmentAction::Resume,
+        "interrupt" => mackes_ipc::AssignmentAction::Interrupt,
+        "discard" => mackes_ipc::AssignmentAction::Discard,
+        "cancel" => mackes_ipc::AssignmentAction::Cancel,
+        _ => return Err("unknown Novation assignment action".into()),
+    };
+    let request = mackes_ipc::AssignmentRequest {
+        generation,
+        action,
+        physical_control_id: physical_control_id.map(str::to_owned),
+        destination_profile: None,
+        destination_effect: None,
+        destination_parameter: None,
+    }
+    .validate()
+    .map_err(str::to_owned)?;
+    let response = daemon_request(
+        mackes_ipc::Command::Assignment,
+        &serde_json::to_vec(&request).map_err(|error| error.to_string())?,
+    );
+    if response.contains("\"ok\":false") || response.contains("\"applied\":false") {
+        Err(response)
+    } else {
+        Ok(response)
+    }
+}
+
+/// Commits one complete Novation assignment through the daemon session.
+pub(crate) fn novation_commit(
+    generation: u64,
+    physical_control_id: &str,
+    profile: &str,
+    effect: &str,
+    parameter: &str,
+) -> Result<String, String> {
+    let request = mackes_ipc::AssignmentRequest {
+        generation,
+        action: mackes_ipc::AssignmentAction::Commit,
+        physical_control_id: Some(physical_control_id.into()),
+        destination_profile: Some(profile.into()),
+        destination_effect: Some(effect.into()),
+        destination_parameter: Some(parameter.into()),
+    }
+    .validate()
+    .map_err(str::to_owned)?;
+    let response = daemon_request(
+        mackes_ipc::Command::Assignment,
+        &serde_json::to_vec(&request).map_err(|error| error.to_string())?,
+    );
+    if response.contains("\"ok\":false") || response.contains("\"applied\":false") {
+        Err(response)
+    } else {
+        Ok(response)
     }
 }
 
@@ -1315,5 +1525,27 @@ pub(crate) const fn restore_result_status(result: &mackes_config::RestoreResult)
     match result {
         mackes_config::RestoreResult::Planned { status, .. }
         | mackes_config::RestoreResult::Applied { status, .. } => backup_status_label(status),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn novation_status_preserves_binding_remediation_in_json_and_human_output() {
+        let value = serde_json::json!({"ok": true, "generation": 4,
+            "novation_device": {"lifecycle": "ready", "stable_id": "novation:1235:0061", "binding_generation": 2},
+            "endpoint_bindings": [{"alias": "launch-control", "state": "missing", "action": "rescan and rebind this alias"}]});
+        let json = super::novation_status_projection(&value, true);
+        let human = super::novation_status_projection(&value, false);
+        assert!(
+            json.contains("\"state\":\"missing\"") && json.contains("rescan and rebind this alias")
+        );
+        assert!(human.contains("launch-control: rescan and rebind this alias"));
+    }
+
+    #[test]
+    fn novation_bind_rejects_ambiguous_identity_and_template() {
+        assert!(super::bind_novation_cli("/missing", " name ", None).is_err());
+        assert!(super::bind_novation_cli("/missing", "novation:1235:0061", Some("16")).is_err());
     }
 }

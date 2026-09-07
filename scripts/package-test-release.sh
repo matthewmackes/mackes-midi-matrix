@@ -18,9 +18,10 @@ trap 'rm -rf -- "$staging"' EXIT
 
 cargo build --release --locked \
   --package mackes-midi-matrix \
-  --package mackesd
+  --package mackesd \
+  --package mackes-web
 
-for binary in mackes-midi-matrix mackes-midi-matrixd; do
+for binary in mackes-midi-matrix mackes-midi-matrixd mackes-web; do
   path="$root_dir/target/release/$binary"
   [[ -x "$path" ]] || {
     printf 'missing release binary: %s; run cargo build --release --locked\n' "$path" >&2
@@ -32,17 +33,21 @@ install -d -m 0755 \
   "$staging/$bundle_name/target/release" \
   "$staging/$bundle_name/scripts" \
   "$staging/$bundle_name/packaging" \
+  "$staging/$bundle_name/schemas" \
   "$staging/$bundle_name/docs"
 install -m 0755 "$root_dir/target/release/mackes-midi-matrix" \
   "$staging/$bundle_name/target/release/mackes-midi-matrix"
 install -m 0755 "$root_dir/target/release/mackes-midi-matrixd" \
   "$staging/$bundle_name/target/release/mackes-midi-matrixd"
+install -m 0755 "$root_dir/target/release/mackes-web" \
+  "$staging/$bundle_name/target/release/mackes-web"
 install -m 0755 "$root_dir/scripts/install-fedora.sh" \
   "$root_dir/scripts/mackes-midi-matrix-local" \
   "$root_dir/scripts/verify-artifacts.py" \
   "$root_dir/scripts/test-verify-artifacts.py" \
   "$staging/$bundle_name/scripts/"
 install -m 0644 "$root_dir/packaging/mackes.service" \
+  "$root_dir/packaging/mackes-web.service" \
   "$root_dir/packaging/10-appliance.conf" \
   "$root_dir/packaging/mackes-midi-matrix-tui.service" \
   "$staging/$bundle_name/packaging/"
@@ -52,8 +57,11 @@ install -m 0644 "$root_dir/README.md" "$root_dir/LICENSE" "$root_dir/Cargo.lock"
   "$staging/$bundle_name/"
 install -m 0644 "$root_dir/docs/installation-fedora.md" \
   "$root_dir/docs/hardware-qualification.md" \
+  "$root_dir/docs/web-api-v1.md" \
+  "$root_dir/docs/web-feature-coverage.md" \
   "$root_dir/docs/mackes-launch-control-xl-mk2-factory1-manifest.json" \
   "$staging/$bundle_name/docs/"
+install -m 0644 "$root_dir/schemas/web-api-v1.schema.json" "$staging/$bundle_name/schemas/"
 install -m 0644 "$root_dir/docs/releases/$version.md" "$staging/$bundle_name/RELEASE_NOTES.md"
 printf 'version=%s\nsource_commit=%s\n' "$version" "$source_commit" >"$staging/$bundle_name/BUILD_PROVENANCE"
 

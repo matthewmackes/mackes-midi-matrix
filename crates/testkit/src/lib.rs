@@ -13,6 +13,70 @@ pub enum Fault {
     WriteFailure,
 }
 
+/// Deterministic Launch Control XL stand-in for controller and routing tests.
+///
+/// This fixture models the two MIDI directions exposed by the device while keeping all
+/// traffic in memory; no ALSA client, USB device, or physical Novation controller is needed.
+#[derive(Debug)]
+pub struct VirtualLaunchControlXl {
+    /// Controller-to-daemon event endpoint.
+    pub input: mackes_midi_engine::VirtualEndpoint,
+    /// Daemon-to-controller feedback endpoint.
+    pub output: mackes_midi_engine::VirtualEndpoint,
+    next_sequence: u64,
+}
+
+impl VirtualLaunchControlXl {
+    /// Creates a bounded virtual Launch Control XL Mk2 MIDI pair.
+    #[must_use]
+    pub fn new(output_capacity: usize) -> Self {
+        Self {
+            input: mackes_midi_engine::VirtualEndpoint::new(
+                "virtual-launch-control-xl-input",
+                "Virtual Launch Control XL Mk2 MIDI",
+                mackes_midi_engine::EndpointDirection::Input,
+            ),
+            output: mackes_midi_engine::VirtualEndpoint::new(
+                "virtual-launch-control-xl-output",
+                "Virtual Launch Control XL Mk2 MIDI",
+                mackes_midi_engine::EndpointDirection::Output,
+            )
+            .with_capacity(output_capacity),
+            next_sequence: 0,
+        }
+    }
+
+    /// Injects a bounded synthetic controller event into the virtual input.
+    pub fn inject(&mut self, event: mackes_domain::MidiEvent) {
+        self.input.inject(event);
+    }
+
+    /// Injects a Factory-1-style note press, using the device's controller channel.
+    pub fn press(&mut self, note: u8) {
+        self.inject_note(note, 127);
+    }
+
+    /// Injects the device's velocity-zero Note On release encoding.
+    pub fn release(&mut self, note: u8) {
+        self.inject_note(note, 0);
+    }
+
+    fn inject_note(&mut self, note: u8, velocity: u8) {
+        let sequence = self.next_sequence;
+        self.next_sequence = self.next_sequence.saturating_add(1);
+        self.inject(mackes_domain::MidiEvent {
+            timestamp: mackes_domain::TimestampNanos::new(sequence),
+            sequence,
+            endpoint: mackes_domain::EndpointId::new(1).expect("virtual endpoint"),
+            message: mackes_domain::MidiMessage::NoteOn {
+                channel: mackes_domain::MidiChannel::new(9).expect("controller channel"),
+                note: mackes_domain::SevenBit::new(note.into()).expect("note"),
+                velocity: mackes_domain::SevenBit::new(velocity.into()).expect("velocity"),
+            },
+        });
+    }
+}
+
 /// Names of the hermetic integration scenarios required by the worklist.
 ///
 /// Keeping this inventory in code makes omissions visible to CI and gives each
@@ -74,7 +138,10 @@ mod tests {
         EndpointDirection, MessageClass, MidiInputAdapter, MidiOutputAdapter, Route, Router,
         RtpMidiPeer, SequenceDisposition, SysexReassembler, VirtualEndpoint,
     };
-    use mackes_profiles::{resolve_alias, AliasSelector, ObservedEndpoint, Resolution};
+    use mackes_profiles::{
+        launch_control_mk2_factory1_layout, resolve_alias, AliasSelector, ObservedEndpoint,
+        Resolution,
+    };
     use mackes_scene_engine::{
         panic_plan, ActionResult, ActivationAction, ActivationPlan, SafetyController,
     };
@@ -89,6 +156,86 @@ mod tests {
         for (index, name) in INTEGRATION_SCENARIOS.iter().enumerate() {
             assert!(!INTEGRATION_SCENARIOS[..index].contains(name));
         }
+    }
+
+    #[test]
+    fn virtual_launch_control_xl_has_bounded_midi_pair() {
+        let mut controller = VirtualLaunchControlXl::new(64);
+        assert_eq!(
+            MidiInputAdapter::info(&controller.input).name,
+            "Virtual Launch Control XL Mk2 MIDI"
+        );
+        assert_eq!(MidiInputAdapter::info(&controller.input).direction, EndpointDirection::Input);
+        assert_eq!(
+            MidiOutputAdapter::info(&controller.output).name,
+            "Virtual Launch Control XL Mk2 MIDI"
+        );
+        assert_eq!(
+            MidiOutputAdapter::info(&controller.output).direction,
+            EndpointDirection::Output
+        );
+        assert_eq!(controller.output.stats(), mackes_midi_engine::EndpointStats::default());
+        controller.press(105);
+        controller.release(105);
+        let press = controller.input.receive().expect("press event");
+        let release = controller.input.receive().expect("release event");
+        assert_eq!((press.sequence, release.sequence), (0, 1));
+        assert!(matches!(
+            release.message,
+            mackes_domain::MidiMessage::NoteOn { velocity, .. } if velocity.as_u8() == 0
+        ));
+    }
+
+    #[test]
+    fn virtual_launch_control_xl_factory_layout_is_complete_and_channel_scoped() {
+        let layout = launch_control_mk2_factory1_layout();
+        assert_eq!(layout.len(), 56);
+        assert_eq!(layout.iter().filter(|control| control.channel == 8).count(), 56);
+        assert_eq!(
+            layout
+                .iter()
+                .filter(|control| control.role == mackes_profiles::PhysicalControlRole::Knob)
+                .count(),
+            24
+        );
+        assert_eq!(
+            layout
+                .iter()
+                .filter(
+                    |control| control.role == mackes_profiles::PhysicalControlRole::ChannelButton
+                )
+                .count(),
+            16
+        );
+        assert_eq!(
+            layout
+                .iter()
+                .filter(|control| control.role == mackes_profiles::PhysicalControlRole::Fader)
+                .count(),
+            8
+        );
+        assert_eq!(
+            layout
+                .iter()
+                .filter(|control| control.role == mackes_profiles::PhysicalControlRole::Utility)
+                .count(),
+            8
+        );
+        assert_eq!(layout.iter().filter(|control| control.feedback_address.is_some()).count(), 48);
+    }
+
+    #[test]
+    fn virtual_launch_control_xl_bounds_feedback_during_mixed_traffic() {
+        let mut controller = VirtualLaunchControlXl::new(64);
+        controller.press(105);
+        let event = controller.input.receive().expect("controller event");
+        for _ in 0..128 {
+            controller.output.send(event.clone());
+        }
+        let stats = controller.output.stats();
+        assert_eq!(stats.sent, 64);
+        assert_eq!(stats.dropped, 64);
+        assert_eq!(controller.output.drain().len(), 64);
     }
 
     #[test]
@@ -292,7 +439,7 @@ mod tests {
 
     #[test]
     fn throughput_regression_routes_ten_thousand_messages_without_drops() {
-        let source = EndpointId::new(11).expect("source");
+        let source = EndpointId::new(1).expect("source");
         let destination = EndpointId::new(12).expect("destination");
         let router = Router::new(
             vec![Route {
@@ -311,12 +458,11 @@ mod tests {
             4,
         )
         .expect("router");
-        let mut output = VirtualEndpoint::new("perf-out", "performance", EndpointDirection::Output)
-            .with_capacity(10_000);
+        let mut controller = VirtualLaunchControlXl::new(10_000);
         let mut samples = Vec::with_capacity(10_000);
         for sequence in 0..10_000_u64 {
             let started = std::time::Instant::now();
-            let event = MidiEvent {
+            controller.inject(MidiEvent {
                 timestamp: TimestampNanos::new(sequence),
                 sequence,
                 endpoint: source,
@@ -325,14 +471,16 @@ mod tests {
                     controller: SevenBit::new(1).expect("controller"),
                     value: SevenBit::new((sequence % 128) as u16).expect("value"),
                 },
-            };
+            });
+            let event = MidiInputAdapter::receive(&mut controller.input).expect("input event");
             let route_result = router.route(&event);
             assert_eq!(route_result.len(), 1);
-            output.send(route_result[0].event.clone());
+            controller.output.send(route_result[0].event.clone());
             samples.push(started.elapsed());
         }
-        assert_eq!(output.stats().sent, 10_000);
-        assert_eq!(output.stats().dropped, 0);
+        assert_eq!(controller.output.stats().sent, 10_000);
+        assert_eq!(controller.output.stats().dropped, 0);
+        assert_eq!(controller.output.drain().len(), 10_000);
         samples.sort_unstable();
         let p99 = samples[(samples.len() * 99 / 100).min(samples.len() - 1)];
         assert!(p99 < std::time::Duration::from_millis(2));

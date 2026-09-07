@@ -15,6 +15,9 @@ python3 scripts/verify-artifacts.py
 python3 scripts/check-worklist.py
 python3 scripts/check-midi-ownership.py
 python3 scripts/check-architecture.py
+python3 scripts/check-web-coverage.py
+python3 scripts/check-web-api-schema.py
+python3 scripts/check-web-assets.py
 while IFS= read -r -d '' script; do
   bash -n "$script"
 done < <(find scripts -maxdepth 1 -type f -name '*.sh' -print0 | sort -z)

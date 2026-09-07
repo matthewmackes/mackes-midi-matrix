@@ -587,3 +587,9 @@ and MidiSport 4x4 (`0763:1021`) present. Native ALSA exposed four MidiSport port
 daemon endpoint inventory included the Mk2 input/output plus all four MidiSport ports. `amidi`
 and `aconnect` were available. No hardware write was performed; this advances environment
 readiness only and does not qualify layout, LED appearance, or preset projection.
+
+2026-09-06 — `scripts/qualify-hardware.sh` observation-only run found Launch Control XL
+`1235:0061`, MicroPitch `1b12:003a`, and MidiSport `0763:1021`; ALSA exposed Launch Control
+MIDI and HUI ports (`24:0`, `24:1`), four MidiSport ports (`28:0`–`28:3`), and the application
+endpoint inventory was populated. `midisport_4x4_acceptance=pass`. No vendor message, LED, or
+physical-write qualification was performed; W126 hardware checks remain open.

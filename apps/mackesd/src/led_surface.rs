@@ -117,6 +117,7 @@ pub struct LedSurface {
     diagnostics: LedDiagnostics,
     target_binding: Option<String>,
     pipedal_controls: Vec<String>,
+    template: u8,
 }
 
 impl Default for LedSurface {
@@ -140,6 +141,7 @@ impl Default for LedSurface {
             diagnostics: LedDiagnostics::new(),
             target_binding: None,
             pipedal_controls: Vec::new(),
+            template: FACTORY1_LED_TEMPLATE,
         }
     }
 }
@@ -155,6 +157,15 @@ impl LedSurface {
     /// Sets the daemon-resolved output identity used for LED writes.
     pub fn set_target_binding(&mut self, endpoint_id: Option<String>) {
         self.target_binding = endpoint_id;
+    }
+
+    /// Selects the validated wire template used for reset, selection, and LED frames.
+    pub fn set_template(&mut self, template: u8) {
+        if template < 16 && self.template != template {
+            self.template = template;
+            self.diagnostics.template = template;
+            self.request_full_resync();
+        }
     }
     /// Records the last Lexicon algorithm selection delivered by the daemon.
     pub fn set_active_lexicon_algorithm(&mut self, algorithm: u8) {
@@ -432,22 +443,18 @@ impl LedSurface {
         self.retry_backoff_until_ms = 0;
         self.diagnostics.target_id = Some(selected.1);
         if self.template_reselect_pending {
-            let reset_sent = mackes_profiles::encode_launch_control_reset(
-                mackes_profiles::LAUNCH_CONTROL_MK2_FACTORY1_SLOT,
-            )
-            .and_then(|bytes| MidiMessage::from_wire(&bytes).ok())
-            .is_some_and(|message| {
-                let event = MidiEvent {
-                    timestamp: TimestampNanos::new(0),
-                    sequence: 0,
-                    endpoint: selected.0,
-                    message,
-                };
-                outputs.send_to_endpoint(selected.0, event).is_ok()
-            });
-            if let Some(bytes) = mackes_profiles::encode_launch_control_template(
-                mackes_profiles::LAUNCH_CONTROL_MK2_FACTORY1_SLOT,
-            ) {
+            let reset_sent = mackes_profiles::encode_launch_control_reset(self.template)
+                .and_then(|bytes| MidiMessage::from_wire(&bytes).ok())
+                .is_some_and(|message| {
+                    let event = MidiEvent {
+                        timestamp: TimestampNanos::new(0),
+                        sequence: 0,
+                        endpoint: selected.0,
+                        message,
+                    };
+                    outputs.send_to_endpoint(selected.0, event).is_ok()
+                });
+            if let Some(bytes) = mackes_profiles::encode_launch_control_template(self.template) {
                 if let Ok(message) = MidiMessage::from_wire(&bytes) {
                     let event = MidiEvent {
                         timestamp: TimestampNanos::new(0),
@@ -507,7 +514,7 @@ impl LedSurface {
         pairs: &[(u8, u8)],
     ) {
         self.diagnostics.attempted = self.diagnostics.attempted.saturating_add(1);
-        let Some(bytes) = encode_launch_control_led_batch(FACTORY1_LED_TEMPLATE, pairs) else {
+        let Some(bytes) = encode_launch_control_led_batch(self.template, pairs) else {
             for (index, _) in pending {
                 self.coalescer.revert_sent(*index);
             }
@@ -1072,6 +1079,27 @@ mod tests {
         assert_eq!(surface.diagnostics.sent, first_sent);
         assert!(surface.diagnostics.coalesced > 0);
         assert_eq!(surface.coalescer.desired(0).map(|state| state.color), Some(LedColor::Amber));
+    }
+
+    #[test]
+    fn configured_template_is_used_for_led_diagnostics_and_resync() {
+        let mut outputs = OutputRegistry::new(4);
+        outputs
+            .insert(Box::new(recording("xl-midi", "Launch Control XL MIDI 1").0))
+            .expect("output");
+        let mut surface = LedSurface::default();
+        surface.set_target_binding(Some("xl-midi".into()));
+        surface.set_template(3);
+        surface.flush(
+            0,
+            &ControlMappingStore::default(),
+            &AssignmentSession::new("live"),
+            None,
+            &mut outputs,
+            false,
+        );
+        assert_eq!(surface.diagnostics.template, 3);
+        assert!(surface.diagnostics.sent > 0);
     }
 
     #[test]

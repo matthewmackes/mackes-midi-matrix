@@ -24,6 +24,8 @@ printf 'release-gate: locked dependency metadata\n'
 cargo metadata --locked --all-features --format-version 1 >/dev/null
 printf 'release-gate: workspace tests\n'
 cargo test --workspace --all-features
+printf 'release-gate: Novation emulator qualification\n'
+scripts/qualify-novation-emulator.sh
 printf 'release-gate: workspace clippy\n'
 cargo clippy --workspace --all-targets --all-features -- -D warnings
 printf 'release-gate: routing benchmark\n'
@@ -40,6 +42,12 @@ archive_listing="$(tar -tzf "$archive")"
 rg -q "mackes-midi-matrix-${version}-linux-x86_64/target/release/mackes-midi-matrix$" \
   <<<"$archive_listing"
 rg -q "mackes-midi-matrix-${version}-linux-x86_64/target/release/mackes-midi-matrixd$" \
+  <<<"$archive_listing"
+rg -q "mackes-midi-matrix-${version}-linux-x86_64/target/release/mackes-web$" \
+  <<<"$archive_listing"
+rg -q "mackes-midi-matrix-${version}-linux-x86_64/packaging/mackes-web.service$" \
+  <<<"$archive_listing"
+rg -q "mackes-midi-matrix-${version}-linux-x86_64/schemas/web-api-v1.schema.json$" \
   <<<"$archive_listing"
 rg -q "mackes-midi-matrix-${version}-linux-x86_64/BUILD_PROVENANCE$" \
   <<<"$archive_listing"

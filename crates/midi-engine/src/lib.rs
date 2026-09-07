@@ -2826,6 +2826,20 @@ impl VirtualEndpoint {
         self
     }
 
+    /// Injects one event into the bounded in-memory endpoint queue.
+    pub fn inject(&mut self, event: MidiEvent) {
+        if self.queue.len() >= self.capacity {
+            self.stats.dropped = self.stats.dropped.saturating_add(1);
+        } else {
+            self.queue.push_back(event);
+        }
+    }
+
+    /// Drains queued events from the in-memory endpoint for assertions.
+    pub fn drain(&mut self) -> Vec<MidiEvent> {
+        self.queue.drain(..).collect()
+    }
+
     /// Returns a snapshot of endpoint counters.
     #[must_use]
     pub const fn stats(&self) -> EndpointStats {

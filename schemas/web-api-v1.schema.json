@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mackes.invalid/schema/web-api-v1.schema.json",
+  "title": "MACKES web API v1 operation envelope",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["request_id", "operation", "generation"],
+  "properties": {
+    "request_id": { "type": "string", "minLength": 1, "maxLength": 96 },
+    "operation": { "type": "string", "minLength": 1, "maxLength": 96 },
+    "generation": { "type": "integer", "minimum": 0 },
+    "confirm": { "type": "boolean", "default": false },
+    "payload": { "type": ["object", "null"] }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "operation": { "const": "device_control" } } },
+      "then": { "properties": { "confirm": { "const": true }, "payload": { "$ref": "#/$defs/device_control_payload" } }, "required": ["confirm", "payload"] }
+    }
+  ],
+  "$defs": {
+    "operation_response": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["operation_id", "generation", "accepted"],
+      "properties": {
+        "operation_id": { "type": "string", "minLength": 1, "maxLength": 96 },
+        "generation": { "type": "integer", "minimum": 0 },
+        "accepted": { "type": "boolean" },
+        "daemon": { "type": ["object", "null"] }
+      }
+    },
+    "assignment_request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["generation", "action"],
+      "properties": {
+        "generation": { "type": "integer", "minimum": 0 },
+        "action": { "type": "string", "enum": ["Snapshot", "Start", "ControlCaptured", "Up", "Down", "Enter", "Back", "ConfirmReplace", "Commit", "Cancel", "Retry", "Resume", "Interrupt", "Succeed", "Fail", "Discard"] },
+        "physical_control_id": { "type": ["string", "null"], "maxLength": 64 },
+        "destination_profile": { "type": ["string", "null"], "maxLength": 96 },
+        "destination_effect": { "type": ["string", "null"], "maxLength": 96 },
+        "destination_parameter": { "type": ["string", "null"], "maxLength": 96 }
+      }
+    },
+    "backup_request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["action"],
+      "properties": {
+        "action": { "type": "string", "enum": ["create", "restore", "export", "portable_export", "portable_import"] },
+        "confirm": { "type": "boolean", "const": true },
+        "name": { "type": "string", "minLength": 1, "maxLength": 256, "pattern": "^[^/\\\\]+\\.backup$" },
+        "content": { "type": "string", "minLength": 1, "maxLength": 1048576 }
+      }
+    },
+    "device_control_payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["profile_id", "control", "channel", "value", "destination"],
+      "properties": {
+        "profile_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "control": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "channel": { "type": "integer", "minimum": 0, "maximum": 15 },
+        "value": { "type": "integer", "minimum": 0, "maximum": 65535 },
+        "destination": { "type": "string", "minLength": 1, "maxLength": 128 }
+      }
+    },
+    "error": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "message"],
+      "properties": {
+        "code": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "message": { "type": "string", "minLength": 1, "maxLength": 512 },
+        "field": { "type": ["string", "null"], "maxLength": 96 },
+        "work_item": { "type": ["string", "null"], "pattern": "^W[0-9]{3}$" }
+      }
+    },
+    "state_event": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sequence", "generation", "kind", "payload"],
+      "properties": {
+        "sequence": { "type": "integer", "minimum": 0 },
+        "generation": { "type": "integer", "minimum": 0 },
+        "kind": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "payload": { "type": "object" }
+      }
+    }
+  }
+}

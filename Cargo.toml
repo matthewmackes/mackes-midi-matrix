@@ -3,6 +3,7 @@ resolver = "2"
 members = [
   "apps/mackes",
   "apps/mackesd",
+  "apps/mackes-web",
   "crates/domain",
   "crates/config",
   "crates/ipc",
@@ -13,6 +14,7 @@ members = [
   "crates/testkit",
   "crates/pipedal-connector",
   "crates/pipedal-adapter",
+  "crates/web-contract",
 ]
 
 [workspace.package]

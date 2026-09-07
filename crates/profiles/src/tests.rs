@@ -630,6 +630,11 @@ fn launch_control_mk1_led_protocol_matches_programmers_reference() {
     );
     assert!(encode_launch_control_led_batch(8, &[(19, 1), (19, 2)]).is_none());
     assert!(encode_launch_control_led_batch(8, &[(23, 1), (19, 2)]).is_none());
+    let all_leds = (0..48).map(|index| (index, 0x7f)).collect::<Vec<_>>();
+    let full_frame = encode_launch_control_led_batch(8, &all_leds).expect("full LED frame");
+    assert_eq!(full_frame.len(), 105);
+    assert_eq!(full_frame.first(), Some(&0xf0));
+    assert_eq!(full_frame.last(), Some(&0xf7));
     assert_eq!(
         encode_launch_control_toggle(2, 7, true),
         Some(vec![0xf0, 0x00, 0x20, 0x29, 0x02, 0x11, 0x7b, 0x02, 0x07, 0x7f, 0xf7])
@@ -1334,10 +1339,26 @@ fn effect_colors_have_stable_non_color_markers() {
 fn launch_control_capability_descriptor_is_explicit_and_serializable() {
     let descriptor = launch_control_capability_descriptor();
     assert_eq!(descriptor.version, 1);
-    assert_eq!(descriptor.identity, LaunchControlIdentity::Mk1);
+    assert_eq!(descriptor.identity, LaunchControlIdentity::Mk2);
     assert_eq!(descriptor.physical_control_count, 56);
     assert_eq!(descriptor.led_count, 48);
     assert!(descriptor.template_selection);
     assert!(!descriptor.led_readback);
+    assert_eq!(
+        descriptor.identity,
+        launch_control_device_snapshot().identity,
+        "capability and device projections must publish one hardware identity"
+    );
     assert!(serde_json::to_string(&descriptor).is_ok());
+}
+
+#[test]
+fn launch_control_device_snapshot_fails_closed_until_bound() {
+    let snapshot = launch_control_device_snapshot();
+    assert_eq!(snapshot.version, 1);
+    assert_eq!(snapshot.lifecycle, LaunchControlLifecycle::Absent);
+    assert_eq!(snapshot.identity, LaunchControlIdentity::Mk2);
+    assert!(snapshot.stable_id.is_none());
+    assert!(snapshot.endpoints.is_empty());
+    assert_eq!(serde_json::to_value(snapshot).expect("snapshot JSON")["binding_generation"], 0);
 }

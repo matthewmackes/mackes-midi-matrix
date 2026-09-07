@@ -12,6 +12,7 @@ if [[ $# -ne 0 ]]; then
 fi
 
 printf 'scenario=throughput_regression_routes_ten_thousand_messages_without_drops\n'
+printf 'controller=virtual-launch-control-xl\n'
 printf 'host=%s\n' "$(hostname)"
 printf 'kernel=%s\n' "$(uname -sr)"
 printf 'rust=%s\n' "$(rustc --version)"

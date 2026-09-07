@@ -14,6 +14,8 @@ be used as alternate implementations.
 | `crates/scene-engine` | scene planning | `domain` |
 | `crates/tui` | rendering and operator input adaptation | `config`, `domain`, `ipc`, `midi-engine`, `profiles` |
 | `crates/testkit` | deterministic cross-layer fixtures | workspace crates only |
+| `crates/web-contract` | transport-neutral web API value contracts | none |
+| `apps/mackes-web` | same-origin HTTP adapter; daemon-owned state/operations | `ipc`, `web-contract` |
 | `apps/mackes` | operator composition; no physical MIDI ownership | workspace crates only |
 | `apps/mackesd` | daemon composition and sole physical-MIDI owner | workspace crates only |
 
@@ -30,7 +32,7 @@ reviewed ceilings for the current roots:
 | File | Maximum lines |
 | --- | ---: |
 | `crates/profiles/src/lib.rs` | 3,100 |
-| `crates/midi-engine/src/lib.rs` | 3,100 |
+| `crates/midi-engine/src/lib.rs` | 3,120 |
 | `crates/tui/src/lib.rs` | 4,200 |
 | `apps/mackesd/src/lib.rs` | 3,800 |
 | `apps/mackes/src/main.rs` | 800 |

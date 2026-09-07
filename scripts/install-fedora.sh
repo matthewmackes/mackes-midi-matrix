@@ -23,14 +23,15 @@ if [[ ! "$console_user" =~ ^[a-z_][a-z0-9_-]*$ || "$console_home" != /* ]]; then
   exit 83
 fi
 root_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-for required in "$root_dir/target/release/mackes-midi-matrix" "$root_dir/target/release/mackes-midi-matrixd"; do
-  if [[ ! -x "$required" ]]; then
+for required in "$root_dir/target/release/mackes-midi-matrix" "$root_dir/target/release/mackes-midi-matrixd" "$root_dir/target/release/mackes-web"; do
+if [[ ! -x "$required" ]]; then
     echo "missing executable: $required (run cargo build --release first)" >&2
     exit 79
   fi
 done
 for required in \
   "$root_dir/packaging/mackes.service" \
+  "$root_dir/packaging/mackes-web.service" \
   "$root_dir/packaging/10-appliance.conf" \
   "$root_dir/packaging/mackes-midi-matrix-tui.service" \
   "$root_dir/packaging/default-config.json5" \
@@ -83,7 +84,9 @@ install -m 0755 "$root_dir/target/release/mackes-midi-matrix" "$libexec_dir/mack
 install -m 0755 "$root_dir/scripts/mackes-midi-matrix-local" "$bin_dir/mackes-midi-matrix"
 install -m 0755 "$root_dir/scripts/mackes-midi-matrix-local" "$bin_dir/mackes-midi-matrix-local"
 install -m 0755 "$root_dir/target/release/mackes-midi-matrixd" "$libexec_dir/mackes-midi-matrixd"
+install -m 0755 "$root_dir/target/release/mackes-web" "$libexec_dir/mackes-web"
 install -m 0644 "$root_dir/packaging/mackes.service" /etc/systemd/system/mackes-midi-matrix.service
+install -m 0644 "$root_dir/packaging/mackes-web.service" /etc/systemd/system/mackes-web.service
 install -d -m 0755 /etc/systemd/system/mackes-midi-matrix.service.d
 install -m 0644 "$root_dir/packaging/10-appliance.conf" /etc/systemd/system/mackes-midi-matrix.service.d/10-appliance.conf
 install -m 0644 "$root_dir/packaging/mackes-midi-matrix-tui.service" /etc/systemd/system/mackes-midi-matrix-tui.service
@@ -100,8 +103,8 @@ fi
 chown -R mackes:mackes "$config_dir" "$state_dir" "$run_dir"
 chmod 0750 "$config_dir" "$state_dir"
 systemctl daemon-reload
-systemctl enable --now mackes-midi-matrix.service mackes-midi-matrix-tui.service
-systemctl restart mackes-midi-matrix.service
+systemctl enable --now mackes-midi-matrix.service mackes-midi-matrix-tui.service mackes-web.service
+systemctl restart mackes-midi-matrix.service mackes-web.service mackes-midi-matrix-tui.service
 if ! systemctl is-active --quiet mackes-midi-matrix.service; then
   echo "daemon installation failed: mackes-midi-matrix.service is not active" >&2
   systemctl --no-pager --full status mackes-midi-matrix.service >&2 || true
@@ -109,6 +112,10 @@ if ! systemctl is-active --quiet mackes-midi-matrix.service; then
 fi
 if ! systemctl is-enabled --quiet mackes-midi-matrix.service; then
   echo "daemon installation failed: mackes-midi-matrix.service is not enabled" >&2
+  exit 84
+fi
+if ! systemctl is-active --quiet mackes-web.service || ! systemctl is-enabled --quiet mackes-web.service; then
+  echo "web installation failed: mackes-web.service is not active and enabled" >&2
   exit 84
 fi
 if ! systemctl is-active --quiet mackes-midi-matrix-tui.service; then

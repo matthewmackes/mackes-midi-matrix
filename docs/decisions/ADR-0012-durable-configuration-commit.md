@@ -13,16 +13,21 @@ backup rotation, temporary-file write, sync, or rename is reported as a failed o
 not be acknowledged as saved. Unknown or ambiguous endpoint references remain unchanged for
 operator repair.
 
+Daemon-owned route state and its undo snapshot use a bounded same-directory prepare journal
+(`*.routes.commit.json`). The journal contains complete replacement documents, is synchronized
+before either file is replaced, and is removed only after both files and their parent directory
+are synchronized. Startup recovery replays an incomplete journal before loading route state;
+malformed, oversized, or path-escaping journals fail closed and remain for diagnosis.
+
 ## Consequences
 
 This contract makes restart recovery select a complete old or new configuration document rather
-than a partially written file. Backup files are recoverable and validated before restore. The
-contract does not pretend that independent files form a distributed transaction: multi-file
-commits require a journal or manifest protocol and remain a separate qualification item under
-W101.
+than a partially written file. Backup files are recoverable and validated before restore. Other
+independent files still require their own coordinated protocol.
 
 ## Verification
 
 `crates/config` tests cover atomic save, backup rotation, migration dry-run/apply, ambiguous-plan
-abort, backup failure, and preservation of the original document. Power-loss, disk-full, and
-multi-file journal qualification remain explicitly open.
+abort, backup failure, and preservation of the original document. The route/undo journal has
+simulated interrupted-recovery coverage; physical power-loss and disk-full qualification remain
+external evidence.

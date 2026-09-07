@@ -42,4 +42,28 @@ mod tests {
         assert!(line.contains("no unique Launch Control XL MIDI output"));
         assert!(line.contains("phase=unknown"));
     }
+
+    #[test]
+    fn led_status_line_exposes_authoritative_surface_progress() {
+        let payload = serde_json::json!({
+            "led": {
+                "phase": "initializing",
+                "desired_indices": 48,
+                "pending_indices": 23,
+                "attempted": 2,
+                "sent": 1,
+                "coalesced": 4,
+                "failed": 1,
+                "template": 8,
+                "target_id": "launch-control-xl-1",
+                "last_error": "transport timeout"
+            }
+        });
+        let line = line_from_payload(&payload).expect("led");
+        assert!(line.contains("phase=initializing"));
+        assert!(line.contains("desired=48"));
+        assert!(line.contains("pending=23"));
+        assert!(line.contains("template=8"));
+        assert!(line.contains("target=launch-control-xl-1"));
+    }
 }
