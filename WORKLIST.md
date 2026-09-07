@@ -8543,6 +8543,10 @@ Known risks and next checkpoint: Resolve prerequisite contracts and source gaps 
   after successful frame encoding and bounded queue admission; failed startup admission cannot
   leave a phantom expected reply. Added regression
   `failed_startup_queue_admission_does_not_reserve_reply_id`; focused adapter tests pass (18 tests).
+- **PiPedal source and lifecycle checkpoints:** source coverage census and response semantics are
+  recorded in commits `5f38922` and `43f3166`; restore and startup correlation fixes are recorded
+  in `a7cd169` and `e9cb72e`. These are software-contract evidence only; exhaustive handler
+  payload/event fixtures and browser acceptance remain open.
 
 ```text
 Item / subtask: W150; split numbered substeps at claim without reducing acceptance.
