@@ -8434,7 +8434,8 @@ documentation. The adapter remains the authoritative native-range validator. A r
 mapping editor now joins resolution plugin URI/symbol to catalog min/max metadata; a browser
 fixture `docs/fixtures/pipedal-native-range-example.json` plus
 `scripts/check-pipedal-range-fixture.py` now proves a `-12..12` native range join and accepted /
-rejected values. Interactive browser observation remains open.
+rejected values. The fixture is now invoked by `scripts/release-gate.sh`; interactive browser
+observation remains open.
 ```
 
 #### [>] W146 — Specify capability contracts and lossless visual drafts
