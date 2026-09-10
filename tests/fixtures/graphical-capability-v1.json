@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "generation": 42,
+  "fallback_renderer": "generic.endpoint",
+  "renderers": [
+    { "key": "novation.launch-control-xl", "device_kind": "controller", "model": "Launch Control XL", "graphic": { "format": "svg", "view_box": "0 0 1000 560", "accessible_name": "Novation Launch Control XL controller" }, "ports": [{ "key": "midi-in", "label": "MIDI in", "direction": "input", "media": "midi", "state": "unknown" }], "controls": [{ "key": "knob-r1-c1", "label": "Knob 1", "type": "continuous", "editable": true, "readback": "unknown" }], "readback": "unknown", "qualification": "qualified" },
+    { "key": "eventide.micropitch", "device_kind": "pedal", "model": "MicroPitch", "graphic": { "format": "svg", "view_box": "0 0 360 150", "accessible_name": "Eventide MicroPitch pedal" }, "ports": [], "controls": [{ "key": "mix", "label": "Mix", "type": "continuous", "editable": true, "unit": "percent", "readback": "sent-unverified", "minimum": 0, "maximum": 127 }], "readback": "sent-unverified", "qualification": "qualified" },
+    { "key": "lexicon.reflex", "device_kind": "rack", "model": "Reflex", "graphic": { "format": "svg", "view_box": "0 0 360 150", "accessible_name": "Lexicon Reflex rack processor" }, "ports": [], "controls": [{ "key": "algorithm", "label": "Algorithm", "type": "enum", "editable": true, "readback": "unknown", "values": ["Algorithm 1"] }], "readback": "unknown", "qualification": "qualified" },
+    { "key": "pipedal", "device_kind": "pedalboard", "model": null, "graphic": { "format": "svg", "view_box": "0 0 360 150", "accessible_name": "PiPedal pedalboard" }, "ports": [], "controls": [{ "key": "plugin-control", "label": "Plugin control", "type": "continuous", "editable": true, "readback": "observed" }], "readback": "observed", "qualification": "qualified" },
+    { "key": "m-audio.midisport-4x4", "device_kind": "interface", "model": "MIDISPORT 4x4", "graphic": { "format": "svg", "view_box": "0 0 360 150", "accessible_name": "M-Audio MIDISPORT 4x4 interface" }, "ports": [{ "key": "input-1", "label": "Input 1", "direction": "input", "media": "midi", "state": "disconnected" }, { "key": "output-1", "label": "Output 1", "direction": "output", "media": "midi", "state": "disconnected" }], "controls": [], "readback": "unknown", "qualification": "qualified" },
+    { "key": "rtp-midi", "device_kind": "network", "model": null, "graphic": { "format": "svg", "view_box": "0 0 360 150", "accessible_name": "RTP-MIDI network session" }, "ports": [{ "key": "session", "label": "Network session", "direction": "bidirectional", "media": "network", "state": "unknown" }], "controls": [], "readback": "unknown", "qualification": "qualified" },
+    { "key": "generic-midi", "device_kind": "midi", "model": null, "graphic": { "format": "svg", "view_box": "0 0 360 150", "accessible_name": "Generic MIDI endpoint" }, "ports": [], "controls": [], "readback": "unknown", "qualification": "generic" },
+    { "key": "mackes.virtual-monitor", "device_kind": "virtual", "model": null, "graphic": { "format": "svg", "view_box": "0 0 360 150", "accessible_name": "MACKES virtual monitor endpoint" }, "ports": [{ "key": "monitor", "label": "Monitor", "direction": "bidirectional", "media": "virtual", "state": "observed" }], "controls": [], "readback": "observed", "qualification": "generic" },
+    { "key": "generic.endpoint", "device_kind": "unknown", "model": null, "graphic": { "format": "svg", "view_box": "0 0 360 150", "accessible_name": "Unknown MIDI endpoint" }, "ports": [{ "key": "unknown", "label": "Available port", "direction": "bidirectional", "media": "unknown", "state": "unknown" }], "controls": [], "readback": "unknown", "qualification": "generic" }
+  ],
+  "devices": [
+    { "renderer_key": "generic.endpoint", "kind": "unknown", "model": null, "name": "Unidentified studio endpoint", "availability": "unknown", "ports": ["unknown"], "readback": "unknown" }
+  ]
+}

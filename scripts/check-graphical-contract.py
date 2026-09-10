@@ -20,4 +20,12 @@ ledger = (ROOT / "docs/graphical-device-renderer-ledger.md").read_text(encoding=
 missing = sorted(key for key in required_keys if f"`{key}`" not in ledger)
 if missing:
     raise SystemExit("graphical renderer ledger missing: " + ", ".join(missing))
+fixture = json.loads((ROOT / "tests/fixtures/graphical-capability-v1.json").read_text(encoding="utf-8"))
+if fixture.get("schema_version") != 1 or fixture.get("fallback_renderer") != "generic.endpoint":
+    raise SystemExit("graphical capability golden fixture has invalid version or fallback")
+fixture_keys = {item.get("key") for item in fixture.get("renderers", [])}
+if fixture_keys != required_keys:
+    raise SystemExit("graphical capability golden fixture renderer inventory drift")
+if not any(item.get("renderer_key") == "generic.endpoint" for item in fixture.get("devices", [])):
+    raise SystemExit("graphical capability golden fixture lacks unknown fallback device")
 print("graphical capability contract checks passed")

@@ -11197,6 +11197,10 @@ Execution board: `docs/worklist-execution-board.md`.
   types/domains, readback semantics, qualification, availability, generation, and mandatory generic
   fallback. Runtime daemon projection, draft migration, golden payloads, and browser contract
   fixtures remain open.
+- **Golden fixture checkpoint (2026-09-10):** Added
+  `tests/fixtures/graphical-capability-v1.json` with all nine renderer keys and an unknown fallback
+  device; `scripts/check-graphical-contract.py` now rejects renderer-inventory drift and missing
+  fallback coverage. Daemon projection and migration tests remain open.
 
 #### [>] W176 — Qualify novice usability and accessibility
 
