@@ -1809,6 +1809,34 @@ impl Worker {
         .map_err(|error| error.to_string())
     }
 
+    /// Prepares a confirmed, generation-checked ALSA sequencer configuration update.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when confirmation, generation, configuration validation, or encoding fails.
+    pub fn prepare_set_alsa_sequencer_configuration(
+        &self,
+        generation: u64,
+        configuration: mackes_pipedal_connector::AlsaSequencerConfiguration,
+        reply_to: Option<u64>,
+        confirmed: bool,
+    ) -> Result<Vec<u8>, String> {
+        if !confirmed {
+            return Err("PiPedal ALSA sequencer changes require explicit confirmation".into());
+        }
+        if generation != self.session.generation() {
+            return Err("PiPedal ALSA sequencer change belongs to an old session generation".into());
+        }
+        let value = serde_json::to_value(&configuration).map_err(|error| error.to_string())?;
+        mackes_pipedal_connector::decode_alsa_sequencer_configuration(Some(value))?;
+        mackes_pipedal_connector::encode_request(&mackes_pipedal_connector::Request {
+            message: "setAlsaSequencerConfiguration".into(),
+            reply_to,
+            body: Some(configuration),
+        })
+        .map_err(|error| error.to_string())
+    }
+
     /// Prepares a confirmed, generation-checked onboarding-state change.
     ///
     /// # Errors

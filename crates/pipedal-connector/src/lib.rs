@@ -402,6 +402,8 @@ pub enum Operation {
     GetAlsaSequencerConfiguration,
     /// Query available ALSA sequencer ports.
     GetAlsaSequencerPorts,
+    /// Set ALSA sequencer configuration.
+    SetAlsaSequencerConfiguration,
     /// Save the current preset.
     SaveCurrentPreset,
     /// Save the current pedalboard as a new preset.
@@ -500,6 +502,7 @@ impl Operation {
             Self::SetOnboarding,
             Self::GetAlsaSequencerConfiguration,
             Self::GetAlsaSequencerPorts,
+            Self::SetAlsaSequencerConfiguration,
             Self::SaveCurrentPreset,
             Self::SaveCurrentPresetAs,
             Self::SavePluginPresetAs,
@@ -571,6 +574,7 @@ impl Operation {
             Self::SetOnboarding => "setOnboarding",
             Self::GetAlsaSequencerConfiguration => "getAlsaSequencerConfiguration",
             Self::GetAlsaSequencerPorts => "getAlsaSequencerPorts",
+            Self::SetAlsaSequencerConfiguration => "setAlsaSequencerConfiguration",
             Self::SaveCurrentPreset => "saveCurrentPreset",
             Self::SaveCurrentPresetAs => "saveCurrentPresetAs",
             Self::SavePluginPresetAs => "savePluginPresetAs",
@@ -642,6 +646,7 @@ impl Operation {
                 | Self::SetJackServerSettings
                 | Self::UpdateNow
                 | Self::SetShowStatusMonitor
+                | Self::SetAlsaSequencerConfiguration
                 | Self::UpdatePluginPresets
                 | Self::Restart
                 | Self::Shutdown
@@ -730,6 +735,7 @@ impl Operation {
             Self::SetOnboarding => "diagnostics",
             Self::GetAlsaSequencerConfiguration => "diagnostics",
             Self::GetAlsaSequencerPorts => "diagnostics",
+            Self::SetAlsaSequencerConfiguration => "midi",
             Self::GetJackServerSettings | Self::GetGovernorSettings => "diagnostics",
             Self::GetShowStatusMonitor => "monitoring",
             Self::GetWifiRegulatoryDomains => "diagnostics",
@@ -2911,7 +2917,7 @@ mod tests {
                 assert!(!operation.is_read_only());
             }
         }
-        assert_eq!(Operation::all().len(), 64);
+        assert_eq!(Operation::all().len(), 65);
         assert!(Operation::all().iter().all(|operation| !operation.wire_name().is_empty()));
         assert_eq!(serde_json::to_string(&Operation::SetControl).expect("json"), "\"setControl\"");
     }

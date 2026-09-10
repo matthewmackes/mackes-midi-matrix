@@ -12306,3 +12306,6 @@ Evidence (2026-09-08): Devices browser gate initially observed a transient daemo
 - **ALSA-sequencer-port readback slice (2026-09-10):** Added bounded decoding and adapter
   retention/query support for source-registered `getAlsaSequencerPorts`. Daemon/browser and
   installed qualification remain pending W150.
+- **ALSA-sequencer write slice (2026-09-10):** Added the source-registered
+  `setAlsaSequencerConfiguration` payload with confirmed, generation-checked bounded validation.
+  Daemon/browser and installed qualification remain pending W150.
