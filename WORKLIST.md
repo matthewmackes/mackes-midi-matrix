@@ -11128,8 +11128,9 @@ Execution board: `docs/worklist-execution-board.md`.
 - **Implementation checkpoint (2026-09-10):** Added the bundled `MackesDeviceRenderer` registry and
   graphical mini-faceplates for all ledger families plus `generic.endpoint` fallback coverage. The
   inventory cards now include SVG chassis, ports, controls, status, and accessible image labels.
-  Model-faithful geometry, richer control interaction, and authoritative capability projection remain
-  open before this item can close.
+  Authoritative PiPedal capability projection is qualified at 3,076 controls and 265 targets;
+  model-faithful geometry, richer control interaction, and native qualification remain open before
+  this item can close.
 - **Interaction verification (2026-09-10):** Installed pointer/keyboard fixture now selects all 56
   Novation faceplate controls successfully after waiting for visible rendering. The remaining
   Eventide/Reflex faithful schematics and model-specific qualification are still open.
