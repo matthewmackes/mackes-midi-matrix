@@ -2147,7 +2147,7 @@ mod tests {
 
     #[test]
     fn has_wifi_decoder_accepts_only_boolean_source_shape() {
-        assert_eq!(decode_has_wifi(Some(serde_json::json!(true))).expect("Wi-Fi flag"), true);
+        assert!(decode_has_wifi(Some(serde_json::json!(true))).expect("Wi-Fi flag"));
         assert!(decode_has_wifi(Some(serde_json::json!("true"))).is_err());
         assert!(decode_has_wifi(None).is_err());
     }
