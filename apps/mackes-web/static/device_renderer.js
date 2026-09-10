@@ -32,7 +32,28 @@
     if (renderer.kind === 'controller') {
       for (let index = 0; index < 8; index += 1) svgElement('line', { x1: 35 + index * 38, y1: 121, x2: 35 + index * 38, y2: 83, class: 'device-graphic-fader' }, svg);
       for (let index = 0; index < renderer.controls; index += 1) svgElement('circle', { cx: 35 + (index % 8) * 38, cy: 69 + Math.floor(index / 8) * 18, r: 5, class: 'device-graphic-control' }, svg);
-    } else if (renderer.kind === 'pedal' || renderer.kind === 'pedalboard') {
+    } else if (renderer.key === 'eventide.micropitch') {
+      svgElement('rect', { x: 38, y: 61, width: 284, height: 66, rx: 6, class: 'device-graphic-panel' }, svg);
+      svgElement('rect', { x: 50, y: 70, width: 74, height: 17, rx: 2, class: 'device-graphic-display' }, svg);
+      const eventideLabel = svgElement('text', { x: 57, y: 82, class: 'device-graphic-caption' }, svg); eventideLabel.textContent = 'MICROPITCH';
+      for (let index = 0; index < 4; index += 1) svgElement('circle', { cx: 151 + index * 35, cy: 79, r: 6, class: 'device-graphic-control' }, svg);
+      svgElement('circle', { cx: 180, cy: 111, r: 10, class: 'device-graphic-switch' }, svg);
+      svgElement('circle', { cx: 276, cy: 111, r: 10, class: 'device-graphic-switch' }, svg);
+    } else if (renderer.key === 'lexicon.reflex') {
+      svgElement('rect', { x: 28, y: 59, width: 304, height: 68, rx: 4, class: 'device-graphic-panel' }, svg);
+      svgElement('rect', { x: 45, y: 71, width: 86, height: 22, rx: 2, class: 'device-graphic-display' }, svg);
+      for (let index = 0; index < 4; index += 1) svgElement('rect', { x: 148 + index * 38, y: 72, width: 22, height: 10, rx: 2, class: 'device-graphic-control' }, svg);
+      for (let index = 0; index < 5; index += 1) svgElement('line', { x1: 52 + index * 42, y1: 111, x2: 52 + index * 42, y2: 99 + (index % 2) * 5, class: 'device-graphic-meter' }, svg);
+      const reflexLabel = svgElement('text', { x: 148, y: 112, class: 'device-graphic-caption' }, svg); reflexLabel.textContent = 'ALGORITHM · ECHO RHYTHM · MIDI';
+    } else if (renderer.key === 'pipedal') {
+      svgElement('rect', { x: 28, y: 60, width: 304, height: 67, rx: 7, class: 'device-graphic-panel' }, svg);
+      for (let index = 0; index < 3; index += 1) {
+        const x = 42 + index * 94;
+        svgElement('rect', { x, y: 77, width: 72, height: 27, rx: 4, class: 'device-graphic-plugin' }, svg);
+        if (index < 2) svgElement('path', { d: `M ${x + 74} 90 L ${x + 89} 90`, class: 'device-graphic-link' }, svg);
+      }
+      const pedalLabel = svgElement('text', { x: 43, y: 119, class: 'device-graphic-caption' }, svg); pedalLabel.textContent = 'PEDALBOARD · PLUGINS · LEVELS';
+    } else if (renderer.kind === 'pedal') {
       svgElement('rect', { x: 30, y: 62, width: 300, height: 62, rx: 8, class: 'device-graphic-panel' }, svg);
       for (let index = 0; index < renderer.controls; index += 1) svgElement('circle', { cx: 58 + index * (250 / Math.max(1, renderer.controls - 1)), cy: 83, r: 7, class: 'device-graphic-control' }, svg);
       svgElement('circle', { cx: 180, cy: 112, r: 9, class: 'device-graphic-switch' }, svg);
