@@ -12288,3 +12288,6 @@ Evidence (2026-09-08): Devices browser gate initially observed a transient daemo
 - **Preset-copy write slice (2026-09-10):** Added the source-registered `copyPreset` payload with
   confirmed, generation-checked, bounded distinct source/target identity validation. Daemon/browser
   and installed qualification remain pending W150.
+- **Plugin-preset-copy write slice (2026-09-10):** Added the source-registered `copyPluginPreset`
+  payload with confirmed, generation-checked, bounded plugin URI and instance identity validation.
+  Daemon/browser and installed qualification remain pending W150.

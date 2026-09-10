@@ -390,6 +390,8 @@ pub enum Operation {
     RenamePresetItem,
     /// Copy a preset item.
     CopyPreset,
+    /// Copy a plugin preset.
+    CopyPluginPreset,
     /// Save the current preset.
     SaveCurrentPreset,
     /// Save the current pedalboard as a new preset.
@@ -482,6 +484,7 @@ impl Operation {
             Self::SaveBankAs,
             Self::RenamePresetItem,
             Self::CopyPreset,
+            Self::CopyPluginPreset,
             Self::SaveCurrentPreset,
             Self::SaveCurrentPresetAs,
             Self::SavePluginPresetAs,
@@ -547,6 +550,7 @@ impl Operation {
             Self::SaveBankAs => "saveBankAs",
             Self::RenamePresetItem => "renamePresetItem",
             Self::CopyPreset => "copyPreset",
+            Self::CopyPluginPreset => "copyPluginPreset",
             Self::SaveCurrentPreset => "saveCurrentPreset",
             Self::SaveCurrentPresetAs => "saveCurrentPresetAs",
             Self::SavePluginPresetAs => "savePluginPresetAs",
@@ -605,6 +609,7 @@ impl Operation {
                 | Self::SaveBankAs
                 | Self::RenamePresetItem
                 | Self::CopyPreset
+                | Self::CopyPluginPreset
                 | Self::SaveCurrentPreset
                 | Self::SaveCurrentPresetAs
                 | Self::SavePluginPresetAs
@@ -694,6 +699,7 @@ impl Operation {
             Self::SaveBankAs => "presets",
             Self::RenamePresetItem => "presets",
             Self::CopyPreset => "presets",
+            Self::CopyPluginPreset => "presets",
             Self::GetJackServerSettings | Self::GetGovernorSettings => "diagnostics",
             Self::GetShowStatusMonitor => "monitoring",
             Self::GetWifiRegulatoryDomains => "diagnostics",
@@ -896,6 +902,25 @@ pub struct CopyPreset {
     pub client_id: i64,
     pub from_id: i64,
     pub to_id: i64,
+}
+
+/// Source-backed plugin-preset copy payload.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CopyPluginPreset {
+    pub plugin_uri: String,
+    pub instance_id: u64,
+}
+
+impl CopyPluginPreset {
+    /// Validate the plugin identity and bounded URI.
+    pub fn validate(&self) -> Result<(), String> {
+        if self.plugin_uri.trim().is_empty() || self.plugin_uri.len() > 512 || self.instance_id == 0
+        {
+            return Err("PiPedal plugin-preset copy identity is invalid or excessive".into());
+        }
+        Ok(())
+    }
 }
 
 impl CopyPreset {
@@ -2789,7 +2814,7 @@ mod tests {
                 assert!(!operation.is_read_only());
             }
         }
-        assert_eq!(Operation::all().len(), 58);
+        assert_eq!(Operation::all().len(), 59);
         assert!(Operation::all().iter().all(|operation| !operation.wire_name().is_empty()));
         assert_eq!(serde_json::to_string(&Operation::SetControl).expect("json"), "\"setControl\"");
     }
