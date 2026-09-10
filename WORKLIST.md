@@ -11088,14 +11088,18 @@ Execution board: `docs/worklist-execution-board.md`.
   This is the shell baseline; palette operations, real route edges, pan/zoom, and full device
   renderers remain open in W170–W172.
 
-#### [ ] W170 — Deliver faithful physical-device schematics
+#### [>] W170 — Deliver faithful physical-device schematics
 
-- **Status:** `NOT_STARTED`
+- **Status:** `IN_PROGRESS`
 - **Owner:** Codex
 - **Depends on:** W169
 - **Objective:** Create responsive code-native SVG faceplates for Novation Launch Control XL Mk1/Mk2, Eventide MicroPitch, and Lexicon Reflex, using governed geometry and port/control placement.
 - **Acceptance:** Each faceplate exposes real controls and ports as selectable graphical targets with labels, tooltips/help, state indication, supported/unsupported semantics, and accessible names. Novation controls support pointer/keyboard selection and emulator fixtures without claiming native observation.
 - **Evidence:** Model-specific renderer fixtures, geometry/source references, interaction tests, reduced-motion/theme checks, and unknown/disconnected state tests.
+- **Implementation checkpoint (2026-09-10):** Catalog entries for Novation Launch Control XL,
+  Eventide MicroPitch, and Lexicon Reflex now render graphical device representations even when the
+  device is unavailable, so researched inventory is no longer text-only. Faithful model geometry,
+  control-specific interaction, and qualification fixtures remain open.
 
 #### [>] W171 — Deliver processor, interface, and virtual endpoint graphics
 

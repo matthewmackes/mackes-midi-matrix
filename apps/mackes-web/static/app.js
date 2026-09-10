@@ -266,6 +266,7 @@ function renderFilteredFeatures() {
     const card = document.createElement('article'); card.className = 'feature-card';
     const heading = document.createElement('h3'); heading.textContent = item.name; card.append(heading);
     const state = document.createElement('p'); state.className = item.connected ? 'feature-connected' : 'feature-disconnected'; state.textContent = item.connected ? 'Connected in live inventory' : 'Researched product · not connected'; card.append(state);
+    window.MackesDeviceRenderer?.appendGraphic({ name: item.name, state: item.connected ? 'connected' : 'not connected' }, card);
     const source = document.createElement('p'); source.className = 'feature-source'; source.textContent = `Evidence: ${item.source}`; card.append(source);
     const list = document.createElement('ul'); item.features.forEach(feature => {
       const li = document.createElement('li');
