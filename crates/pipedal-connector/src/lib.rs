@@ -394,6 +394,8 @@ pub enum Operation {
     CopyPluginPreset,
     /// Delete a preset bank item.
     DeleteBankItem,
+    /// Delete selected preset items.
+    DeletePresetItems,
     /// Save the current preset.
     SaveCurrentPreset,
     /// Save the current pedalboard as a new preset.
@@ -488,6 +490,7 @@ impl Operation {
             Self::CopyPreset,
             Self::CopyPluginPreset,
             Self::DeleteBankItem,
+            Self::DeletePresetItems,
             Self::SaveCurrentPreset,
             Self::SaveCurrentPresetAs,
             Self::SavePluginPresetAs,
@@ -555,6 +558,7 @@ impl Operation {
             Self::CopyPreset => "copyPreset",
             Self::CopyPluginPreset => "copyPluginPreset",
             Self::DeleteBankItem => "deleteBankItem",
+            Self::DeletePresetItems => "deletePresetItems",
             Self::SaveCurrentPreset => "saveCurrentPreset",
             Self::SaveCurrentPresetAs => "saveCurrentPresetAs",
             Self::SavePluginPresetAs => "savePluginPresetAs",
@@ -615,6 +619,7 @@ impl Operation {
                 | Self::CopyPreset
                 | Self::CopyPluginPreset
                 | Self::DeleteBankItem
+                | Self::DeletePresetItems
                 | Self::SaveCurrentPreset
                 | Self::SaveCurrentPresetAs
                 | Self::SavePluginPresetAs
@@ -706,6 +711,7 @@ impl Operation {
             Self::CopyPreset => "presets",
             Self::CopyPluginPreset => "presets",
             Self::DeleteBankItem => "presets",
+            Self::DeletePresetItems => "presets",
             Self::GetJackServerSettings | Self::GetGovernorSettings => "diagnostics",
             Self::GetShowStatusMonitor => "monitoring",
             Self::GetWifiRegulatoryDomains => "diagnostics",
@@ -916,6 +922,26 @@ pub struct CopyPreset {
 pub struct CopyPluginPreset {
     pub plugin_uri: String,
     pub instance_id: u64,
+}
+
+/// Source-backed preset-item deletion list.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DeletePresetItems(pub Vec<i64>);
+
+impl DeletePresetItems {
+    /// Validate a bounded list of nonnegative, unique preset identities.
+    pub fn validate(&self) -> Result<(), String> {
+        if self.0.is_empty() || self.0.len() > 256 || self.0.iter().any(|id| *id < 0) {
+            return Err("PiPedal preset deletion list is invalid or excessive".into());
+        }
+        let mut ids = self.0.clone();
+        ids.sort_unstable();
+        ids.dedup();
+        if ids.len() != self.0.len() {
+            return Err("PiPedal preset deletion list contains duplicates".into());
+        }
+        Ok(())
+    }
 }
 
 impl CopyPluginPreset {
@@ -2820,7 +2846,7 @@ mod tests {
                 assert!(!operation.is_read_only());
             }
         }
-        assert_eq!(Operation::all().len(), 60);
+        assert_eq!(Operation::all().len(), 61);
         assert!(Operation::all().iter().all(|operation| !operation.wire_name().is_empty()));
         assert_eq!(serde_json::to_string(&Operation::SetControl).expect("json"), "\"setControl\"");
     }

@@ -12294,3 +12294,6 @@ Evidence (2026-09-08): Devices browser gate initially observed a transient daemo
 - **Bank-item delete write slice (2026-09-10):** Added the source-registered `deleteBankItem` scalar
   command with confirmed, generation-checked nonnegative identity validation. Daemon/browser and
   installed qualification remain pending W150.
+- **Preset-item delete write slice (2026-09-10):** Added the source-registered `deletePresetItems`
+  array payload with confirmed, generation-checked bounded unique identity validation. Daemon,
+  browser, and installed qualification remain pending W150.

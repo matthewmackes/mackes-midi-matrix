@@ -1705,6 +1705,33 @@ impl Worker {
         .map_err(|error| error.to_string())
     }
 
+    /// Prepares a confirmed, generation-checked preset-item deletion list.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when confirmation, generation, payload validation, or encoding fails.
+    pub fn prepare_delete_preset_items(
+        &self,
+        generation: u64,
+        request: mackes_pipedal_connector::DeletePresetItems,
+        reply_to: Option<u64>,
+        confirmed: bool,
+    ) -> Result<Vec<u8>, String> {
+        if !confirmed {
+            return Err("PiPedal preset deletion requires explicit confirmation".into());
+        }
+        if generation != self.session.generation() {
+            return Err("PiPedal preset deletion belongs to an old session generation".into());
+        }
+        request.validate()?;
+        mackes_pipedal_connector::encode_request(&mackes_pipedal_connector::Request {
+            message: "deletePresetItems".into(),
+            reply_to,
+            body: Some(request),
+        })
+        .map_err(|error| error.to_string())
+    }
+
     /// Prepares a confirmed, generation-checked preset rename.
     ///
     /// # Errors
