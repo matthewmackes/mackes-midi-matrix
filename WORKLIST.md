@@ -5278,6 +5278,11 @@ tests, strict Clippy, architecture/worklist policy, and the complete release gat
   queue path for the source-backed `getJackServerSettings` read operation, with regression coverage
   for the wire name and stale-generation rejection. The audit now records the implemented adapter
   boundary; daemon/browser/installed qualification remains explicitly pending W150.
+- **Governor startup-read slice (2026-09-10):** Promoted the validated `getGovernorSettings`
+  response into the bounded seven-request startup sequence so reconnects refresh the session-scoped
+  governor projection automatically. Existing decoder, lifecycle reset, and snapshot consumers are
+  reused; connector startup-order coverage and the audit boundary are updated, while daemon/browser
+  and installed qualification remain pending W150.
 - **Connector-design synchronization (2026-09-09):** The PiPedal connector handoff now records
   that validated version metadata is session-scoped diagnostic readback, cleared on reconnect and
   never sufficient to authorize version-dependent writes. Documentation, worklist, and diff checks

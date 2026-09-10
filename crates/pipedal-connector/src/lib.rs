@@ -1083,8 +1083,16 @@ pub enum SessionPhase {
 
 /// The bounded read-only requests used to populate a fresh PiPedal session.
 #[must_use]
-pub const fn startup_requests() -> [&'static str; 6] {
-    ["hello", "version", "plugins", "currentPedalboard", "getSystemMidiBindings", "getFavorites"]
+pub const fn startup_requests() -> [&'static str; 7] {
+    [
+        "hello",
+        "version",
+        "plugins",
+        "currentPedalboard",
+        "getSystemMidiBindings",
+        "getFavorites",
+        "getGovernorSettings",
+    ]
 }
 
 impl SessionPhase {
@@ -2159,7 +2167,7 @@ mod tests {
         assert_eq!(requests[0], "hello");
         assert_eq!(requests[1], "version");
         assert_eq!(requests[4], "getSystemMidiBindings");
-        assert_eq!(requests.last(), Some(&"getFavorites"));
+        assert_eq!(requests.last(), Some(&"getGovernorSettings"));
         assert!(requests.len() <= 16);
     }
 
