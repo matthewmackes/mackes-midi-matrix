@@ -11071,7 +11071,7 @@ Execution board: `docs/worklist-execution-board.md`.
 - **Closeout evidence (2026-09-10):** The normal GUI now uses guided settings, qualified device
   command entry points, graphical route/scene workspaces, and a human-readable live status panel.
   The guard passes; the nine-family ledger and runtime renderer registry are present;
-  `cargo test -p mackes-web` passes 55/55; the bundled asset budget and JavaScript syntax checks
+  `cargo test -p mackes-web` passes 56/56; the bundled asset budget and JavaScript syntax checks
   pass. Raw backups and diagnostics remain download-only boundaries.
 
 #### [>] W169 — Build the responsive studio signal-flow shell
@@ -11291,6 +11291,10 @@ Execution board: `docs/worklist-execution-board.md`.
   A subsequent full rerun was inconclusive because Chromium's long dump-dom capture timed out before
   producing `devices.html`; this is a harness/environment stability finding, not a product pass claim.
   The prior all-16 aggregate result remains the latest complete aggregate evidence.
+- **Formal gate refresh (2026-09-10):** After the renderer accessible-list addition and refreshed
+  web contract assertions, `scripts/release-gate.sh` passed end to end: 56 web tests, workspace
+  tests, emulator qualification, strict Clippy, routing benchmark, hermetic integration, installer
+  smoke, and release artifact checksum/contents validation.
 
 ## 4. Dependency and parallelization map
 
