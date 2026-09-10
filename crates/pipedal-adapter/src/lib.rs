@@ -1943,6 +1943,29 @@ impl Worker {
         .map_err(|error| error.to_string())
     }
 
+    /// Prepares a generation-checked raw patch-property query.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the generation, query identity, or encoding is invalid.
+    pub fn prepare_get_patch_property(
+        &self,
+        generation: u64,
+        request: mackes_pipedal_connector::GetPatchProperty,
+        reply_to: Option<u64>,
+    ) -> Result<Vec<u8>, String> {
+        if generation != self.session.generation() {
+            return Err("PiPedal patch-property query belongs to an old session generation".into());
+        }
+        request.validate()?;
+        mackes_pipedal_connector::encode_request(&mackes_pipedal_connector::Request {
+            message: "getPatchProperty".into(),
+            reply_to,
+            body: Some(request),
+        })
+        .map_err(|error| error.to_string())
+    }
+
     /// Prepares a confirmed, generation-checked onboarding-state change.
     ///
     /// # Errors

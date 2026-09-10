@@ -412,6 +412,8 @@ pub enum Operation {
     ForceUpdateCheck,
     /// Set a raw LV2 patch property.
     SetPatchProperty,
+    /// Query a raw LV2 patch property.
+    GetPatchProperty,
     /// Save the current preset.
     SaveCurrentPreset,
     /// Save the current pedalboard as a new preset.
@@ -515,6 +517,7 @@ impl Operation {
             Self::SetUpdatePolicy,
             Self::ForceUpdateCheck,
             Self::SetPatchProperty,
+            Self::GetPatchProperty,
             Self::SaveCurrentPreset,
             Self::SaveCurrentPresetAs,
             Self::SavePluginPresetAs,
@@ -591,6 +594,7 @@ impl Operation {
             Self::SetUpdatePolicy => "setUpdatePolicy",
             Self::ForceUpdateCheck => "forceUpdateCheck",
             Self::SetPatchProperty => "setPatchProperty",
+            Self::GetPatchProperty => "getPatchProperty",
             Self::SaveCurrentPreset => "saveCurrentPreset",
             Self::SaveCurrentPresetAs => "saveCurrentPresetAs",
             Self::SavePluginPresetAs => "savePluginPresetAs",
@@ -695,6 +699,7 @@ impl Operation {
                 | Self::GetWifiConfigSettings
                 | Self::GetAlsaSequencerConfiguration
                 | Self::GetAlsaSequencerPorts
+                | Self::GetPatchProperty
                 | Self::GetSystemMidiBindings
         )
     }
@@ -760,6 +765,7 @@ impl Operation {
             Self::SetUpdatePolicy => "host",
             Self::ForceUpdateCheck => "host",
             Self::SetPatchProperty => "pedalboard",
+            Self::GetPatchProperty => "pedalboard",
             Self::GetJackServerSettings | Self::GetGovernorSettings => "diagnostics",
             Self::GetShowStatusMonitor => "monitoring",
             Self::GetWifiRegulatoryDomains => "diagnostics",
@@ -999,6 +1005,27 @@ pub struct SetPatchProperty {
     pub instance_id: u64,
     pub property_uri: String,
     pub value: serde_json::Value,
+}
+
+/// Source-backed patch-property query payload.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GetPatchProperty {
+    pub instance_id: u64,
+    pub property_uri: String,
+}
+
+impl GetPatchProperty {
+    /// Validate the property query identity.
+    pub fn validate(&self) -> Result<(), String> {
+        if self.instance_id == 0
+            || self.property_uri.trim().is_empty()
+            || self.property_uri.len() > 512
+        {
+            return Err("PiPedal patch-property query identity is invalid or excessive".into());
+        }
+        Ok(())
+    }
 }
 
 impl SetPatchProperty {
@@ -2966,7 +2993,7 @@ mod tests {
                 assert!(!operation.is_read_only());
             }
         }
-        assert_eq!(Operation::all().len(), 69);
+        assert_eq!(Operation::all().len(), 70);
         assert!(Operation::all().iter().all(|operation| !operation.wire_name().is_empty()));
         assert_eq!(serde_json::to_string(&Operation::SetControl).expect("json"), "\"setControl\"");
     }

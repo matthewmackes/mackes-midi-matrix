@@ -12321,3 +12321,6 @@ Evidence (2026-09-08): Devices browser gate initially observed a transient daemo
 - **Patch-property write slice (2026-09-10):** Added the source-registered `setPatchProperty` raw
   JSON payload with confirmed, generation-checked identity and 16 KiB value bounds. Daemon,
   browser, and installed qualification remain pending W150.
+- **Patch-property query slice (2026-09-10):** Added the source-registered `getPatchProperty`
+  bounded instance/URI query payload and generation-checked adapter encoding. Raw asynchronous
+  response projection remains explicitly pending W150.
