@@ -11282,15 +11282,16 @@ Execution board: `docs/worklist-execution-board.md`.
 - **Release-gate checkpoint (2026-09-10):** `scripts/release-gate.sh` passed end to end after the
   catalog-bound fix: formatting/policy, workspace tests, emulator qualification, clippy, routing
   benchmark, 16 passing hermetic scenarios (1 explicitly post-release ignored), installer smoke, and
-  packaged release checksum/contents validation. The final installed web qualification passed all 16
+  packaged release checksum/contents validation. The final installed web qualification passed all 17
   fixtures, including graphical inventory, renderer registry, PiPedal catalog (3,076 controls / 265
   targets), lifecycle, responsive, accessibility, and lossless-route checks. W176 novice/human sign-off
   and final release artifacts/sign-off remain open before this packet can close.
-- **Aggregate requalification checkpoint (2026-09-10):** The installed host remained `health=ready`
-  and the newly added visual-accessibility and race-hardened assignment fixtures pass independently.
-  A subsequent full rerun was inconclusive because Chromium's long dump-dom capture timed out before
-  producing `devices.html`; this is a harness/environment stability finding, not a product pass claim.
-  The prior all-16 aggregate result remains the latest complete aggregate evidence.
+- **Aggregate requalification checkpoint (2026-09-10):** After the renderer accessible-list addition,
+  the final installed `scripts/qualify-web-installed.sh` run passed all 17 fixtures against
+  `http://172.20.222.222:8081`, including the full browser capture, graphical inventory, nine-family
+  renderer registry with accessible lists, novice surface, visual accessibility, PiPedal catalog,
+  generation/lifecycle preservation, mobile overflow, assignment inspection, lossless-route safety,
+  and task ownership. The host remained `health=ready` throughout the completed run.
 - **Formal gate refresh (2026-09-10):** After the renderer accessible-list addition and refreshed
   web contract assertions, `scripts/release-gate.sh` passed end to end: 56 web tests, workspace
   tests, emulator qualification, strict Clippy, routing benchmark, hermetic integration, installer
