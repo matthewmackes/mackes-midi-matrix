@@ -12276,3 +12276,6 @@ Evidence (2026-09-08): Devices browser gate initially observed a transient daemo
 - **Bank-rename write slice (2026-09-10):** Added the source-registered `renameBank` payload with
   confirmed, generation-checked, bounded name validation. Daemon/browser and installed
   qualification remain pending W150.
+- **Bank-open write slice (2026-09-10):** Added the source-registered `openBank` scalar command
+  with confirmed, generation-checked nonnegative identity validation. Daemon/browser and installed
+  qualification remain pending W150.

@@ -382,6 +382,8 @@ pub enum Operation {
     PreviousPreset,
     /// Rename a preset bank.
     RenameBank,
+    /// Open a preset bank by instance identity.
+    OpenBank,
     /// Save the current preset.
     SaveCurrentPreset,
     /// Save the current pedalboard as a new preset.
@@ -470,6 +472,7 @@ impl Operation {
             Self::NextPreset,
             Self::PreviousPreset,
             Self::RenameBank,
+            Self::OpenBank,
             Self::SaveCurrentPreset,
             Self::SaveCurrentPresetAs,
             Self::SavePluginPresetAs,
@@ -531,6 +534,7 @@ impl Operation {
             Self::NextPreset => "nextPreset",
             Self::PreviousPreset => "previousPreset",
             Self::RenameBank => "renameBank",
+            Self::OpenBank => "openBank",
             Self::SaveCurrentPreset => "saveCurrentPreset",
             Self::SaveCurrentPresetAs => "saveCurrentPresetAs",
             Self::SavePluginPresetAs => "savePluginPresetAs",
@@ -585,6 +589,7 @@ impl Operation {
                 | Self::NextPreset
                 | Self::PreviousPreset
                 | Self::RenameBank
+                | Self::OpenBank
                 | Self::SaveCurrentPreset
                 | Self::SaveCurrentPresetAs
                 | Self::SavePluginPresetAs
@@ -670,6 +675,7 @@ impl Operation {
             Self::NextPreset => "presets",
             Self::PreviousPreset => "presets",
             Self::RenameBank => "presets",
+            Self::OpenBank => "presets",
             Self::GetJackServerSettings | Self::GetGovernorSettings => "diagnostics",
             Self::GetShowStatusMonitor => "monitoring",
             Self::GetWifiRegulatoryDomains => "diagnostics",
@@ -2705,7 +2711,7 @@ mod tests {
                 assert!(!operation.is_read_only());
             }
         }
-        assert_eq!(Operation::all().len(), 54);
+        assert_eq!(Operation::all().len(), 55);
         assert!(Operation::all().iter().all(|operation| !operation.wire_name().is_empty()));
         assert_eq!(serde_json::to_string(&Operation::SetControl).expect("json"), "\"setControl\"");
     }

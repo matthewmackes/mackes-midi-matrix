@@ -1593,6 +1593,35 @@ impl Worker {
         .map_err(|error| error.to_string())
     }
 
+    /// Prepares a confirmed, generation-checked bank-open command.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when confirmation, generation, identity validation, or encoding fails.
+    pub fn prepare_open_bank(
+        &self,
+        generation: u64,
+        bank_id: i64,
+        reply_to: Option<u64>,
+        confirmed: bool,
+    ) -> Result<Vec<u8>, String> {
+        if !confirmed {
+            return Err("PiPedal bank opens require explicit confirmation".into());
+        }
+        if generation != self.session.generation() {
+            return Err("PiPedal bank open belongs to an old session generation".into());
+        }
+        if bank_id < 0 {
+            return Err("PiPedal bank identity is invalid".into());
+        }
+        mackes_pipedal_connector::encode_request(&mackes_pipedal_connector::Request {
+            message: "openBank".into(),
+            reply_to,
+            body: Some(bank_id),
+        })
+        .map_err(|error| error.to_string())
+    }
+
     /// Prepares a confirmed, generation-checked next-bank command.
     ///
     /// # Errors
