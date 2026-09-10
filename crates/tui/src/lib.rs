@@ -948,6 +948,16 @@ pub struct DashboardState {
     pub mapping_browser: MappingBrowser,
     /// Latest daemon LED contract status line.
     pub led_status: Option<String>,
+    /// Number of validated `PiPedal` system MIDI bindings in the latest snapshot.
+    pub pipedal_system_midi_bindings: usize,
+    /// First bounded set of validated `PiPedal` MIDI binding symbols.
+    pub pipedal_system_midi_symbols: Vec<String>,
+    /// Number of daemon-qualified `PiPedal` operations in the latest snapshot.
+    pub pipedal_operation_count: usize,
+    /// Last bounded `PiPedal` CPU-governor readback.
+    pub pipedal_governor_settings: String,
+    /// Last bounded `PiPedal` status-monitor visibility readback.
+    pub pipedal_show_status_monitor: Option<bool>,
 }
 
 /// Renderer-safe physical MIDI device inventory record.
@@ -3173,6 +3183,16 @@ pub enum DashboardEvent {
     LatestAudit(String),
     /// Updates the daemon-owned LED contract status line.
     LedStatus(String),
+    /// Updates the bounded `PiPedal` system-MIDI binding count.
+    PiPedalMidiBindings(usize),
+    /// Updates the first bounded `PiPedal` system-MIDI binding symbols.
+    PiPedalMidiSymbols(Vec<String>),
+    /// Updates the bounded qualified `PiPedal` operation count.
+    PiPedalOperationCount(usize),
+    /// Updates the bounded `PiPedal` CPU-governor readback.
+    PiPedalGovernorSettings(String),
+    /// Updates the bounded `PiPedal` status-monitor visibility.
+    PiPedalShowStatusMonitor(Option<bool>),
 }
 
 impl DashboardEvent {
@@ -3262,8 +3282,43 @@ impl DashboardEvent {
         if let Some(line) = led_status::line_from_payload(payload) {
             events.push(Self::LedStatus(line));
         }
+        events.extend(pipedal_snapshot_events(payload));
         events
     }
+}
+
+fn pipedal_snapshot_events(payload: &serde_json::Value) -> Vec<DashboardEvent> {
+    let mut events = Vec::with_capacity(5);
+    if let Some(bindings) =
+        payload.get("pipedal_system_midi_bindings").and_then(serde_json::Value::as_array)
+    {
+        events.push(DashboardEvent::PiPedalMidiBindings(bindings.len().min(128)));
+        let mut symbols = bindings
+            .iter()
+            .filter_map(|binding| binding.get("symbol").and_then(serde_json::Value::as_str))
+            .filter(|symbol| !symbol.is_empty())
+            .map(|symbol| symbol.chars().take(64).collect::<String>())
+            .take(8)
+            .collect::<Vec<_>>();
+        symbols.dedup();
+        events.push(DashboardEvent::PiPedalMidiSymbols(symbols));
+    }
+    if let Some(operations) =
+        payload.get("pipedal_operations").and_then(serde_json::Value::as_array)
+    {
+        events.push(DashboardEvent::PiPedalOperationCount(operations.len().min(64)));
+    }
+    if let Some(governor) =
+        payload.get("pipedal_governor_settings").and_then(serde_json::Value::as_str)
+    {
+        events.push(DashboardEvent::PiPedalGovernorSettings(governor.chars().take(64).collect()));
+    }
+    if payload.get("pipedal_show_status_monitor").is_some() {
+        events.push(DashboardEvent::PiPedalShowStatusMonitor(
+            payload.get("pipedal_show_status_monitor").and_then(serde_json::Value::as_bool),
+        ));
+    }
+    events
 }
 
 fn parse_physical_devices(value: &serde_json::Value) -> Option<Vec<PhysicalDevice>> {
@@ -3966,6 +4021,15 @@ impl DashboardState {
                     MappingBrowser::from_authoritative(&mappings, self.mapping_activity.as_ref());
             }
             DashboardEvent::LedStatus(value) => self.led_status = Some(value),
+            DashboardEvent::PiPedalMidiBindings(value) => self.pipedal_system_midi_bindings = value,
+            DashboardEvent::PiPedalMidiSymbols(value) => self.pipedal_system_midi_symbols = value,
+            DashboardEvent::PiPedalOperationCount(value) => self.pipedal_operation_count = value,
+            DashboardEvent::PiPedalGovernorSettings(value) => {
+                self.pipedal_governor_settings = value;
+            }
+            DashboardEvent::PiPedalShowStatusMonitor(value) => {
+                self.pipedal_show_status_monitor = value;
+            }
         }
     }
 
@@ -4080,6 +4144,11 @@ impl DashboardState {
             format!("activation_result={}", self.activation_result.as_deref().unwrap_or("none")),
             format!("PANIC: {}", if self.panic_available { "available" } else { "unavailable" }),
             self.led_status.clone().unwrap_or_else(|| "led sent=0 failed=0".into()),
+            format!("pipedal system MIDI bindings={}", self.pipedal_system_midi_bindings),
+            format!("pipedal MIDI symbols={}", self.pipedal_system_midi_symbols.join(",")),
+            format!("pipedal qualified operations={}", self.pipedal_operation_count),
+            format!("pipedal governor={}", self.pipedal_governor_settings),
+            format!("pipedal status monitor={:?}", self.pipedal_show_status_monitor),
             "keys: 1 dashboard 2 learn 3 reflex 4 eventide 5 routing | n/p scene | ! panic | q quit"
                 .into(),
         ];

@@ -678,6 +678,7 @@ fn dashboard_event_projection_updates_widgets_and_keeps_panic() {
     dashboard.apply_event(DashboardEvent::ActivationProgress { completed: 2, total: 3 });
     dashboard.apply_event(DashboardEvent::ActivationResult("partial: 1 failed".into()));
     dashboard.apply_event(DashboardEvent::DeviceHealth(vec![("processor".into(), "ready".into())]));
+    dashboard.apply_event(DashboardEvent::PiPedalMidiBindings(3));
     dashboard.apply_event(DashboardEvent::Notification {
         severity: SemanticToken::Warning,
         message: "endpoint degraded".into(),
@@ -689,6 +690,8 @@ fn dashboard_event_projection_updates_widgets_and_keeps_panic() {
     assert_eq!(dashboard.activation_progress, (2, 3));
     assert_eq!(dashboard.activation_result.as_deref(), Some("partial: 1 failed"));
     assert_eq!(dashboard.device_health, vec![("processor".into(), "ready".into())]);
+    assert_eq!(dashboard.pipedal_system_midi_bindings, 3);
+    assert!(dashboard.frame_lines().iter().any(|line| line == "pipedal system MIDI bindings=3"));
     assert!(dashboard.frame_lines().iter().any(|line| line == "device=processor health=ready"));
     assert!(dashboard.frame_lines().iter().any(|line| line == "[WARN] endpoint degraded"));
     dashboard
@@ -754,6 +757,8 @@ fn dashboard_payload_projection_decodes_authoritative_fields() {
         "sent": 8,
         "dropped": 2,
         "activation_result": "total=2 succeeded=2 failed=0",
+        "pipedal_system_midi_bindings": [{"symbol":"gain"},{"symbol":"mix"}],
+        "pipedal_operations": ["setControl", "getPresets"],
         "physical_devices": [{
             "id": "launch control xl",
             "name": "Launch Control XL",
@@ -783,6 +788,9 @@ fn dashboard_payload_projection_decodes_authoritative_fields() {
     assert_eq!(dashboard.route_generation, 7);
     assert_eq!((dashboard.received, dashboard.sent, dashboard.dropped), (10, 8, 2));
     assert_eq!(dashboard.activation_result.as_deref(), Some("total=2 succeeded=2 failed=0"));
+    assert_eq!(dashboard.pipedal_system_midi_bindings, 2);
+    assert_eq!(dashboard.pipedal_system_midi_symbols, vec!["gain", "mix"]);
+    assert_eq!(dashboard.pipedal_operation_count, 2);
     assert_eq!(dashboard.physical_devices.len(), 1);
     assert_eq!(dashboard.physical_devices[0].name, "Launch Control XL");
     assert_eq!(dashboard.physical_devices[0].inputs, vec!["input-1"]);
@@ -805,6 +813,32 @@ fn dashboard_payload_projection_decodes_authoritative_fields() {
     }))
     .iter()
     .all(|event| !matches!(event, DashboardEvent::LiveActivity(_))));
+}
+
+#[test]
+fn pipedal_binding_projection_is_bounded() {
+    let payload = serde_json::json!({
+        "pipedal_system_midi_bindings": (0..256).map(|_| serde_json::json!({})).collect::<Vec<_>>()
+    });
+    let events = DashboardEvent::from_payload(&payload);
+    assert_eq!(
+        events,
+        vec![
+            DashboardEvent::PiPedalMidiBindings(128),
+            DashboardEvent::PiPedalMidiSymbols(Vec::new()),
+        ]
+    );
+}
+
+#[test]
+fn pipedal_operation_projection_is_bounded() {
+    let payload = serde_json::json!({
+        "pipedal_operations": (0..256).map(|_| serde_json::json!("setControl")).collect::<Vec<_>>()
+    });
+    assert_eq!(
+        DashboardEvent::from_payload(&payload),
+        vec![DashboardEvent::PiPedalOperationCount(64)]
+    );
 }
 
 #[test]
@@ -1502,6 +1536,7 @@ fn mapping_outcomes_keep_recovery_action_inline_and_typed() {
         undo_available: true,
         active: None,
         draft: None,
+        mapping_layers_v2: None,
         outcome: mackes_ipc::MappingOutcome::Conflict,
     };
     let response = serde_json::to_string(&result).expect("mapping result");

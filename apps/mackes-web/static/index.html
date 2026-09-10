@@ -9,41 +9,55 @@
 <body>
   <header><h1>MACKES MIDI Matrix</h1><p id="health">Connecting to daemon…</p><p id="reconnect-banner" role="alert" hidden>Daemon connection lost — reconnecting…</p><button id="theme" type="button">Use light theme</button></header>
   <main>
-    <nav aria-label="Workspaces"><button data-view="state">Live</button><button data-view="mappings">Map Controls</button><button data-view="routes">Routing</button><button data-view="scenes">Scenes &amp; Setlists</button><button data-view="devices">Devices</button><button data-view="system">System</button><button data-view="monitor">Monitor</button></nav>
+    <nav class="workspace-sidebar" aria-label="Workspaces"><button data-view="state">Live</button><button data-view="mappings">Map Controls</button><button data-view="routes">Routing</button><button data-view="scenes">Scenes &amp; Setlists</button><button data-view="devices">Devices</button><button data-view="recovery">Recovery</button><button data-view="system">System</button><button data-view="monitor">Monitor</button></nav>
     <details id="keyboard-help"><summary>Keyboard help</summary><p>Use Tab and Shift+Tab to move through controls, Enter or Space to activate a focused control, and browser back/forward to move between workspaces.</p></details>
-    <section><h2 id="view-title">Live</h2>
+    <section class="workspace-stage"><nav id="breadcrumbs" class="breadcrumbs" aria-label="Breadcrumb"></nav><h2 id="view-title">Live</h2>
       <div id="device-board" class="device-board" hidden aria-label="Device connection inventory"></div>
       <label id="feature-filter-label" hidden>Filter product features <input id="feature-filter" type="search" maxlength="96" placeholder="e.g. preset, LED, snapshot"></label>
       <div id="feature-board" class="feature-board" hidden aria-label="Product feature workspaces"></div>
       <div id="capability-board" class="capability-board" hidden aria-live="polite" aria-label="Platform capability coverage"></div>
+      <h3 id="novation-grid-heading" class="section-heading" hidden>Novation control grid <a href="/devices/novation">Open Novation device</a></h3>
       <div class="actions" aria-label="Emergency and recovery controls">
-        <button id="rescan" type="button">Rescan devices</button>
-        <button id="panic" type="button">Panic all outputs</button>
-        <button id="previous-scene" type="button">Previous scene</button>
-        <button id="next-scene" type="button">Next scene</button>
-        <button id="download-diagnostics" type="button">Download diagnostics</button>
+        <div id="recovery-actions" class="action-group"><h3>Recovery</h3>
+          <button id="rescan" type="button">Rescan devices</button>
+          <button id="panic" type="button">Panic all outputs</button>
+        </div>
+        <div id="scene-actions" class="action-group"><h3>Scenes</h3>
+          <button id="previous-scene" type="button">Previous scene</button>
+          <button id="next-scene" type="button">Next scene</button>
+        </div>
+        <details id="configuration-actions" class="action-group"><summary>Configuration <a href="/system/configuration">Open configuration workspace</a></summary>
+          <button id="download-diagnostics" type="button">Download diagnostics</button>
         <button id="download-configuration" type="button">Export configuration</button>
         <button id="download-raw-configuration" type="button">Export raw configuration</button>
         <button id="download-portable-configuration" type="button">Export portable configuration</button>
         <button id="import-portable-configuration" type="button">Import portable configuration</button>
         <input id="portable-import-file" type="file" accept=".json,.json5,application/json" hidden>
         <button id="validate-configuration" type="button">Validate configuration</button>
+        <label>Raw JSON5 draft <textarea id="configuration-json5-draft" rows="8" maxlength="1048576" placeholder="Edit JSON5 configuration"></textarea></label>
+        <button id="apply-configuration-json5" type="button">Validate and apply JSON5 draft</button>
         <button id="inspect-backups" type="button">Inspect backups</button>
         <label>Managed backup <select id="backup-choice"><option value="">Inspect backups first</option></select></label>
         <button id="create-backup" type="button">Create configuration backup</button>
         <button id="restore-backup" type="button">Restore configuration backup</button>
+        </details>
+        <details id="hardware-actions" class="action-group"><summary>Hardware <a href="/system/diagnostics">Open diagnostics</a></summary>
         <label>SysEx destination <input id="sysex-destination" maxlength="128" placeholder="destination alias"></label>
         <label>SysEx data bytes <textarea id="sysex-bytes" rows="2" maxlength="4096" placeholder="decimal bytes, space-separated (0–127)"></textarea></label>
         <label><input id="sysex-confirm" type="checkbox"> Confirm hardware-affecting SysEx</label>
         <button id="send-sysex" type="button">Send confirmed SysEx</button>
         <button id="novation-refresh" type="button">Refresh Novation device</button>
+        <p id="novation-diagnostics" class="device-diagnostics" role="status" aria-live="polite">Novation diagnostics unavailable until refresh.</p>
+        </details>
       </div>
       <p id="operation" role="status" aria-live="polite"></p>
       <form id="device-control" class="device-control" hidden>
         <h3>Device control</h3>
         <button id="pipedal-refresh" type="button">Refresh PiPedal catalog</button>
-        <label>PiPedal operation <select id="pipedal-operation-choice"><option>Snapshot</option><option>Apply</option><option>Undo</option></select></label>
+        <label>PiPedal operation <select id="pipedal-operation-choice"><option>Snapshot</option><option>Apply</option><option>Repair</option><option>Undo</option></select></label>
         <label>Persisted mapping <select id="pipedal-mapping-choice"><option value="">Refresh catalog first</option></select></label>
+        <label>Repair plugin URI <input id="pipedal-repair-plugin" maxlength="512" placeholder="Only for Repair"></label>
+        <label>Repair parameter symbol <input id="pipedal-repair-symbol" maxlength="256" placeholder="Only for Repair"></label>
         <label>Instance ID <input id="pipedal-instance-id" maxlength="128" placeholder="plugin-instance"></label>
         <label>Control-domain value <input id="pipedal-value" type="number" step="any" value="0"></label>
         <label><input id="pipedal-confirm" type="checkbox"> Confirm external change</label>
@@ -71,9 +85,14 @@
         <button id="mapping-undo" type="button">Undo last mapping</button>
         <button data-assignment-action="Cancel" type="button">Cancel assignment</button>
       </div>
-      <pre id="assignment-catalog" hidden aria-live="polite"></pre>
+      <aside id="workspace-inspector" class="workspace-inspector" aria-label="Workspace inspector" hidden>
+        <h3>Inspector</h3><p id="inspector-summary">Select an item to inspect its authoritative state.</p>
+      </aside>
+      <h3 id="assignment-catalog-heading" class="section-heading" hidden>Current assignments</h3>
+      <pre id="assignment-catalog" hidden aria-live="polite" aria-label="Current authoritative assignments"></pre>
       <pre id="faceplate" hidden aria-label="Novation physical control faceplate"></pre>
-      <div id="faceplate-controls" class="faceplate-controls" hidden aria-label="Select Novation physical control"></div>
+      <svg id="faceplate-controls" class="faceplate-controls" hidden viewBox="0 0 1000 560" role="group" aria-label="Select Novation physical control"></svg>
+      <button id="layout-toggle" type="button" hidden aria-pressed="false">Use generic layout</button>
       <p id="selected-physical-control" aria-live="polite">No physical control selected.</p>
       <fieldset id="mapping-behavior" hidden>
         <legend>Selected mapping behavior</legend>
@@ -83,12 +102,20 @@
         <label>Destination max <input id="mapping-destination-max" type="number" min="0" max="65535" value="127"></label>
         <label>Curve <select id="mapping-curve"><option>linear</option><option>exponential</option><option>logarithmic</option></select></label>
         <label><input id="mapping-invert" type="checkbox"> Invert destination</label>
+        <button id="mapping-preview" type="button">Preview mapping changes</button>
         <button id="mapping-save-behavior" type="button">Save behavior</button>
         <button id="mapping-replace-destination" type="button">Replace destination</button>
         <button id="mapping-toggle-enabled" type="button">Disable mapping</button>
         <button id="mapping-delete" type="button">Delete mapping</button>
       </fieldset>
+      <section id="mapping-layer-controls" class="action-group" hidden aria-label="Mapping layers">
+        <h3>Modifier layer</h3>
+        <label>Active layer <select id="mapping-layer-select"><option value="">Base layer</option></select></label>
+        <button id="mapping-layer-apply" type="button">Apply layer</button>
+        <p id="mapping-layer-status" role="status" aria-live="polite"></p>
+      </section>
       <label id="assignment-choice-label" hidden>Catalog choice
+        <input id="assignment-search" type="search" maxlength="96" placeholder="Filter compatible destinations">
         <select id="assignment-choice"><option value="">Choose an authoritative catalog entry</option></select>
       </label>
       <div id="routing-controls" class="actions" hidden aria-label="Routing workflow">
@@ -102,13 +129,24 @@
         <label>Hop limit <input id="route-hop-limit" type="number" min="1" max="16" value="8"></label>
         <button id="routing-preview" type="button">Preview routes</button>
         <button id="routing-apply" type="button">Apply routes</button>
+        <fieldset class="rtp-controls"><legend>RTP-MIDI peer</legend>
+          <label>Token <input id="rtp-token" type="number" min="0" max="4294967295" value="0"></label>
+          <label>SSRC <input id="rtp-ssrc" type="number" min="0" max="4294967295" value="0"></label>
+          <button id="rtp-establish" type="button">Establish peer</button>
+          <button id="rtp-end" type="button">End peer</button>
+          <button id="rtp-discover" type="button">Discover MIDI endpoints</button>
+          <output id="rtp-discovery" aria-live="polite">No endpoint discovery run.</output>
+        </fieldset>
       </div>
       <div id="scene-controls" class="actions" hidden aria-label="Scene workflow">
         <button id="scene-refresh" type="button">Refresh scenes and setlists</button>
         <div id="scene-board" class="scene-board" hidden aria-label="Visual scene board"></div>
         <label>Scene ID <select id="scene-id"><option value="">Refresh scenes first</option></select></label>
+        <label>Scene actions JSON <textarea id="scene-actions-json" rows="4" maxlength="65536" placeholder='[{"id":"action-1","description":"..."}]'></textarea></label>
+        <button id="save-scene-actions" type="button">Save scene actions</button>
         <button id="preview-scene" type="button">Preview scene</button>
         <button id="select-scene" type="button">Select scene</button>
+        <button id="execute-scene" type="button">Execute scene</button>
       </div>
       <div id="monitor-controls" hidden>
         <label>Endpoint <input id="monitor-endpoint" maxlength="128" placeholder="all"></label>
@@ -121,6 +159,11 @@
       <pre id="state" aria-live="polite">Loading…</pre>
     </section>
   </main>
-  <script src="/assets/app.js"></script>
+  <script src="/assets/navigation.js"></script>
+  <script src="/assets/health.js"></script>
+    <script src="/assets/feature_catalog.js"></script>
+    <script src="/assets/feature_renderer.js"></script>
+    <script src="/assets/state_store.js"></script>
+    <script src="/assets/app.js"></script>
 </body>
 </html>

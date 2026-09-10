@@ -308,6 +308,8 @@ pub enum Command {
     Hello,
     /// Retrieve a complete state snapshot.
     Snapshot,
+    /// Retrieve the bounded Novation device projection without full state serialization.
+    NovationSnapshot,
     /// Subscribe to sequenced state events.
     Subscribe,
     /// Validate a configuration path.
@@ -359,6 +361,7 @@ impl Command {
         match self {
             Self::Hello => "hello",
             Self::Snapshot => "snapshot",
+            Self::NovationSnapshot => "novation_snapshot",
             Self::Subscribe => "subscribe",
             Self::Validate => "validate",
             Self::Configuration => "configuration",
@@ -394,6 +397,8 @@ pub enum PiPedalOperation {
     Apply,
     /// Request an explicitly confirmed restore of the last mutation.
     Undo,
+    /// Replace one persisted mapping target after a missing or ambiguous plugin repair.
+    Repair,
 }
 
 /// Strict `PiPedal` IPC request envelope.
@@ -422,6 +427,74 @@ pub struct PiPedalRequest {
     /// Requested native plugin control-domain value.
     #[serde(default)]
     pub value: Option<f32>,
+    /// Requested pedalboard item enabled state for the typed bypass operation.
+    #[serde(default)]
+    pub enabled: Option<bool>,
+    /// Requested plugin-provided UI mode for pedalboard items.
+    #[serde(default)]
+    pub use_mod_ui: Option<bool>,
+    /// Requested pedalboard item title.
+    #[serde(default)]
+    pub title: Option<String>,
+    /// Requested `PiPedal` icon color key for a title update.
+    #[serde(default)]
+    pub color_key: Option<String>,
+    /// Requested scalar preview volume in decibels.
+    #[serde(default)]
+    pub volume_db: Option<f32>,
+    /// Selects input (`true`) or output (`false`) preview volume.
+    #[serde(default)]
+    pub preview_input: Option<bool>,
+    /// Client-generated `PiPedal` MIDI listener handle.
+    #[serde(default)]
+    pub midi_listener_handle: Option<u64>,
+    /// Selects listener cancellation rather than listener start.
+    #[serde(default)]
+    pub cancel_midi_listener: Option<bool>,
+    /// Client-generated patch-property monitor handle.
+    #[serde(default)]
+    pub monitor_client_handle: Option<u64>,
+    /// Patch property URI for monitoring.
+    #[serde(default)]
+    pub property_uri: Option<String>,
+    /// Selects patch-monitor cancellation rather than start.
+    #[serde(default)]
+    pub cancel_patch_monitor: Option<bool>,
+    /// Replacement URI-to-favorite map for `PiPedal`.
+    #[serde(default)]
+    pub favorites: Option<std::collections::BTreeMap<String, bool>>,
+    /// Optional request marker for a status-monitor readback query.
+    #[serde(default)]
+    pub query_show_status_monitor: Option<bool>,
+    /// Bank instance containing a new current preset.
+    #[serde(default)]
+    pub bank_instance_id: Option<i64>,
+    /// New preset name for a source-backed save-as request.
+    #[serde(default)]
+    pub preset_name: Option<String>,
+    /// Preset instance after which the new preset is inserted.
+    #[serde(default)]
+    pub save_after_instance_id: Option<i64>,
+    /// Runtime plugin instance for a plugin-preset save-as request.
+    #[serde(default)]
+    pub plugin_instance_id: Option<i64>,
+    /// New plugin-preset name.
+    #[serde(default)]
+    pub plugin_preset_name: Option<String>,
+    /// Current-preset instance ID for a connector-owned load request.
+    #[serde(default)]
+    pub load_preset_instance_id: Option<i64>,
+}
+
+impl PiPedalRequest {
+    /// Whether this request can change persisted or external `PiPedal` state.
+    #[must_use]
+    pub const fn is_mutation(&self) -> bool {
+        matches!(
+            self.operation,
+            PiPedalOperation::Apply | PiPedalOperation::Undo | PiPedalOperation::Repair
+        )
+    }
 }
 
 /// Stable mapping target carried by a `PiPedal` apply request.
@@ -573,6 +646,8 @@ pub enum MappingOperation {
     Delete,
     /// Undo the latest mutation.
     Undo,
+    /// Select or clear the daemon-owned active mapping layer.
+    SelectLayer,
 }
 
 /// Generation-checked mapping IPC request.
@@ -621,6 +696,11 @@ pub enum MappingPayload {
         /// Active mapping identifier.
         mapping_id: String,
     },
+    /// Active layer identity; null selects the base layer.
+    Layer {
+        /// Layer identity, or null to select the base layer.
+        active_layer: Option<String>,
+    },
 }
 
 /// Stable result for a mapping mutation or snapshot request.
@@ -637,6 +717,9 @@ pub struct MappingResult {
     /// Inactive draft projection, when returned by the operation.
     #[serde(default)]
     pub draft: Option<Vec<ControlMappingDraft>>,
+    /// Authoritative v2 layer projection, when configured.
+    #[serde(default)]
+    pub mapping_layers_v2: Option<mackes_config::MappingLayersV2>,
     /// Stable terminal outcome.
     pub outcome: MappingOutcome,
 }
@@ -1664,6 +1747,84 @@ mod tests {
     }
 
     #[test]
+    fn pipedal_repair_request_round_trips_as_confirmed_typed_operation() {
+        let request = PiPedalRequest {
+            operation: PiPedalOperation::Repair,
+            generation: 9,
+            confirm: true,
+            mapping: Some(PiPedalMappingTarget {
+                physical_control_id: "knob-r3-c4".into(),
+                plugin_uri: "urn:eq".into(),
+                symbol: "gain".into(),
+                scope: None,
+            }),
+            physical_control_id: Some("knob-r3-c4".into()),
+            instance_id: None,
+            client_id: None,
+            value: None,
+            enabled: None,
+            use_mod_ui: None,
+            title: None,
+            color_key: None,
+            volume_db: None,
+            preview_input: None,
+            midi_listener_handle: None,
+            cancel_midi_listener: None,
+            monitor_client_handle: None,
+            property_uri: None,
+            cancel_patch_monitor: None,
+            favorites: None,
+            query_show_status_monitor: None,
+            bank_instance_id: None,
+            preset_name: None,
+            save_after_instance_id: None,
+            plugin_instance_id: None,
+            plugin_preset_name: None,
+            load_preset_instance_id: None,
+        };
+        let encoded = serde_json::to_vec(&request).expect("encode");
+        assert_eq!(serde_json::from_slice::<PiPedalRequest>(&encoded).expect("decode"), request);
+        assert!(request.is_mutation());
+        assert!(!PiPedalRequest { operation: PiPedalOperation::Snapshot, ..request }.is_mutation());
+    }
+
+    #[test]
+    fn pipedal_apply_request_round_trips_bypass_state() {
+        let request = PiPedalRequest {
+            operation: PiPedalOperation::Apply,
+            generation: 3,
+            confirm: true,
+            mapping: None,
+            physical_control_id: None,
+            instance_id: Some(42),
+            client_id: None,
+            value: None,
+            enabled: Some(false),
+            use_mod_ui: None,
+            title: None,
+            color_key: None,
+            volume_db: None,
+            preview_input: None,
+            midi_listener_handle: None,
+            cancel_midi_listener: None,
+            monitor_client_handle: None,
+            property_uri: None,
+            cancel_patch_monitor: None,
+            favorites: Some(std::collections::BTreeMap::from([("urn:eq".into(), true)])),
+            query_show_status_monitor: None,
+            bank_instance_id: None,
+            preset_name: None,
+            save_after_instance_id: None,
+            plugin_instance_id: None,
+            plugin_preset_name: None,
+            load_preset_instance_id: None,
+        };
+        let encoded = serde_json::to_vec(&request).expect("encode");
+        assert_eq!(serde_json::from_slice::<PiPedalRequest>(&encoded).expect("decode"), request);
+        assert_eq!(request.favorites.as_ref().and_then(|map| map.get("urn:eq")), Some(&true));
+    }
+
+    #[test]
     fn maximum_response_decodes_bytewise_and_retains_following_frames() {
         let mut decoder = LineDecoder::default();
         for _ in 0..MAX_FRAME_BYTES {
@@ -1957,6 +2118,7 @@ mod tests {
             undo_available: true,
             active: None,
             draft: None,
+            mapping_layers_v2: None,
             outcome: MappingOutcome::Applied,
         };
         assert_eq!(

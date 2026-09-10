@@ -77,7 +77,10 @@ The current persisted local preview is `mackes pipedal mappings <config> [--json
 the version-1 `settings.pipedal_mappings` record, bounded to 128 entries, whose identity is
 `physical_control_id`, `plugin_uri`, `symbol`, and optional `scope`. Duplicate physical controls
 or duplicate targets fail validation before preview output; this command performs no PiPedal or
-MIDI write. Apply, undo, and live catalog resolution remain worker/IPC delivery work.
+MIDI write. Apply, undo, and live catalog resolution remain worker/IPC delivery work. Persisted
+target repair is exposed as a separate confirmed `Repair` operation: it requires the current
+connector generation, replaces exactly one stable physical-control target, and commits through
+the daemon's revision-checked atomic configuration save before refreshing the runtime cache.
 
 Catalog entries expose label, symbol, units, min/max/default, enum/step/log properties,
 writability and current value with freshness. Unsupported metadata stays unavailable.
@@ -216,6 +219,20 @@ catalog is enumerable and serializes each capability using its exact wire name. 
 host-wide, or disruptive mutations carry an explicit confirmation requirement; ordinary
 parameter control remains immediate. Operations outside this qualified set remain pending
 until an installed-version fixture supplies their request and response contracts.
+
+The validated `version` handshake metadata is retained for the active session and projected in
+daemon and browser snapshots. It is cleared on reconnect, and is diagnostic readback only; it
+does not by itself authorize version-dependent operations or control writes.
+
+### Restoring a qualification pedalboard
+
+When the live catalog is empty, restore the known `Fender Clean` preset through the typed
+connector path. PiPedal's installed client contract is `loadPreset` with a positive preset
+instance ID as the scalar body (the observed `Fender Clean` ID is `16`), not an ad-hoc JSON
+object. The adapter must require the current session generation and explicit confirmation before
+queueing this write; after the request, refresh `getPresets` and `currentPedalboard`, then require
+non-empty controls and targets before claiming qualification. Never substitute a hand-built
+WebSocket probe or guess a preset ID when the authoritative preset catalog is available.
 
 ## Current delivery priority
 

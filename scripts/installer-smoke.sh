@@ -7,7 +7,7 @@ if [[ $# -ne 0 ]]; then
 fi
 
 scripts/install-fedora.sh --check >/dev/null
-for required in packaging/10-appliance.conf packaging/mackes-midi-matrix-tui.service packaging/mackes-web.service scripts/mackes-midi-matrix-local; do
+for required in packaging/10-appliance.conf packaging/mackes-midi-matrix-tui.service packaging/mackes-web.service scripts/mackes-midi-matrix-local scripts/browser-smoke.sh; do
   [[ -f "$required" ]] || { printf 'installer smoke: missing packaged dependency %s\n' "$required" >&2; exit 1; }
 done
 [[ -x scripts/capture-qualification-baseline.sh ]] || {

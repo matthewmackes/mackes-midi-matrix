@@ -1601,6 +1601,13 @@ fn command_acknowledgments_are_stable_and_operation_specific() {
         command_ack(Command::DeviceQuery, Health::Ready, 8, &[], None, &[]),
         "{\"ok\":true,\"generation\":8,\"devices\":[],\"physical_devices\":[]}\n"
     );
+    let device_endpoints = vec![mackes_midi_engine::EndpointInfo {
+        id: "midir-in-test".into(),
+        name: "Test MIDI In".into(),
+        direction: mackes_midi_engine::EndpointDirection::Input,
+    }];
+    assert!(command_ack(Command::DeviceQuery, Health::Ready, 8, &device_endpoints, None, &[])
+        .contains("\"devices\":[{\"direction\":\"input\",\"id\":\"midir-in-test\",\"name\":\"Test MIDI In\"}]"));
     assert_eq!(
         command_ack(Command::Monitor, Health::Ready, 9, &[], None, &[]),
         "{\"ok\":true,\"generation\":9,\"monitor\":[]}\n"
@@ -1635,6 +1642,16 @@ fn scenes_query_projects_daemon_scene_catalog() {
         serde_json::from_str(&daemon.scenes_response()).expect("response");
     assert_eq!(response["scenes"], serde_json::json!(["intro", "verse"]));
     assert_eq!(response["active_scene"], "verse");
+}
+
+#[test]
+fn scene_selection_only_does_not_execute_actions() {
+    let path =
+        std::env::temp_dir().join(format!("mackes-scenes-select-only-{}.sock", std::process::id()));
+    let mut daemon = Daemon::bind(&path).expect("daemon");
+    daemon.set_scene_ids(vec!["intro".into()]);
+    assert_eq!(daemon.select_scene_only("intro").expect("select"), "intro");
+    assert_eq!(daemon.activation_result, None);
 }
 
 #[test]

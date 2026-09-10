@@ -9,6 +9,12 @@ import re
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 schema = json.loads((ROOT / "schemas" / "web-api-v1.schema.json").read_text(encoding="utf-8"))
+configuration_schema = json.loads(
+    (ROOT / "schemas" / "configuration-boundary.schema.json").read_text(encoding="utf-8")
+)
+capability_schema = json.loads(
+    (ROOT / "schemas" / "capability-boundary.schema.json").read_text(encoding="utf-8")
+)
 contract = (ROOT / "crates" / "web-contract" / "src" / "lib.rs").read_text(encoding="utf-8")
 
 
@@ -53,6 +59,24 @@ if properties.get("confirm", {}).get("type") != "boolean":
     raise SystemExit("web API confirmation must be boolean")
 if properties.get("confirm", {}).get("default") is not False:
     raise SystemExit("web API confirmation must default to false")
+if configuration_schema.get("$id") != "https://mackes.invalid/schema/configuration-boundary.schema.json":
+    raise SystemExit("configuration boundary schema has an unexpected identity")
+if configuration_schema.get("additionalProperties") is not False:
+    raise SystemExit("configuration boundary envelope must be a closed object")
+if capability_schema.get("$id") != "https://mackes.invalid/schema/capability-boundary.schema.json":
+    raise SystemExit("capability boundary schema has an unexpected identity")
+if capability_schema.get("additionalProperties") is not False:
+    raise SystemExit("capability boundary schema must be a closed object")
+if capability_schema.get("properties", {}).get("schema_version", {}).get("const") != 1:
+    raise SystemExit("capability boundary schema version must be 1")
+if set(configuration_schema.get("required", [])) != {"request_id", "operation"}:
+    raise SystemExit("configuration boundary required fields changed")
+operations = configuration_schema.get("properties", {}).get("operation", {}).get("enum", [])
+if set(operations) != {"read", "draft", "validate", "diff", "apply", "operation"}:
+    raise SystemExit("configuration boundary operation vocabulary changed")
+for operation in ("draft", "validate", "diff", "apply", "operation"):
+    if operation not in web_source:
+        raise SystemExit(f"configuration HTTP operation is not represented: {operation}")
 definitions = schema.get("$defs", {})
 for definition, required in {
     "operation_response": {"operation_id", "generation", "accepted"},

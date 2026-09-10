@@ -4,10 +4,10 @@ pub(crate) mod interactive;
 use cli::{
     apply_routes_cli, backup_entries, backup_status_label, daemon_command, daemon_request,
     daemon_status, discovered_endpoints, mappings_cli, migrate_config_cli, navigate_scene_cli,
-    pipedal_mappings_cli, pipedal_snapshot_request, print_daemon_command, print_default_provider,
-    print_effects_assignments, print_effects_demo, print_effects_faceplate, print_effects_plan,
-    print_learn, reflex_pcm70_preset, register_endpoint_cli, rescan_cli, restore_cli,
-    restore_novation_template_cli, scene_action_add_cli, scene_action_remove_cli,
+    pipedal_mappings_cli, pipedal_repair_request, pipedal_snapshot_request, print_daemon_command,
+    print_default_provider, print_effects_assignments, print_effects_demo, print_effects_faceplate,
+    print_effects_plan, print_learn, reflex_pcm70_preset, register_endpoint_cli, rescan_cli,
+    restore_cli, restore_novation_template_cli, scene_action_add_cli, scene_action_remove_cli,
     scene_actions_cli, scene_plan_cli, send_device_control_cli, send_sysex_cli,
     set_default_provider_cli,
 };
@@ -42,6 +42,7 @@ fn main() {
             println!("  mackes-midi-matrix pipedal mapping-status [--json]");
             println!("  mackes-midi-matrix pipedal snapshot [--json]");
             println!("  mackes-midi-matrix pipedal apply <generation> <physical-id> <plugin-uri> <symbol> <instance-id> <value> --confirm");
+            println!("  mackes-midi-matrix pipedal repair <generation> <physical-id> <plugin-uri> <symbol> --confirm");
             println!("  mackes-midi-matrix pipedal undo <generation> --confirm");
             println!("  mackes-midi-matrix mappings [--json]");
             println!("  mackes-midi-matrix learn <endpoint-id> [limit]");
@@ -650,6 +651,23 @@ fn main() {
                 )
             );
         }
+        [command, action, generation, physical_id, plugin_uri, symbol, flag]
+            if command == "pipedal" && action == "repair" && flag == "--confirm" =>
+        {
+            let payload = pipedal_repair_request(
+                generation.parse::<u64>().unwrap_or(u64::MAX),
+                physical_id,
+                plugin_uri,
+                symbol,
+            );
+            println!(
+                "{}",
+                daemon_request(
+                    mackes_ipc::Command::PiPedal,
+                    &serde_json::to_vec(&payload).expect("PiPedal repair request")
+                )
+            );
+        }
         [command, action, generation, flag]
             if command == "pipedal" && action == "undo" && flag == "--confirm" =>
         {
@@ -698,7 +716,7 @@ fn main() {
             eprintln!("  mackes-midi-matrix migrate <config> [--dry-run|--json]");
             eprintln!("  mackes-midi-matrix rescan [--json]");
             eprintln!("  mackes-midi-matrix mappings [--json]");
-            eprintln!("  mackes-midi-matrix pipedal mappings <config> [--json]\n  mackes-midi-matrix pipedal mapping-status [--json]\n  mackes-midi-matrix pipedal apply-mapping <generation> <physical-id> <instance-id> <value> --confirm");
+            eprintln!("  mackes-midi-matrix pipedal mappings <config> [--json]\n  mackes-midi-matrix pipedal mapping-status [--json]\n  mackes-midi-matrix pipedal apply-mapping <generation> <physical-id> <instance-id> <value> --confirm\n  mackes-midi-matrix pipedal repair <generation> <physical-id> <plugin-uri> <symbol> --confirm");
             std::process::exit(64);
         }
     }
@@ -809,6 +827,15 @@ mod tests {
         assert_eq!(value["version"], 1);
         assert_eq!(value["count"], 1);
         assert!(crate::cli::pipedal_mappings_cli("/tmp/mackes-no-such-config.json5", true).is_err());
+    }
+    #[test]
+    fn pipedal_repair_request_is_typed_and_confirmed() {
+        let request = crate::cli::pipedal_repair_request(7, "knob-r3-c4", "urn:eq", "gain");
+        assert_eq!(request["operation"], "repair");
+        assert_eq!(request["generation"], 7);
+        assert_eq!(request["confirm"], true);
+        assert_eq!(request["mapping"]["physical_control_id"], "knob-r3-c4");
+        assert_eq!(request["mapping"]["symbol"], "gain");
     }
     #[test]
     fn novation_assignment_cli_rejects_unknown_actions_and_bad_controls_before_ipc() {

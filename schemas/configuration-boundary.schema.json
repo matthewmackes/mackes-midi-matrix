@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mackes.invalid/schema/configuration-boundary.schema.json",
+  "title": "MACKES versioned configuration boundary",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["request_id", "operation"],
+  "properties": {
+    "request_id": { "type": "string", "minLength": 1, "maxLength": 96 },
+    "operation": { "type": "string", "enum": ["read", "draft", "validate", "diff", "apply", "operation"] },
+    "draft_id": { "type": "string", "minLength": 1, "maxLength": 96 },
+    "draft_revision": { "$ref": "#/$defs/revision" },
+    "expected_revision": { "$ref": "#/$defs/revision" },
+    "operation_id": { "type": "string", "minLength": 1, "maxLength": 96 },
+    "confirm": { "type": "boolean", "default": false },
+    "configuration": { "$ref": "config.schema.json" },
+    "source_json5": { "type": "string", "maxLength": 1048576 }
+  },
+  "$defs": {
+    "revision": { "type": "string", "minLength": 1, "maxLength": 128 }
+  }
+}

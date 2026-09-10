@@ -4,14 +4,18 @@ use mackes_config::ConfigError;
 use mackes_ipc::{authorize, AccessPolicy, Authorization, Command, LocalServer};
 use std::{
     collections::VecDeque,
+    fmt::Write as FmtWrite,
     fs::{self, OpenOptions},
     io::{self, Read, Write},
     path::{Path, PathBuf},
     sync::mpsc::{self, Receiver, Sender},
     time::{Duration, Instant},
 };
+mod configuration_response;
+mod mapping_layers_runtime;
 mod mapping_runtime;
-
+mod pipedal_dispatch;
+mod scene_runtime;
 /// Daemon health state.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Health {
@@ -64,13 +68,11 @@ pub struct EndpointSettlePolicy {
     /// Maximum wait in milliseconds.
     pub window_ms: u64,
 }
-
 impl Default for EndpointSettlePolicy {
     fn default() -> Self {
         Self { window_ms: 5_000 }
     }
 }
-
 impl EndpointSettlePolicy {
     /// Creates a policy, rejecting an unbounded zero-length window.
     #[must_use]
@@ -174,7 +176,6 @@ pub struct InstanceLock {
     path: PathBuf,
     _file: fs::File,
 }
-
 impl InstanceLock {
     /// Acquires an exclusive lock using atomic file creation.
     ///
@@ -187,13 +188,11 @@ impl InstanceLock {
         Ok(Self { path, _file: file })
     }
 }
-
 impl Drop for InstanceLock {
     fn drop(&mut self) {
         let _ = fs::remove_file(&self.path);
     }
 }
-
 /// Persistent daemon state and local IPC listener.
 #[cfg(target_os = "linux")]
 #[derive(Debug)]
@@ -211,13 +210,17 @@ pub struct Daemon {
     profile_bindings: Vec<(String, String)>,
     binding_generation: u64,
     config_path: Option<std::path::PathBuf>,
+    operation_journal: Option<mackes_config::OperationJournal>,
     novation_device_policy: Option<mackes_config::NovationDeviceConfig>,
+    novation_rebind_previous: Option<mackes_config::NovationDeviceConfig>,
     /// Cached `PiPedal` physical control IDs used by the real-time LED composer.
     /// This must be refreshed at configuration boundaries, never from the LED tick.
     pipedal_controls: Vec<String>,
     /// Cached validated `PiPedal` identities used by snapshots and dispatch.
     pipedal_mappings: Vec<mackes_pipedal_adapter::MappingIdentity>,
     mapping_store: mackes_config::ControlMappingStore,
+    /// Validated daemon-owned v2 layer projection loaded with configuration.
+    mapping_layers_v2: Option<mackes_config::MappingLayersV2>,
     button_toggle_state: std::collections::HashMap<String, (bool, bool)>,
     lexicon_active_algorithm: Option<u8>,
     lexicon_readback_error: Option<String>,
@@ -258,11 +261,11 @@ pub struct Daemon {
     safety: mackes_scene_engine::SafetyController,
     audit: mackes_scene_engine::AuditLog,
     activation_result: Option<String>,
+    activation_outcomes: Option<Vec<serde_json::Value>>,
     state_sequence: u64,
     state_events: VecDeque<mackes_ipc::StateEvent>,
     safety_clock: Instant,
 }
-
 /// Classifies a bounded JSON command tag without deserializing untrusted payloads.
 #[cfg(target_os = "linux")]
 #[must_use]
@@ -270,6 +273,7 @@ pub fn classify_command(request: &[u8]) -> Option<Command> {
     const COMMANDS: &[(Command, &[u8])] = &[
         (Command::Hello, b"hello"),
         (Command::Snapshot, b"snapshot"),
+        (Command::NovationSnapshot, b"novation_snapshot"),
         (Command::Subscribe, b"subscribe"),
         (Command::Validate, b"validate"),
         (Command::Configuration, b"configuration"),
@@ -300,7 +304,6 @@ pub fn classify_command(request: &[u8]) -> Option<Command> {
         request.windows(needle.len()).any(|window| window == needle).then_some(*command)
     })
 }
-
 #[cfg(target_os = "linux")]
 fn physical_devices_json(endpoints: &[mackes_midi_engine::EndpointInfo]) -> String {
     let devices = mackes_midi_engine::group_physical_devices(endpoints)
@@ -318,32 +321,26 @@ fn physical_devices_json(endpoints: &[mackes_midi_engine::EndpointInfo]) -> Stri
         .collect::<Vec<_>>();
     serde_json::to_string(&devices).unwrap_or_else(|_| "[]".to_owned())
 }
-
 #[cfg(target_os = "linux")]
 fn physical_devices_value(endpoints: &[mackes_midi_engine::EndpointInfo]) -> serde_json::Value {
     serde_json::from_str(&physical_devices_json(endpoints))
         .unwrap_or_else(|_| serde_json::json!([]))
 }
-
 const MAX_PHYSICAL_DEVICE_RECORDS: usize = 32;
 /// Maximum interval between bounded native endpoint discovery passes.
 pub(crate) const NATIVE_RESCAN_INTERVAL_MS: u64 = 250;
-
 #[cfg(target_os = "linux")]
 fn routes_path(config_path: &std::path::Path) -> std::path::PathBuf {
     config_path.with_extension("routes.json")
 }
-
 #[cfg(target_os = "linux")]
 fn routes_undo_path(config_path: &std::path::Path) -> std::path::PathBuf {
     config_path.with_extension("routes.undo.json")
 }
-
 #[cfg(target_os = "linux")]
 fn persist_routes(config_path: &std::path::Path, routes: &serde_json::Value) -> io::Result<()> {
     persistence_projection::persist_json_atomic(&routes_path(config_path), routes, "routes.json")
 }
-
 #[cfg(target_os = "linux")]
 fn midi_activity_json(
     event: &mackes_domain::MidiEvent,
@@ -405,7 +402,6 @@ fn midi_activity_json(
         "sequence": event.sequence,
     })
 }
-
 /// Produces a stable acknowledgment for a recognized command.
 #[cfg(target_os = "linux")]
 #[allow(clippy::too_many_lines)]
@@ -431,6 +427,9 @@ fn command_ack(
         Command::Hello => format!("{{\"ok\":true,\"generation\":{generation},\"protocol\":1}}\n"),
         Command::Snapshot => {
             format!("{{\"ok\":true,\"generation\":{generation},\"snapshot\":true}}\n")
+        }
+        Command::NovationSnapshot => {
+            format!("{{\"ok\":true,\"generation\":{generation},\"novation_snapshot\":true}}\n")
         }
         Command::Subscribe => {
             format!("{{\"ok\":true,\"generation\":{generation},\"subscribed\":true}}\n")
@@ -534,10 +533,10 @@ fn command_ack(
         ),
     }
 }
-
 #[cfg(target_os = "linux")]
 impl Daemon {
     fn cache_pipedal_mappings(&mut self, document: &mackes_config::ConfigDocument) {
+        self.mapping_layers_v2.clone_from(&document.mapping_layers_v2);
         self.pipedal_controls = document
             .settings
             .pipedal_mappings
@@ -558,7 +557,6 @@ impl Daemon {
             })
             .collect();
     }
-
     /// Binds the daemon control socket.
     ///
     /// # Errors
@@ -580,10 +578,13 @@ impl Daemon {
             profile_bindings: Vec::new(),
             binding_generation: 0,
             config_path: None,
+            operation_journal: None,
             novation_device_policy: None,
+            novation_rebind_previous: None,
             pipedal_controls: Vec::new(),
             pipedal_mappings: Vec::new(),
             mapping_store: mackes_config::ControlMappingStore::default(),
+            mapping_layers_v2: None,
             button_toggle_state: std::collections::HashMap::new(),
             lexicon_active_algorithm: None,
             lexicon_readback_error: None,
@@ -625,6 +626,7 @@ impl Daemon {
             safety: mackes_scene_engine::SafetyController::default(),
             audit: mackes_scene_engine::AuditLog::new(128).map_err(io::Error::other)?,
             activation_result: None,
+            activation_outcomes: None,
             state_sequence: 0,
             state_events: VecDeque::with_capacity(256),
             safety_clock: Instant::now(),
@@ -1011,9 +1013,14 @@ impl Daemon {
             self.led.set_template(policy.template);
         }
         self.led.set_pipedal_controls(self.pipedal_controls.clone());
+        let mut effective_store = self.mapping_store.clone();
+        effective_store.active = mapping_layers_runtime::effective_mappings(
+            &self.mapping_store,
+            self.mapping_layers_v2.as_ref(),
+        );
         self.led.flush(
             now_ms,
-            &self.mapping_store,
+            &effective_store,
             &self.assignment_session,
             self.assignment_control_id.as_deref(),
             &mut self.outputs,
@@ -1458,13 +1465,13 @@ impl Daemon {
         let routed = self.route_event(event);
         let mut sent = 0;
         let mut unmatched = 0;
-        let active_mappings = self
-            .mapping_store
-            .active
-            .iter()
-            .filter(|mapping| mapping.enabled)
-            .cloned()
-            .collect::<Vec<_>>();
+        let active_mappings = mapping_layers_runtime::effective_mappings(
+            &self.mapping_store,
+            self.mapping_layers_v2.as_ref(),
+        )
+        .into_iter()
+        .filter(|mapping| mapping.enabled)
+        .collect::<Vec<_>>();
         for mapping in active_mappings {
             let now =
                 u64::try_from(self.safety_clock.elapsed().as_nanos().min(u128::from(u64::MAX)))
@@ -1730,6 +1737,13 @@ impl Daemon {
     /// Records a validated startup scene for dashboard snapshots and events.
     pub fn set_active_scene(&mut self, scene: Option<String>) {
         self.active_scene = scene;
+        if let Some(layers) = self.mapping_layers_v2.as_mut() {
+            if layers.active_layer.take().is_some() {
+                if let Some(path) = self.config_path.as_deref() {
+                    let _ = mackes_config::save_mapping_layers(path, layers, 1);
+                }
+            }
+        }
         self.record_state_event(Command::Scenes);
     }
     /// Returns the currently selected scene projected by the daemon.
@@ -1762,11 +1776,7 @@ impl Daemon {
     ///
     /// Returns an error when the scene is absent or persistence fails.
     pub fn select_scene(&mut self, scene: &str) -> Result<String, &'static str> {
-        if !self.scene_ids.iter().any(|candidate| candidate == scene) {
-            return Err("scene is not present in the active catalog");
-        }
-        let selected = scene.to_owned();
-        self.set_active_scene(Some(selected.clone()));
+        let selected = self.select_scene_only(scene)?;
         if let Some(path) = self.config_path.as_deref() {
             persist_active_scene(path, Some(scene)).map_err(|_| "scene persistence failed")?;
             let document = mackes_config::load(path).map_err(|_| "scene load failed")?;
@@ -1800,6 +1810,22 @@ impl Daemon {
             {
                 return Err("scene operation failed");
             }
+        }
+        Ok(selected)
+    }
+    /// Selects and persists a scene without executing its actions.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the scene is absent or persistence fails.
+    pub fn select_scene_only(&mut self, scene: &str) -> Result<String, &'static str> {
+        if !self.scene_ids.iter().any(|candidate| candidate == scene) {
+            return Err("scene is not present in the active catalog");
+        }
+        let selected = scene.to_owned();
+        self.set_active_scene(Some(selected.clone()));
+        if let Some(path) = self.config_path.as_deref() {
+            persist_active_scene(path, Some(scene)).map_err(|_| "scene persistence failed")?;
         }
         Ok(selected)
     }
@@ -1859,7 +1885,6 @@ impl Daemon {
         events.extend(self.inputs.poll_once());
         events
     }
-
     #[cfg(feature = "alsa-seq-backend")]
     fn poll_native_alsa_lifecycle(&mut self) {
         let Some(client) = self.alsa_input_client.clone() else {
@@ -2128,7 +2153,6 @@ impl Daemon {
     fn is_launch_control_factory1_device_press(event: &mackes_domain::MidiEvent) -> bool {
         matches!(Self::launch_control_factory1_control_id(event).as_deref(), Some("utility-1"))
     }
-
     fn launch_control_factory1_navigation(
         event: &mackes_domain::MidiEvent,
     ) -> Option<&'static str> {
@@ -2146,7 +2170,6 @@ impl Daemon {
             _ => None,
         }
     }
-
     fn launch_control_factory1_layout_id(event: &mackes_domain::MidiEvent) -> Option<String> {
         let (kind, number, channel) = match event.message {
             mackes_domain::MidiMessage::ControlChange { channel, controller, .. } => (
@@ -2166,7 +2189,6 @@ impl Daemon {
                 .then_some(control.physical_control_id)
         })
     }
-
     fn launch_control_factory1_control_id(event: &mackes_domain::MidiEvent) -> Option<String> {
         let (kind, number, channel, value) = match event.message {
             mackes_domain::MidiMessage::ControlChange { channel, controller, value } => (
@@ -2185,7 +2207,6 @@ impl Daemon {
         };
         mackes_profiles::resolve_launch_control_mk2_factory1_input(channel, kind, number, value)
     }
-
     fn record_navigation_event(&mut self, action: &'static str) {
         self.record_state_event(Command::Monitor);
         if let Some(event) = self.state_events.back_mut() {
@@ -2213,7 +2234,6 @@ impl Daemon {
             .map(|(command, _)| command)
             .collect()
     }
-
     /// Polls registered inputs and retains dashboard scene direction.
     #[must_use]
     fn poll_dashboard_actions(
@@ -2355,7 +2375,6 @@ impl Daemon {
     pub fn route_generation(&self) -> Option<u64> {
         self.router.generation()
     }
-
     /// Establishes the configured RTP-MIDI peer identity and resets sequence state.
     ///
     /// # Errors
@@ -2364,7 +2383,6 @@ impl Daemon {
     pub fn establish_rtp_peer(&mut self, token: u32, ssrc: u32) -> Result<(), &'static str> {
         self.rtp_peer.establish(token, ssrc)
     }
-
     /// Validates one RTP-MIDI packet against the configured peer and allowlist.
     ///
     /// # Errors
@@ -2382,7 +2400,6 @@ impl Daemon {
             .receive_packet(packet, peer, allowed_peers, token, ssrc)
             .map(|(_, disposition)| disposition)
     }
-
     /// Receives and validates one datagram from a configured RTP-MIDI transport.
     ///
     /// # Errors
@@ -2397,11 +2414,7 @@ impl Daemon {
     ) -> std::io::Result<Option<(Vec<u8>, mackes_midi_engine::SequenceDisposition)>> {
         self.rtp_peer.receive_from_transport(transport, allowlist, token, ssrc)
     }
-
     /// Drains at most `limit` authorized RTP-MIDI datagrams from a transport.
-    ///
-    /// The bound makes one daemon loop iteration predictable and prevents a
-    /// busy peer from starving local MIDI inputs and IPC work.
     ///
     /// # Errors
     ///
@@ -2430,11 +2443,7 @@ impl Daemon {
         }
         Ok(packets)
     }
-
     /// Receives one authorized RTP-MIDI packet, decodes channel-voice events,
-    /// and dispatches them through the daemon-owned router/output registry.
-    /// System-common/realtime and `SysEx` packets use the dedicated sibling
-    /// pumps below so callers cannot accidentally process a packet twice.
     ///
     /// # Errors
     ///
@@ -2471,10 +2480,7 @@ impl Daemon {
         }
         Ok(Some((events.len(), sent, unmatched)))
     }
-
     /// Receives one authorized RTP-MIDI packet and dispatches its system
-    /// common/realtime messages. Channel-voice messages are rejected here so
-    /// callers cannot accidentally process a packet twice.
     ///
     /// # Errors
     ///
@@ -2513,7 +2519,6 @@ impl Daemon {
         }
         Ok(Some((events.len(), sent, unmatched)))
     }
-
     /// Receives one authorized RTP-MIDI packet containing one complete `SysEx`
     /// command and dispatches it through the daemon-owned router.
     ///
@@ -2546,7 +2551,6 @@ impl Daemon {
         let (sent, unmatched) = self.dispatch_registered(&event);
         Ok(Some((1, sent, unmatched)))
     }
-
     /// Ends the established RTP-MIDI session and clears sequence history.
     ///
     /// # Errors
@@ -2628,6 +2632,13 @@ impl Daemon {
             summary.cancelled,
             summary.sent_unverified
         ));
+        self.activation_outcomes = Some(
+            results
+                .iter()
+                .take(128)
+                .map(|(id, result)| serde_json::json!({"id": id, "outcome": format!("{result:?}")}))
+                .collect(),
+        );
         self.record_state_event(Command::Scenes);
     }
     /// Discovers ALSA MIDI endpoints without opening a device or transmitting MIDI.
@@ -2658,7 +2669,11 @@ impl Daemon {
             "last_mapping_activity": self.last_mapping_activity,
             "control_mappings": self.mapping_store.active,
             "mapping_registry": self.resolved_mapping_registry(),
+            "mapping_layers_v2": self.mapping_layers_v2,
+            "rtp_midi": {"state": format!("{:?}", self.rtp_peer.state()), "remote_ssrc": self.rtp_peer.remote_ssrc(), "remote_name": self.rtp_peer.remote_name()},
             "activation_result": self.activation_result.as_deref(),
+            "activation_outcomes": self.activation_outcomes,
+            "activation_outcomes": self.activation_outcomes,
             "assignment_session": self.assignment_session,
             "catalog": self.catalog,
             "physical_devices": self.physical_devices,
@@ -2669,6 +2684,11 @@ impl Daemon {
             ),
             "pipedal": self.pipedal_worker.ipc_status(),
             "pipedal_catalog": self.pipedal_worker.catalog(),
+            "pipedal_system_midi_bindings": self.pipedal_worker.system_midi_bindings(),
+            "pipedal_version": self.pipedal_worker.version(),
+            "pipedal_governor_settings": self.pipedal_worker.governor_settings(),
+            "pipedal_show_status_monitor": self.pipedal_worker.show_status_monitor(),
+            "pipedal_wifi_regulatory_domains": self.pipedal_worker.wifi_regulatory_domains(),
             "pipedal_operations": mackes_pipedal_adapter::supported_operations(),
             "pipedal_mapping_resolution": self.pipedal_mapping_resolution(),
             "health": match self.health {
@@ -2761,6 +2781,7 @@ impl Daemon {
             "last_mapping_activity": self.last_mapping_activity,
             "control_mappings": self.mapping_store.active,
             "mapping_registry": self.resolved_mapping_registry(),
+            "mapping_layers_v2": self.mapping_layers_v2,
             "activation_result": self.activation_result.as_deref(),
             "assignment_session": self.assignment_session,
             "last_sequence": self.state_sequence,
@@ -2952,12 +2973,7 @@ impl Daemon {
             .to_string()
             + "\n"
     }
-    /// Handles one local request and remains usable for subsequent clients.
-    ///
-    /// # Errors
-    ///
-    /// Returns an I/O error for accept/read/write failures.
-    #[allow(clippy::too_many_lines)]
+    #[allow(clippy::too_many_lines, missing_docs, clippy::missing_errors_doc)]
     pub fn serve_once(&mut self, policy: AccessPolicy) -> io::Result<()> {
         let _ = self.drain_virtual_input();
         let (mut stream, identity) = self.server.accept_authorized(policy)?;
@@ -2981,9 +2997,6 @@ impl Daemon {
             mackes_ipc::ActorClass::LocalTui
         };
         let command = classify_command(&request);
-        // The command is classified from the framed envelope, but every handler
-        // operates on its typed JSON payload. Keeping that boundary here prevents
-        // local CLI writes from silently losing confirmation or destination fields.
         let request_payload = serde_json::from_slice::<serde_json::Value>(&request)
             .ok()
             .and_then(|envelope| envelope.get("payload").cloned())
@@ -3000,7 +3013,37 @@ impl Daemon {
             if command == Some(Command::Configuration) {
                 let value = serde_json::from_slice::<serde_json::Value>(&request_payload)
                     .unwrap_or_default();
-                if value.get("setlists").is_some() || value.get("learned_mappings").is_some() {
+                if ["configuration", "setlists", "learned_mappings"]
+                    .iter()
+                    .any(|key| value.get(*key).is_some())
+                {
+                    let request_id = value.get("request_id").and_then(serde_json::Value::as_str);
+                    let operation_id = value
+                        .get("operation_id")
+                        .and_then(serde_json::Value::as_str)
+                        .or(request_id);
+                    let fingerprint = request_id.map(|_| {
+                        let mut encoded = String::with_capacity(request_payload.len() * 2);
+                        for byte in &request_payload {
+                            let _ = write!(&mut encoded, "{byte:02x}");
+                        }
+                        encoded
+                    });
+                    if let (Some(request_id), Some(fingerprint), Some(journal)) =
+                        (request_id, fingerprint.as_deref(), self.operation_journal.as_ref())
+                    {
+                        match journal.lookup(request_id, fingerprint) {
+                            Ok(Some(record)) => {
+                                return stream
+                                    .write_all((record.outcome.to_string() + "\n").as_bytes());
+                            }
+                            Err(error) => {
+                                return stream
+                                    .write_all(configuration_response::error(&error).as_bytes());
+                            }
+                            Ok(None) => {}
+                        }
+                    }
                     let Some(path) = self.config_path.clone() else {
                         return stream.write_all(
                             b"{\"ok\":false,\"error\":\"configuration path is unavailable\"}\n",
@@ -3011,49 +3054,114 @@ impl Daemon {
                             b"{\"ok\":false,\"error\":\"configuration load failed\"}\n",
                         );
                     };
-                    if let Some(values) = value.get("setlists") {
-                        let Ok(setlists) =
-                            serde_json::from_value::<Vec<mackes_config::Setlist>>(values.clone())
-                        else {
-                            return stream
-                                .write_all(b"{\"ok\":false,\"error\":\"invalid setlists\"}\n");
+                    let expected_revision = configuration_response::revision(&value);
+                    if let Err(error) =
+                        configuration_response::apply_payload(&value, &path, &mut document)
+                    {
+                        return stream.write_all(configuration_response::error(&error).as_bytes());
+                    }
+                    let mut prepared_store =
+                        match mackes_config::ControlMappingStore::from_document(&document) {
+                            Ok(store) => store,
+                            Err(message) => {
+                                let error = mackes_config::ConfigError::Semantic {
+                                    path: path.clone(),
+                                    message,
+                                };
+                                return stream
+                                    .write_all(configuration_response::error(&error).as_bytes());
+                            }
                         };
-                        document.setlists = setlists;
+                    prepared_store.active.retain(assignment_commit::mapping_role_compatible);
+                    if let Err(error) = mackes_config::save_with_optional_revision(
+                        &path,
+                        &document,
+                        5,
+                        expected_revision.as_deref(),
+                    ) {
+                        return stream.write_all(configuration_response::error(&error).as_bytes());
                     }
-                    if let Some(values) = value.get("learned_mappings") {
-                        let Ok(mappings) = serde_json::from_value::<
-                            Vec<mackes_config::LearnedMapping>,
-                        >(values.clone()) else {
-                            return stream.write_all(
-                                b"{\"ok\":false,\"error\":\"invalid learned mappings\"}\n",
-                            );
-                        };
-                        for mapping in mappings {
-                            let updated = mackes_config::add_learned_mapping(&document, mapping)
-                                .map_err(io::Error::other);
-                            let Ok(updated) = updated else {
-                                return stream.write_all(
-                                    b"{\"ok\":false,\"error\":\"invalid learned mapping\"}\n",
-                                );
-                            };
-                            document = updated;
-                        }
+                    self.novation_device_policy.clone_from(&document.settings.novation_device);
+                    self.cache_pipedal_mappings(&document);
+                    self.mapping_store = prepared_store;
+                    self.assignment_session.has_draft = !self.mapping_store.drafts.is_empty();
+                    self.sync_assignment_catalog();
+                    self.catalog = serde_json::json!({"configuration": document, "configuration_revision": mackes_config::document_revision(&document).unwrap_or_default(), "projects": document.projects.iter().map(|project| serde_json::json!({"id": project.id, "scenes": project.scenes.iter().map(|scene| scene.id.clone()).collect::<Vec<_>>() })).collect::<Vec<_>>(), "setlists": document.setlists, "learned_mappings": document.learned_mappings});
+                    if let (
+                        Some(request_id),
+                        Some(operation_id),
+                        Some(fingerprint),
+                        Some(journal),
+                    ) = (request_id, operation_id, fingerprint, self.operation_journal.as_mut())
+                    {
+                        let outcome = serde_json::json!({"ok": true, "operation_id": operation_id});
+                        let _ = journal.record(mackes_config::OperationRecord {
+                            request_id: request_id.to_owned(),
+                            fingerprint,
+                            operation_id: operation_id.to_owned(),
+                            outcome,
+                        });
                     }
-                    if let Err(error) = mackes_config::validate(&document) {
-                        return stream.write_all(
-                            format!("{{\"ok\":false,\"error\":\"{error}\"}}\n").as_bytes(),
-                        );
-                    }
-                    if let Err(error) = mackes_config::save(&path, &document, 5) {
-                        return stream.write_all(
-                            format!("{{\"ok\":false,\"error\":\"{error}\"}}\n").as_bytes(),
-                        );
-                    }
-                    self.catalog = serde_json::json!({"projects": document.projects.iter().map(|project| serde_json::json!({"id": project.id, "scenes": project.scenes.iter().map(|scene| scene.id.clone()).collect::<Vec<_>>() })).collect::<Vec<_>>(), "setlists": document.setlists, "learned_mappings": document.learned_mappings});
                 }
             }
             if command == Some(Command::Routes) {
                 if let Ok(value) = serde_json::from_slice::<serde_json::Value>(&request_payload) {
+                    if value.get("action").and_then(serde_json::Value::as_str)
+                        == Some("rtp_establish")
+                    {
+                        let token = value
+                            .get("token")
+                            .and_then(serde_json::Value::as_u64)
+                            .and_then(|v| u32::try_from(v).ok());
+                        let ssrc = value
+                            .get("ssrc")
+                            .and_then(serde_json::Value::as_u64)
+                            .and_then(|v| u32::try_from(v).ok());
+                        let result = token
+                            .zip(ssrc)
+                            .ok_or("RTP token and SSRC are required")
+                            .and_then(|(token, ssrc)| self.establish_rtp_peer(token, ssrc));
+                        return stream.write_all(
+                            match result {
+                                Ok(()) => format!(
+                                    "{{\"ok\":true,\"generation\":{},\"rtp\":\"established\"}}\n",
+                                    self.generation
+                                ),
+                                Err(error) => format!(
+                                    "{{\"ok\":false,\"generation\":{},\"error\":\"{error}\"}}\n",
+                                    self.generation
+                                ),
+                            }
+                            .as_bytes(),
+                        );
+                    }
+                    if value.get("action").and_then(serde_json::Value::as_str) == Some("rtp_end") {
+                        let token = value
+                            .get("token")
+                            .and_then(serde_json::Value::as_u64)
+                            .and_then(|v| u32::try_from(v).ok());
+                        let ssrc = value
+                            .get("ssrc")
+                            .and_then(serde_json::Value::as_u64)
+                            .and_then(|v| u32::try_from(v).ok());
+                        let result = token
+                            .zip(ssrc)
+                            .ok_or("RTP token and SSRC are required")
+                            .and_then(|(token, ssrc)| self.end_rtp_peer(token, ssrc));
+                        return stream.write_all(
+                            match result {
+                                Ok(()) => format!(
+                                    "{{\"ok\":true,\"generation\":{},\"rtp\":\"ended\"}}\n",
+                                    self.generation
+                                ),
+                                Err(error) => format!(
+                                    "{{\"ok\":false,\"generation\":{},\"error\":\"{error}\"}}\n",
+                                    self.generation
+                                ),
+                            }
+                            .as_bytes(),
+                        );
+                    }
                     if value.get("action").and_then(serde_json::Value::as_str) == Some("undo") {
                         if let Some(expected) =
                             value.get("route_generation").and_then(serde_json::Value::as_u64)
@@ -3297,8 +3405,228 @@ impl Daemon {
             if command == Some(Command::Scenes) {
                 let value = serde_json::from_slice::<serde_json::Value>(&request_payload)
                     .unwrap_or_default();
-                if let Some(scene) = value.get("scene").and_then(serde_json::Value::as_str) {
+                if let Some(value) = value.get("setlist_create") {
+                    let Some(path) = self.config_path.as_deref() else {
+                        return stream.write_all(
+                            b"{\"ok\":false,\"error\":\"configuration path is unavailable\"}\n",
+                        );
+                    };
+                    return stream.write_all(
+                        match scene_runtime::create_setlist(path, value) {
+                            Ok(id) => format!(
+                                "{{\"ok\":true,\"generation\":{},\"setlist\":{}}}\n",
+                                self.generation,
+                                serde_json::to_string(&id).unwrap_or_default()
+                            )
+                            .into_bytes(),
+                            Err(error) => format!(
+                                "{{\"ok\":false,\"error\":{}}}\n",
+                                serde_json::to_string(&error).unwrap_or_default()
+                            )
+                            .into_bytes(),
+                        }
+                        .as_slice(),
+                    );
+                }
+                if let Some(id) = value.get("setlist_delete").and_then(serde_json::Value::as_str) {
+                    let Some(path) = self.config_path.as_deref() else {
+                        return stream.write_all(
+                            b"{\"ok\":false,\"error\":\"configuration path is unavailable\"}\n",
+                        );
+                    };
+                    return stream.write_all(
+                        match scene_runtime::delete_setlist(path, id) {
+                            Ok(id) => format!(
+                                "{{\"ok\":true,\"generation\":{},\"setlist\":{}}}\n",
+                                self.generation,
+                                serde_json::to_string(&id).unwrap_or_default()
+                            )
+                            .into_bytes(),
+                            Err(error) => format!(
+                                "{{\"ok\":false,\"error\":{}}}\n",
+                                serde_json::to_string(&error).unwrap_or_default()
+                            )
+                            .into_bytes(),
+                        }
+                        .as_slice(),
+                    );
+                }
+                if let Some(copy) = value.get("project_copy") {
+                    let Some(path) = self.config_path.as_deref() else {
+                        return stream.write_all(
+                            b"{\"ok\":false,\"error\":\"configuration path is unavailable\"}\n",
+                        );
+                    };
+                    return stream.write_all(
+                        match scene_runtime::copy_project(path, copy) {
+                            Ok(id) => format!(
+                                "{{\"ok\":true,\"generation\":{},\"project\":{}}}\n",
+                                self.generation,
+                                serde_json::to_string(&id).unwrap_or_default()
+                            )
+                            .into_bytes(),
+                            Err(error) => format!(
+                                "{{\"ok\":false,\"error\":{}}}\n",
+                                serde_json::to_string(&error).unwrap_or_default()
+                            )
+                            .into_bytes(),
+                        }
+                        .as_slice(),
+                    );
+                }
+                if let Some(copy) = value.get("setlist_copy") {
+                    let Some(path) = self.config_path.as_deref() else {
+                        return stream.write_all(
+                            b"{\"ok\":false,\"error\":\"configuration path is unavailable\"}\n",
+                        );
+                    };
+                    return stream.write_all(
+                        match scene_runtime::copy_setlist(path, copy) {
+                            Ok(id) => format!(
+                                "{{\"ok\":true,\"generation\":{},\"setlist\":{}}}\n",
+                                self.generation,
+                                serde_json::to_string(&id).unwrap_or_default()
+                            )
+                            .into_bytes(),
+                            Err(error) => format!(
+                                "{{\"ok\":false,\"error\":{}}}\n",
+                                serde_json::to_string(&error).unwrap_or_default()
+                            )
+                            .into_bytes(),
+                        }
+                        .as_slice(),
+                    );
+                }
+                if let Some(scene_id) =
+                    value.get("preview_scene").and_then(serde_json::Value::as_str)
+                {
+                    let Some(path) = self.config_path.as_deref() else {
+                        return stream.write_all(
+                            b"{\"ok\":false,\"error\":\"configuration path is unavailable\"}\n",
+                        );
+                    };
+                    return stream.write_all(
+                        match scene_runtime::preview_scene(path, scene_id) {
+                            Ok(preview) => format!(
+                                "{{\"ok\":true,\"generation\":{},\"preview\":{}}}\n",
+                                self.generation, preview
+                            )
+                            .into_bytes(),
+                            Err(error) => format!(
+                                "{{\"ok\":false,\"error\":{}}}\n",
+                                serde_json::to_string(&error).unwrap_or_default()
+                            )
+                            .into_bytes(),
+                        }
+                        .as_slice(),
+                    );
+                }
+                if let Some(setlist_id) =
+                    value.get("preview_setlist").and_then(serde_json::Value::as_str)
+                {
+                    let Some(path) = self.config_path.as_deref() else {
+                        return stream.write_all(
+                            b"{\"ok\":false,\"error\":\"configuration path is unavailable\"}\n",
+                        );
+                    };
+                    return stream.write_all(
+                        match scene_runtime::preview_setlist(path, setlist_id) {
+                            Ok(preview) => format!(
+                                "{{\"ok\":true,\"generation\":{},\"preview\":{}}}\n",
+                                self.generation, preview
+                            )
+                            .into_bytes(),
+                            Err(error) => format!(
+                                "{{\"ok\":false,\"error\":{}}}\n",
+                                serde_json::to_string(&error).unwrap_or_default()
+                            )
+                            .into_bytes(),
+                        }
+                        .as_slice(),
+                    );
+                }
+                if let Some(scene) = value.get("execute_scene").and_then(serde_json::Value::as_str)
+                {
                     if let Err(error) = self.select_scene(scene) {
+                        return stream.write_all(
+                            format!("{{\"ok\":false,\"error\":\"{error}\"}}\n").as_bytes(),
+                        );
+                    }
+                    return stream.write_all(serde_json::json!({"ok": true, "generation": self.generation, "executed_scene": scene, "activation_result": self.activation_result, "activation_outcomes": self.activation_outcomes}).to_string().as_bytes()).and_then(|()| stream.write_all(b"\n"));
+                }
+                if let Some(setlist_value) = value.get("setlist") {
+                    let Some(path) = self.config_path.as_deref() else {
+                        return stream.write_all(
+                            b"{\"ok\":false,\"error\":\"configuration path is unavailable\"}\n",
+                        );
+                    };
+                    return stream.write_all(
+                        match scene_runtime::replace_setlist(path, setlist_value) {
+                            Ok(setlist_id) => format!(
+                                "{{\"ok\":true,\"generation\":{},\"setlist\":{}}}\n",
+                                self.generation,
+                                serde_json::to_string(&setlist_id).unwrap_or_default()
+                            )
+                            .into_bytes(),
+                            Err(error) => format!(
+                                "{{\"ok\":false,\"error\":{}}}\n",
+                                serde_json::to_string(&error).unwrap_or_default()
+                            )
+                            .into_bytes(),
+                        }
+                        .as_slice(),
+                    );
+                }
+                if let Some(project_value) = value.get("project") {
+                    let Some(path) = self.config_path.as_deref() else {
+                        return stream.write_all(
+                            b"{\"ok\":false,\"error\":\"configuration path is unavailable\"}\n",
+                        );
+                    };
+                    return stream.write_all(
+                        match scene_runtime::replace_project(path, project_value) {
+                            Ok(project_id) => format!(
+                                "{{\"ok\":true,\"generation\":{},\"project\":{}}}\n",
+                                self.generation,
+                                serde_json::to_string(&project_id).unwrap_or_default()
+                            )
+                            .into_bytes(),
+                            Err(error) => format!(
+                                "{{\"ok\":false,\"error\":{}}}\n",
+                                serde_json::to_string(&error).unwrap_or_default()
+                            )
+                            .into_bytes(),
+                        }
+                        .as_slice(),
+                    );
+                }
+                if let (Some(scene_id), Some(actions_value)) =
+                    (value.get("scene").and_then(serde_json::Value::as_str), value.get("actions"))
+                {
+                    let Some(path) = self.config_path.as_deref() else {
+                        return stream.write_all(
+                            b"{\"ok\":false,\"error\":\"configuration path is unavailable\"}\n",
+                        );
+                    };
+                    let result = scene_runtime::replace_actions(path, scene_id, actions_value);
+                    return stream.write_all(
+                        match result {
+                            Ok(()) => format!(
+                                "{{\"ok\":true,\"generation\":{},\"scene\":\"{}\"}}\n",
+                                self.generation, scene_id
+                            )
+                            .into_bytes(),
+                            Err(error) => format!(
+                                "{{\"ok\":false,\"error\":\"{}\"}}\n",
+                                error.replace('"', "'")
+                            )
+                            .into_bytes(),
+                        }
+                        .as_slice(),
+                    );
+                }
+                if let Some(scene) = value.get("scene").and_then(serde_json::Value::as_str) {
+                    if let Err(error) = self.select_scene_only(scene) {
                         return stream.write_all(
                             format!("{{\"ok\":false,\"error\":\"{error}\"}}\n").as_bytes(),
                         );
@@ -3496,7 +3824,11 @@ impl Daemon {
             if let Some(command) = command {
                 if !matches!(
                     command,
-                    Command::Hello | Command::Health | Command::Snapshot | Command::Subscribe
+                    Command::Hello
+                        | Command::Health
+                        | Command::Snapshot
+                        | Command::NovationSnapshot
+                        | Command::Subscribe
                 ) {
                     if command == Command::Panic {
                         let _ = self.send_panic_controls();
@@ -3506,7 +3838,127 @@ impl Daemon {
             }
             match command {
                 Some(Command::Snapshot) => self.snapshot_response(),
+                Some(Command::NovationSnapshot) => self.novation_snapshot_response(),
                 Some(Command::Rescan) => {
+                    if request_payload
+                        .get(..)
+                        .and_then(|payload| {
+                            serde_json::from_slice::<serde_json::Value>(payload).ok()
+                        })
+                        .and_then(|value| {
+                            value
+                                .get("action")
+                                .and_then(serde_json::Value::as_str)
+                                .map(str::to_owned)
+                        })
+                        .as_deref()
+                        .is_some_and(|action| action == "rebind" || action == "rebind_undo")
+                    {
+                        let value = serde_json::from_slice::<serde_json::Value>(&request_payload)
+                            .unwrap_or_default();
+                        if value.get("action").and_then(serde_json::Value::as_str)
+                            == Some("rebind_undo")
+                        {
+                            let Some(previous) = self.novation_rebind_previous.take() else {
+                                return stream.write_all(format!("{{\"ok\":false,\"generation\":{},\"error\":\"no rebind undo is available\"}}\n", self.generation).as_bytes());
+                            };
+                            let Some(path) = self.config_path.as_deref() else {
+                                return stream.write_all(format!("{{\"ok\":false,\"generation\":{},\"error\":\"rebind undo requires a persisted configuration\"}}\n", self.generation).as_bytes());
+                            };
+                            let result = mackes_config::load(path)
+                                .map_err(|error| error.to_string())
+                                .and_then(|mut document| {
+                                    document
+                                        .settings
+                                        .novation_device
+                                        .clone_from(&Some(previous.clone()));
+                                    mackes_config::validate(&document)?;
+                                    mackes_config::save(path, &document, 1)
+                                        .map_err(|error| error.to_string())
+                                });
+                            return match result {
+                                Ok(()) => {
+                                    self.novation_device_policy = Some(previous);
+                                    self.native_rescan_at = None;
+                                    stream.write_all(format!("{{\"ok\":true,\"generation\":{},\"rebind_undo\":\"applied\"}}\n", self.generation).as_bytes())
+                                }
+                                Err(error) => stream.write_all(
+                                    format!(
+                                        "{{\"ok\":false,\"generation\":{},\"error\":{}}}\n",
+                                        self.generation,
+                                        serde_json::to_string(&error)
+                                            .unwrap_or_else(|_| "\"rebind undo failed\"".into())
+                                    )
+                                    .as_bytes(),
+                                ),
+                            };
+                        }
+                        let stable_id = value
+                            .get("stable_id")
+                            .and_then(serde_json::Value::as_str)
+                            .unwrap_or("");
+                        let template = value
+                            .get("template")
+                            .and_then(serde_json::Value::as_u64)
+                            .unwrap_or_else(|| {
+                                u64::from(mackes_profiles::LAUNCH_CONTROL_MK2_FACTORY1_SLOT)
+                            });
+                        if stable_id.trim().is_empty()
+                            || stable_id.len() > 128
+                            || stable_id != stable_id.trim()
+                            || template >= 16
+                        {
+                            return stream.write_all(format!("{{\"ok\":false,\"generation\":{},\"error\":\"invalid rebind identity or template\"}}\n", self.generation).as_bytes());
+                        }
+                        let Ok(template) = u8::try_from(template) else {
+                            return stream.write_all(format!("{{\"ok\":false,\"generation\":{},\"error\":\"invalid template\"}}\n", self.generation).as_bytes());
+                        };
+                        let Some(path) = self.config_path.as_deref() else {
+                            return stream.write_all(format!("{{\"ok\":false,\"generation\":{},\"error\":\"rebind requires a persisted configuration\"}}\n", self.generation).as_bytes());
+                        };
+                        match mackes_config::load(path).map_err(|error| error.to_string()).and_then(
+                            |mut document| {
+                                if let Some(previous) = document.settings.novation_device.clone() {
+                                    self.novation_rebind_previous = Some(previous);
+                                }
+                                document.settings.novation_device =
+                                    Some(mackes_config::NovationDeviceConfig {
+                                        version: 1,
+                                        stable_id: Some(stable_id.to_owned()),
+                                        template,
+                                        auto_reapply: true,
+                                        feedback_enabled: true,
+                                    });
+                                mackes_config::validate(&document)?;
+                                mackes_config::save(path, &document, 1)
+                                    .map_err(|error| error.to_string())
+                            },
+                        ) {
+                            Ok(()) => {
+                                self.novation_device_policy =
+                                    Some(mackes_config::NovationDeviceConfig {
+                                        version: 1,
+                                        stable_id: Some(stable_id.to_owned()),
+                                        template,
+                                        auto_reapply: true,
+                                        feedback_enabled: true,
+                                    });
+                                self.native_rescan_at = None;
+                                return stream.write_all(format!("{{\"ok\":true,\"generation\":{},\"rebind\":\"applied\"}}\n", self.generation).as_bytes());
+                            }
+                            Err(error) => {
+                                return stream.write_all(
+                                    format!(
+                                        "{{\"ok\":false,\"generation\":{},\"error\":{}}}\n",
+                                        self.generation,
+                                        serde_json::to_string(&error)
+                                            .unwrap_or_else(|_| "\"rebind failed\"".into())
+                                    )
+                                    .as_bytes(),
+                                )
+                            }
+                        }
+                    }
                     self.native_rescan_at = None;
                     format!(
                         "{{\"ok\":true,\"generation\":{},\"rescan\":\"scheduled\"}}\n",
@@ -3535,6 +3987,12 @@ impl Daemon {
                                 "generation": self.generation,
                                 "pipedal": self.pipedal_worker.ipc_status(),
                                 "catalog": self.pipedal_worker.catalog(),
+                                "favorites": self.pipedal_worker.favorites(),
+                                "system_midi_bindings": self.pipedal_worker.system_midi_bindings(),
+                                "version": self.pipedal_worker.version(),
+                                "governor_settings": self.pipedal_worker.governor_settings(),
+                                "show_status_monitor": self.pipedal_worker.show_status_monitor(),
+                                "wifi_regulatory_domains": self.pipedal_worker.wifi_regulatory_domains(),
                                 "supported_operations": mackes_pipedal_adapter::supported_operations(),
                                 "mapping_resolution": self.pipedal_mapping_resolution(),
                             })
@@ -3542,8 +4000,95 @@ impl Daemon {
                                 + "\n"
                         }
                         Some(request)
+                            if matches!(request.operation, mackes_ipc::PiPedalOperation::Repair) =>
+                        {
+                            if !request.confirm {
+                                return stream.write_all(b"{\"ok\":false,\"error\":\"PiPedal repair requires confirmation\"}\n");
+                            }
+                            if request.generation != self.generation {
+                                return stream.write_all(serde_json::json!({"ok": false, "error": "PiPedal generation conflict", "generation": self.generation}).to_string().as_bytes()).and_then(|()| stream.write_all(b"\n"));
+                            }
+                            let (Some(control_id), Some(target)) =
+                                (request.physical_control_id, request.mapping)
+                            else {
+                                return stream.write_all(b"{\"ok\":false,\"error\":\"PiPedal repair requires physical_control_id and mapping\"}\n");
+                            };
+                            if control_id.len() > 128 || target.plugin_uri.len() > 512 || target.symbol.len() > 256 || target.scope.as_ref().is_some_and(|scope| scope.len() > 256) {
+                                return stream.write_all(b"{\"ok\":false,\"error\":\"PiPedal repair fields are too long\"}\n");
+                            }
+                            let Some(path) = self.config_path.clone() else {
+                                return stream.write_all(b"{\"ok\":false,\"error\":\"configuration path is unavailable\"}\n");
+                            };
+                            let Ok(mut document) = mackes_config::load(&path) else {
+                                return stream.write_all(b"{\"ok\":false,\"error\":\"configuration load failed\"}\n");
+                            };
+                            let Some(existing) = document.settings.pipedal_mappings.mappings.iter_mut().find(|mapping| mapping.physical_control_id == control_id) else {
+                                return stream.write_all(b"{\"ok\":false,\"error\":\"persisted PiPedal mapping was not found\"}\n");
+                            };
+                            existing.plugin_uri = target.plugin_uri;
+                            existing.symbol = target.symbol;
+                            existing.scope = target.scope;
+                            let expected_revision = mackes_config::document_revision(&document).ok();
+                            let Some(expected_revision) = expected_revision else {
+                                return stream.write_all(b"{\"ok\":false,\"error\":\"configuration revision unavailable\"}\n");
+                            };
+                            if let Err(error) = mackes_config::save_if_revision(&path, &document, 5, &expected_revision) {
+                                return stream.write_all(serde_json::json!({"ok": false, "error": error.to_string()}).to_string().as_bytes()).and_then(|()| stream.write_all(b"\n"));
+                            }
+                            self.cache_pipedal_mappings(&document);
+                            serde_json::json!({"ok": true, "repaired": true, "generation": self.generation, "physical_control_id": control_id}).to_string() + "\n"
+                        }
+                        Some(request)
                             if matches!(request.operation, mackes_ipc::PiPedalOperation::Apply) =>
                         {
+                            if let Some(body) = pipedal_dispatch::apply_readback_or_preset(&mut self.pipedal_worker, &request) {
+                                return stream.write_all(body.to_string().as_bytes()).and_then(|()| stream.write_all(b"\n"));
+                            }
+                            if let (Some(instance_id), Some(enabled)) = (request.instance_id, request.enabled) {
+                                if !request.confirm { return stream.write_all(b"{\"ok\":false,\"error\":\"PiPedal bypass requires confirmation\"}\n"); }
+                                let Some(client_id) = self.pipedal_worker.pipedal_client_id() else { return stream.write_all(b"{\"ok\":false,\"error\":\"PiPedal client identity is unavailable\"}\n"); };
+                                let reply_to = self.pipedal_worker.allocate_reply_id();
+                                let result = self.pipedal_worker.apply_set_pedalboard_item_enable(request.generation, client_id, instance_id, enabled, Some(reply_to), true);
+                                let body = match result { Ok(()) => serde_json::json!({"ok": true, "applied": true, "bypass": !enabled, "generation": request.generation}), Err(error) => serde_json::json!({"ok": false, "error": error}) };
+                                return stream.write_all(body.to_string().as_bytes()).and_then(|()| stream.write_all(b"\n"));
+                            }
+                            if let (Some(instance_id), Some(use_mod_ui)) = (request.instance_id, request.use_mod_ui) {
+                                let Some(client_id) = self.pipedal_worker.pipedal_client_id() else { return stream.write_all(b"{\"ok\":false,\"error\":\"PiPedal client identity is unavailable\"}\n"); };
+                                let reply_to = self.pipedal_worker.allocate_reply_id();
+                                let result = self.pipedal_worker.apply_set_pedalboard_item_use_mod_ui(request.generation, client_id, instance_id, use_mod_ui, Some(reply_to), request.confirm);
+                                let body = match result { Ok(()) => serde_json::json!({"ok": true, "applied": true, "use_mod_ui": use_mod_ui, "generation": request.generation}), Err(error) => serde_json::json!({"ok": false, "error": error}) };
+                                return stream.write_all(body.to_string().as_bytes()).and_then(|()| stream.write_all(b"\n"));
+                            }
+                            if let (Some(instance_id), Some(title), Some(color_key)) = (request.instance_id, request.title, request.color_key) {
+                                let reply_to = self.pipedal_worker.allocate_reply_id();
+                                let result = self.pipedal_worker.apply_set_pedalboard_item_title(request.generation, instance_id, title, color_key, Some(reply_to), request.confirm);
+                                let body = match result { Ok(()) => serde_json::json!({"ok": true, "applied": true, "title": true, "generation": request.generation}), Err(error) => serde_json::json!({"ok": false, "error": error}) };
+                                return stream.write_all(body.to_string().as_bytes()).and_then(|()| stream.write_all(b"\n"));
+                            }
+                            if let (Some(volume_db), Some(input)) = (request.volume_db, request.preview_input) {
+                                let reply_to = self.pipedal_worker.allocate_reply_id();
+                                let result = self.pipedal_worker.apply_preview_volume(request.generation, input, volume_db, Some(reply_to));
+                                let body = match result { Ok(()) => serde_json::json!({"ok": true, "previewed": true, "input": input, "volume_db": volume_db, "generation": request.generation}), Err(error) => serde_json::json!({"ok": false, "error": error}) };
+                                return stream.write_all(body.to_string().as_bytes()).and_then(|()| stream.write_all(b"\n"));
+                            }
+                            if let (Some(handle), Some(cancel)) = (request.midi_listener_handle, request.cancel_midi_listener) {
+                                let reply_to = self.pipedal_worker.allocate_reply_id();
+                                let result = if cancel { self.pipedal_worker.apply_cancel_listen_for_midi_event(request.generation, handle, Some(reply_to)) } else { self.pipedal_worker.apply_listen_for_midi_event(request.generation, handle, Some(reply_to)) };
+                                let body = match result { Ok(()) => serde_json::json!({"ok": true, "listening": !cancel, "cancelled": cancel, "handle": handle, "generation": request.generation}), Err(error) => serde_json::json!({"ok": false, "error": error}) };
+                                return stream.write_all(body.to_string().as_bytes()).and_then(|()| stream.write_all(b"\n"));
+                            }
+                            if let (Some(handle), Some(cancel)) = (request.monitor_client_handle, request.cancel_patch_monitor) {
+                                let reply_to = self.pipedal_worker.allocate_reply_id();
+                                let result = if cancel {
+                                    self.pipedal_worker.apply_cancel_monitor_patch_property(request.generation, handle, Some(reply_to))
+                                } else {
+                                    let Some(instance_id) = request.instance_id else { return stream.write_all(b"{\"ok\":false,\"error\":\"PiPedal patch monitor instance is required\"}\n"); };
+                                    let Some(property_uri) = request.property_uri else { return stream.write_all(b"{\"ok\":false,\"error\":\"PiPedal patch monitor property is required\"}\n"); };
+                                    self.pipedal_worker.apply_monitor_patch_property(request.generation, instance_id, handle, property_uri, Some(reply_to))
+                                };
+                                let body = match result { Ok(()) => serde_json::json!({"ok": true, "monitoring": !cancel, "cancelled": cancel, "handle": handle, "generation": request.generation}), Err(error) => serde_json::json!({"ok": false, "error": error}) };
+                                return stream.write_all(body.to_string().as_bytes()).and_then(|()| stream.write_all(b"\n"));
+                            }
                             let target = match (request.mapping, request.physical_control_id) {
                                 (Some(target), None) => target,
                                 (None, Some(control_id)) => {
@@ -3576,6 +4121,11 @@ impl Daemon {
                                 request.confirm,
                             ) {
                                 Ok(()) => {
+                                    if let Some(path) = self.config_path.as_deref() {
+                                        if let Err(error) = persistence_projection::persist_pipedal_undo(path, self.pipedal_worker.apply_record()) {
+                                            return stream.write_all(serde_json::json!({"ok": false, "error": format!("PiPedal undo journal persistence failed: {error}")}).to_string().as_bytes()).and_then(|()| stream.write_all(b"\n"));
+                                        }
+                                    }
                                     serde_json::json!({"ok": true, "applied": true, "generation": request.generation}).to_string() + "\n"
                                 }
                                 Err(error) => {
@@ -3598,6 +4148,11 @@ impl Daemon {
                                 request.confirm,
                             ) {
                                 Ok(()) => {
+                                    if let Some(path) = self.config_path.as_deref() {
+                                        if let Err(error) = persistence_projection::persist_pipedal_undo(path, None) {
+                                            return stream.write_all(serde_json::json!({"ok": false, "error": format!("PiPedal undo journal cleanup failed: {error}")}).to_string().as_bytes()).and_then(|()| stream.write_all(b"\n"));
+                                        }
+                                    }
                                     serde_json::json!({"ok": true, "undo": true, "generation": request.generation}).to_string() + "\n"
                                 }
                                 Err(error) => {
@@ -3717,6 +4272,24 @@ impl Daemon {
                                 ) => candidate
                                     .delete(mapping.generation, &mapping_id)
                                     .map_err(str::to_owned),
+                                (
+                                    mackes_ipc::MappingOperation::SelectLayer,
+                                    Some(mackes_ipc::MappingPayload::Layer { active_layer }),
+                                ) => {
+                                    match mapping_layers_runtime::select_layer(
+                                        self.mapping_layers_v2.as_ref(),
+                                        mapping.generation,
+                                        candidate.generation,
+                                        active_layer,
+                                    ) {
+                                        Ok((next, generation)) => {
+                                            self.mapping_layers_v2 = Some(next);
+                                            candidate.generation = generation;
+                                            Ok(())
+                                        }
+                                        Err(error) => Err(error),
+                                    }
+                                }
                                 (mackes_ipc::MappingOperation::Undo, None) => {
                                     candidate.undo(mapping.generation).map_err(str::to_owned)
                                 }
@@ -3724,13 +4297,12 @@ impl Daemon {
                             };
                             outcome = match mutation {
                                 Ok(()) => {
-                                    let persisted =
-                                        self.config_path.as_deref().is_some_and(|path| {
-                                            mackes_config::save_control_mapping_store(
-                                                path, &candidate, 1,
-                                            )
-                                            .is_ok()
-                                        });
+                                    let persisted = mapping_layers_runtime::persist(
+                                        self.config_path.as_deref(),
+                                        mapping.operation,
+                                        self.mapping_layers_v2.as_ref(),
+                                        &candidate,
+                                    );
                                     if persisted {
                                         self.mapping_store = candidate;
                                         mackes_ipc::MappingOutcome::Applied
@@ -3755,6 +4327,7 @@ impl Daemon {
                         undo_available: self.mapping_store.undo_available(),
                         active: Some(active.to_vec()),
                         draft: Some(drafts.to_vec()),
+                        mapping_layers_v2: self.mapping_layers_v2.clone(),
                         outcome,
                     })
                     .map_or_else(
@@ -3766,7 +4339,26 @@ impl Daemon {
                     )
                 }
                 Some(command) => {
-                    let endpoints = if matches!(command, Command::Endpoints | Command::Routes) {
+                    if command == Command::Configuration {
+                        let persisted_revision = self
+                            .config_path
+                            .as_deref()
+                            .and_then(|path| mackes_config::load(path).ok())
+                            .and_then(|document| mackes_config::document_revision(&document).ok());
+                        let catalog = configuration_response::with_runtime_status(
+                            self.catalog.clone(),
+                            persisted_revision.as_deref(),
+                        );
+                        return configuration_response::write(
+                            &mut stream,
+                            &catalog,
+                            self.generation,
+                        );
+                    }
+                    let endpoints = if matches!(
+                        command,
+                        Command::DeviceQuery | Command::Endpoints | Command::Routes
+                    ) {
                         self.discover_endpoints().unwrap_or_default()
                     } else {
                         Vec::new()
@@ -3927,6 +4519,17 @@ impl Daemon {
     /// Sets the daemon-owned configuration path for authorized persistence.
     pub fn set_config_path(&mut self, path: impl Into<std::path::PathBuf>) {
         let path = path.into();
+        self.operation_journal =
+            match mackes_config::OperationJournal::open(path.with_extension("operations.json")) {
+                Ok(journal) => Some(journal),
+                Err(error) => {
+                    eprint!(
+                        "{}",
+                        structured_log_line("error", "operation_journal_open_failed", &error)
+                    );
+                    None
+                }
+            };
         if let Err(error) =
             persistence_projection::recover_json_pair(&path.with_extension("routes.commit.json"))
         {
@@ -3960,6 +4563,17 @@ impl Daemon {
         }
         if let Ok(bytes) = std::fs::read(routes_undo_path(&path)) {
             self.route_undo = serde_json::from_slice(&bytes).ok();
+        }
+        if let Ok(bytes) = std::fs::read(persistence_projection::pipedal_undo_path(&path)) {
+            match serde_json::from_slice::<mackes_pipedal_adapter::ApplyRecord>(&bytes)
+                .ok()
+                .and_then(|record| self.pipedal_worker.restore_apply_record(record).ok())
+            {
+                Some(()) => {}
+                None => {
+                    let _ = persistence_projection::persist_pipedal_undo(&path, None);
+                }
+            }
         }
         if let Ok(bytes) = std::fs::read(routes_path(&path)) {
             if let Ok(value) = serde_json::from_slice::<serde_json::Value>(&bytes) {
@@ -4014,6 +4628,7 @@ mod led_surface;
 #[cfg(all(test, target_os = "linux"))]
 mod native_cutover;
 mod novation_snapshot;
+mod novation_snapshot_response;
 mod persistence_projection;
 mod profile_bindings;
 #[cfg(test)]

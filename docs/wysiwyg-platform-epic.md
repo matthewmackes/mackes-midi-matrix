@@ -201,7 +201,7 @@ route board, scene cards, endpoint/device cards, a product-aware feature board w
 labels and explicit read-only boundaries, capability status chips, and active-workspace
 navigation. Connected endpoint identities populate a destination picker, product feature entries
 open only guarded qualified editors, and route drafts survive polling with explicit discard
-confirmation. The Novation faceplate now renders all 24 knobs, 24 buttons, and 8 faders reported
+confirmation. The Novation faceplate now renders all 24 knobs, 16 channel buttons, 8 utility controls, and 8 faders reported
 by the qualified 56-control profile. The release web binary was rebuilt and installed;
 `mackes-web.service` accepts the
 configured LAN Host header. Health, endpoint, Novation, and capability projections returned

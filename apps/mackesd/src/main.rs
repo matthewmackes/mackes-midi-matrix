@@ -142,6 +142,13 @@ fn main() {
                 })
             });
         let catalog = serde_json::json!({
+            "configuration": document,
+            "configuration_revision": mackes_config::document_revision(&document).unwrap_or_default(),
+            "configuration_runtime": {
+                "live": ["settings.pipedal_mappings", "learned_mappings"],
+                "on_demand": ["projects", "setlists", "profiles", "control_mappings", "scene_actions"],
+                "restart_required": ["settings.default_providers"]
+            },
             "projects": document.projects.iter().map(|project| serde_json::json!({
                 "id": project.id,
                 "scenes": project.scenes.iter().map(|scene| scene.id.clone()).collect::<Vec<_>>(),
@@ -261,13 +268,20 @@ fn main() {
         // bounded, but prioritizing the nonblocking server keeps status,
         // panic, and repair commands responsive during input bursts.
         if let Err(error) = daemon.serve_once(policy) {
-            if error.kind() != std::io::ErrorKind::WouldBlock {
+            if !matches!(
+                error.kind(),
+                std::io::ErrorKind::WouldBlock | std::io::ErrorKind::BrokenPipe
+            ) {
                 eprint!(
                     "{}",
                     mackesd::structured_log_line("error", "request_failed", &error.to_string())
                 );
             }
-            std::thread::sleep(std::time::Duration::from_millis(10));
+            // The control socket is nonblocking; avoid a 100 Hz busy-poll when
+            // idle.  A 20 ms backoff still keeps command and MIDI servicing
+            // comfortably below the platform's 10-second synchronization
+            // contract while materially reducing idle CPU and wakeups.
+            std::thread::sleep(std::time::Duration::from_millis(20));
         }
         daemon.poll_pipedal();
         let mapped = daemon.process_dashboard_commands(&dashboard_bindings, 128);

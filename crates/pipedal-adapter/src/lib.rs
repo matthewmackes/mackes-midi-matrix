@@ -175,6 +175,8 @@ pub struct ResolutionOutcome {
     pub plugin_uri: String,
     /// Stable plugin parameter symbol used to join this result with catalog metadata.
     pub symbol: String,
+    /// Runtime instance identity when exactly one writable target resolves.
+    pub instance_id: Option<u64>,
     /// Resolution state.
     pub state: ResolutionState,
     /// Short operator-facing detail.
@@ -240,6 +242,12 @@ pub struct Health {
 pub struct Worker {
     session: Session,
     catalog: mackes_pipedal_connector::PluginCatalog,
+    favorites: std::collections::BTreeMap<String, bool>,
+    governor_settings: String,
+    show_status_monitor: Option<bool>,
+    wifi_regulatory_domains: std::collections::BTreeMap<String, String>,
+    system_midi_bindings: Vec<mackes_pipedal_connector::MidiBinding>,
+    version: Option<mackes_pipedal_connector::PiPedalVersion>,
     runtime_targets: Vec<(u64, String)>,
     pickup_ledger: mackes_pipedal_connector::ReconciliationLedger,
     pickup_targets: Vec<(String, String, String)>,
@@ -266,6 +274,12 @@ impl Worker {
         Self {
             session,
             catalog: mackes_pipedal_connector::PluginCatalog::default(),
+            favorites: std::collections::BTreeMap::new(),
+            governor_settings: String::new(),
+            show_status_monitor: None,
+            wifi_regulatory_domains: std::collections::BTreeMap::new(),
+            system_midi_bindings: Vec::new(),
+            version: None,
             runtime_targets: Vec::new(),
             pickup_ledger: mackes_pipedal_connector::ReconciliationLedger::default(),
             pickup_targets: Vec::new(),
@@ -316,6 +330,12 @@ impl Worker {
                     self.expected_replies.clear();
                     self.startup_next = 0;
                     self.runtime_targets.clear();
+                    self.favorites.clear();
+                    self.governor_settings.clear();
+                    self.show_status_monitor = None;
+                    self.wifi_regulatory_domains.clear();
+                    self.system_midi_bindings.clear();
+                    self.version = None;
                     self.pickup_ledger.clear();
                     self.pickup_targets.clear();
                     self.next_reply_id = 1;
@@ -399,8 +419,43 @@ impl Worker {
             self.catalog = decode_catalog(body.as_ref().ok_or(TransportError::Protocol)?)
                 .map_err(|_| TransportError::Protocol)?;
         }
+        if header.message == "pluginClasses" {
+            mackes_pipedal_connector::decode_plugin_classes(body.clone())
+                .map_err(|_| TransportError::Protocol)?;
+        }
+        if header.message == "getFavorites" {
+            self.favorites = mackes_pipedal_connector::decode_favorites(body.clone())
+                .map_err(|_| TransportError::Protocol)?;
+        }
+        if header.message == "getSystemMidiBindings" {
+            self.system_midi_bindings =
+                mackes_pipedal_connector::decode_system_midi_bindings(body.clone())
+                    .map_err(|_| TransportError::Protocol)?;
+        }
+        if header.message == "getGovernorSettings" {
+            self.governor_settings =
+                mackes_pipedal_connector::decode_governor_settings(body.clone())
+                    .map_err(|_| TransportError::Protocol)?;
+        }
+        if header.message == "getShowStatusMonitor" {
+            self.show_status_monitor = Some(
+                mackes_pipedal_connector::decode_show_status_monitor(body.clone())
+                    .map_err(|_| TransportError::Protocol)?,
+            );
+        }
+        if header.message == "getWifiRegulatoryDomains" {
+            self.wifi_regulatory_domains =
+                mackes_pipedal_connector::decode_wifi_regulatory_domains(body.clone())
+                    .map_err(|_| TransportError::Protocol)?;
+        }
         if header.message == "ehlo" {
             self.pipedal_client_id = body.as_ref().and_then(serde_json::Value::as_u64);
+        }
+        if header.message == "version" {
+            self.version = Some(
+                mackes_pipedal_connector::decode_version(body.clone())
+                    .map_err(|_| TransportError::Protocol)?,
+            );
         }
         if header.message == "currentPedalboard" {
             ingest_current_pedalboard(
@@ -441,6 +496,12 @@ impl Worker {
     #[must_use]
     pub const fn pipedal_client_id(&self) -> Option<u64> {
         self.pipedal_client_id
+    }
+
+    /// Returns the latest validated `PiPedal` version metadata for this session.
+    #[must_use]
+    pub const fn version(&self) -> Option<&mackes_pipedal_connector::PiPedalVersion> {
+        self.version.as_ref()
     }
 
     /// Arms pickup for one stable mapping from its freshest catalog value.
@@ -517,6 +578,36 @@ impl Worker {
     #[must_use]
     pub const fn catalog(&self) -> &mackes_pipedal_connector::PluginCatalog {
         &self.catalog
+    }
+
+    /// Returns the latest bounded favorite-URI projection.
+    #[must_use]
+    pub const fn favorites(&self) -> &std::collections::BTreeMap<String, bool> {
+        &self.favorites
+    }
+
+    /// Returns the latest bounded system MIDI binding projection.
+    #[must_use]
+    pub fn system_midi_bindings(&self) -> &[mackes_pipedal_connector::MidiBinding] {
+        &self.system_midi_bindings
+    }
+
+    /// Last validated CPU-governor readback.
+    #[must_use]
+    pub fn governor_settings(&self) -> &str {
+        &self.governor_settings
+    }
+
+    /// Last validated status-monitor visibility readback.
+    #[must_use]
+    pub const fn show_status_monitor(&self) -> Option<bool> {
+        self.show_status_monitor
+    }
+
+    /// Last validated Wi-Fi regulatory-domain labels.
+    #[must_use]
+    pub const fn wifi_regulatory_domains(&self) -> &std::collections::BTreeMap<String, String> {
+        &self.wifi_regulatory_domains
     }
 
     /// Resolves the current runtime instance for a persisted mapping.
@@ -623,20 +714,32 @@ impl Worker {
                     symbol: mapping.symbol.clone(),
                     scope: mapping.scope.clone(),
                 };
-                let (state, detail) = match self.catalog.resolve_mapping(&connector_mapping) {
-                    Ok(_) => {
-                        (ResolutionState::Resolved, "target is available and writable".to_owned())
-                    }
-                    Err(error) if error.contains("ambiguous") => {
-                        (ResolutionState::Ambiguous, error)
-                    }
-                    Err(error) if error.contains("read-only") => (ResolutionState::ReadOnly, error),
-                    Err(error) => (ResolutionState::Unavailable, error),
-                };
+                let (state, detail, instance_id) =
+                    match self.catalog.resolve_mapping(&connector_mapping) {
+                        Ok(_) => match self.resolve_instance_id(mapping) {
+                            Ok(instance_id) => (
+                                ResolutionState::Resolved,
+                                "target is available and writable".to_owned(),
+                                Some(instance_id),
+                            ),
+                            Err(error) if error.contains("ambiguous") => {
+                                (ResolutionState::Ambiguous, error, None)
+                            }
+                            Err(error) => (ResolutionState::Unavailable, error, None),
+                        },
+                        Err(error) if error.contains("ambiguous") => {
+                            (ResolutionState::Ambiguous, error, None)
+                        }
+                        Err(error) if error.contains("read-only") => {
+                            (ResolutionState::ReadOnly, error, None)
+                        }
+                        Err(error) => (ResolutionState::Unavailable, error, None),
+                    };
                 ResolutionOutcome {
                     physical_control_id: mapping.physical_control_id.clone(),
                     plugin_uri: mapping.plugin_uri.clone(),
                     symbol: mapping.symbol.clone(),
+                    instance_id,
                     state,
                     detail,
                 }
@@ -722,6 +825,1136 @@ impl Worker {
         Ok(())
     }
 
+    /// Prepares a generation-checked complete replacement for `PiPedal` system MIDI bindings.
+    ///
+    /// The installed `PiPedal` protocol treats this as a replacement set, so callers must supply
+    /// the full validated response rather than a partial patch.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the generation is stale or the binding set is invalid.
+    pub fn prepare_set_system_midi_bindings(
+        &self,
+        generation: u64,
+        bindings: mackes_pipedal_connector::SystemMidiBindings,
+        reply_to: Option<u64>,
+    ) -> Result<Vec<u8>, String> {
+        if generation != self.session.generation() {
+            return Err("PiPedal MIDI bindings belong to an old session generation".into());
+        }
+        bindings.validate()?;
+        mackes_pipedal_connector::encode_request(&mackes_pipedal_connector::Request {
+            message: "setSystemMidiBindings".into(),
+            reply_to,
+            body: Some(bindings),
+        })
+        .map_err(|error| error.to_string())
+    }
+
+    /// Queues a confirmed complete replacement for `PiPedal` system MIDI bindings.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when confirmation is absent, the session is not ready, the generation
+    /// is stale, or the binding set is invalid.
+    pub fn apply_set_system_midi_bindings(
+        &mut self,
+        generation: u64,
+        bindings: mackes_pipedal_connector::SystemMidiBindings,
+        reply_to: Option<u64>,
+        confirmed: bool,
+    ) -> Result<(), String> {
+        if !confirmed {
+            return Err("PiPedal MIDI binding replacement requires explicit confirmation".into());
+        }
+        if !self.session.is_ready() {
+            return Err("PiPedal session is not ready for MIDI binding delivery".into());
+        }
+        let frame = self.prepare_set_system_midi_bindings(generation, bindings, reply_to)?;
+        self.session.enqueue_control(generation, frame)
+    }
+
+    /// Prepares a generation-checked pedalboard enable/bypass request.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the session generation is stale or the instance identity is invalid.
+    pub fn prepare_set_pedalboard_item_enable(
+        &self,
+        generation: u64,
+        client_id: u64,
+        instance_id: u64,
+        enabled: bool,
+        reply_to: Option<u64>,
+    ) -> Result<Vec<u8>, String> {
+        if generation != self.session.generation() {
+            return Err("PiPedal pedalboard item belongs to an old session generation".into());
+        }
+        let body =
+            mackes_pipedal_connector::SetPedalboardItemEnable { client_id, instance_id, enabled };
+        body.validate()?;
+        mackes_pipedal_connector::encode_request(&mackes_pipedal_connector::Request {
+            message: "setPedalboardItemEnable".into(),
+            reply_to,
+            body: Some(body),
+        })
+        .map_err(|error| error.to_string())
+    }
+
+    /// Queues a confirmed pedalboard enable/bypass request.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when confirmation is absent, the session is not ready, the generation is
+    /// stale, or the instance identity is invalid.
+    pub fn apply_set_pedalboard_item_enable(
+        &mut self,
+        generation: u64,
+        client_id: u64,
+        instance_id: u64,
+        enabled: bool,
+        reply_to: Option<u64>,
+        confirmed: bool,
+    ) -> Result<(), String> {
+        if !confirmed {
+            return Err("PiPedal pedalboard enable requires explicit confirmation".into());
+        }
+        if !self.session.is_ready() {
+            return Err("PiPedal session is not ready for pedalboard delivery".into());
+        }
+        let frame = self.prepare_set_pedalboard_item_enable(
+            generation,
+            client_id,
+            instance_id,
+            enabled,
+            reply_to,
+        )?;
+        self.session.enqueue_control(generation, frame)
+    }
+
+    /// Prepare a generation-checked plugin-UI mode request.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for a stale generation, invalid instance identity, or encoding failure.
+    pub fn prepare_set_pedalboard_item_use_mod_ui(
+        &self,
+        generation: u64,
+        client_id: u64,
+        instance_id: u64,
+        use_mod_ui: bool,
+        reply_to: Option<u64>,
+    ) -> Result<Vec<u8>, String> {
+        if generation != self.session.generation() {
+            return Err("PiPedal pedalboard item belongs to an old session generation".into());
+        }
+        let body = mackes_pipedal_connector::SetPedalboardItemUseModUi {
+            client_id,
+            instance_id,
+            use_mod_ui,
+        };
+        body.validate()?;
+        mackes_pipedal_connector::encode_request(&mackes_pipedal_connector::Request {
+            message: "setPedalboardItemUseModUi".into(),
+            reply_to,
+            body: Some(body),
+        })
+        .map_err(|error| error.to_string())
+    }
+
+    /// Queue a confirmed plugin-UI mode request.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when confirmation, readiness, generation, identity, or queue admission
+    /// validation fails.
+    pub fn apply_set_pedalboard_item_use_mod_ui(
+        &mut self,
+        generation: u64,
+        client_id: u64,
+        instance_id: u64,
+        use_mod_ui: bool,
+        reply_to: Option<u64>,
+        confirmed: bool,
+    ) -> Result<(), String> {
+        if !confirmed {
+            return Err("PiPedal plugin UI mode requires explicit confirmation".into());
+        }
+        if !self.session.is_ready() {
+            return Err("PiPedal session is not ready for plugin UI mode".into());
+        }
+        let frame = self.prepare_set_pedalboard_item_use_mod_ui(
+            generation,
+            client_id,
+            instance_id,
+            use_mod_ui,
+            reply_to,
+        )?;
+        self.session.enqueue_control(generation, frame)
+    }
+
+    /// Prepare a generation-checked pedalboard item title request.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for a stale generation, invalid title fields, or encoding failure.
+    pub fn prepare_set_pedalboard_item_title(
+        &self,
+        generation: u64,
+        instance_id: u64,
+        title: String,
+        color_key: String,
+        reply_to: Option<u64>,
+    ) -> Result<Vec<u8>, String> {
+        if generation != self.session.generation() {
+            return Err("PiPedal pedalboard item belongs to an old session generation".into());
+        }
+        let body =
+            mackes_pipedal_connector::SetPedalboardItemTitle { instance_id, title, color_key };
+        body.validate()?;
+        mackes_pipedal_connector::encode_request(&mackes_pipedal_connector::Request {
+            message: "setPedalboardItemTitle".into(),
+            reply_to,
+            body: Some(body),
+        })
+        .map_err(|error| error.to_string())
+    }
+
+    /// Queue a confirmed pedalboard item title request.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when confirmation, readiness, generation, or title validation fails.
+    pub fn apply_set_pedalboard_item_title(
+        &mut self,
+        generation: u64,
+        instance_id: u64,
+        title: String,
+        color_key: String,
+        reply_to: Option<u64>,
+        confirmed: bool,
+    ) -> Result<(), String> {
+        if !confirmed {
+            return Err("PiPedal pedalboard item title requires explicit confirmation".into());
+        }
+        if !self.session.is_ready() {
+            return Err("PiPedal session is not ready for title delivery".into());
+        }
+        let frame = self.prepare_set_pedalboard_item_title(
+            generation,
+            instance_id,
+            title,
+            color_key,
+            reply_to,
+        )?;
+        self.session.enqueue_control(generation, frame)
+    }
+
+    /// Prepare a source-compatible scalar `PiPedal` preview-volume request.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for a stale generation, non-finite volume, or encoding failure.
+    pub fn prepare_preview_volume(
+        &self,
+        generation: u64,
+        input: bool,
+        volume_db: f32,
+        reply_to: Option<u64>,
+    ) -> Result<Vec<u8>, String> {
+        if generation != self.session.generation() {
+            return Err("PiPedal volume preview belongs to an old session generation".into());
+        }
+        if !volume_db.is_finite() {
+            return Err("PiPedal volume preview is not finite".into());
+        }
+        mackes_pipedal_connector::encode_request(&mackes_pipedal_connector::Request {
+            message: if input { "previewInputVolume" } else { "previewOutputVolume" }.into(),
+            reply_to,
+            body: Some(volume_db),
+        })
+        .map_err(|error| error.to_string())
+    }
+
+    /// Queue a source-compatible scalar `PiPedal` preview-volume request.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the session is not ready or validation fails.
+    pub fn apply_preview_volume(
+        &mut self,
+        generation: u64,
+        input: bool,
+        volume_db: f32,
+        reply_to: Option<u64>,
+    ) -> Result<(), String> {
+        if !self.session.is_ready() {
+            return Err("PiPedal session is not ready for volume preview".into());
+        }
+        let frame = self.prepare_preview_volume(generation, input, volume_db, reply_to)?;
+        self.session.enqueue_control(generation, frame)
+    }
+
+    /// Prepare a generation-checked `PiPedal` MIDI listener request.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for a stale generation, invalid handle, or encoding failure.
+    pub fn prepare_listen_for_midi_event(
+        &self,
+        generation: u64,
+        handle: u64,
+        reply_to: Option<u64>,
+    ) -> Result<Vec<u8>, String> {
+        if generation != self.session.generation() {
+            return Err("PiPedal MIDI listener belongs to an old session generation".into());
+        }
+        let body = mackes_pipedal_connector::ListenForMidiEvent { handle };
+        body.validate()?;
+        mackes_pipedal_connector::encode_request(&mackes_pipedal_connector::Request {
+            message: "listenForMidiEvent".into(),
+            reply_to,
+            body: Some(body),
+        })
+        .map_err(|error| error.to_string())
+    }
+
+    /// Prepare a generation-checked `PiPedal` MIDI listener cancellation request.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for a stale generation, invalid handle, or encoding failure.
+    pub fn prepare_cancel_listen_for_midi_event(
+        &self,
+        generation: u64,
+        handle: u64,
+        reply_to: Option<u64>,
+    ) -> Result<Vec<u8>, String> {
+        if generation != self.session.generation() || handle == 0 {
+            return Err("PiPedal MIDI listener cancellation is invalid".into());
+        }
+        mackes_pipedal_connector::encode_request(&mackes_pipedal_connector::Request {
+            message: "cancelListenForMidiEvent".into(),
+            reply_to,
+            body: Some(handle),
+        })
+        .map_err(|error| error.to_string())
+    }
+
+    /// Queue a generation-checked `PiPedal` MIDI listener start request.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the session is not ready or validation fails.
+    pub fn apply_listen_for_midi_event(
+        &mut self,
+        generation: u64,
+        handle: u64,
+        reply_to: Option<u64>,
+    ) -> Result<(), String> {
+        if !self.session.is_ready() {
+            return Err("PiPedal session is not ready for MIDI listening".into());
+        }
+        let frame = self.prepare_listen_for_midi_event(generation, handle, reply_to)?;
+        self.session.enqueue_control(generation, frame)
+    }
+
+    /// Queue a generation-checked `PiPedal` MIDI listener cancellation request.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the session is not ready or validation fails.
+    pub fn apply_cancel_listen_for_midi_event(
+        &mut self,
+        generation: u64,
+        handle: u64,
+        reply_to: Option<u64>,
+    ) -> Result<(), String> {
+        if !self.session.is_ready() {
+            return Err("PiPedal session is not ready for MIDI listening".into());
+        }
+        let frame = self.prepare_cancel_listen_for_midi_event(generation, handle, reply_to)?;
+        self.session.enqueue_control(generation, frame)
+    }
+
+    /// Prepare a generation-checked `PiPedal` patch-property monitor request.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for stale generation, invalid identities/URI, or encoding failure.
+    pub fn prepare_monitor_patch_property(
+        &self,
+        generation: u64,
+        instance_id: u64,
+        client_handle: u64,
+        property_uri: String,
+        reply_to: Option<u64>,
+    ) -> Result<Vec<u8>, String> {
+        if generation != self.session.generation() {
+            return Err("PiPedal patch monitor belongs to an old session generation".into());
+        }
+        let body = mackes_pipedal_connector::MonitorPatchProperty {
+            instance_id,
+            client_handle,
+            property_uri,
+        };
+        body.validate()?;
+        mackes_pipedal_connector::encode_request(&mackes_pipedal_connector::Request {
+            message: "monitorPatchProperty".into(),
+            reply_to,
+            body: Some(body),
+        })
+        .map_err(|error| error.to_string())
+    }
+
+    /// Prepare a generation-checked `PiPedal` patch-property monitor cancellation request.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for stale generation, invalid handle, or encoding failure.
+    pub fn prepare_cancel_monitor_patch_property(
+        &self,
+        generation: u64,
+        client_handle: u64,
+        reply_to: Option<u64>,
+    ) -> Result<Vec<u8>, String> {
+        if generation != self.session.generation() || client_handle == 0 {
+            return Err("PiPedal patch monitor cancellation is invalid".into());
+        }
+        mackes_pipedal_connector::encode_request(&mackes_pipedal_connector::Request {
+            message: "cancelMonitorPatchProperty".into(),
+            reply_to,
+            body: Some(client_handle),
+        })
+        .map_err(|error| error.to_string())
+    }
+
+    /// Queue a generation-checked patch-property monitor request.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the session is not ready or validation fails.
+    pub fn apply_monitor_patch_property(
+        &mut self,
+        generation: u64,
+        instance_id: u64,
+        client_handle: u64,
+        property_uri: String,
+        reply_to: Option<u64>,
+    ) -> Result<(), String> {
+        if !self.session.is_ready() {
+            return Err("PiPedal session is not ready for patch monitoring".into());
+        }
+        let frame = self.prepare_monitor_patch_property(
+            generation,
+            instance_id,
+            client_handle,
+            property_uri,
+            reply_to,
+        )?;
+        self.session.enqueue_control(generation, frame)
+    }
+
+    /// Queue a generation-checked patch-property monitor cancellation request.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the session is not ready or validation fails.
+    pub fn apply_cancel_monitor_patch_property(
+        &mut self,
+        generation: u64,
+        client_handle: u64,
+        reply_to: Option<u64>,
+    ) -> Result<(), String> {
+        if !self.session.is_ready() {
+            return Err("PiPedal session is not ready for patch monitoring".into());
+        }
+        let frame =
+            self.prepare_cancel_monitor_patch_property(generation, client_handle, reply_to)?;
+        self.session.enqueue_control(generation, frame)
+    }
+
+    /// Prepares a generation-checked, read-only system MIDI bindings query.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the requested generation is stale or encoding fails.
+    pub fn prepare_get_system_midi_bindings(
+        &self,
+        generation: u64,
+        reply_to: Option<u64>,
+    ) -> Result<Vec<u8>, String> {
+        if generation != self.session.generation() {
+            return Err("PiPedal system MIDI query belongs to an old session generation".into());
+        }
+        mackes_pipedal_connector::encode_request(&mackes_pipedal_connector::Request::<()> {
+            message: "getSystemMidiBindings".into(),
+            reply_to,
+            body: None,
+        })
+        .map_err(|error| error.to_string())
+    }
+
+    /// Queues a read-only system MIDI bindings query.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the session is not ready, the generation is stale, or queue admission fails.
+    pub fn query_system_midi_bindings(
+        &mut self,
+        generation: u64,
+        reply_to: Option<u64>,
+    ) -> Result<(), String> {
+        if !self.session.is_ready() {
+            return Err("PiPedal session is not ready for system MIDI queries".into());
+        }
+        let frame = self.prepare_get_system_midi_bindings(generation, reply_to)?;
+        self.session.enqueue(generation, frame)
+    }
+
+    /// Prepares a read-only qualified preset catalog query for the current session.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the requested generation is stale or the request cannot be encoded.
+    pub fn prepare_get_presets(
+        &self,
+        generation: u64,
+        reply_to: Option<u64>,
+    ) -> Result<Vec<u8>, String> {
+        if generation != self.session.generation() {
+            return Err("PiPedal preset query belongs to an old session generation".into());
+        }
+        mackes_pipedal_connector::encode_request(&mackes_pipedal_connector::Request::<()> {
+            message: "getPresets".into(),
+            reply_to,
+            body: None,
+        })
+        .map_err(|error| error.to_string())
+    }
+
+    /// Queues a read-only qualified preset catalog query.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the session is not ready, the generation is stale, or queue
+    /// admission fails.
+    pub fn query_presets(&mut self, generation: u64, reply_to: Option<u64>) -> Result<(), String> {
+        if !self.session.is_ready() {
+            return Err("PiPedal session is not ready for preset queries".into());
+        }
+        let frame = self.prepare_get_presets(generation, reply_to)?;
+        self.session.enqueue(generation, frame)
+    }
+
+    /// Prepares a confirmed, generation-checked current-preset load request.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when confirmation, generation, preset identity, or request encoding is invalid.
+    pub fn prepare_load_preset(
+        &self,
+        generation: u64,
+        preset_instance_id: i64,
+        reply_to: Option<u64>,
+        confirmed: bool,
+    ) -> Result<Vec<u8>, String> {
+        if !confirmed {
+            return Err("PiPedal preset load requires explicit confirmation".into());
+        }
+        if generation != self.session.generation() {
+            return Err("PiPedal preset load belongs to an old session generation".into());
+        }
+        let body = mackes_pipedal_connector::LoadPreset(preset_instance_id);
+        body.validate()?;
+        mackes_pipedal_connector::encode_request(&mackes_pipedal_connector::Request {
+            message: "loadPreset".into(),
+            reply_to,
+            body: Some(body),
+        })
+        .map_err(|error| error.to_string())
+    }
+
+    /// Queues a confirmed current-preset load request.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the session is not ready, confirmation or generation is invalid,
+    /// or queue admission fails.
+    pub fn apply_load_preset(
+        &mut self,
+        generation: u64,
+        preset_instance_id: i64,
+        reply_to: Option<u64>,
+        confirmed: bool,
+    ) -> Result<(), String> {
+        if !self.session.is_ready() {
+            return Err("PiPedal session is not ready for preset load".into());
+        }
+        let frame =
+            self.prepare_load_preset(generation, preset_instance_id, reply_to, confirmed)?;
+        self.session.enqueue_control(generation, frame)
+    }
+
+    /// Prepares a confirmed, generation-checked current-preset save-as request.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when confirmation, generation, or source-backed fields are invalid.
+    pub fn prepare_save_current_preset_as(
+        &self,
+        generation: u64,
+        bank_instance_id: i64,
+        name: String,
+        save_after_instance_id: i64,
+        reply_to: Option<u64>,
+        confirmed: bool,
+    ) -> Result<Vec<u8>, String> {
+        if !confirmed {
+            return Err("PiPedal preset save-as requires explicit confirmation".into());
+        }
+        if generation != self.session.generation() {
+            return Err("PiPedal preset save-as belongs to an old session generation".into());
+        }
+        let body = mackes_pipedal_connector::SaveCurrentPresetAs {
+            bank_instance_id,
+            name,
+            save_after_instance_id,
+        };
+        body.validate()?;
+        mackes_pipedal_connector::encode_request(&mackes_pipedal_connector::Request {
+            message: "saveCurrentPresetAs".into(),
+            reply_to,
+            body: Some(body),
+        })
+        .map_err(|error| error.to_string())
+    }
+
+    /// Queues a confirmed current-preset save-as request.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the session is not ready, confirmation/generation validation fails,
+    /// or queue admission fails.
+    pub fn apply_save_current_preset_as(
+        &mut self,
+        generation: u64,
+        bank_instance_id: i64,
+        name: String,
+        save_after_instance_id: i64,
+        reply_to: Option<u64>,
+        confirmed: bool,
+    ) -> Result<(), String> {
+        if !self.session.is_ready() {
+            return Err("PiPedal session is not ready for preset save-as".into());
+        }
+        let frame = self.prepare_save_current_preset_as(
+            generation,
+            bank_instance_id,
+            name,
+            save_after_instance_id,
+            reply_to,
+            confirmed,
+        )?;
+        self.session.enqueue_control(generation, frame)
+    }
+
+    /// Prepares a confirmed, generation-checked plugin-preset save-as request.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when confirmation, generation, or source-backed fields are invalid.
+    pub fn prepare_save_plugin_preset_as(
+        &self,
+        generation: u64,
+        instance_id: i64,
+        name: String,
+        reply_to: Option<u64>,
+        confirmed: bool,
+    ) -> Result<Vec<u8>, String> {
+        if !confirmed {
+            return Err("PiPedal plugin-preset save-as requires explicit confirmation".into());
+        }
+        if generation != self.session.generation() {
+            return Err("PiPedal plugin-preset save-as belongs to an old session generation".into());
+        }
+        let body = mackes_pipedal_connector::SavePluginPresetAs { instance_id, name };
+        body.validate()?;
+        mackes_pipedal_connector::encode_request(&mackes_pipedal_connector::Request {
+            message: "savePluginPresetAs".into(),
+            reply_to,
+            body: Some(body),
+        })
+        .map_err(|error| error.to_string())
+    }
+
+    /// Queues a confirmed plugin-preset save-as request.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the session is not ready, confirmation/generation validation fails,
+    /// or queue admission fails.
+    pub fn apply_save_plugin_preset_as(
+        &mut self,
+        generation: u64,
+        instance_id: i64,
+        name: String,
+        reply_to: Option<u64>,
+        confirmed: bool,
+    ) -> Result<(), String> {
+        if !self.session.is_ready() {
+            return Err("PiPedal session is not ready for plugin-preset save-as".into());
+        }
+        let frame =
+            self.prepare_save_plugin_preset_as(generation, instance_id, name, reply_to, confirmed)?;
+        self.session.enqueue_control(generation, frame)
+    }
+
+    /// Prepares a generation-checked, read-only favorites query.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the requested generation is stale or the request cannot be encoded.
+    pub fn prepare_get_favorites(
+        &self,
+        generation: u64,
+        reply_to: Option<u64>,
+    ) -> Result<Vec<u8>, String> {
+        if generation != self.session.generation() {
+            return Err("PiPedal favorites query belongs to an old session generation".into());
+        }
+        mackes_pipedal_connector::encode_request(&mackes_pipedal_connector::Request::<()> {
+            message: "getFavorites".into(),
+            reply_to,
+            body: None,
+        })
+        .map_err(|error| error.to_string())
+    }
+
+    /// Queues a read-only favorites query.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the session is not ready, the generation is stale, or queue
+    /// admission fails.
+    pub fn query_favorites(
+        &mut self,
+        generation: u64,
+        reply_to: Option<u64>,
+    ) -> Result<(), String> {
+        if !self.session.is_ready() {
+            return Err("PiPedal session is not ready for favorites queries".into());
+        }
+        let frame = self.prepare_get_favorites(generation, reply_to)?;
+        self.session.enqueue(generation, frame)
+    }
+
+    /// Prepares a generation-checked favorites replacement.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for a stale generation, invalid URI map, or encoding failure.
+    pub fn prepare_set_favorites(
+        &self,
+        generation: u64,
+        favorites: std::collections::BTreeMap<String, bool>,
+    ) -> Result<Vec<u8>, String> {
+        if generation != self.session.generation() {
+            return Err("PiPedal favorites write belongs to an old session generation".into());
+        }
+        mackes_pipedal_connector::validate_favorites(&favorites)?;
+        mackes_pipedal_connector::encode_request(&mackes_pipedal_connector::Request {
+            message: "setFavorites".into(),
+            reply_to: None,
+            body: Some(favorites),
+        })
+        .map_err(|error| error.to_string())
+    }
+
+    /// Queues a generation-checked favorites replacement.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the session is not ready, the generation is stale, validation
+    /// fails, or queue admission fails.
+    pub fn apply_set_favorites(
+        &mut self,
+        generation: u64,
+        favorites: std::collections::BTreeMap<String, bool>,
+    ) -> Result<(), String> {
+        if !self.session.is_ready() {
+            return Err("PiPedal session is not ready for favorites writes".into());
+        }
+        let frame = self.prepare_set_favorites(generation, favorites)?;
+        self.session.enqueue_control(generation, frame)
+    }
+
+    /// Prepares a generation-checked, read-only update-status query.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the requested generation is stale or the request cannot be encoded.
+    pub fn prepare_get_update_status(
+        &self,
+        generation: u64,
+        reply_to: Option<u64>,
+    ) -> Result<Vec<u8>, String> {
+        if generation != self.session.generation() {
+            return Err("PiPedal update-status query belongs to an old session generation".into());
+        }
+        mackes_pipedal_connector::encode_request(&mackes_pipedal_connector::Request::<()> {
+            message: "getUpdateStatus".into(),
+            reply_to,
+            body: None,
+        })
+        .map_err(|error| error.to_string())
+    }
+
+    /// Queues a read-only update-status query.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the session is not ready, the generation is stale, or queue admission fails.
+    pub fn query_update_status(
+        &mut self,
+        generation: u64,
+        reply_to: Option<u64>,
+    ) -> Result<(), String> {
+        if !self.session.is_ready() {
+            return Err("PiPedal session is not ready for update status".into());
+        }
+        let frame = self.prepare_get_update_status(generation, reply_to)?;
+        self.session.enqueue(generation, frame)
+    }
+
+    /// Prepares a generation-checked, read-only Wi-Fi availability query.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the requested generation is stale or encoding fails.
+    pub fn prepare_get_has_wifi(
+        &self,
+        generation: u64,
+        reply_to: Option<u64>,
+    ) -> Result<Vec<u8>, String> {
+        if generation != self.session.generation() {
+            return Err("PiPedal Wi-Fi query belongs to an old session generation".into());
+        }
+        mackes_pipedal_connector::encode_request(&mackes_pipedal_connector::Request::<()> {
+            message: "getHasWifi".into(),
+            reply_to,
+            body: None,
+        })
+        .map_err(|error| error.to_string())
+    }
+
+    /// Prepares a generation-checked Wi-Fi channel query with the source scalar country body.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the generation or country code is invalid, or encoding fails.
+    pub fn prepare_get_wifi_channels(
+        &self,
+        generation: u64,
+        country: String,
+        reply_to: Option<u64>,
+    ) -> Result<Vec<u8>, String> {
+        if generation != self.session.generation() {
+            return Err("PiPedal Wi-Fi channel query belongs to an old session generation".into());
+        }
+        if country.trim().is_empty() || country.len() > 16 {
+            return Err("PiPedal Wi-Fi country code is invalid".into());
+        }
+        mackes_pipedal_connector::encode_request(&mackes_pipedal_connector::Request {
+            message: "getWifiChannels".into(),
+            reply_to,
+            body: Some(country),
+        })
+        .map_err(|error| error.to_string())
+    }
+
+    /// Prepares a generation-checked plugin-preset query with a bounded URI body.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the generation or URI is invalid, or encoding fails.
+    pub fn prepare_get_plugin_presets(
+        &self,
+        generation: u64,
+        plugin_uri: String,
+        reply_to: Option<u64>,
+    ) -> Result<Vec<u8>, String> {
+        if generation != self.session.generation() {
+            return Err("PiPedal plugin-preset query belongs to an old session generation".into());
+        }
+        if plugin_uri.trim().is_empty() || plugin_uri.len() > 512 {
+            return Err("PiPedal plugin URI is invalid".into());
+        }
+        mackes_pipedal_connector::encode_request(&mackes_pipedal_connector::Request {
+            message: "getPluginPresets".into(),
+            reply_to,
+            body: Some(plugin_uri),
+        })
+        .map_err(|error| error.to_string())
+    }
+
+    /// Prepares a generation-checked, read-only known-Wi-Fi-networks query.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the requested generation is stale or encoding fails.
+    pub fn prepare_get_known_wifi_networks(
+        &self,
+        generation: u64,
+        reply_to: Option<u64>,
+    ) -> Result<Vec<u8>, String> {
+        if generation != self.session.generation() {
+            return Err("PiPedal known-Wi-Fi query belongs to an old session generation".into());
+        }
+        mackes_pipedal_connector::encode_request(&mackes_pipedal_connector::Request::<()> {
+            message: "getKnownWifiNetworks".into(),
+            reply_to,
+            body: None,
+        })
+        .map_err(|error| error.to_string())
+    }
+
+    /// Prepares a confirmed plugin-preset load request.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when confirmation, generation, identities, or encoding is invalid.
+    pub fn prepare_load_plugin_preset(
+        &self,
+        generation: u64,
+        plugin_instance_id: u64,
+        preset_instance_id: u64,
+        reply_to: Option<u64>,
+        confirmed: bool,
+    ) -> Result<Vec<u8>, String> {
+        if !confirmed {
+            return Err("PiPedal plugin-preset load requires explicit confirmation".into());
+        }
+        if generation != self.session.generation() {
+            return Err("PiPedal plugin-preset load belongs to an old session generation".into());
+        }
+        let body =
+            mackes_pipedal_connector::LoadPluginPreset { plugin_instance_id, preset_instance_id };
+        body.validate()?;
+        mackes_pipedal_connector::encode_request(&mackes_pipedal_connector::Request {
+            message: "loadPluginPreset".into(),
+            reply_to,
+            body: Some(body),
+        })
+        .map_err(|error| error.to_string())
+    }
+
+    /// Prepares a generation-checked, read-only JACK-settings query.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the requested generation is stale or encoding fails.
+    pub fn prepare_get_jack_server_settings(
+        &self,
+        generation: u64,
+        reply_to: Option<u64>,
+    ) -> Result<Vec<u8>, String> {
+        if generation != self.session.generation() {
+            return Err("PiPedal JACK-settings query belongs to an old session generation".into());
+        }
+        mackes_pipedal_connector::encode_request(&mackes_pipedal_connector::Request::<()> {
+            message: "getJackServerSettings".into(),
+            reply_to,
+            body: None,
+        })
+        .map_err(|error| error.to_string())
+    }
+
+    /// Prepares a confirmed CPU-governor settings request with a bounded scalar body.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when confirmation, generation, or governor input is invalid.
+    pub fn prepare_set_governor_settings(
+        &self,
+        generation: u64,
+        governor: String,
+        reply_to: Option<u64>,
+        confirmed: bool,
+    ) -> Result<Vec<u8>, String> {
+        if !confirmed {
+            return Err("PiPedal governor settings require explicit confirmation".into());
+        }
+        if generation != self.session.generation() {
+            return Err("PiPedal governor settings belong to an old session generation".into());
+        }
+        if governor.trim().is_empty() || governor.len() > 64 {
+            return Err("PiPedal governor setting is invalid".into());
+        }
+        mackes_pipedal_connector::encode_request(&mackes_pipedal_connector::Request {
+            message: "setGovernorSettings".into(),
+            reply_to,
+            body: Some(governor),
+        })
+        .map_err(|error| error.to_string())
+    }
+
+    /// Prepares a generation-checked, read-only CPU-governor query.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the requested generation is stale or encoding fails.
+    pub fn prepare_get_governor_settings(
+        &self,
+        generation: u64,
+        reply_to: Option<u64>,
+    ) -> Result<Vec<u8>, String> {
+        if generation != self.session.generation() {
+            return Err("PiPedal governor query belongs to an old session generation".into());
+        }
+        mackes_pipedal_connector::encode_request(&mackes_pipedal_connector::Request::<()> {
+            message: "getGovernorSettings".into(),
+            reply_to,
+            body: None,
+        })
+        .map_err(|error| error.to_string())
+    }
+
+    /// Queues a read-only CPU-governor query.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the session is not ready, the generation is stale, or queue
+    /// admission fails.
+    pub fn query_governor_settings(
+        &mut self,
+        generation: u64,
+        reply_to: Option<u64>,
+    ) -> Result<(), String> {
+        if !self.session.is_ready() {
+            return Err("PiPedal session is not ready for governor queries".into());
+        }
+        let frame = self.prepare_get_governor_settings(generation, reply_to)?;
+        self.session.enqueue(generation, frame)
+    }
+
+    /// Prepares a generation-checked, read-only status-monitor query.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the requested generation is stale or encoding fails.
+    pub fn prepare_get_show_status_monitor(
+        &self,
+        generation: u64,
+        reply_to: Option<u64>,
+    ) -> Result<Vec<u8>, String> {
+        if generation != self.session.generation() {
+            return Err("PiPedal status-monitor query belongs to an old session generation".into());
+        }
+        mackes_pipedal_connector::encode_request(&mackes_pipedal_connector::Request::<()> {
+            message: "getShowStatusMonitor".into(),
+            reply_to,
+            body: None,
+        })
+        .map_err(|error| error.to_string())
+    }
+
+    /// Queues a read-only status-monitor query.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the session is not ready, the generation is stale, or queue
+    /// admission fails.
+    pub fn query_show_status_monitor(
+        &mut self,
+        generation: u64,
+        reply_to: Option<u64>,
+    ) -> Result<(), String> {
+        if !self.session.is_ready() {
+            return Err("PiPedal session is not ready for status-monitor queries".into());
+        }
+        let frame = self.prepare_get_show_status_monitor(generation, reply_to)?;
+        self.session.enqueue(generation, frame)
+    }
+
+    /// Prepares a generation-checked, read-only Wi-Fi regulatory-domain query.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the requested generation is stale or encoding fails.
+    pub fn prepare_get_wifi_regulatory_domains(
+        &self,
+        generation: u64,
+        reply_to: Option<u64>,
+    ) -> Result<Vec<u8>, String> {
+        if generation != self.session.generation() {
+            return Err("PiPedal Wi-Fi domain query belongs to an old session generation".into());
+        }
+        mackes_pipedal_connector::encode_request(&mackes_pipedal_connector::Request::<()> {
+            message: "getWifiRegulatoryDomains".into(),
+            reply_to,
+            body: None,
+        })
+        .map_err(|error| error.to_string())
+    }
+
+    /// Queues a read-only Wi-Fi regulatory-domain query.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the session is not ready, the generation is stale, or queue
+    /// admission fails.
+    pub fn query_wifi_regulatory_domains(
+        &mut self,
+        generation: u64,
+        reply_to: Option<u64>,
+    ) -> Result<(), String> {
+        if !self.session.is_ready() {
+            return Err("PiPedal session is not ready for Wi-Fi domain queries".into());
+        }
+        let frame = self.prepare_get_wifi_regulatory_domains(generation, reply_to)?;
+        self.session.enqueue(generation, frame)
+    }
+
+    /// Prepares a generation-checked, read-only current-bank query.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the requested generation is stale or the request cannot be encoded.
+    pub fn prepare_get_bank_index(
+        &self,
+        generation: u64,
+        reply_to: Option<u64>,
+    ) -> Result<Vec<u8>, String> {
+        if generation != self.session.generation() {
+            return Err("PiPedal bank query belongs to an old session generation".into());
+        }
+        mackes_pipedal_connector::encode_request(&mackes_pipedal_connector::Request::<()> {
+            message: "getBankIndex".into(),
+            reply_to,
+            body: None,
+        })
+        .map_err(|error| error.to_string())
+    }
+
+    /// Queues a read-only current-bank query.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the session is not ready, the generation is stale, or queue
+    /// admission fails.
+    pub fn query_bank_index(
+        &mut self,
+        generation: u64,
+        reply_to: Option<u64>,
+    ) -> Result<(), String> {
+        if !self.session.is_ready() {
+            return Err("PiPedal session is not ready for bank queries".into());
+        }
+        let frame = self.prepare_get_bank_index(generation, reply_to)?;
+        self.session.enqueue(generation, frame)
+    }
+
     /// Applies a control only when a fresh catalog value is available, retaining that value for
     /// an immediately safe undo. The journal is updated only after queue admission succeeds.
     ///
@@ -768,6 +2001,26 @@ impl Worker {
         let id = self.next_reply_id;
         self.next_reply_id = self.next_reply_id.saturating_add(1).max(1);
         id
+    }
+
+    /// Returns the last admitted scalar mutation for daemon-owned persistence.
+    #[must_use]
+    pub const fn apply_record(&self) -> Option<&ApplyRecord> {
+        self.apply_record.as_ref()
+    }
+
+    /// Restores a persisted journal entry only when it belongs to this session.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the record belongs to another generation or contains a
+    /// non-finite prior value.
+    pub fn restore_apply_record(&mut self, record: ApplyRecord) -> Result<(), String> {
+        if record.generation != self.session.generation() || !record.previous_value.is_finite() {
+            return Err("PiPedal persisted undo belongs to an old or invalid session".into());
+        }
+        self.apply_record = Some(record);
+        Ok(())
     }
 
     /// Records the prior value after a confirmed apply has been admitted.
@@ -904,6 +2157,7 @@ impl Worker {
 fn decode_catalog(
     value: &serde_json::Value,
 ) -> Result<mackes_pipedal_connector::PluginCatalog, String> {
+    mackes_pipedal_connector::decode_plugin_catalog(Some(value.clone()))?;
     let entries = value.as_array().ok_or("PiPedal plugins body is not an array")?;
     let mut catalog = mackes_pipedal_connector::PluginCatalog::default();
     for (entry_index, entry) in
@@ -1000,40 +2254,17 @@ fn ingest_current_pedalboard(
     runtime_targets: &mut Vec<(u64, String)>,
     value: &serde_json::Value,
 ) -> Result<(), String> {
-    let items = value
-        .get("items")
-        .and_then(serde_json::Value::as_array)
-        .ok_or("PiPedal pedalboard items are missing")?;
+    let snapshot = mackes_pipedal_connector::decode_current_pedalboard(Some(value.clone()))?;
     runtime_targets.clear();
-    for item in items {
-        let object = item.as_object().ok_or("PiPedal pedalboard item is not an object")?;
-        let uri = object
-            .get("uri")
-            .and_then(serde_json::Value::as_str)
-            .ok_or("PiPedal pedalboard URI is missing")?;
-        let instance_id = object
-            .get("instanceId")
-            .and_then(serde_json::Value::as_u64)
-            .ok_or("PiPedal pedalboard instance ID is missing")?;
+    for item in snapshot.items {
+        let uri = item.uri;
+        let instance_id = item.instance_id;
         if runtime_targets.len() < mackes_pipedal_connector::MAX_CATALOG_CONTROLS {
-            runtime_targets.push((instance_id, uri.to_owned()));
+            runtime_targets.push((instance_id, uri.clone()));
         }
-        let values = object
-            .get("controlValues")
-            .and_then(serde_json::Value::as_array)
-            .map_or(&[][..], |values| values.as_slice());
-        for value in values {
-            let value_object = value.as_object().ok_or("PiPedal control value is not an object")?;
-            let symbol = value_object
-                .get("key")
-                .and_then(serde_json::Value::as_str)
-                .ok_or("PiPedal control value key is missing")?;
-            let value = value_object
-                .get("value")
-                .and_then(serde_json::Value::as_f64)
-                .map(|v| f64_to_f32(v, "PiPedal control value is not finite"))
-                .transpose()?
-                .ok_or("PiPedal control value is missing")?;
+        for control_value in item.control_values {
+            let symbol = control_value.key;
+            let value = f64_to_f32(control_value.value, "PiPedal control value is not finite")?;
             if let Some(control) = catalog
                 .controls
                 .iter_mut()
@@ -1103,6 +2334,44 @@ mod tests {
     }
 
     #[test]
+    fn favorites_projection_is_retained_and_cleared_on_reconnect() {
+        let mut worker = Worker::default();
+        worker.enqueue(Command::Start).expect("start queue");
+        worker.process(&mut NoopTransport, 1);
+        worker.accept_frame(br#"[{"message":"ehlo"},1]"#).expect("hello");
+        worker
+            .accept_frame(br#"[{"message":"version"},{"serverVersion":"PiPedal v2"}]"#)
+            .expect("version");
+        assert_eq!(worker.version().map(|value| value.server_version.as_str()), Some("PiPedal v2"));
+        worker
+            .accept_frame(br#"[{"message":"getSystemMidiBindings"},[{"symbol":"gain","channel":1,"bindingType":0,"note":0,"control":7,"minControlValue":0,"maxControlValue":127,"minValue":0.0,"maxValue":1.0,"rotaryScale":1.0,"linearControlType":0,"switchControlType":0}]]"#)
+            .expect("system MIDI bindings");
+        assert_eq!(worker.system_midi_bindings().len(), 1);
+        worker
+            .accept_frame(br#"[{"message":"getFavorites"},{"urn:eq":true,"urn:delay":false}]"#)
+            .expect("favorites");
+        assert_eq!(worker.favorites().get("urn:eq"), Some(&true));
+        worker.enqueue(Command::Reconnect).expect("reconnect queue");
+        worker.process(&mut NoopTransport, 1);
+        assert!(worker.favorites().is_empty());
+        assert!(worker.system_midi_bindings().is_empty());
+        assert!(worker.version().is_none());
+    }
+
+    #[test]
+    fn favorites_write_preserves_source_map_shape_and_generation() {
+        let worker = Worker::default();
+        let favorites = std::collections::BTreeMap::from([("urn:eq".to_owned(), true)]);
+        let frame = worker.prepare_set_favorites(0, favorites).expect("favorites write");
+        let text = String::from_utf8_lossy(&frame);
+        assert!(text.contains("setFavorites"));
+        assert!(text.contains("urn:eq"));
+        assert!(worker.prepare_set_favorites(1, std::collections::BTreeMap::new()).is_err());
+        let invalid = std::collections::BTreeMap::from([(String::new(), true)]);
+        assert!(worker.prepare_set_favorites(0, invalid).is_err());
+    }
+
+    #[test]
     fn pump_returns_available_frames_without_waiting() {
         let mut worker = Worker::new(Session::default());
         let mut transport = QueuedTransport { frames: vec![vec![1, 2, 3]] };
@@ -1165,6 +2434,130 @@ mod tests {
         worker.process(&mut NoopTransport, 1);
         assert_eq!(worker.health().phase, SessionPhase::Connected);
         assert_eq!(worker.health().pending_commands, 0);
+    }
+
+    #[test]
+    fn system_midi_binding_replacement_is_generation_checked_and_typed() {
+        let worker = Worker::default();
+        let binding = mackes_pipedal_connector::MidiBinding {
+            symbol: "gain".into(),
+            channel: -1,
+            binding_type: 0,
+            note: 0,
+            control: 74,
+            min_control_value: 0,
+            max_control_value: 127,
+            min_value: -1.0,
+            max_value: 1.0,
+            rotary_scale: 1.0,
+            linear_control_type: 0,
+            switch_control_type: 0,
+        };
+        let body = mackes_pipedal_connector::SystemMidiBindings { bindings: vec![binding] };
+        let frame = worker
+            .prepare_set_system_midi_bindings(0, body, Some(41))
+            .expect("typed binding replacement");
+        assert!(String::from_utf8_lossy(&frame).contains("setSystemMidiBindings"));
+        assert!(worker
+            .prepare_set_system_midi_bindings(
+                1,
+                mackes_pipedal_connector::SystemMidiBindings { bindings: Vec::new() },
+                None,
+            )
+            .is_err());
+    }
+
+    #[test]
+    fn pedalboard_enable_request_is_typed_and_rejects_zero_identity() {
+        let worker = Worker::default();
+        let frame = worker
+            .prepare_set_pedalboard_item_enable(0, 99, 7, false, Some(42))
+            .expect("typed bypass request");
+        assert!(String::from_utf8_lossy(&frame).contains("setPedalboardItemEnable"));
+        assert!(worker.prepare_set_pedalboard_item_enable(0, 99, 0, true, None).is_err());
+    }
+
+    #[test]
+    fn preview_volume_request_preserves_source_scalar_body_and_bounds_values() {
+        let worker = Worker::default();
+        let input = worker.prepare_preview_volume(0, true, -6.5, Some(43)).expect("input preview");
+        let output = worker.prepare_preview_volume(0, false, 3.0, None).expect("output preview");
+        assert!(String::from_utf8_lossy(&input).contains("previewInputVolume"));
+        assert!(String::from_utf8_lossy(&input).contains("-6.5"));
+        assert!(String::from_utf8_lossy(&output).contains("previewOutputVolume"));
+        assert!(worker.prepare_preview_volume(0, true, f32::NAN, None).is_err());
+        assert!(worker.prepare_preview_volume(1, true, 0.0, None).is_err());
+    }
+
+    #[test]
+    fn patch_monitor_requests_preserve_source_object_and_scalar_shapes() {
+        let worker = Worker::default();
+        let start = worker
+            .prepare_monitor_patch_property(0, 7, 4, "urn:property".into(), Some(44))
+            .expect("monitor");
+        let cancel = worker.prepare_cancel_monitor_patch_property(0, 4, None).expect("cancel");
+        let start_text = String::from_utf8_lossy(&start);
+        assert!(start_text.contains("monitorPatchProperty"));
+        assert!(start_text.contains("clientHandle"));
+        assert!(start_text.contains("propertyUri"));
+        assert!(String::from_utf8_lossy(&cancel).contains("cancelMonitorPatchProperty"));
+        assert!(worker.prepare_monitor_patch_property(0, 0, 4, "urn:x".into(), None).is_err());
+        assert!(worker.prepare_cancel_monitor_patch_property(1, 4, None).is_err());
+    }
+
+    #[test]
+    fn system_midi_query_is_read_only_and_generation_checked() {
+        let worker = Worker::default();
+        let frame = worker.prepare_get_system_midi_bindings(0, Some(45)).expect("MIDI query");
+        assert!(String::from_utf8_lossy(&frame).contains("getSystemMidiBindings"));
+        assert!(worker.prepare_get_system_midi_bindings(1, None).is_err());
+    }
+
+    #[test]
+    fn preset_catalog_query_is_read_only_and_generation_checked() {
+        let worker = Worker::default();
+        let frame = worker.prepare_get_presets(0, Some(77)).expect("preset query");
+        assert!(String::from_utf8_lossy(&frame).contains("getPresets"));
+        assert!(worker.prepare_get_presets(1, None).is_err());
+    }
+
+    #[test]
+    fn preset_save_as_preserves_source_payload_and_confirmation() {
+        let worker = Worker::default();
+        let frame = worker
+            .prepare_save_current_preset_as(0, 7, "New preset".into(), 12, Some(78), true)
+            .expect("preset save-as");
+        let text = String::from_utf8_lossy(&frame);
+        assert!(text.contains("saveCurrentPresetAs"));
+        assert!(text.contains("bankInstanceId"));
+        assert!(text.contains("saveAfterInstanceId"));
+        assert!(worker
+            .prepare_save_current_preset_as(0, 7, "New preset".into(), 12, None, false)
+            .is_err());
+        assert!(worker
+            .prepare_save_current_preset_as(1, 7, "New preset".into(), 12, None, true)
+            .is_err());
+        assert!(worker
+            .prepare_save_current_preset_as(0, 7, String::new(), 12, None, true)
+            .is_err());
+    }
+
+    #[test]
+    fn plugin_preset_save_as_preserves_source_payload_and_confirmation() {
+        let worker = Worker::default();
+        let frame = worker
+            .prepare_save_plugin_preset_as(0, 137, "Warm gain".into(), Some(79), true)
+            .expect("plugin preset save-as");
+        let text = String::from_utf8_lossy(&frame);
+        assert!(text.contains("savePluginPresetAs"));
+        assert!(text.contains("instanceId"));
+        assert!(text.contains("Warm gain"));
+        assert!(worker
+            .prepare_save_plugin_preset_as(0, 137, "Warm gain".into(), None, false)
+            .is_err());
+        assert!(worker
+            .prepare_save_plugin_preset_as(0, 0, "Warm gain".into(), None, true)
+            .is_err());
     }
 
     #[test]
@@ -1255,6 +2648,23 @@ mod tests {
     }
 
     #[test]
+    fn current_pedalboard_acceptance_uses_bounded_connector_projection() {
+        let mut catalog = decode_catalog(&serde_json::json!([{
+            "uri": "urn:eq", "name": "EQ", "controls": []
+        }]))
+        .expect("catalog");
+        let mut targets = Vec::new();
+        let malformed = serde_json::json!({
+            "items": [
+                {"instanceId": 4, "uri": "urn:eq"},
+                {"instanceId": 4, "uri": "urn:eq"}
+            ]
+        });
+        assert!(ingest_current_pedalboard(&mut catalog, &mut targets, &malformed).is_err());
+        assert!(targets.is_empty());
+    }
+
+    #[test]
     fn control_event_burst_converges_without_feedback_and_reconnect_rejects_stale_instance() {
         let mut worker = Worker::default();
         worker.enqueue(Command::Start).expect("start");
@@ -1306,6 +2716,7 @@ mod tests {
             physical_control_id: "knob-r3-c4".into(),
             plugin_uri: "urn:eq".into(),
             symbol: "gain".into(),
+            instance_id: None,
             state: ResolutionState::Unavailable,
             detail: "target is unavailable".into(),
         };
@@ -1366,6 +2777,29 @@ mod tests {
     }
 
     #[test]
+    fn persisted_apply_record_is_generation_checked_and_round_trips() {
+        let record = ApplyRecord {
+            mapping: MappingIdentity {
+                physical_control_id: "knob-r3-c4".into(),
+                plugin_uri: "urn:eq".into(),
+                symbol: "gain".into(),
+                scope: Some("main".into()),
+            },
+            instance_id: 7,
+            previous_value: -3.0,
+            generation: 0,
+        };
+        let encoded = serde_json::to_vec(&record).expect("encode journal");
+        let decoded: ApplyRecord = serde_json::from_slice(&encoded).expect("decode journal");
+        let mut worker = Worker::default();
+        worker.restore_apply_record(decoded).expect("restore journal");
+        assert!(worker.apply_record().is_some());
+        assert!(worker
+            .restore_apply_record(ApplyRecord { previous_value: f32::NAN, generation: 0, ..record })
+            .is_err());
+    }
+
+    #[test]
     fn apply_with_record_requires_a_fresh_catalog_value() {
         let mut worker = Worker::default();
         let mapping = MappingIdentity {
@@ -1415,6 +2849,40 @@ mod tests {
         };
         worker.apply_restore_intent(&intent, 2, Some(91), true).expect("restore queues");
         assert!(worker.accept_frame(br#"[{"reply":91,"message":"setControl"}]"#).is_ok());
+    }
+
+    #[test]
+    fn governor_settings_request_is_confirmed_bounded_and_scalar() {
+        let worker = Worker::default();
+        let frame = worker
+            .prepare_set_governor_settings(0, "performance".into(), Some(45), true)
+            .expect("governor settings queues");
+        let text = String::from_utf8_lossy(&frame);
+        assert!(text.contains("setGovernorSettings"));
+        assert!(text.contains("performance"));
+        assert!(worker
+            .prepare_set_governor_settings(0, "performance".into(), None, false)
+            .is_err());
+        assert!(worker.prepare_set_governor_settings(0, String::new(), None, true).is_err());
+        assert!(worker.prepare_set_governor_settings(1, "performance".into(), None, true).is_err());
+    }
+
+    #[test]
+    fn status_monitor_query_is_generation_checked_and_boolean() {
+        let worker = Worker::default();
+        let frame =
+            worker.prepare_get_show_status_monitor(0, Some(46)).expect("status monitor query");
+        assert!(String::from_utf8_lossy(&frame).contains("getShowStatusMonitor"));
+        assert!(worker.prepare_get_show_status_monitor(1, None).is_err());
+    }
+
+    #[test]
+    fn wifi_regulatory_domain_query_is_generation_checked() {
+        let worker = Worker::default();
+        let frame =
+            worker.prepare_get_wifi_regulatory_domains(0, Some(47)).expect("Wi-Fi domain query");
+        assert!(String::from_utf8_lossy(&frame).contains("getWifiRegulatoryDomains"));
+        assert!(worker.prepare_get_wifi_regulatory_domains(1, None).is_err());
     }
 
     #[test]

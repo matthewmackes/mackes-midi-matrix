@@ -39,4 +39,18 @@ for forbidden in ("TLS/PSK frame/session suite", "MACKES TLS peer", "mode `0666`
     if forbidden in implementation:
         raise SystemExit(f"superseded implementation text remains: {forbidden}")
 
+board = (ROOT / "docs/worklist-execution-board.md").read_text(encoding="utf-8")
+summary = re.search(r"current worklist state: (\d+) complete, (\d+) in progress, (\d+) not started \((\d+) total", board)
+if not summary:
+    raise SystemExit("execution board lacks a current worklist summary")
+actual = (
+    len(re.findall(r"^#### \[x\] W", TEXT, re.M)),
+    len(re.findall(r"^#### \[>] W", TEXT, re.M)),
+    len(re.findall(r"^#### \[ \] W", TEXT, re.M)),
+    len(ids),
+)
+reported = tuple(int(value) for value in summary.groups())
+if actual != reported:
+    raise SystemExit(f"execution board count drift: reported={reported}, actual={actual}")
+
 print(f"worklist checks passed ({len(ids)} items)")

@@ -11,7 +11,52 @@ pub(crate) const fn pipedal_snapshot_request() -> mackes_ipc::PiPedalRequest {
         instance_id: None,
         client_id: None,
         value: None,
+        enabled: None,
+        use_mod_ui: None,
+        title: None,
+        color_key: None,
+        volume_db: None,
+        preview_input: None,
+        midi_listener_handle: None,
+        cancel_midi_listener: None,
+        monitor_client_handle: None,
+        property_uri: None,
+        cancel_patch_monitor: None,
+        favorites: None,
+        query_show_status_monitor: None,
+        bank_instance_id: None,
+        preset_name: None,
+        save_after_instance_id: None,
+        plugin_instance_id: None,
+        plugin_preset_name: None,
+        load_preset_instance_id: None,
     }
+}
+
+/// Builds the bounded, confirmed persisted-target repair request used by the CLI.
+#[must_use]
+pub(crate) fn pipedal_repair_request(
+    generation: u64,
+    physical_control_id: &str,
+    plugin_uri: &str,
+    symbol: &str,
+) -> serde_json::Value {
+    serde_json::json!({
+        "operation": "repair",
+        "generation": generation,
+        "confirm": true,
+        "physical_control_id": physical_control_id,
+        "mapping": {"physical_control_id": physical_control_id, "plugin_uri": plugin_uri, "symbol": symbol}
+    })
+}
+
+fn save_with_observed_revision(
+    path: &std::path::Path,
+    observed: &mackes_config::ConfigDocument,
+    updated: &mackes_config::ConfigDocument,
+) -> Result<(), String> {
+    let revision = mackes_config::document_revision(observed)?;
+    mackes_config::save_if_revision(path, updated, 10, &revision).map_err(|error| error.to_string())
 }
 
 pub(crate) fn reflex_pcm70_preset(
@@ -51,6 +96,21 @@ pub(crate) fn reflex_pcm70_preset(
 
 pub(crate) fn novation_command(args: &[String]) -> ! {
     let result = match args {
+        [action, flag] if action == "bind" && flag == "--help" => {
+            Ok("usage: novation bind <config> <stable-id> [template 0..15]".to_owned())
+        }
+        [action, flag] if action == "candidates" && flag == "--help" => {
+            Ok("usage: novation candidates <endpoint> [limit]".to_owned())
+        }
+        [action, flag] if action == "rescan" && flag == "--help" => {
+            Ok("usage: novation rescan [--json]".to_owned())
+        }
+        [action, flag] if action == "rebind" && flag == "--help" => {
+            Ok("usage: novation rebind <stable-id> [template 0..15] [--json]".to_owned())
+        }
+        [action, flag] if action == "status" && flag == "--help" => {
+            Ok("usage: novation status [--json]".to_owned())
+        }
         [action, endpoint] if action == "candidates" => {
             print_learn(endpoint, 128);
             std::process::exit(0)
@@ -68,7 +128,17 @@ pub(crate) fn novation_command(args: &[String]) -> ! {
         }
         [action] if action == "status" => Ok(novation_status(false)),
         [action, flag] if action == "status" && flag == "--json" => Ok(novation_status(true)),
-        [action] if action == "rescan" || action == "rebind" => Ok(rescan_cli(false)),
+        [action, stable_id, flag] if action == "rebind" && flag == "--json" => {
+            rebind_novation_cli(stable_id, None, true)
+        }
+        [action, flag] if action == "rebind" && flag == "--json" => {
+            Err("usage: novation rebind <stable-id> [template] --json".into())
+        }
+        [action, stable_id] if action == "rebind" => rebind_novation_cli(stable_id, None, false),
+        [action, stable_id, template] if action == "rebind" => {
+            rebind_novation_cli(stable_id, Some(template), false)
+        }
+        [action] if action == "rescan" => Ok(rescan_cli(false)),
         [action] => novation_assignment(action, 0, None),
         [action, generation] => generation.parse::<u64>().map_or_else(
             |_| Err("invalid assignment generation".to_owned()),
@@ -118,6 +188,7 @@ pub(crate) fn bind_novation_cli(
     }
     let path = std::path::Path::new(path);
     let mut document = mackes_config::load(path).map_err(|error| error.to_string())?;
+    let observed = document.clone();
     document.settings.novation_device = Some(mackes_config::NovationDeviceConfig {
         version: 1,
         stable_id: Some(stable_id.to_owned()),
@@ -126,7 +197,7 @@ pub(crate) fn bind_novation_cli(
         feedback_enabled: true,
     });
     mackes_config::validate(&document)?;
-    mackes_config::save(path, &document, 10).map_err(|error| error.to_string())
+    save_with_observed_revision(path, &observed, &document)
 }
 
 pub(crate) fn set_default_provider_cli(
@@ -142,7 +213,7 @@ pub(crate) fn set_default_provider_cli(
     let path = std::path::Path::new(path);
     let document = mackes_config::load(path).map_err(|error| error.to_string())?;
     let updated = mackes_config::set_default_provider(&document, capability, profile_id)?;
-    mackes_config::save(path, &updated, 10).map_err(|error| error.to_string())
+    save_with_observed_revision(path, &document, &updated)
 }
 
 pub(crate) fn migrate_config_cli(path: &str, dry_run: bool, json: bool) -> Result<String, String> {
@@ -162,6 +233,35 @@ pub(crate) fn rescan_cli(json: bool) -> String {
         return response;
     }
     "native endpoint rescan scheduled".into()
+}
+
+pub(crate) fn rebind_novation_cli(
+    stable_id: &str,
+    template: Option<&str>,
+    json: bool,
+) -> Result<String, String> {
+    if stable_id.is_empty() || stable_id.len() > 128 || stable_id != stable_id.trim() {
+        return Err("stable Novation identity must be a non-empty bounded token".into());
+    }
+    let template = template
+        .map(|value| value.parse::<u8>().map_err(|_| "template must be 0..15".to_owned()))
+        .transpose()?
+        .unwrap_or(mackes_profiles::LAUNCH_CONTROL_MK2_FACTORY1_SLOT);
+    if template >= 16 {
+        return Err("template must be 0..15".into());
+    }
+    let payload = serde_json::json!({"action":"rebind","stable_id":stable_id,"template":template});
+    let response = daemon_request(
+        mackes_ipc::Command::Rescan,
+        &serde_json::to_vec(&payload).map_err(|error| error.to_string())?,
+    );
+    if json {
+        Ok(response)
+    } else if response.contains("\"ok\":true") {
+        Ok(format!("rebound {stable_id}"))
+    } else {
+        Err(response)
+    }
 }
 
 pub(crate) fn pipedal_mappings_cli(path: &str, json: bool) -> Result<String, String> {
@@ -232,7 +332,7 @@ pub(crate) fn register_endpoint_cli(
         role: option("role"),
     };
     let updated = mackes_config::register_endpoint(&document, endpoint)?;
-    mackes_config::save(std::path::Path::new(path), &updated, 10).map_err(|e| e.to_string())
+    save_with_observed_revision(std::path::Path::new(path), &document, &updated)
 }
 
 pub(crate) fn restore_novation_template_cli(path: &str) -> Result<(), String> {
@@ -258,13 +358,14 @@ pub(crate) fn restore_novation_template_cli(path: &str) -> Result<(), String> {
             })
         })
         .collect::<Result<Vec<_>, String>>()?;
+    let observed = document.clone();
     let mut updated = document;
     updated.settings.launch_control_template = Some(mackes_config::LaunchControlTemplateConfig {
         template: mackes_profiles::LAUNCH_CONTROL_MK2_FACTORY1_SLOT,
         assignments,
     });
     mackes_config::validate(&updated)?;
-    mackes_config::save(std::path::Path::new(path), &updated, 10).map_err(|e| e.to_string())
+    save_with_observed_revision(std::path::Path::new(path), &observed, &updated)
 }
 
 pub(crate) fn print_default_provider(
@@ -488,8 +589,7 @@ pub(crate) fn scene_action_add_cli(
             },
         )?;
         let updated = mackes_config::replace_project(&document, updated_project)?;
-        mackes_config::save(std::path::Path::new(path), &updated, 10)
-            .map_err(|error| error.to_string())?;
+        save_with_observed_revision(std::path::Path::new(path), &document, &updated)?;
         Ok(())
     })();
     match result {
@@ -531,8 +631,7 @@ pub(crate) fn scene_action_remove_cli(
             .ok_or_else(|| format!("project '{project_id}' was not found"))?;
         let updated_project = mackes_config::remove_scene_action(project, scene_id, action_id)?;
         let updated = mackes_config::replace_project(&document, updated_project)?;
-        mackes_config::save(std::path::Path::new(path), &updated, 10)
-            .map_err(|error| error.to_string())?;
+        save_with_observed_revision(std::path::Path::new(path), &document, &updated)?;
         Ok(())
     })();
     match result {

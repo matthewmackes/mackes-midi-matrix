@@ -41,6 +41,28 @@ pub fn persist_json_atomic(path: &Path, value: &serde_json::Value, suffix: &str)
     result
 }
 
+pub fn pipedal_undo_path(config_path: &Path) -> std::path::PathBuf {
+    config_path.with_extension("pipedal.undo.json")
+}
+
+pub fn persist_pipedal_undo(
+    config_path: &Path,
+    record: Option<&mackes_pipedal_adapter::ApplyRecord>,
+) -> io::Result<()> {
+    let path = pipedal_undo_path(config_path);
+    match record {
+        Some(record) => {
+            let value = serde_json::to_value(record).map_err(io::Error::other)?;
+            persist_json_atomic(&path, &value, "pipedal.undo.json")
+        }
+        None => match std::fs::remove_file(path) {
+            Ok(()) => Ok(()),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
+            Err(error) => Err(error),
+        },
+    }
+}
+
 /// Recovers a previously prepared two-file JSON commit, if present.
 pub fn recover_json_pair(journal: &Path) -> io::Result<bool> {
     let metadata = match std::fs::metadata(journal) {
@@ -347,7 +369,16 @@ pub fn backup_response(generation: u64, path: Option<&Path>, request: Option<&[u
                 }
                 let document = mackes_config::parse(content, Path::new("portable-import.json5"))
                     .map_err(|error| error.to_string())?;
-                mackes_config::save(config, &document, 3).map_err(|error| error.to_string())
+                match mackes_config::load(config) {
+                    Ok(current) => {
+                        let expected_revision = mackes_config::document_revision(&current)?;
+                        mackes_config::save_if_revision(config, &document, 3, &expected_revision)
+                            .map_err(|error| error.to_string())
+                    }
+                    Err(_) => {
+                        mackes_config::save(config, &document, 3).map_err(|error| error.to_string())
+                    }
+                }
             });
         return match result {
             Ok(()) => {

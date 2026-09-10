@@ -6,13 +6,13 @@ use std::{
     collections::VecDeque,
     io::{Read, Write},
     net::{TcpListener, TcpStream},
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::{
         atomic::{AtomicU64, Ordering},
         Mutex, OnceLock,
     },
     thread,
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 const DEFAULT_BIND: &str = "0.0.0.0:8081";
@@ -21,8 +21,12 @@ const DEFAULT_ORIGIN: &str = "http://localhost:8081";
 const CLIENT_IO_TIMEOUT: Duration = Duration::from_secs(5);
 static NEXT_REQUEST_ID: AtomicU64 = AtomicU64::new(1);
 static OPERATION_CACHE: OnceLock<Mutex<VecDeque<(String, String, HttpResponse)>>> = OnceLock::new();
+type ReadCacheEntry = (String, String, Instant, Vec<u8>);
+static READ_CACHE: OnceLock<Mutex<Vec<ReadCacheEntry>>> = OnceLock::new();
+static READ_FLIGHT: OnceLock<Mutex<()>> = OnceLock::new();
 const OPERATION_CACHE_CAPACITY: usize = 256;
 const OPERATION_CACHE_PATH: &str = "/var/lib/mackes-midi-matrix/web-operation-cache.json";
+const READ_CACHE_TTL: Duration = Duration::from_millis(100);
 
 fn main() {
     let (bind, socket, origin) = arguments();
@@ -72,6 +76,54 @@ fn usage(message: &str) -> ! {
     eprintln!("mackes-web: {message}");
     eprintln!("usage: mackes-web [--bind ADDRESS] [--socket PATH] [--origin URL]");
     std::process::exit(2);
+}
+
+fn cached_read(socket: &Path, command: Command) -> Option<Vec<u8>> {
+    if !matches!(
+        command,
+        Command::DeviceQuery
+            | Command::Endpoints
+            | Command::Health
+            | Command::Mappings
+            | Command::Snapshot
+    ) {
+        return None;
+    }
+    let key = socket.display().to_string();
+    let command = format!("{command:?}");
+    let cache = READ_CACHE.get_or_init(|| Mutex::new(Vec::new()));
+    let mut entries = cache.lock().ok()?;
+    entries.retain(|(_, tag, created, _)| {
+        let ttl = if tag == "Mappings" { Duration::from_secs(2) } else { READ_CACHE_TTL };
+        created.elapsed() < ttl
+    });
+    entries
+        .iter()
+        .find(|(path, tag, _, _)| path == &key && tag == &command)
+        .map(|(_, _, _, body)| body.clone())
+}
+
+fn store_read(socket: &Path, command: Command, body: &[u8]) {
+    if !matches!(
+        command,
+        Command::DeviceQuery
+            | Command::Endpoints
+            | Command::Health
+            | Command::Mappings
+            | Command::Snapshot
+    ) {
+        return;
+    }
+    let key = socket.display().to_string();
+    let tag = format!("{command:?}");
+    let cache = READ_CACHE.get_or_init(|| Mutex::new(Vec::new()));
+    if let Ok(mut entries) = cache.lock() {
+        entries.retain(|(path, command, created, _)| {
+            let ttl = if command == "Mappings" { Duration::from_secs(2) } else { READ_CACHE_TTL };
+            created.elapsed() < ttl && !(path == &key && command == &tag)
+        });
+        entries.push((key, tag, Instant::now(), body.to_vec()));
+    }
 }
 
 fn serve(mut stream: TcpStream, socket: &PathBuf, origin: &str) {
@@ -257,7 +309,19 @@ fn route(request: &HttpRequest, socket: &PathBuf, origin: &str) -> HttpResponse 
         }
         (
             "GET",
-            "/state" | "/mappings" | "/routes" | "/scenes" | "/devices" | "/system" | "/monitor",
+            "/state"
+            | "/mappings"
+            | "/routes"
+            | "/scenes"
+            | "/devices"
+            | "/devices/novation"
+            | "/recovery"
+            | "/system"
+            | "/system/configuration"
+            | "/system/configuration/raw"
+            | "/system/backups"
+            | "/system/diagnostics"
+            | "/monitor",
         ) => {
             return HttpResponse::asset(
                 200,
@@ -270,6 +334,24 @@ fn route(request: &HttpRequest, socket: &PathBuf, origin: &str) -> HttpResponse 
             return HttpResponse::new(
                 200,
                 serde_json::json!({
+                    "schema_version": 1,
+                    "generation": 0,
+                    "capabilities": [
+                        {"id": "configuration", "state": "available", "operations": ["read", "draft", "validate", "diff", "apply", "operation"]},
+                        {"id": "events", "state": "available", "operations": ["poll", "stream"]},
+                        {"id": "health", "state": "available", "operations": ["read"]},
+                        {"id": "state", "state": "available", "operations": ["read"]},
+                        {"id": "endpoints", "state": "available", "operations": ["read"]},
+                        {"id": "routes", "state": "available", "operations": ["read", "apply"]},
+                        {"id": "scenes", "state": "available", "operations": ["read", "apply"]},
+                        {"id": "devices", "state": "available", "operations": ["read"]},
+                        {"id": "assignment", "state": "available", "operations": ["read", "apply"]},
+                        {"id": "mappings", "state": "available", "operations": ["read", "apply"]},
+                        {"id": "pipedal", "state": "degraded", "operations": ["read", "apply"]},
+                        {"id": "monitor", "state": "available", "operations": ["read"]},
+                        {"id": "validation", "state": "available", "operations": ["read"]},
+                        {"id": "diagnostics", "state": "available", "operations": ["read"]}
+                    ],
                     "api": "v1",
                     "port": 8081,
                     "reads": ["health", "state", "capabilities", "endpoints", "routes", "scenes", "devices", "novation", "assignment", "mappings", "pipedal", "monitor", "backups", "configuration", "validation", "diagnostics", "diagnostics_bundle"],
@@ -317,6 +399,15 @@ fn route(request: &HttpRequest, socket: &PathBuf, origin: &str) -> HttpResponse 
             .expect("bounded diagnostics bundle response");
         }
         ("GET", "/api/v1/novation") => return novation_snapshot(socket),
+        ("GET", "/api/v1/rtp") => return rtp_snapshot(socket),
+        ("GET", "/favicon.ico") => {
+            return HttpResponse::asset(
+                200,
+                br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><rect width="16" height="16" rx="3" fill="#161616"/><path d="M3 4h10v2H9v6H7V6H3z" fill="#78a9ff"/></svg>"##.to_vec(),
+                "image/svg+xml",
+            )
+            .expect("bounded favicon response");
+        }
         ("GET", "/assets/app.js") => {
             return HttpResponse::asset(
                 200,
@@ -324,6 +415,46 @@ fn route(request: &HttpRequest, socket: &PathBuf, origin: &str) -> HttpResponse 
                 "text/javascript; charset=utf-8",
             )
             .expect("bounded script response");
+        }
+        ("GET", "/assets/navigation.js") => {
+            return HttpResponse::asset(
+                200,
+                include_bytes!("../static/navigation.js").to_vec(),
+                "text/javascript; charset=utf-8",
+            )
+            .expect("bounded navigation script response");
+        }
+        ("GET", "/assets/health.js") => {
+            return HttpResponse::asset(
+                200,
+                include_bytes!("../static/health.js").to_vec(),
+                "text/javascript; charset=utf-8",
+            )
+            .expect("bounded health script response");
+        }
+        ("GET", "/assets/feature_catalog.js") => {
+            return HttpResponse::asset(
+                200,
+                include_bytes!("../static/feature_catalog.js").to_vec(),
+                "text/javascript; charset=utf-8",
+            )
+            .expect("bounded feature catalog script response");
+        }
+        ("GET", "/assets/feature_renderer.js") => {
+            return HttpResponse::asset(
+                200,
+                include_bytes!("../static/feature_renderer.js").to_vec(),
+                "text/javascript; charset=utf-8",
+            )
+            .expect("bounded feature renderer script response");
+        }
+        ("GET", "/assets/state_store.js") => {
+            return HttpResponse::asset(
+                200,
+                include_bytes!("../static/state_store.js").to_vec(),
+                "text/javascript; charset=utf-8",
+            )
+            .expect("bounded state store script response");
         }
         ("GET", "/assets/app.css") => {
             return HttpResponse::asset(
@@ -383,11 +514,29 @@ fn route(request: &HttpRequest, socket: &PathBuf, origin: &str) -> HttpResponse 
         command,
         payload,
     };
+    let _read_flight = if matches!(
+        command,
+        Command::DeviceQuery
+            | Command::Endpoints
+            | Command::Health
+            | Command::Mappings
+            | Command::Snapshot
+    ) {
+        Some(READ_FLIGHT.get_or_init(|| Mutex::new(())).lock().expect("read flight lock"))
+    } else {
+        None
+    };
+    if let Some(body) = cached_read(socket, command) {
+        return HttpResponse::new(200, body, true).expect("bounded cached daemon response");
+    }
     let policy =
         mackes_ipc::ReconnectPolicy::new(3, Duration::from_millis(25), Duration::from_millis(250))
             .expect("valid reconnect policy");
     match LocalClient::request_with_policy(socket, policy, &envelope) {
-        Ok((body, _)) => HttpResponse::new(200, body, true).expect("bounded daemon response"),
+        Ok((body, _)) => {
+            store_read(socket, command, &body);
+            HttpResponse::new(200, body, true).expect("bounded daemon response")
+        }
         Err(error) => HttpResponse::new(
             503,
             serde_json::json!({"code":"daemon_unavailable","message":error})
@@ -515,6 +664,7 @@ fn sysex_operation(request: &HttpRequest, socket: &PathBuf) -> HttpResponse {
     }
 }
 
+#[allow(clippy::too_many_lines)]
 fn configuration_operation(request: &HttpRequest, socket: &PathBuf) -> HttpResponse {
     let json = request.headers.iter().find(|(name, _)| name == "content-type").is_some_and(
         |(_, value)| {
@@ -543,8 +693,36 @@ fn configuration_operation(request: &HttpRequest, socket: &PathBuf) -> HttpRespo
             .expect("bounded configuration error")
         }
     };
-    if value.get("confirm").and_then(serde_json::Value::as_bool) != Some(true)
-        || (value.get("setlists").is_none() && value.get("learned_mappings").is_none())
+    let operation = value.get("operation").and_then(serde_json::Value::as_str).unwrap_or("apply");
+    if !matches!(operation, "draft" | "validate" | "diff" | "apply") {
+        return HttpResponse::new(
+            400,
+            br#"{"code":"invalid_configuration_operation"}"#.to_vec(),
+            true,
+        )
+        .expect("bounded configuration operation error");
+    }
+    for field in ["draft_id", "operation_id"] {
+        if let Some(value) = value.get(field) {
+            if !value.is_string()
+                || value.as_str().is_some_and(|value| value.is_empty() || value.len() > 128)
+            {
+                return HttpResponse::new(
+                    400,
+                    br#"{"code":"invalid_configuration_identifier"}"#.to_vec(),
+                    true,
+                )
+                .expect("bounded configuration identifier error");
+            }
+        }
+    }
+    let has_document =
+        value.get("configuration").is_some() || value.get("configuration_json5").is_some();
+    let has_legacy_patch =
+        value.get("setlists").is_some() || value.get("learned_mappings").is_some();
+    if (operation == "apply"
+        && value.get("confirm").and_then(serde_json::Value::as_bool) != Some(true))
+        || (!has_document && !has_legacy_patch)
     {
         return HttpResponse::new(
             400,
@@ -552,6 +730,16 @@ fn configuration_operation(request: &HttpRequest, socket: &PathBuf) -> HttpRespo
             true,
         )
         .expect("bounded configuration confirmation error");
+    }
+    if let Some(revision) = value.get("configuration_revision") {
+        if !revision.is_string() || revision.as_str().is_some_and(|value| value.len() > 128) {
+            return HttpResponse::new(
+                400,
+                br#"{"code":"invalid_configuration_revision"}"#.to_vec(),
+                true,
+            )
+            .expect("bounded configuration revision error");
+        }
     }
     value.as_object_mut().expect("configuration object").remove("confirm");
     let envelope = Envelope {
@@ -566,7 +754,31 @@ fn configuration_operation(request: &HttpRequest, socket: &PathBuf) -> HttpRespo
             .expect("valid reconnect policy");
     match LocalClient::request_with_policy(socket, policy, &envelope) {
         Ok((body, _)) => {
-            HttpResponse::new(200, body, true).expect("bounded configuration response")
+            let parsed = serde_json::from_slice::<serde_json::Value>(&body).ok();
+            let status = parsed
+                .as_ref()
+                .and_then(|value| {
+                    value.get("ok").and_then(serde_json::Value::as_bool).map(|ok| {
+                        if ok {
+                            200
+                        } else {
+                            let error = value
+                                .get("error")
+                                .and_then(serde_json::Value::as_str)
+                                .unwrap_or_default();
+                            if error.contains("concurrent")
+                                || error.contains("revision")
+                                || error.contains("conflict")
+                            {
+                                409
+                            } else {
+                                422
+                            }
+                        }
+                    })
+                })
+                .unwrap_or(502);
+            HttpResponse::new(status, body, true).expect("bounded configuration response")
         }
         Err(error) => HttpResponse::new(
             503,
@@ -666,6 +878,10 @@ fn pipedal_operation(request: &HttpRequest, socket: &PathBuf) -> HttpResponse {
             .expect("bounded error response");
         }
     };
+    if pipedal.is_mutation() && !pipedal.confirm {
+        return HttpResponse::new(400, br#"{"code":"confirmation_required"}"#.to_vec(), true)
+            .expect("bounded confirmation response");
+    }
     let request_id = NEXT_REQUEST_ID.fetch_add(1, Ordering::Relaxed).max(1);
     let envelope = Envelope {
         version: ProtocolVersion::current(),
@@ -750,7 +966,7 @@ fn novation_snapshot(socket: &PathBuf) -> HttpResponse {
     let envelope = Envelope {
         version: ProtocolVersion::current(),
         request_id: RequestId::new(request_id).expect("nonzero request ID"),
-        command: Command::Snapshot,
+        command: Command::NovationSnapshot,
         payload: b"{}".to_vec(),
     };
     let policy =
@@ -787,6 +1003,40 @@ fn novation_snapshot(socket: &PathBuf) -> HttpResponse {
     }
 }
 
+fn rtp_snapshot(socket: &PathBuf) -> HttpResponse {
+    let request_id = NEXT_REQUEST_ID.fetch_add(1, Ordering::Relaxed).max(1);
+    let envelope = Envelope {
+        version: ProtocolVersion::current(),
+        request_id: RequestId::new(request_id).expect("nonzero request ID"),
+        command: Command::Snapshot,
+        payload: b"{}".to_vec(),
+    };
+    let policy =
+        mackes_ipc::ReconnectPolicy::new(3, Duration::from_millis(25), Duration::from_millis(250))
+            .expect("valid reconnect policy");
+    match LocalClient::request_with_policy(socket, policy, &envelope) {
+        Ok((body, _)) => {
+            let Ok(snapshot) = serde_json::from_slice::<serde_json::Value>(&body) else {
+                return HttpResponse::new(
+                    502,
+                    br#"{"code":"malformed_daemon_response"}"#.to_vec(),
+                    true,
+                )
+                .expect("bounded response");
+            };
+            HttpResponse::new(200, serde_json::json!({"ok": snapshot.get("ok").and_then(serde_json::Value::as_bool).unwrap_or(false), "generation": snapshot.get("generation"), "rtp_midi": snapshot.get("rtp_midi")}).to_string().into_bytes(), true).expect("bounded response")
+        }
+        Err(error) => HttpResponse::new(
+            503,
+            serde_json::json!({"code":"daemon_unavailable","message":error})
+                .to_string()
+                .into_bytes(),
+            true,
+        )
+        .expect("bounded unavailable response"),
+    }
+}
+
 fn pipedal_snapshot(socket: &PathBuf) -> HttpResponse {
     let request_id = NEXT_REQUEST_ID.fetch_add(1, Ordering::Relaxed).max(1);
     let pipedal = mackes_ipc::PiPedalRequest {
@@ -798,6 +1048,25 @@ fn pipedal_snapshot(socket: &PathBuf) -> HttpResponse {
         instance_id: None,
         client_id: None,
         value: None,
+        enabled: None,
+        use_mod_ui: None,
+        title: None,
+        color_key: None,
+        volume_db: None,
+        preview_input: None,
+        midi_listener_handle: None,
+        cancel_midi_listener: None,
+        monitor_client_handle: None,
+        property_uri: None,
+        cancel_patch_monitor: None,
+        favorites: None,
+        query_show_status_monitor: None,
+        bank_instance_id: None,
+        preset_name: None,
+        save_after_instance_id: None,
+        plugin_instance_id: None,
+        plugin_preset_name: None,
+        load_preset_instance_id: None,
     };
     let envelope = Envelope {
         version: ProtocolVersion::current(),
@@ -843,13 +1112,32 @@ fn routes_operation(request: &HttpRequest, socket: &PathBuf) -> HttpResponse {
     };
     let valid_fields = value.as_object().is_some_and(|object| {
         object.keys().all(|key| {
-            matches!(key.as_str(), "action" | "routes" | "route_generation" | "hop_limit")
+            matches!(
+                key.as_str(),
+                "action" | "routes" | "route_generation" | "hop_limit" | "token" | "ssrc"
+            )
         })
     });
     let is_undo = value.get("action").and_then(serde_json::Value::as_str) == Some("undo");
+    let rtp_action = matches!(
+        value.get("action").and_then(serde_json::Value::as_str),
+        Some("rtp_establish" | "rtp_end")
+    );
     let valid = valid_fields
-        && value.get("route_generation").and_then(serde_json::Value::as_u64).is_some()
-        && if is_undo {
+        && (rtp_action
+            || value.get("route_generation").and_then(serde_json::Value::as_u64).is_some())
+        && if rtp_action {
+            value
+                .get("token")
+                .and_then(serde_json::Value::as_u64)
+                .is_some_and(|v| u32::try_from(v).is_ok())
+                && value
+                    .get("ssrc")
+                    .and_then(serde_json::Value::as_u64)
+                    .is_some_and(|v| u32::try_from(v).is_ok())
+                && value.get("routes").is_none()
+                && value.get("hop_limit").is_none()
+        } else if is_undo {
             value.get("routes").is_none() && value.get("hop_limit").is_none()
         } else {
             value.get("action").is_none()
@@ -893,6 +1181,7 @@ fn routes_operation(request: &HttpRequest, socket: &PathBuf) -> HttpResponse {
     }
 }
 
+#[allow(clippy::too_many_lines)]
 fn scenes_operation(request: &HttpRequest, socket: &PathBuf) -> HttpResponse {
     let json_content_type =
         request.headers.iter().find(|(name, _)| name == "content-type").is_some_and(
@@ -914,7 +1203,23 @@ fn scenes_operation(request: &HttpRequest, socket: &PathBuf) -> HttpResponse {
         }
     };
     let valid_fields = value.as_object().is_some_and(|object| {
-        object.keys().all(|key| matches!(key.as_str(), "scene" | "direction"))
+        object.keys().all(|key| {
+            matches!(
+                key.as_str(),
+                "scene"
+                    | "direction"
+                    | "actions"
+                    | "project"
+                    | "setlist"
+                    | "setlist_create"
+                    | "setlist_delete"
+                    | "project_copy"
+                    | "setlist_copy"
+                    | "preview_scene"
+                    | "preview_setlist"
+                    | "execute_scene"
+            )
+        })
     });
     let scene_valid = value.get("scene").and_then(serde_json::Value::as_str).is_some_and(|scene| {
         !scene.is_empty() && scene.len() <= mackes_web_contract::MAX_ID_LENGTH
@@ -925,8 +1230,119 @@ fn scenes_operation(request: &HttpRequest, socket: &PathBuf) -> HttpResponse {
         .is_some_and(|direction| matches!(direction, "next" | "previous"));
     let has_scene = value.get("scene").is_some();
     let has_direction = value.get("direction").is_some();
-    let valid_action = (has_scene && !has_direction && scene_valid)
-        || (has_direction && !has_scene && direction_valid);
+    let has_project = value.get("project").is_some();
+    let has_setlist = value.get("setlist").is_some();
+    let has_setlist_create = value.get("setlist_create").is_some();
+    let has_setlist_delete = value.get("setlist_delete").is_some();
+    let has_project_copy = value.get("project_copy").is_some();
+    let has_setlist_copy = value.get("setlist_copy").is_some();
+    let has_preview_scene = value.get("preview_scene").is_some();
+    let has_preview_setlist = value.get("preview_setlist").is_some();
+    let has_execute_scene = value.get("execute_scene").is_some();
+    let execute_scene_valid = value
+        .get("execute_scene")
+        .and_then(serde_json::Value::as_str)
+        .is_some_and(|id| !id.is_empty() && id.len() <= mackes_web_contract::MAX_ID_LENGTH);
+    let actions_valid = value
+        .get("actions")
+        .is_none_or(|actions| actions.as_array().is_some_and(|items| items.len() <= 128));
+    let project_valid = value.get("project").is_some_and(serde_json::Value::is_object);
+    let setlist_valid = value.get("setlist").is_some_and(serde_json::Value::is_object);
+    let setlist_create_valid =
+        value.get("setlist_create").is_some_and(serde_json::Value::is_object);
+    let setlist_delete_valid = value
+        .get("setlist_delete")
+        .and_then(serde_json::Value::as_str)
+        .is_some_and(|id| !id.is_empty() && id.len() <= mackes_web_contract::MAX_ID_LENGTH);
+    let project_copy_valid = value.get("project_copy").is_some_and(|copy| {
+        copy.get("source").and_then(serde_json::Value::as_str).is_some_and(|id| !id.is_empty())
+            && copy
+                .get("new_id")
+                .and_then(serde_json::Value::as_str)
+                .is_some_and(|id| !id.is_empty() && id.len() <= mackes_web_contract::MAX_ID_LENGTH)
+    });
+    let setlist_copy_valid = value.get("setlist_copy").is_some_and(|copy| {
+        copy.get("source").and_then(serde_json::Value::as_str).is_some_and(|id| !id.is_empty())
+            && copy
+                .get("new_id")
+                .and_then(serde_json::Value::as_str)
+                .is_some_and(|id| !id.is_empty() && id.len() <= mackes_web_contract::MAX_ID_LENGTH)
+    });
+    let preview_scene_valid = value
+        .get("preview_scene")
+        .and_then(serde_json::Value::as_str)
+        .is_some_and(|id| !id.is_empty() && id.len() <= mackes_web_contract::MAX_ID_LENGTH);
+    let preview_setlist_valid = value
+        .get("preview_setlist")
+        .and_then(serde_json::Value::as_str)
+        .is_some_and(|id| !id.is_empty() && id.len() <= mackes_web_contract::MAX_ID_LENGTH);
+    let valid_action =
+        (has_scene && !has_direction && !has_project && scene_valid && actions_valid)
+            || (!has_scene && !has_direction && has_project && project_valid)
+            || (!has_scene && !has_direction && !has_project && has_setlist && setlist_valid)
+            || (!has_scene
+                && !has_direction
+                && !has_project
+                && !has_setlist
+                && has_setlist_create
+                && setlist_create_valid)
+            || (!has_scene
+                && !has_direction
+                && !has_project
+                && !has_setlist
+                && !has_setlist_create
+                && has_setlist_delete
+                && setlist_delete_valid)
+            || (!has_scene
+                && !has_direction
+                && !has_project
+                && !has_setlist
+                && !has_setlist_create
+                && !has_setlist_delete
+                && has_project_copy
+                && project_copy_valid)
+            || (!has_scene
+                && !has_direction
+                && !has_project
+                && !has_setlist
+                && !has_setlist_create
+                && !has_setlist_delete
+                && !has_project_copy
+                && !has_setlist_copy
+                && has_preview_scene
+                && preview_scene_valid)
+            || (!has_scene
+                && !has_direction
+                && !has_project
+                && !has_setlist
+                && !has_setlist_create
+                && !has_setlist_delete
+                && !has_project_copy
+                && !has_setlist_copy
+                && !has_preview_scene
+                && has_preview_setlist
+                && preview_setlist_valid)
+            || (!has_scene
+                && !has_direction
+                && !has_project
+                && !has_setlist
+                && !has_setlist_create
+                && !has_setlist_delete
+                && !has_project_copy
+                && !has_setlist_copy
+                && !has_preview_scene
+                && has_execute_scene
+                && execute_scene_valid)
+            || (!has_scene
+                && !has_direction
+                && !has_project
+                && !has_setlist
+                && !has_setlist_create
+                && !has_setlist_delete
+                && !has_project_copy
+                && has_setlist_copy
+                && setlist_copy_valid)
+            || (has_direction && !has_scene && direction_valid);
     if !valid_fields || !valid_action {
         return HttpResponse::new(
             400,
@@ -1008,6 +1424,12 @@ fn validate_device_control_payload(
     {
         return Err("device_control identity fields are invalid");
     }
+    // Reflex reset is a documented device operation rather than a MIDI
+    // parameter.  The daemon deliberately accepts it without channel/value;
+    // keep the browser boundary aligned with that typed contract.
+    if profile == Some("lexicon.reflex") && control == Some("system-reset") {
+        return Ok(());
+    }
     if object.get("channel").and_then(serde_json::Value::as_u64).is_none_or(|value| value > 15)
         || object
             .get("value")
@@ -1015,6 +1437,25 @@ fn validate_device_control_payload(
             .is_none_or(|value| value > u16::MAX.into())
     {
         return Err("device_control channel or value is out of range");
+    }
+    Ok(())
+}
+
+fn validate_rebind_payload(payload: Option<&serde_json::Value>) -> Result<(), &'static str> {
+    let object =
+        payload.and_then(serde_json::Value::as_object).ok_or("rebind payload is required")?;
+    let stable_id = object
+        .get("stable_id")
+        .and_then(serde_json::Value::as_str)
+        .ok_or("rebind stable_id is required")?;
+    if stable_id.is_empty()
+        || stable_id.len() > mackes_web_contract::MAX_ID_LENGTH
+        || stable_id != stable_id.trim()
+    {
+        return Err("rebind stable_id is invalid");
+    }
+    if object.get("template").and_then(serde_json::Value::as_u64).is_none_or(|value| value >= 16) {
+        return Err("rebind template must be 0..15");
     }
     Ok(())
 }
@@ -1070,7 +1511,20 @@ fn operation(request: &HttpRequest, socket: &PathBuf) -> HttpResponse {
             .expect("bounded request reuse response");
     }
     let command = match parsed.operation.as_str() {
-        "rescan" => Command::Rescan,
+        "rescan" | "rebind_undo" => Command::Rescan,
+        "rebind" => {
+            if let Err(error) = validate_rebind_payload(parsed.payload.as_ref()) {
+                return HttpResponse::new(
+                    400,
+                    serde_json::json!({"code":"invalid_request","message":error})
+                        .to_string()
+                        .into_bytes(),
+                    true,
+                )
+                .expect("bounded error response");
+            }
+            Command::Rescan
+        }
         "panic" if parsed.confirm => Command::Panic,
         "device_control" if parsed.confirm => {
             if let Err(error) = validate_device_control_payload(parsed.payload.as_ref()) {
@@ -1102,6 +1556,15 @@ fn operation(request: &HttpRequest, socket: &PathBuf) -> HttpResponse {
     let payload = if command == Command::DeviceControl {
         serde_json::to_vec(parsed.payload.as_ref().expect("validated control payload"))
             .expect("typed control payload serializes")
+    } else if parsed.operation == "rebind" || parsed.operation == "rebind_undo" {
+        let mut value = parsed.payload.clone().unwrap_or_else(|| serde_json::json!({}));
+        value.as_object_mut().expect("validated rebind object").insert(
+            "action".into(),
+            serde_json::Value::String(
+                if parsed.operation == "rebind" { "rebind" } else { "rebind_undo" }.into(),
+            ),
+        );
+        serde_json::to_vec(&value).expect("typed rebind payload serializes")
     } else {
         serde_json::to_vec(&parsed).expect("typed request serializes")
     };
@@ -1216,6 +1679,77 @@ fn write_response(stream: &mut TcpStream, response: &HttpResponse) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn raw_configuration_editor_is_bound_to_shared_apply_boundary() {
+        let html = include_str!("../static/index.html");
+        let js = include_str!("../static/app.js");
+        assert!(html.contains("configuration-json5-draft"));
+        assert!(html.contains("apply-configuration-json5"));
+        assert!(js.contains("configuration_json5: draft"));
+        assert!(js.contains("/api/v1/configuration"));
+        assert!(js.contains("Configuration changed elsewhere"));
+    }
+
+    #[test]
+    fn bundled_shell_loads_feature_catalog_before_application() {
+        let html = include_str!("../static/index.html");
+        let js = include_str!("../static/app.js");
+        let catalog = html.find("/assets/feature_catalog.js").expect("feature catalog asset");
+        let app = html.find("/assets/app.js").expect("application asset");
+        assert!(catalog < app, "feature catalog must initialize before app.js");
+        assert!(js.contains("endpoints.some(device => /pipedal/i.test(JSON.stringify(device)))"));
+        assert!(js.contains("Novation ${lifecycle} · identity ${stableId} · LED ${ledPhase}"));
+        assert!(js.contains("Implemented operations"));
+        assert!(js.contains("runOperation(entry.operation)"));
+        assert!(js.contains("renderFaceplate(body);"));
+        assert!(js.contains("PiPedal authoritative snapshot"));
+        assert!(js.contains("preset/bank readback unavailable in this snapshot"));
+        assert!(js.contains("presetIndex.selectedInstanceId"));
+        assert!(js.contains("bankIndex.selectedBank"));
+        assert!(js.contains("pipedalCatalogTargets"));
+        assert!(js.contains("currentPedalboard readback unavailable in this snapshot"));
+        assert!(js.contains("bypass unavailable"));
+        assert!(js.contains("non-finite/unavailable"));
+        assert!(js.contains("currentPedalboard control values unavailable in this snapshot"));
+        assert!(js.contains("governor readback unavailable in this snapshot"));
+        assert!(js.contains("status monitor readback unavailable in this snapshot"));
+        assert!(js.contains("versionReadback"));
+        assert!(js.contains("PiPedal version readback unavailable in this snapshot"));
+        assert!(js.contains("Wi-Fi regulatory-domain readback unavailable in this snapshot"));
+        assert!(js.contains("Refresh status monitor"));
+        assert!(js.contains("Save current preset as"));
+        assert!(js.contains("Save plugin preset as"));
+        assert!(js.contains("control rows unavailable"));
+        assert!(js.contains("range unavailable"));
+        assert!(js.contains("symbol !== label"));
+        assert!(js.contains("plugin class unavailable"));
+        assert!(js.contains("authoritative mapping is ambiguous"));
+        assert!(js.contains("lifecycleReadback"));
+        assert!(js.contains("daemon lifecycle unavailable"));
+        assert!(js.contains("control domains are stale until a successful refresh"));
+    }
+
+    #[test]
+    fn event_stream_reconnect_is_sequence_aware() {
+        let js = include_str!("../static/app.js");
+        assert!(js.contains("/api/v1/events/stream?after_sequence=${lastSequence}"));
+        assert!(js.contains("eventStreamRetry"));
+        assert!(js.contains("snapshot_required"));
+    }
+
+    #[test]
+    fn capabilities_response_conforms_to_versioned_envelope() {
+        let request = HttpRequest::parse(
+            b"GET /api/v1/capabilities HTTP/1.1\r\nHost: localhost:8081\r\nOrigin: http://localhost:8081\r\n\r\n",
+        )
+        .expect("request");
+        let response = route(&request, &PathBuf::from("/unused"), "http://localhost:8081");
+        let value: serde_json::Value = serde_json::from_slice(&response.body).expect("JSON");
+        assert_eq!(value["schema_version"], 1);
+        assert!(value["generation"].is_u64());
+        assert!(value["capabilities"].as_array().is_some_and(|items| !items.is_empty()));
+    }
 
     #[test]
     fn unavailable_daemon_is_not_reported_as_success() {
@@ -1338,7 +1872,7 @@ mod tests {
             }
             assert!(String::from_utf8(request)
                 .expect("IPC UTF-8")
-                .contains("\"command\":\"snapshot\""));
+                .contains("\"command\":\"novation_snapshot\""));
             stream.write_all(b"{\"ok\":true,\"generation\":7,\"received\":99,\"novation_device\":{\"lifecycle\":\"Ready\"},\"novation_capabilities\":{\"led_count\":48},\"led\":{\"phase\":\"ready\"}}\n").expect("write response");
         });
         let response = novation_snapshot(&socket);
@@ -1403,6 +1937,12 @@ mod tests {
         })))
         .is_err());
         assert!(validate_device_control_payload(Some(&serde_json::json!({
+            "profile_id": "lexicon.reflex",
+            "control": "system-reset",
+            "destination": "lexicon-midi"
+        })))
+        .is_ok());
+        assert!(validate_device_control_payload(Some(&serde_json::json!({
             "profile_id": "default",
             "control": "cutoff",
             "channel": 1,
@@ -1434,9 +1974,46 @@ mod tests {
 
     #[test]
     fn configuration_boundary_rejects_unconfirmed_or_empty_writes_before_ipc() {
-        for body in
-            [br#"{"confirm":false,"setlists":[]}"#.as_slice(), br#"{"confirm":true}"#.as_slice()]
-        {
+        for body in [
+            br#"{"confirm":false,"setlists":[]}"#.as_slice(),
+            br#"{"confirm":true}"#.as_slice(),
+            br#"{"confirm":true,"setlists":[],"configuration_revision":7}"#.as_slice(),
+        ] {
+            let request = HttpRequest::parse(format!(
+                "POST /api/v1/configuration HTTP/1.1\r\nHost: localhost:8081\r\nOrigin: http://localhost:8081\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+                body.len(),
+                std::str::from_utf8(body).expect("JSON")
+            ).as_bytes()).expect("request");
+            assert_eq!(
+                configuration_operation(&request, &PathBuf::from("/never-open")).status,
+                400
+            );
+        }
+    }
+
+    #[test]
+    fn configuration_boundary_accepts_full_documents_and_draft_operations() {
+        for body in [
+            br#"{"operation":"draft","draft_id":"draft-1","operation_id":"op-1","configuration":{"schema_version":1}}"#.as_slice(),
+            br#"{"operation":"validate","configuration":{"schema_version":1}}"#.as_slice(),
+        ] {
+            let request = HttpRequest::parse(format!(
+                "POST /api/v1/configuration HTTP/1.1\r\nHost: localhost:8081\r\nOrigin: http://localhost:8081\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+                body.len(),
+                std::str::from_utf8(body).expect("JSON")
+            ).as_bytes()).expect("request");
+            // Validation succeeds at the web boundary and reaches the unavailable-daemon path.
+            assert_eq!(configuration_operation(&request, &PathBuf::from("/never-open")).status, 503);
+        }
+    }
+
+    #[test]
+    fn configuration_boundary_rejects_unknown_operation_and_unbounded_identifier() {
+        for body in [
+            br#"{"operation":"delete","configuration":{"schema_version":1}}"#.as_slice(),
+            br#"{"operation":"draft","draft_id":"","configuration":{"schema_version":1}}"#
+                .as_slice(),
+        ] {
             let request = HttpRequest::parse(format!(
                 "POST /api/v1/configuration HTTP/1.1\r\nHost: localhost:8081\r\nOrigin: http://localhost:8081\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
                 body.len(),
@@ -1679,6 +2256,42 @@ mod tests {
         .expect("request");
         let response = scenes_operation(&request, &socket);
         assert_eq!(response.status, 200);
+        worker.join().expect("fake daemon");
+        let _ = std::fs::remove_file(socket);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn scene_execution_forwards_explicit_typed_request() {
+        use std::{os::unix::net::UnixListener, thread};
+        let socket =
+            std::env::temp_dir().join(format!("mackes-web-execute-scene-{}", std::process::id()));
+        let _ = std::fs::remove_file(&socket);
+        let listener = UnixListener::bind(&socket).expect("bind fake daemon");
+        let worker = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().expect("accept web client");
+            let mut request = Vec::new();
+            let mut byte = [0_u8; 1];
+            while stream.read(&mut byte).expect("read request") == 1 {
+                request.push(byte[0]);
+                if byte[0] == b'\n' {
+                    break;
+                }
+            }
+            let request = String::from_utf8(request).expect("IPC UTF-8");
+            assert!(request.contains("\"command\":\"scenes\""));
+            assert!(request.contains("\"execute_scene\":\"scene-a\""));
+            stream.write_all(br#"{"ok":true,"generation":10,"executed_scene":"scene-a","activation_outcomes":[{"id":"a","outcome":"Succeeded"}]}
+"#).expect("write response");
+        });
+        let body = br#"{"execute_scene":"scene-a"}"#;
+        let request = HttpRequest::parse(format!(
+            "POST /api/v1/scenes HTTP/1.1\r\nHost: localhost:8081\r\nOrigin: http://localhost:8081\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+            body.len(), std::str::from_utf8(body).expect("JSON")
+        ).as_bytes()).expect("request");
+        let response = scenes_operation(&request, &socket);
+        assert_eq!(response.status, 200);
+        assert!(String::from_utf8_lossy(&response.body).contains("activation_outcomes"));
         worker.join().expect("fake daemon");
         let _ = std::fs::remove_file(socket);
     }
@@ -2182,6 +2795,7 @@ mod tests {
         assert!(!body.contains("W137-W139"));
         assert!(body.contains("W138-W139"));
         assert!(body.contains("remaining_mutations"));
+        assert!(body.contains("\"operation\""));
     }
 
     #[cfg(unix)]
@@ -2261,6 +2875,7 @@ mod tests {
         assert!(html.contains("Refresh PiPedal catalog"));
         assert!(html.contains("Run PiPedal operation"));
         assert!(html.contains("id=\"pipedal-operation-choice\""));
+        assert!(html.contains("id=\"pipedal-instance-id\""));
         assert!(html.contains("id=\"pipedal-mapping-choice\""));
         assert!(html.contains("id=\"pipedal-instance-id\""));
         assert!(html.contains("id=\"pipedal-value\""));
@@ -2275,6 +2890,11 @@ mod tests {
         assert!(html.contains("Commit assignment"));
         assert!(html.contains("Download capture"));
         assert!(html.contains("Novation physical control faceplate"));
+        assert!(html.contains("viewBox=\"0 0 1000 560\""));
+        assert!(html.contains("novation-diagnostics"));
+        assert!(html.contains("Novation control grid"));
+        assert!(html.contains("class=\"action-group\"><h3>Recovery"));
+        assert!(html.contains("class=\"action-group\"><summary>Configuration"));
         assert!(html.contains("Select scene"));
         assert!(html.contains("id=\"preview-scene\""));
         assert!(html.contains("id=\"scene-id\""));
@@ -2287,6 +2907,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::too_many_lines)]
     fn bundled_shell_script_preserves_deep_links_and_history() {
         let request =
             HttpRequest::parse(b"GET /assets/app.js HTTP/1.1\r\nHost: localhost:8081\r\n\r\n")
@@ -2320,6 +2941,52 @@ mod tests {
         assert!(script.contains("operation.dataset.state = 'pending'"));
         assert!(script.contains("operation.setAttribute('aria-busy', 'true')"));
         assert!(script.contains("operation.dataset.state = 'unknown'"));
+        assert!(script.contains("request.enabled = operationName === 'enable'"));
+        assert!(script.contains("supportsBypass"));
+        assert!(script.contains("['Enable', 'enable']"));
+        assert!(script.contains("use_mod_ui = true"));
+        assert!(script.contains("supportsTitle"));
+        assert!(script.contains("['Rename', 'rename']"));
+        assert!(script.contains("request.color_key = colorKey"));
+        assert!(script.contains("body: JSON.stringify({ preview_scene: scene })"));
+        assert!(script.contains(
+            "Scene preview outcome unknown; inspect authoritative state before retrying"
+        ));
+        assert!(script.contains("body: JSON.stringify({ preview_setlist: id })"));
+        assert!(script.contains("Dry-run only; no scene selected or executed."));
+        assert!(script.contains(
+            "Setlist preview outcome unknown; inspect authoritative state before retrying"
+        ));
+        assert!(script
+            .contains("body: JSON.stringify({ setlist_copy: { source: id, new_id: newId } })"));
+        assert!(script
+            .contains("Setlist copy outcome unknown; inspect authoritative state before retrying"));
+        assert!(script.contains("body: JSON.stringify({ setlist_delete: id })"));
+        assert!(script.contains("Delete setlist ${id}? This does not delete its projects."));
+        assert!(script.contains(
+            "Setlist deletion outcome unknown; inspect authoritative state before retrying"
+        ));
+        assert!(script
+            .contains("body: JSON.stringify({ project_copy: { source: id, new_id: newId } })"));
+        assert!(script
+            .contains("Project copy outcome unknown; inspect authoritative state before retrying"));
+        assert!(script.contains("schema_version: 1, project: entry"));
+        assert!(script.contains("Project ${id} exported from authoritative state."));
+        assert!(script.contains("Refreshing authoritative scenes, projects, and setlists"));
+        assert!(script.contains("body: JSON.stringify({ setlist: { id, projects } })"));
+        assert!(script.contains(
+            "Setlist reorder outcome unknown; inspect authoritative state before retrying"
+        ));
+        assert!(script.contains("schema_version: 1, setlist: { id, projects"));
+        assert!(script.contains("Setlist ${id} exported from authoritative state."));
+        assert!(script.contains("Replace projects in setlist ${id} with imported ordering?"));
+        assert!(script.contains(
+            "Setlist import outcome unknown; inspect authoritative state before retrying"
+        ));
+        assert!(script.contains("body: JSON.stringify({ setlist_create: { id, projects: [] } })"));
+        assert!(script.contains(
+            "Setlist creation outcome unknown; inspect authoritative state before retrying"
+        ));
         assert!(script.contains("Assignment outcome unknown; inspect state before retrying"));
         assert!(script
             .contains("new EventSource(`/api/v1/events/stream?after_sequence=${lastSequence}`)"));
@@ -2334,14 +3001,74 @@ mod tests {
         assert!(script.contains("bytes.length > 1024"));
         assert!(script.contains("sysex-bytes').value = ''"));
         assert!(script.contains("renderFaceplate(body)"));
+        assert!(script.contains("function boundedFetch("));
+        assert!(script.contains("const browserSmoke = window.location.hash.includes"));
+        assert!(script.contains("if (!browserSmoke) startEventStream()"));
+        assert!(script.contains(
+            "boundedFetch('/api/v1/novation', { signal: abortController.signal }, 12000)"
+        ));
+        assert!(script.contains("let viewLoadSequence = 0"));
+        assert!(script.contains("let activeViewAbortController = null"));
+        assert!(script.contains("activeViewAbortController?.abort()"));
+        assert!(script.contains("new AbortController()"));
+        assert!(script.contains("document.addEventListener('visibilitychange'"));
+        assert!(script.contains("if (document.hidden || browserSmoke) return;"));
+        assert!(script.contains("const loadSequence = ++viewLoadSequence"));
+        assert!(script.contains("if (loadSequence !== viewLoadSequence) return;"));
+        assert!(script.contains("fetch('/api/v1/mappings', { signal: controller.signal })"));
+        assert!(script.contains("renderFaceplate({ ...novationBody, mapping_registry:"));
+        assert!(script.contains("novationGridHeading.hidden = false"));
         assert!(script.contains("body.mapping_registry"));
         assert!(script.contains("led=${mapping.led || 'unspecified'}"));
         assert!(script.contains("knob-r${row}-c${col + 1}"));
+        assert!(script.contains("document.createElementNS(namespace, name)"));
+        assert!(script.contains("tabindex: 0, role: 'button'"));
+        assert!(script.contains("event.key === 'Enter' || event.key === ' '"));
+        assert!(script.contains("control.addEventListener('click', select)"));
+        assert!(script.contains("control.addEventListener('keydown'"));
+        assert!(script.contains("class: 'assignment-label'"));
+        assert!(script.contains("assignment.length > 14"));
+        assert!(script.contains("Novation assignments: ${assigned.length} active of ${ids.length}"));
+        assert!(script.contains("boundedFetch('/api/v1/health', {}, 5500)"));
+        assert!(script.contains("window.MackesHealth.status"));
+        assert!(script.contains("window.setInterval(refreshActiveView, 10000)"));
         assert!(script.contains("mapping-save-behavior"));
+        assert!(script.contains("mapping-preview"));
+        assert!(script.contains("explicit Apply remains required"));
+        assert!(script.contains("acknowledged; awaiting observed state."));
+        assert!(script.contains("observed after authoritative refresh."));
+        assert!(script.contains("rejected; draft remains available for correction."));
+        assert!(script.contains("outcome unknown; inspect authoritative state before retrying."));
         assert!(script.contains("operation: 'Behavior'"));
         assert!(script.contains("mappingMutation('Enabled'"));
         assert!(script.contains("mappingMutation('Delete'"));
         assert!(script.contains("mapping-toggle-enabled"));
+        assert!(script.contains("workspaceInspector"));
+        assert!(script.contains("showInspector("));
+        assert!(script.contains("Destination: ${destination}"));
+        assert!(script.contains("Source: ${source}"));
+        assert!(script.contains("mapping id: ${mapping.id"));
+        assert!(script.contains("routeEndpointLossless"));
+        assert!(script.contains(
+            "Route apply blocked: endpoint identifiers require a lossless numeric contract."
+        ));
+        assert!(script.contains(
+            "Readback and value domain are unknown until the authoritative profile supplies them."
+        ));
+        assert!(script.contains("readback/domain unknown"));
+        assert!(script.contains("workspace selected. Refresh to inspect authoritative state."));
+        assert!(script.contains("focusedId"));
+        assert!(script.contains("preventScroll: true"));
+        assert!(script.contains("Novation device refreshed"));
+        assert!(script.contains("Novation diagnostics unavailable in authoritative response."));
+        assert!(script.contains("favoritesReadback"));
+        assert!(script.contains("favorite plugin identities"));
+        assert!(script.contains("systemMidiReadback"));
+        assert!(script.contains("system MIDI bindings"));
+        assert!(script.contains("aria-description"));
+        assert!(script.contains("value range 0 to 127"));
+        assert!(script.contains("Unavailable until the qualified device is connected."));
+        assert!(script.contains("Route ${Number(card.dataset.routeIndex) + 1} selected"));
         let shell_request =
             HttpRequest::parse(b"GET / HTTP/1.1\r\nHost: localhost:8081\r\n\r\n").expect("request");
         let shell = String::from_utf8(
@@ -2350,12 +3077,26 @@ mod tests {
         .expect("HTML");
         assert!(shell.contains("mapping-source-min"));
         assert!(shell.contains("mapping-delete"));
+        assert!(shell.contains("workspace-inspector"));
     }
 
     #[test]
     fn workspace_deep_links_serve_the_shell() {
-        for path in ["/state", "/mappings", "/routes", "/scenes", "/devices", "/system", "/monitor"]
-        {
+        for path in [
+            "/state",
+            "/mappings",
+            "/routes",
+            "/scenes",
+            "/devices",
+            "/devices/novation",
+            "/recovery",
+            "/system",
+            "/system/configuration",
+            "/system/configuration/raw",
+            "/system/backups",
+            "/system/diagnostics",
+            "/monitor",
+        ] {
             let request = HttpRequest::parse(
                 format!("GET {path} HTTP/1.1\r\nHost: localhost:8081\r\n\r\n").as_bytes(),
             )
@@ -2367,7 +3108,7 @@ mod tests {
     }
 
     #[test]
-    fn bundled_styles_expose_shared_carbon_design_tokens() {
+    fn bundled_styles_expose_shared_design_tokens() {
         let request =
             HttpRequest::parse(b"GET /assets/app.css HTTP/1.1\r\nHost: localhost:8081\r\n\r\n")
                 .expect("request");
@@ -2392,5 +3133,80 @@ mod tests {
         assert!(css.contains("min-height: 2.75rem"));
         assert!(css.contains("@media (max-width: 42rem)"));
         assert!(css.contains("prefers-reduced-motion"));
+    }
+
+    #[test]
+    fn bundled_navigation_asset_is_served_same_origin() {
+        let request = HttpRequest::parse(
+            b"GET /assets/navigation.js HTTP/1.1\r\nHost: localhost:8081\r\n\r\n",
+        )
+        .expect("request");
+        let response = route(&request, &PathBuf::from("/missing"), "http://localhost:8081");
+        let script = String::from_utf8(response.body).expect("JavaScript");
+        assert_eq!(response.status, 200);
+        assert!(script.contains("MackesNavigation"));
+    }
+
+    #[test]
+    fn bundled_feature_catalog_asset_is_served_same_origin() {
+        let request = HttpRequest::parse(
+            b"GET /assets/feature_catalog.js HTTP/1.1\r\nHost: localhost:8081\r\n\r\n",
+        )
+        .expect("request");
+        let response = route(&request, &PathBuf::from("/missing"), "http://localhost:8081");
+        let script = String::from_utf8(response.body).expect("JavaScript");
+        assert_eq!(response.status, 200);
+        assert!(script.contains("MackesFeatureCatalog"));
+        assert!(script.contains("Novation Launch Control XL"));
+        assert!(script.contains("entriesFor"));
+    }
+
+    #[test]
+    fn bundled_feature_renderer_asset_is_served_same_origin() {
+        let request = HttpRequest::parse(
+            b"GET /assets/feature_renderer.js HTTP/1.1\r\nHost: localhost:8081\r\n\r\n",
+        )
+        .expect("request");
+        let response = route(&request, &PathBuf::from("/missing"), "http://localhost:8081");
+        let script = String::from_utf8(response.body).expect("JavaScript");
+        assert_eq!(response.status, 200);
+        assert!(script.contains("MackesFeatureRenderer"));
+        assert!(script.contains("searchableText"));
+    }
+
+    #[test]
+    fn bundled_state_store_asset_is_served_same_origin() {
+        let request = HttpRequest::parse(
+            b"GET /assets/state_store.js HTTP/1.1\r\nHost: localhost:8081\r\n\r\n",
+        )
+        .expect("request");
+        let response = route(&request, &PathBuf::from("/missing"), "http://localhost:8081");
+        let script = String::from_utf8(response.body).expect("JavaScript");
+        assert_eq!(response.status, 200);
+        assert!(script.contains("MackesStateStore"));
+        assert!(script.contains("generation"));
+    }
+
+    #[test]
+    fn favicon_is_served_same_origin_for_clean_browser_console() {
+        let request =
+            HttpRequest::parse(b"GET /favicon.ico HTTP/1.1\r\nHost: localhost:8081\r\n\r\n")
+                .expect("request");
+        let response = route(&request, &PathBuf::from("/missing"), "http://localhost:8081");
+        assert_eq!(response.status, 200);
+        assert!(String::from_utf8_lossy(&response.body).contains("<svg"));
+    }
+
+    #[test]
+    fn read_cache_coalesces_identical_reads_per_socket_and_command() {
+        let socket = PathBuf::from(format!("/tmp/mackes-read-cache-{}", std::process::id()));
+        store_read(&socket, Command::Health, br#"{"ok":true}"#);
+        assert_eq!(cached_read(&socket, Command::Health), Some(br#"{"ok":true}"#.to_vec()));
+        store_read(&socket, Command::DeviceQuery, br#"{"devices":[]}"#);
+        assert_eq!(cached_read(&socket, Command::DeviceQuery), Some(br#"{"devices":[]}"#.to_vec()));
+        store_read(&socket, Command::Endpoints, br#"{"endpoints":[]}"#);
+        assert_eq!(cached_read(&socket, Command::Endpoints), Some(br#"{"endpoints":[]}"#.to_vec()));
+        assert!(cached_read(&socket, Command::Mappings).is_none());
+        assert!(cached_read(&PathBuf::from("/tmp/other-socket"), Command::Health).is_none());
     }
 }

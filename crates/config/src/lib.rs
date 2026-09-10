@@ -12,6 +12,136 @@ use std::{
 /// Current configuration schema version.
 pub const CURRENT_SCHEMA_VERSION: u32 = 1;
 
+/// Returns a stable SHA-256 revision token for a validated configuration.
+///
+/// The token is derived from canonical JSON serialization and is independent
+/// of daemon reads, MIDI activity, or process lifetime.
+///
+/// # Errors
+///
+/// Returns an error if canonical serialization fails.
+pub fn document_revision(document: &ConfigDocument) -> Result<String, String> {
+    let encoded = serde_json::to_vec(document).map_err(|error| error.to_string())?;
+    let digest = Sha256::digest(encoded);
+    Ok(format!("sha256:{digest:x}"))
+}
+
+/// Maximum number of completed operation records retained for replay protection.
+pub const MAX_OPERATION_RECORDS: usize = 256;
+
+/// A durable terminal result for a client request. The request fingerprint makes retries safe.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct OperationRecord {
+    /// Client correlation identity.
+    pub request_id: String,
+    /// Canonical fingerprint of the request payload.
+    pub fingerprint: String,
+    /// Durable server operation identity.
+    pub operation_id: String,
+    /// JSON-serializable terminal outcome.
+    pub outcome: serde_json::Value,
+}
+
+/// Small atomically-replaced journal for idempotent configuration operations.
+#[derive(Clone, Debug)]
+pub struct OperationJournal {
+    path: PathBuf,
+    records: Vec<OperationRecord>,
+}
+
+impl OperationJournal {
+    /// Opens an existing journal, treating a missing journal as empty.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the journal cannot be read, decoded, or exceeds its bound.
+    pub fn open(path: impl Into<PathBuf>) -> Result<Self, String> {
+        let path = path.into();
+        let records = if path.exists() {
+            let bytes = fs::read(&path).map_err(|error| error.to_string())?;
+            serde_json::from_slice(&bytes).map_err(|error| error.to_string())?
+        } else {
+            Vec::new()
+        };
+        if records.len() > MAX_OPERATION_RECORDS {
+            return Err("operation journal exceeds record limit".into());
+        }
+        Ok(Self { path, records })
+    }
+
+    /// Returns a prior result, rejecting request-id reuse with a different payload fingerprint.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the request identity conflicts with a stored fingerprint.
+    pub fn lookup(
+        &self,
+        request_id: &str,
+        fingerprint: &str,
+    ) -> Result<Option<&OperationRecord>, String> {
+        let Some(record) = self.records.iter().find(|record| record.request_id == request_id)
+        else {
+            return Ok(None);
+        };
+        if record.fingerprint != fingerprint {
+            return Err("request_id was reused with a different fingerprint".into());
+        }
+        Ok(Some(record))
+    }
+
+    /// Appends a terminal result and atomically replaces the journal on disk.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for invalid identities, conflicting retries, serialization, or I/O.
+    pub fn record(&mut self, record: OperationRecord) -> Result<(), String> {
+        if record.request_id.is_empty()
+            || record.request_id.len() > 96
+            || record.fingerprint.is_empty()
+            || record.operation_id.is_empty()
+        {
+            return Err("operation record identity is invalid".into());
+        }
+        if self.lookup(&record.request_id, &record.fingerprint)?.is_some() {
+            return Ok(());
+        }
+        if self.records.iter().any(|existing| existing.request_id == record.request_id) {
+            return Err("request_id was reused with a different fingerprint".into());
+        }
+        self.records.push(record);
+        if self.records.len() > MAX_OPERATION_RECORDS {
+            self.records.remove(0);
+        }
+        let bytes = serde_json::to_vec_pretty(&self.records).map_err(|error| error.to_string())?;
+        let temp = self.path.with_extension("tmp");
+        let mut file = fs::File::create(&temp).map_err(|error| error.to_string())?;
+        file.write_all(&bytes).map_err(|error| error.to_string())?;
+        file.sync_all().map_err(|error| error.to_string())?;
+        fs::rename(&temp, &self.path).map_err(|error| error.to_string())?;
+        // Ensure the rename itself is durable before reporting a terminal outcome. Directory
+        // syncing is supported on Unix; other platforms retain the atomic rename guarantee.
+        #[cfg(unix)]
+        if let Some(parent) = self.path.parent() {
+            fs::File::open(parent)
+                .and_then(|directory| directory.sync_all())
+                .map_err(|error| error.to_string())?;
+        }
+        Ok(())
+    }
+
+    /// Returns the number of retained terminal records.
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.records.len()
+    }
+
+    /// Returns whether the journal contains no records.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.records.is_empty()
+    }
+}
+
 /// Result of validating a configuration path for CLI/TUI presentation.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 pub struct ValidationReport {
@@ -53,6 +183,9 @@ pub struct ConfigDocument {
     /// Resumable but inactive mapping drafts.
     #[serde(default)]
     pub control_mapping_drafts: Vec<ControlMappingDraft>,
+    /// Optional versioned multi-destination/layer projection.
+    #[serde(default)]
+    pub mapping_layers_v2: Option<MappingLayersV2>,
 }
 
 /// Validated mapping behavior applied between source and destination ranges.
@@ -79,6 +212,96 @@ fn default_curve() -> String {
 
 const fn default_mapping_range() -> (u16, u16) {
     (0, 127)
+}
+
+/// Versioned daemon-owned multi-destination mapping projection.
+#[allow(missing_docs)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct MappingLayersV2 {
+    pub schema_version: u32,
+    pub base: MappingLayerV2,
+    #[serde(default)]
+    pub layers: Vec<MappingLayerV2>,
+    #[serde(default)]
+    pub active_layer: Option<String>,
+}
+
+#[allow(missing_docs)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct MappingLayerV2 {
+    pub control_id: String,
+    #[serde(default)]
+    pub destinations: Vec<MappingDestinationV2>,
+}
+
+#[allow(missing_docs)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct MappingDestinationV2 {
+    pub id: String,
+    pub endpoint: String,
+    pub profile: String,
+    pub effect: String,
+    pub parameter: String,
+    pub channel: u8,
+    pub behavior: MappingBehavior,
+}
+
+#[allow(missing_docs)]
+impl MappingLayersV2 {
+    /// Validates the schema discriminator, identities, bounds, and active layer.
+    ///
+    /// # Errors
+    ///
+    /// Returns a descriptive error when any invariant is violated.
+    pub fn validate(&self) -> Result<(), String> {
+        if self.schema_version != 2 {
+            return Err("mapping layer schema_version must be 2".into());
+        }
+        let mut controls = std::collections::BTreeSet::new();
+        for layer in std::iter::once(&self.base).chain(self.layers.iter()) {
+            if layer.control_id.trim().is_empty() || !controls.insert(layer.control_id.as_str()) {
+                return Err("layer control_id is empty or duplicated".into());
+            }
+            let mut ids = std::collections::BTreeSet::new();
+            for destination in &layer.destinations {
+                if [
+                    &destination.id,
+                    &destination.endpoint,
+                    &destination.profile,
+                    &destination.effect,
+                    &destination.parameter,
+                ]
+                .iter()
+                .any(|v| v.trim().is_empty())
+                {
+                    return Err("mapping destination identity is required".into());
+                }
+                if !(1..=16).contains(&destination.channel) {
+                    return Err("mapping destination channel must be 1..=16".into());
+                }
+                if !ids.insert(destination.id.as_str()) {
+                    return Err("duplicate destination id".into());
+                }
+            }
+        }
+        if let Some(active) = &self.active_layer {
+            if !self.layers.iter().any(|layer| &layer.control_id == active) {
+                return Err("active_layer does not exist".into());
+            }
+        }
+        Ok(())
+    }
+
+    #[must_use]
+    pub fn effective_layer(&self) -> &MappingLayerV2 {
+        self.active_layer
+            .as_ref()
+            .and_then(|id| self.layers.iter().find(|layer| &layer.control_id == id))
+            .unwrap_or(&self.base)
+    }
 }
 
 /// Durable, complete hardware-first parameter mapping.
@@ -1556,6 +1779,24 @@ pub fn add_learned_mapping(
     Ok(candidate)
 }
 
+/// Replaces the complete learned-mapping collection transactionally.
+///
+/// This is the collection-level operation used by configuration imports and
+/// editors; unlike [`add_learned_mapping`], it cannot retain stale entries.
+///
+/// # Errors
+///
+/// Returns an error when the resulting document fails semantic validation.
+pub fn replace_learned_mappings(
+    document: &ConfigDocument,
+    mappings: Vec<LearnedMapping>,
+) -> Result<ConfigDocument, String> {
+    let mut candidate = document.clone();
+    candidate.learned_mappings = mappings;
+    validate(&candidate)?;
+    Ok(candidate)
+}
+
 /// Copies a project under a new stable ID and regenerates each contained scene ID.
 ///
 /// # Errors
@@ -1785,6 +2026,15 @@ pub enum ConfigError {
         /// Underlying replacement error.
         source: io::Error,
     },
+    /// The on-disk document changed since the caller read it.
+    Conflict {
+        /// Configuration path.
+        path: PathBuf,
+        /// Caller-observed revision.
+        expected: String,
+        /// Revision found while holding the writer lock.
+        actual: String,
+    },
 }
 
 impl fmt::Display for ConfigError {
@@ -1799,6 +2049,11 @@ impl fmt::Display for ConfigError {
             Self::Version { path, found } => {
                 write!(formatter, "unsupported schema version {found} in {}", path.display())
             }
+            Self::Conflict { path, expected, actual } => write!(
+                formatter,
+                "configuration revision conflict for {} (expected {expected}, found {actual})",
+                path.display()
+            ),
             Self::Replace { path, source } => {
                 write!(formatter, "cannot atomically replace {}: {source}", path.display())
             }
@@ -2149,6 +2404,9 @@ pub fn validate(document: &ConfigDocument) -> Result<(), String> {
             return Err("control mapping draft identity or step is invalid or duplicated".into());
         }
     }
+    if let Some(layers) = &document.mapping_layers_v2 {
+        layers.validate()?;
+    }
     Ok(())
 }
 
@@ -2258,6 +2516,88 @@ pub fn save(
 ) -> Result<(), ConfigError> {
     let _lock = SaveLock::acquire(path)
         .map_err(|source| ConfigError::Io { path: path.to_owned(), source })?;
+    save_locked(path, document, backup_count)
+}
+
+/// Saves only when the currently persisted document has the expected revision.
+///
+/// # Errors
+///
+/// Returns an I/O, parse, validation, replacement, or revision-conflict error.
+pub fn save_if_revision(
+    path: &Path,
+    document: &ConfigDocument,
+    backup_count: usize,
+    expected: &str,
+) -> Result<(), ConfigError> {
+    let _lock = SaveLock::acquire(path)
+        .map_err(|source| ConfigError::Io { path: path.to_owned(), source })?;
+    let actual = if path.exists() {
+        document_revision(&load(path).map_err(|error| ConfigError::Parse {
+            path: path.to_owned(),
+            message: error.to_string(),
+        })?)
+        .map_err(|message| ConfigError::Parse { path: path.to_owned(), message })?
+    } else {
+        "sha256:empty".to_owned()
+    };
+    if actual != expected {
+        return Err(ConfigError::Conflict {
+            path: path.to_owned(),
+            expected: expected.to_owned(),
+            actual,
+        });
+    }
+    save_locked(path, document, backup_count)
+}
+
+/// Saves with an optional revision guard for compatibility migrations.
+///
+/// # Errors
+///
+/// Returns the error produced by the selected save operation.
+pub fn save_with_optional_revision(
+    path: &Path,
+    document: &ConfigDocument,
+    backup_count: usize,
+    expected: Option<&str>,
+) -> Result<(), ConfigError> {
+    expected.map_or_else(
+        || save(path, document, backup_count),
+        |revision| save_if_revision(path, document, backup_count, revision),
+    )
+}
+
+/// Saves a document using the revision observed immediately before the write.
+///
+/// This adapter gives internal restore/import callers conflict detection without exposing
+/// revision tokens at their public boundary.
+///
+/// # Errors
+///
+/// Returns an I/O, parse, validation, or revision-conflict error when the observed document
+/// cannot be loaded or the guarded replacement cannot be committed.
+pub fn save_current_revision(
+    path: &Path,
+    document: &ConfigDocument,
+    retries: usize,
+) -> Result<(), ConfigError> {
+    let expected = match load(path) {
+        Ok(current) => document_revision(&current)
+            .map_err(|message| ConfigError::Parse { path: path.to_path_buf(), message })?,
+        Err(ConfigError::Io { source, .. }) if source.kind() == io::ErrorKind::NotFound => {
+            "sha256:empty".to_owned()
+        }
+        Err(error) => return Err(error),
+    };
+    save_if_revision(path, document, retries, &expected)
+}
+
+fn save_locked(
+    path: &Path,
+    document: &ConfigDocument,
+    backup_count: usize,
+) -> Result<(), ConfigError> {
     cleanup_stale_temporary_files(path)
         .map_err(|source| ConfigError::Io { path: path.to_owned(), source })?;
     validate(document)
@@ -2347,6 +2687,24 @@ pub fn save_control_mapping_store(
 ) -> Result<(), ConfigError> {
     let document = load(path)?;
     save(path, &store.apply_to_document(&document), backup_count)
+}
+
+/// Persists a validated v2 mapping-layer projection while preserving all other configuration.
+///
+/// # Errors
+///
+/// Returns a validation, load, lock, serialization, or atomic replacement error.
+pub fn save_mapping_layers(
+    path: &Path,
+    layers: &MappingLayersV2,
+    backup_count: usize,
+) -> Result<(), ConfigError> {
+    layers
+        .validate()
+        .map_err(|message| ConfigError::Semantic { path: path.to_owned(), message })?;
+    let mut document = load(path)?;
+    document.mapping_layers_v2 = Some(layers.clone());
+    save(path, &document, backup_count)
 }
 
 /// Exports a validated configuration into a portable directory without machine-specific paths.
@@ -2488,6 +2846,7 @@ mod tests {
             learned_mappings: vec![],
             control_mappings: vec![],
             control_mapping_drafts: vec![],
+            mapping_layers_v2: None,
         }
     }
 
@@ -2694,6 +3053,110 @@ mod tests {
         let text = "{schema_version:1, settings:{active_project:'demo'}, projects:[{id:'demo',scenes:[]}]}";
         assert_eq!(json5::from_str::<ConfigDocument>(text).expect("valid").schema_version, 1);
         assert!(json5::from_str::<ConfigDocument>("{schema_version:1, unknown:true}").is_err());
+    }
+
+    #[test]
+    fn complete_schema_fields_round_trip() {
+        let mut value = document();
+        value.settings.default_providers.push(DefaultProvider {
+            capability: "delay".into(),
+            profile_id: "eventide.blackhole".into(),
+        });
+        value.profiles.push(ProfileRef {
+            id: "eventide.blackhole".into(),
+            version: 1,
+            endpoint_alias: Some("blackhole-midi".into()),
+        });
+        value.endpoints.push(EndpointAlias {
+            id: "blackhole-midi".into(),
+            stable_id: None,
+            name: None,
+            vendor_id: None,
+            product_id: None,
+            serial: None,
+            logical_port: None,
+            direction: Some("output".into()),
+            role: Some("midi".into()),
+        });
+        value.projects[0].scenes[0].actions.push(SceneAction {
+            id: "send".into(),
+            description: "send preset".into(),
+            unsafe_action: false,
+            depends_on: None,
+            destination: Some("blackhole-midi".into()),
+            message: Some(vec![0xf0, 0x7d, 0xf7]),
+        });
+        value.setlists.push(Setlist { id: "main".into(), projects: vec!["demo".into()] });
+        value.control_mapping_drafts.push(ControlMappingDraft {
+            id: "draft-1".into(),
+            step: "destination".into(),
+            physical_control_id: None,
+            destination: Some("blackhole-midi".into()),
+        });
+        value.learned_mappings.push(LearnedMapping {
+            source_alias: "blackhole-midi".into(),
+            message_kind: "control_change".into(),
+            channel_policy: LearnedChannelPolicy::Exact(1),
+            number: Some(7),
+            raw: vec![0xb0, 7, 64],
+            destination: "blackhole-midi".into(),
+            mode: "cc".into(),
+            enabled: false,
+            priority: 1,
+            filters: Vec::new(),
+        });
+        value.control_mappings.push(ControlMapping {
+            id: "map-1".into(),
+            controller_profile: "novation.launch-control-xl.mk2".into(),
+            physical_control_id: "knob-r1-c1".into(),
+            source_endpoint: "blackhole-midi".into(),
+            source_kind: "cc".into(),
+            source_channel: 0,
+            destination_channel: Some(1),
+            source_number: 21,
+            destination_endpoint: "blackhole-midi".into(),
+            destination_profile: "eventide.micropitch".into(),
+            destination_effect: "modulation".into(),
+            destination_parameter: "Mix".into(),
+            behavior: MappingBehavior {
+                source_range: (0, 127),
+                destination_range: (0, 127),
+                invert: false,
+                curve: "linear".into(),
+            },
+            enabled: false,
+            profile_version: 1,
+        });
+        let encoded = serde_json::to_string(&value).expect("encode");
+        let decoded: ConfigDocument = serde_json::from_str(&encoded).expect("decode");
+        assert_eq!(decoded, value);
+        let validation = validate(&decoded);
+        assert!(validation.is_ok(), "{validation:?}");
+
+        let mut invalid_version = decoded.clone();
+        invalid_version.schema_version = CURRENT_SCHEMA_VERSION + 1;
+        assert_eq!(
+            validate(&invalid_version),
+            Err(format!("schema_version must be {CURRENT_SCHEMA_VERSION}"))
+        );
+
+        let mut invalid_mapping = decoded;
+        invalid_mapping.control_mappings[0].source_number = 128;
+        assert!(
+            validate(&invalid_mapping).is_err(),
+            "out-of-range control mapping must be rejected"
+        );
+    }
+
+    #[test]
+    fn document_revision_is_stable_and_content_addressed() {
+        let value = document();
+        let first = document_revision(&value).expect("revision");
+        let second = document_revision(&value).expect("revision");
+        assert_eq!(first, second);
+        let mut changed = value;
+        changed.settings.active_scene = Some("intro".into());
+        assert_ne!(first, document_revision(&changed).expect("revision"));
     }
 
     #[test]
@@ -3002,6 +3465,48 @@ mod tests {
         assert!(path.with_extension("json5.bak1").exists());
         let _ = fs::remove_file(&path);
         let _ = fs::remove_file(path.with_extension("json5.bak1"));
+    }
+
+    #[test]
+    fn json5_comments_are_explicitly_normalized_on_save() {
+        let path = std::env::temp_dir()
+            .join(format!("mackes-json5-normalize-{}.json5", std::process::id()));
+        fs::write(&path, "{schema_version: 1, // operator note\n settings: {}}\n")
+            .expect("write JSON5");
+        let loaded = load(&path).expect("load JSON5 with comment");
+        save(&path, &loaded, 0).expect("normalize save");
+        let normalized = fs::read_to_string(&path).expect("read normalized JSON5");
+        assert!(!normalized.contains("operator note"));
+        assert!(normalized.contains("schema_version"));
+        let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn save_if_revision_rejects_stale_writer_without_replacing_file() {
+        let path = std::env::temp_dir().join(format!("mackes-cas-{}.json5", std::process::id()));
+        let original = document();
+        save(&path, &original, 0).expect("save");
+        let mut changed = original.clone();
+        changed.settings.active_scene = Some("intro".into());
+        let stale = "sha256:stale";
+        let error = save_if_revision(&path, &changed, 0, stale).expect_err("conflict");
+        assert!(matches!(error, ConfigError::Conflict { .. }));
+        assert_eq!(load(&path).expect("load"), original);
+        let _ = fs::remove_file(&path);
+        let _ = fs::remove_file(path.with_extension("json5.lock"));
+    }
+
+    #[test]
+    fn save_current_revision_commits_against_existing_document() {
+        let path =
+            std::env::temp_dir().join(format!("mackes-current-cas-{}.json5", std::process::id()));
+        save(&path, &document(), 0).expect("initial save");
+        let mut changed = document();
+        changed.settings.active_scene = Some("intro".into());
+        save_current_revision(&path, &changed, 0).expect("current revision save");
+        assert_eq!(load(&path).expect("load").settings.active_scene.as_deref(), Some("intro"));
+        let _ = fs::remove_file(&path);
+        let _ = fs::remove_file(path.with_extension("json5.lock"));
     }
 
     #[test]
@@ -3808,5 +4313,112 @@ mod tests {
         let encoded = serde_json::to_vec(&loaded).expect("encode config");
         let decoded: ConfigDocument = serde_json::from_slice(&encoded).expect("decode config");
         assert_eq!(decoded.settings.pipedal_mappings, loaded.settings.pipedal_mappings);
+    }
+
+    #[test]
+    fn operation_journal_replays_and_survives_reopen() {
+        let path =
+            std::env::temp_dir().join(format!("mackes-operation-{}.json", std::process::id()));
+        let _ = fs::remove_file(&path);
+        let mut journal = OperationJournal::open(&path).expect("open journal");
+        let record = OperationRecord {
+            request_id: "request-1".into(),
+            fingerprint: "sha256:payload".into(),
+            operation_id: "operation-1".into(),
+            outcome: serde_json::json!({"accepted": true}),
+        };
+        journal.record(record.clone()).expect("record result");
+        journal.record(record).expect("retry is idempotent");
+        assert_eq!(journal.len(), 1);
+        assert_eq!(
+            journal.lookup("request-1", "sha256:payload").unwrap().unwrap().operation_id,
+            "operation-1"
+        );
+        assert!(journal.lookup("request-1", "sha256:other").is_err());
+        let reopened = OperationJournal::open(&path).expect("reopen journal");
+        assert_eq!(reopened.len(), 1);
+        let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn mapping_layers_v2_validate_and_select_effective_layer() {
+        let destination = MappingDestinationV2 {
+            id: "primary".into(),
+            endpoint: "midi-out".into(),
+            profile: "eventide".into(),
+            effect: "micropitch".into(),
+            parameter: "mix".into(),
+            channel: 1,
+            behavior: MappingBehavior {
+                source_range: (0, 127),
+                destination_range: (0, 127),
+                invert: false,
+                curve: "linear".into(),
+            },
+        };
+        let document = MappingLayersV2 {
+            schema_version: 2,
+            base: MappingLayerV2 {
+                control_id: "base".into(),
+                destinations: vec![destination.clone()],
+            },
+            layers: vec![MappingLayerV2 {
+                control_id: "scene-a".into(),
+                destinations: vec![destination],
+            }],
+            active_layer: Some("scene-a".into()),
+        };
+        assert!(document.validate().is_ok());
+        assert_eq!(document.effective_layer().control_id, "scene-a");
+    }
+
+    #[test]
+    fn mapping_layers_v2_reject_duplicate_destinations_and_unknown_active_layer() {
+        let destination = MappingDestinationV2 {
+            id: "same".into(),
+            endpoint: "out".into(),
+            profile: "p".into(),
+            effect: "e".into(),
+            parameter: "x".into(),
+            channel: 1,
+            behavior: MappingBehavior {
+                source_range: (0, 127),
+                destination_range: (0, 127),
+                invert: false,
+                curve: "linear".into(),
+            },
+        };
+        let duplicate = MappingLayersV2 {
+            schema_version: 2,
+            base: MappingLayerV2 {
+                control_id: "base".into(),
+                destinations: vec![destination.clone(), destination],
+            },
+            layers: vec![],
+            active_layer: None,
+        };
+        assert_eq!(duplicate.validate().unwrap_err(), "duplicate destination id");
+        let missing = MappingLayersV2 {
+            schema_version: 2,
+            base: MappingLayerV2 { control_id: "base".into(), destinations: vec![] },
+            layers: vec![],
+            active_layer: Some("missing".into()),
+        };
+        assert_eq!(missing.validate().unwrap_err(), "active_layer does not exist");
+    }
+
+    #[test]
+    fn mapping_layers_v2_round_trip_through_config_document() {
+        let mut value = document();
+        value.mapping_layers_v2 = Some(MappingLayersV2 {
+            schema_version: 2,
+            base: MappingLayerV2 { control_id: "base".into(), destinations: vec![] },
+            layers: vec![],
+            active_layer: None,
+        });
+        let encoded = serde_json::to_string(&value).expect("encode document");
+        let decoded: ConfigDocument = serde_json::from_str(&encoded).expect("decode document");
+        assert_eq!(decoded.mapping_layers_v2, value.mapping_layers_v2);
+        assert!(validate(&decoded).is_ok());
     }
 }

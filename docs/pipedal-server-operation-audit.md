@@ -1,7 +1,7 @@
 # PiPedal server operation audit
 
 Research checkpoint for W145/W150, 2026-09-07. Enumerated all 104 message
-registrations in local src/PiPedalSocket.cpp, compared with 18 connector Operation variants.
+registrations in local src/PiPedalSocket.cpp, compared with 42 connector Operation variants.
 This file inventories exposed handlers, not qualified end-to-end functionality.
 Plugin-specific metadata still needs separate review. The HTTP route and outbound-notification
 surfaces are inventoried below; their payload and browser qualification remain W150 work.
@@ -105,49 +105,49 @@ user-facing workflow without needing an independent button; require a documented
 | previewControl | catalogued | Pedalboard and parameter inspector | pending W150 |
 | setInputVolume | catalogued | Pedalboard and parameter inspector | pending W150 |
 | setOutputVolume | catalogued | Pedalboard and parameter inspector | pending W150 |
-| previewInputVolume | missing | Pedalboard and parameter inspector | pending W150 |
-| previewOutputVolume | missing | Pedalboard and parameter inspector | pending W150 |
-| listenForMidiEvent | missing | Monitoring and MIDI | pending W150 |
-| cancelListenForMidiEvent | missing | Monitoring and MIDI | pending W150 |
-| monitorPatchProperty | missing | Monitoring and MIDI | pending W150 |
-| cancelMonitorPatchProperty | missing | Monitoring and MIDI | pending W150 |
-| getUpdateStatus | missing | Device system settings | pending W150 |
-| getHasWifi | missing | Device system settings | pending W150 |
+| previewInputVolume | catalogued | Pedalboard and parameter inspector | adapter/browser preview path implemented; full installed qualification pending W150 |
+| previewOutputVolume | catalogued | Pedalboard and parameter inspector | adapter/browser preview path implemented; full installed qualification pending W150 |
+| listenForMidiEvent | catalogued | Monitoring and MIDI | bounded adapter/daemon queue path; event readback pending W150 |
+| cancelListenForMidiEvent | catalogued | Monitoring and MIDI | bounded adapter/daemon queue path; event readback pending W150 |
+| monitorPatchProperty | catalogued | Monitoring and MIDI | bounded adapter/daemon queue path; event readback pending W150 |
+| cancelMonitorPatchProperty | catalogued | Monitoring and MIDI | bounded adapter/daemon queue path; event readback pending W150 |
+| getUpdateStatus | catalogued | Device system settings | pending W150 |
+| getHasWifi | catalogued | Device system settings | pending W150 |
 | updateNow | missing | Device system settings | pending W150 |
 | getJackStatus | catalogued | Device system settings | pending W150 |
 | getAlsaDevices | catalogued | Device system settings | pending W150 |
-| getKnownWifiNetworks | missing | Device system settings | pending W150 |
-| getWifiChannels | missing | Device system settings | pending W150 |
-| getPluginPresets | missing | Presets and snapshots | pending W150 |
-| loadPluginPreset | missing | Presets and snapshots | pending W150 |
+| getKnownWifiNetworks | catalogued | Device system settings | pending W150 |
+| getWifiChannels | catalogued | Device system settings | pending W150 |
+| getPluginPresets | catalogued | Presets and snapshots | pending W150 |
+| loadPluginPreset | catalogued | Presets and snapshots | pending W150 |
 | setJackServerSettings | missing | Device system settings | pending W150 |
-| setGovernorSettings | missing | Device system settings | pending W150 |
+| setGovernorSettings | catalogued | Device system settings | pending W150 |
 | setWifiConfigSettings | missing | Device system settings | pending W150 |
 | getWifiConfigSettings | missing | Device system settings | pending W150 |
 | setWifiDirectConfigSettings | missing | Device system settings | pending W150 |
 | getWifiDirectConfigSettings | missing | Device system settings | pending W150 |
-| getGovernorSettings | missing | Device system settings | pending W150 |
-| getJackServerSettings | missing | Device system settings | pending W150 |
-| getBankIndex | missing | Presets and snapshots | pending W150 |
+| getGovernorSettings | catalogued | Device system settings | source-backed scalar response; execution/readback pending W150 |
+| getJackServerSettings | catalogued | Device system settings | pending W150 |
+| getBankIndex | catalogued | Presets and snapshots | bounded readback implemented; full browser/installed qualification pending W150 |
 | getJackConfiguration | missing | Device system settings | pending W150 |
 | getJackSettings | missing | Device system settings | pending W150 |
 | saveCurrentPreset | catalogued | Presets and snapshots | pending W150 |
-| saveCurrentPresetAs | missing | Presets and snapshots | pending W150 |
+| saveCurrentPresetAs | catalogued | Presets and snapshots | source-backed payload; execution/readback pending W150 |
 | setSelectedPedalboardPlugin | catalogued | Pedalboard and parameter inspector | pending W150 |
-| savePluginPresetAs | missing | Presets and snapshots | pending W150 |
-| getPresets | missing | Presets and snapshots | pending W150 |
+| savePluginPresetAs | catalogued | Presets and snapshots | source-backed payload; execution/readback pending W150 |
+| getPresets | catalogued | Presets and snapshots | bounded readback implemented; full browser/installed qualification pending W150 |
 | setPedalboardItemEnable | catalogued | Pedalboard and parameter inspector | pending W150 |
 | setPedalboardItemUseModUi | catalogued | Pedalboard and parameter inspector | pending W150 |
 | updateCurrentPedalboard | catalogued | Pedalboard and parameter inspector | pending W150 |
 | setSnapshot | catalogued | Presets and snapshots | pending W150 |
 | setSnapshots | catalogued | Presets and snapshots | pending W150 |
-| currentPedalboard | missing | Pedalboard and parameter inspector | pending W150 |
-| plugins | missing | Pedalboard and parameter inspector | pending W150 |
-| pluginClasses | missing | Pedalboard and parameter inspector | pending W150 |
+| currentPedalboard | catalogued | Pedalboard and parameter inspector | bounded readback decoder and adapter projection implemented; full browser/installed qualification pending W150 |
+| plugins | catalogued | Pedalboard and parameter inspector | bounded identity/catalog decoder and adapter projection implemented; full browser/installed qualification pending W150 |
+| pluginClasses | catalogued | Pedalboard and parameter inspector | bounded class-tree decoder and adapter validation implemented; full browser/installed qualification pending W150 |
 | hello | missing | Device session/preferences | pending W150 |
 | setShowStatusMonitor | missing | Monitoring and MIDI | pending W150 |
-| getShowStatusMonitor | missing | Monitoring and MIDI | pending W150 |
-| version | missing | Device session/preferences | pending W150 |
+| getShowStatusMonitor | catalogued | Monitoring and MIDI | source-backed boolean response; execution/readback pending W150 |
+| version | catalogued | Device session/preferences | bounded session-scoped readback and adapter projection implemented; full installed qualification pending W150 |
 | loadPreset | catalogued | Presets and snapshots | pending W150 |
 | updatePresets | missing | Presets and snapshots | pending W150 |
 | updatePluginPresets | missing | Presets and snapshots | pending W150 |
@@ -174,12 +174,12 @@ user-facing workflow without needing an independent button; require a documented
 | addVuSubscription | missing | Monitoring and MIDI | pending W150 |
 | removeVuSubscription | missing | Monitoring and MIDI | pending W150 |
 | imageList | missing | Device assets/library | pending W150 |
-| getFavorites | missing | Device session/preferences | pending W150 |
-| setFavorites | missing | Device session/preferences | pending W150 |
+| getFavorites | catalogued | Device session/preferences | bounded startup readback and snapshot projection implemented; full browser/installed qualification pending W150 |
+| setFavorites | catalogued | Device session/preferences | source-backed map and event; execution/readback pending W150 |
 | setUpdatePolicy | missing | Device system settings | pending W150 |
 | forceUpdateCheck | missing | Device system settings | pending W150 |
 | setSystemMidiBindings | catalogued | Monitoring and MIDI | pending W150 |
-| getSystemMidiBindings | missing | Monitoring and MIDI | pending W150 |
+| getSystemMidiBindings | catalogued | Monitoring and MIDI | bounded startup/read-only query path; installed qualification pending W150 |
 | requestFileList | missing | Device assets/library | pending W150 |
 | requestFileList2 | missing | Device assets/library | pending W150 |
 | newPreset | missing | Presets and snapshots | pending W150 |
@@ -190,7 +190,7 @@ user-facing workflow without needing an independent button; require a documented
 | getFilePropertyDirectoryTree | missing | Device assets/library | pending W150 |
 | moveAudioFile | missing | Device assets/library | pending W150 |
 | setOnboarding | missing | Device system settings | pending W150 |
-| getWifiRegulatoryDomains | missing | Device system settings | pending W150 |
+| getWifiRegulatoryDomains | catalogued | Device system settings | source-backed bounded map response; execution/readback pending W150 |
 | setAlsaSequencerConfiguration | missing | Device system settings | pending W150 |
 | getAlsaSequencerConfiguration | missing | Device system settings | pending W150 |
 | getAlsaSequencerPorts | missing | Device system settings | pending W150 |

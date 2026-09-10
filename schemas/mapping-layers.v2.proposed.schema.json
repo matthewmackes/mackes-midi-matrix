@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:mackes:mapping-layers:v2:proposed",
+  "title": "MACKES proposed versioned mapping layers",
+  "description": "Design-only W165 schema; not accepted by the runtime configuration boundary.",
+  "type": "object",
+  "required": ["schema_version", "base", "layers", "active_layer"],
+  "properties": {
+    "schema_version": {"const": 2},
+    "base": {"$ref": "#/$defs/layer"},
+    "layers": {"type": "array", "items": {"$ref": "#/$defs/layer"}},
+    "active_layer": {"type": ["string", "null"]}
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "layer": {
+      "type": "object",
+      "required": ["control_id", "destinations"],
+      "properties": {
+        "control_id": {"type": "string", "minLength": 1},
+        "destinations": {"type": "array", "items": {"$ref": "#/$defs/destination"}}
+      },
+      "additionalProperties": false
+    },
+    "destination": {
+      "type": "object",
+      "required": ["id", "endpoint", "profile", "effect", "parameter", "channel", "behavior"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "endpoint": {"type": "string", "minLength": 1},
+        "profile": {"type": "string", "minLength": 1},
+        "effect": {"type": "string", "minLength": 1},
+        "parameter": {"type": "string", "minLength": 1},
+        "channel": {"type": "integer", "minimum": 1, "maximum": 16},
+        "behavior": {"type": "object"}
+      },
+      "additionalProperties": false
+    }
+  }
+}

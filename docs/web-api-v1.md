@@ -32,13 +32,17 @@ does not synthesize missing source identity or behavior fields.
 `GET /api/v1/pipedal` requests a typed connector snapshot, and `POST /api/v1/pipedal` forwards the
 strict `PiPedalRequest` contract to the daemon-owned connector; unsupported connector capabilities
 remain explicit in the daemon response.
+The snapshot may include validated session-scoped PiPedal version metadata; it is diagnostic
+readback, is cleared on reconnect, and does not authorize version-dependent writes.
 The Devices workspace exposes the connector's `Snapshot`, confirmed `Apply`, and confirmed `Undo`
 operations; the browser does not maintain plugin or mapping state independently.
 `POST /api/v1/routes` forwards bounded route replacement or explicit undo JSON with an explicit
 generation (and hop limit for replacement); the daemon remains responsible for graph validation,
 authorization, persistence, and atomic install.
-`POST /api/v1/scenes` forwards exactly one bounded scene selection or `next`/`previous` navigation
-action to the daemon-owned scene catalog.
+`POST /api/v1/scenes` forwards exactly one bounded scene selection, `next`/`previous` navigation,
+action replacement (up to 128 actions), read-only `preview_scene`, or explicit `execute_scene`
+request to the daemon-owned scene catalog. Execution responses preserve the daemon's aggregate and
+per-action outcomes; preview never recalls or mutates state.
 `POST /api/v1/backups` supports confirmed `create`, `restore`, and `portable_import` actions. Create snapshots the
 configured file into daemon-managed immutable artifacts; restore accepts only an inventoried
 basename and uses verified digest/identity compatibility plus atomic replacement. Browser paths
@@ -49,9 +53,20 @@ committed through the daemon's atomic configuration writer.
 `POST /api/v1/sysex` forwards a confirmed framed request with a bounded destination alias and
 1–1024 seven-bit data bytes; malformed, unconfirmed, or oversized payloads are rejected before IPC.
 `GET /api/v1/validation` forwards the daemon's read-only configuration validation command.
-`POST /api/v1/configuration` accepts a confirmed JSON mutation containing daemon-owned `setlists`
-and/or `learned_mappings`; the request is size-bounded and validated before IPC, while schema
-validation and atomic persistence remain daemon responsibilities.
+`GET /api/v1/configuration` returns the complete daemon-owned configuration projection and a
+content-addressed `configuration_revision` token. `POST /api/v1/configuration` accepts a confirmed
+JSON mutation containing a complete `configuration` document (or legacy daemon-owned `setlists`
+and/or `learned_mappings`); the request is size-bounded and validated before IPC, while schema
+validation and atomic persistence remain daemon responsibilities. Supplying that token in a mutation enables the daemon's lock-held CAS
+writer; stale values return HTTP 409. Requests that omit it retain the legacy compatibility path
+until all callers migrate under W155.
+The configuration route is governed by `schemas/configuration-boundary.schema.json`, whose closed
+envelope defines `read`, `draft`, `validate`, `diff`, `apply`, and `operation`. `read` is the GET
+projection; `draft`, `validate`, and `diff` are non-committing workflows; `apply` is the confirmed
+CAS-guarded commit; and `operation` retrieves an admitted outcome by bounded `operation_id`.
+Opaque bounded IDs (`draft_id`, `draft_revision`, `expected_revision`, and `operation_id`) are
+forwarded without browser reinterpretation. Conflict, validation, and unsupported operation
+responses remain structured HTTP 409, 422, and 501 outcomes.
 `GET /api/v1/diagnostics` reports web build/API/IPC configuration and explicitly separates web
 limitations from daemon health, which is returned by `/api/v1/health`.
 The response also exposes the effective configured origin and the supported service settings
@@ -96,3 +111,12 @@ CDN, runtime Node process, or second configuration writer is introduced.
 
 The exact operation payload is owned by the corresponding IPC contract and the canonical editor
 identified in `docs/web-feature-coverage.md`; the web layer does not reinterpret domain fields.
+For configuration, the machine-readable operation vocabulary and bounds in
+`schemas/configuration-boundary.schema.json` are authoritative; this document records only the
+HTTP route mapping and lifecycle semantics.
+# Capability envelope schema
+
+Capability snapshots use the governed [`schemas/capability-boundary.schema.json`](../schemas/capability-boundary.schema.json)
+artifact. `schema_version` and `generation` are authoritative; each capability declares an
+availability state and bounded operation names. Unknown states or fields are rejected rather than
+silently rendered as supported features.

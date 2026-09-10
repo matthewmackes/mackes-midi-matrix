@@ -16,11 +16,14 @@ cargo fmt --check
 printf 'release-gate: repository policy and worklist\n'
 python3 scripts/check-midi-ownership.py
 scripts/verify-repository.sh
+node scripts/feature-renderer-smoke.js
+node scripts/state-store-smoke.js
 printf 'release-gate: controller template artifact\n'
 python3 scripts/verify-artifacts.py
 python3 scripts/test-verify-artifacts.py
 python3 scripts/check-pipedal-fixture.py
 python3 scripts/check-pipedal-range-fixture.py
+python3 scripts/check-pipedal-audit.py
 printf 'release-gate: locked dependency metadata\n'
 cargo metadata --locked --all-features --format-version 1 >/dev/null
 printf 'release-gate: workspace tests\n'
@@ -49,6 +52,8 @@ rg -q "mackes-midi-matrix-${version}-linux-x86_64/target/release/mackes-web$" \
 rg -q "mackes-midi-matrix-${version}-linux-x86_64/packaging/mackes-web.service$" \
   <<<"$archive_listing"
 rg -q "mackes-midi-matrix-${version}-linux-x86_64/schemas/web-api-v1.schema.json$" \
+  <<<"$archive_listing"
+rg -q "mackes-midi-matrix-${version}-linux-x86_64/schemas/configuration-boundary.schema.json$" \
   <<<"$archive_listing"
 rg -q "mackes-midi-matrix-${version}-linux-x86_64/BUILD_PROVENANCE$" \
   <<<"$archive_listing"

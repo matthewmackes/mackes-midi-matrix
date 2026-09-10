@@ -10,3 +10,4 @@
 *.syx
 docs/hardware-validation/*-private.*
 fixtures/local/
+scripts/__pycache__/

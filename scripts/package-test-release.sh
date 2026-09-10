@@ -62,6 +62,7 @@ install -m 0644 "$root_dir/docs/installation-fedora.md" \
   "$root_dir/docs/mackes-launch-control-xl-mk2-factory1-manifest.json" \
   "$staging/$bundle_name/docs/"
 install -m 0644 "$root_dir/schemas/web-api-v1.schema.json" "$staging/$bundle_name/schemas/"
+install -m 0644 "$root_dir/schemas/configuration-boundary.schema.json" "$staging/$bundle_name/schemas/"
 install -m 0644 "$root_dir/docs/releases/$version.md" "$staging/$bundle_name/RELEASE_NOTES.md"
 printf 'version=%s\nsource_commit=%s\n' "$version" "$source_commit" >"$staging/$bundle_name/BUILD_PROVENANCE"
 

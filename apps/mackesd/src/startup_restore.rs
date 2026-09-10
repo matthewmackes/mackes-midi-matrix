@@ -93,6 +93,8 @@ pub fn compile_scene_actions(
 #[cfg(target_os = "linux")]
 pub fn persist_active_scene(path: &Path, scene: Option<&str>) -> Result<(), String> {
     let document = mackes_config::load(path).map_err(|error| error.to_string())?;
+    let expected_revision = mackes_config::document_revision(&document)?;
     let updated = mackes_config::set_active_scene(&document, scene)?;
-    mackes_config::save(path, &updated, 10).map_err(|error| error.to_string())
+    mackes_config::save_if_revision(path, &updated, 10, &expected_revision)
+        .map_err(|error| error.to_string())
 }

@@ -33,6 +33,24 @@ pub const MAX_MAPPINGS: usize = 128;
 pub const MAX_RECONCILIATION_STATES: usize = MAX_MAPPINGS;
 /// Maximum discovered plugin controls in one catalog snapshot.
 pub const MAX_CATALOG_CONTROLS: usize = 4_096;
+/// Maximum preset entries accepted from one PiPedal catalog response.
+pub const MAX_PRESET_ENTRIES: usize = 256;
+/// Maximum bank entries accepted from one PiPedal catalog response.
+pub const MAX_BANK_ENTRIES: usize = 128;
+/// Maximum current-pedalboard items accepted from one PiPedal state response.
+pub const MAX_PEDALBOARD_ITEMS: usize = 256;
+/// Maximum plugin entries accepted from one PiPedal `plugins` response.
+pub const MAX_PLUGIN_ENTRIES: usize = 256;
+/// Maximum child classes retained in one plugin-class node.
+pub const MAX_PLUGIN_CLASS_CHILDREN: usize = 256;
+/// Maximum favorite identities accepted from one PiPedal response.
+pub const MAX_FAVORITES: usize = 512;
+/// Maximum length of a PiPedal version string accepted at handshake.
+pub const MAX_VERSION_TEXT: usize = 256;
+/// Maximum CPU-governor identifier accepted from PiPedal.
+pub const MAX_GOVERNOR_TEXT: usize = 64;
+/// Maximum Wi-Fi regulatory-domain entries accepted from PiPedal.
+pub const MAX_WIFI_REGULATORY_DOMAINS: usize = 256;
 /// Maximum system MIDI bindings accepted in one PiPedal update.
 pub const MAX_SYSTEM_MIDI_BINDINGS: usize = 128;
 /// Maximum requests waiting for the PiPedal transport worker.
@@ -323,14 +341,62 @@ pub enum Operation {
     SetInputVolume,
     /// Set the PiPedal output mixer level.
     SetOutputVolume,
+    /// Preview the PiPedal input mixer level without persisting it.
+    PreviewInputVolume,
+    /// Preview the PiPedal output mixer level without persisting it.
+    PreviewOutputVolume,
+    /// Start listening for one PiPedal MIDI event handle.
+    ListenForMidiEvent,
+    /// Cancel one PiPedal MIDI event listener.
+    CancelListenForMidiEvent,
+    /// Monitor one PiPedal patch property.
+    MonitorPatchProperty,
+    /// Cancel one PiPedal patch-property monitor.
+    CancelMonitorPatchProperty,
+    /// Query the current system MIDI bindings.
+    GetSystemMidiBindings,
     /// Load a saved preset.
     LoadPreset,
     /// Save the current preset.
     SaveCurrentPreset,
+    /// Save the current pedalboard as a new preset.
+    SaveCurrentPresetAs,
+    /// Save a plugin state as a new plugin preset.
+    SavePluginPresetAs,
     /// Query ALSA devices.
     GetAlsaDevices,
     /// Query JACK status.
     GetJackStatus,
+    /// Query host update status.
+    GetUpdateStatus,
+    /// Query whether Wi-Fi hardware is available.
+    GetHasWifi,
+    /// Query the URI-to-favorite flags used by the PiPedal browser.
+    GetFavorites,
+    /// Replace the URI-to-favorite flags used by the PiPedal browser.
+    SetFavorites,
+    /// Query Wi-Fi channels for a country code.
+    GetWifiChannels,
+    /// Query presets for a plugin URI.
+    GetPluginPresets,
+    /// Query the current preset index.
+    GetPresets,
+    /// Query the current bank index.
+    GetBankIndex,
+    /// Query known Wi-Fi network names.
+    GetKnownWifiNetworks,
+    /// Load a plugin preset into a runtime instance.
+    LoadPluginPreset,
+    /// Query JACK server settings.
+    GetJackServerSettings,
+    /// Set the CPU governor policy.
+    SetGovernorSettings,
+    /// Query the CPU governor policy.
+    GetGovernorSettings,
+    /// Query whether PiPedal's status monitor is shown.
+    GetShowStatusMonitor,
+    /// Query Wi-Fi regulatory-domain labels.
+    GetWifiRegulatoryDomains,
     /// Restart the PiPedal engine.
     Restart,
     /// Shut down the PiPedal host.
@@ -354,10 +420,34 @@ impl Operation {
             Self::SetSystemMidiBindings,
             Self::SetInputVolume,
             Self::SetOutputVolume,
+            Self::PreviewInputVolume,
+            Self::PreviewOutputVolume,
+            Self::ListenForMidiEvent,
+            Self::CancelListenForMidiEvent,
+            Self::MonitorPatchProperty,
+            Self::CancelMonitorPatchProperty,
+            Self::GetSystemMidiBindings,
             Self::LoadPreset,
             Self::SaveCurrentPreset,
+            Self::SaveCurrentPresetAs,
+            Self::SavePluginPresetAs,
             Self::GetAlsaDevices,
             Self::GetJackStatus,
+            Self::GetUpdateStatus,
+            Self::GetHasWifi,
+            Self::GetFavorites,
+            Self::SetFavorites,
+            Self::GetWifiChannels,
+            Self::GetPluginPresets,
+            Self::GetPresets,
+            Self::GetBankIndex,
+            Self::GetKnownWifiNetworks,
+            Self::LoadPluginPreset,
+            Self::GetJackServerSettings,
+            Self::SetGovernorSettings,
+            Self::GetGovernorSettings,
+            Self::GetShowStatusMonitor,
+            Self::GetWifiRegulatoryDomains,
             Self::Restart,
             Self::Shutdown,
         ]
@@ -379,10 +469,34 @@ impl Operation {
             Self::SetSystemMidiBindings => "setSystemMidiBindings",
             Self::SetInputVolume => "setInputVolume",
             Self::SetOutputVolume => "setOutputVolume",
+            Self::PreviewInputVolume => "previewInputVolume",
+            Self::PreviewOutputVolume => "previewOutputVolume",
+            Self::ListenForMidiEvent => "listenForMidiEvent",
+            Self::CancelListenForMidiEvent => "cancelListenForMidiEvent",
+            Self::MonitorPatchProperty => "monitorPatchProperty",
+            Self::CancelMonitorPatchProperty => "cancelMonitorPatchProperty",
+            Self::GetSystemMidiBindings => "getSystemMidiBindings",
             Self::LoadPreset => "loadPreset",
             Self::SaveCurrentPreset => "saveCurrentPreset",
+            Self::SaveCurrentPresetAs => "saveCurrentPresetAs",
+            Self::SavePluginPresetAs => "savePluginPresetAs",
             Self::GetAlsaDevices => "getAlsaDevices",
             Self::GetJackStatus => "getJackStatus",
+            Self::GetUpdateStatus => "getUpdateStatus",
+            Self::GetHasWifi => "getHasWifi",
+            Self::GetFavorites => "getFavorites",
+            Self::SetFavorites => "setFavorites",
+            Self::GetWifiChannels => "getWifiChannels",
+            Self::GetPluginPresets => "getPluginPresets",
+            Self::GetPresets => "getPresets",
+            Self::GetBankIndex => "getBankIndex",
+            Self::GetKnownWifiNetworks => "getKnownWifiNetworks",
+            Self::LoadPluginPreset => "loadPluginPreset",
+            Self::GetJackServerSettings => "getJackServerSettings",
+            Self::SetGovernorSettings => "setGovernorSettings",
+            Self::GetGovernorSettings => "getGovernorSettings",
+            Self::GetShowStatusMonitor => "getShowStatusMonitor",
+            Self::GetWifiRegulatoryDomains => "getWifiRegulatoryDomains",
             Self::Restart => "restart",
             Self::Shutdown => "shutdown",
         }
@@ -397,8 +511,20 @@ impl Operation {
                 | Self::SetSystemMidiBindings
                 | Self::SetInputVolume
                 | Self::SetOutputVolume
+                | Self::PreviewInputVolume
+                | Self::PreviewOutputVolume
+                | Self::ListenForMidiEvent
+                | Self::CancelListenForMidiEvent
+                | Self::MonitorPatchProperty
+                | Self::CancelMonitorPatchProperty
+                | Self::GetSystemMidiBindings
                 | Self::LoadPreset
                 | Self::SaveCurrentPreset
+                | Self::SaveCurrentPresetAs
+                | Self::SavePluginPresetAs
+                | Self::SetFavorites
+                | Self::LoadPluginPreset
+                | Self::SetGovernorSettings
                 | Self::Restart
                 | Self::Shutdown
         )
@@ -407,7 +533,24 @@ impl Operation {
     /// Whether this operation only queries PiPedal state.
     #[must_use]
     pub const fn is_read_only(self) -> bool {
-        matches!(self, Self::GetAlsaDevices | Self::GetJackStatus)
+        matches!(
+            self,
+            Self::GetAlsaDevices
+                | Self::GetJackStatus
+                | Self::GetUpdateStatus
+                | Self::GetHasWifi
+                | Self::GetFavorites
+                | Self::GetWifiChannels
+                | Self::GetPluginPresets
+                | Self::GetPresets
+                | Self::GetBankIndex
+                | Self::GetKnownWifiNetworks
+                | Self::GetJackServerSettings
+                | Self::GetGovernorSettings
+                | Self::GetShowStatusMonitor
+                | Self::GetWifiRegulatoryDomains
+                | Self::GetSystemMidiBindings
+        )
     }
 
     /// Whether the operation is safe to expose as a physical scalar/toggle mapping.
@@ -429,8 +572,30 @@ impl Operation {
             Self::SetSnapshot | Self::SetSnapshots => "snapshots",
             Self::SetSystemMidiBindings => "midi",
             Self::SetInputVolume | Self::SetOutputVolume => "audio",
-            Self::LoadPreset | Self::SaveCurrentPreset => "presets",
-            Self::GetAlsaDevices | Self::GetJackStatus => "diagnostics",
+            Self::PreviewInputVolume | Self::PreviewOutputVolume => "audio",
+            Self::ListenForMidiEvent
+            | Self::CancelListenForMidiEvent
+            | Self::MonitorPatchProperty
+            | Self::CancelMonitorPatchProperty => "midi",
+            Self::GetSystemMidiBindings => "midi",
+            Self::LoadPreset
+            | Self::SaveCurrentPreset
+            | Self::SaveCurrentPresetAs
+            | Self::SavePluginPresetAs => "presets",
+            Self::GetAlsaDevices
+            | Self::GetJackStatus
+            | Self::GetUpdateStatus
+            | Self::GetHasWifi => "diagnostics",
+            Self::GetFavorites | Self::SetFavorites => "preferences",
+            Self::GetWifiChannels => "diagnostics",
+            Self::GetPluginPresets => "presets",
+            Self::GetPresets | Self::GetBankIndex => "presets",
+            Self::GetKnownWifiNetworks => "diagnostics",
+            Self::LoadPluginPreset => "presets",
+            Self::GetJackServerSettings | Self::GetGovernorSettings => "diagnostics",
+            Self::GetShowStatusMonitor => "monitoring",
+            Self::GetWifiRegulatoryDomains => "diagnostics",
+            Self::SetGovernorSettings => "host",
             Self::Restart | Self::Shutdown => "host",
         }
     }
@@ -547,6 +712,360 @@ pub struct ErrorBody {
     pub message: String,
 }
 
+/// One entry returned by PiPedal's `getPresets` response.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PresetIndexEntry {
+    #[serde(rename = "instanceId")]
+    pub instance_id: i64,
+    pub name: String,
+}
+
+/// Bounded readback returned by PiPedal's `getPresets` operation.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PresetIndex {
+    #[serde(rename = "selectedInstanceId")]
+    pub selected_instance_id: i64,
+    #[serde(rename = "presetChanged")]
+    pub preset_changed: bool,
+    pub presets: Vec<PresetIndexEntry>,
+}
+
+/// Body accepted by PiPedal's `saveCurrentPresetAs` operation.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SaveCurrentPresetAs {
+    #[serde(rename = "bankInstanceId")]
+    pub bank_instance_id: i64,
+    pub name: String,
+    #[serde(rename = "saveAfterInstanceId")]
+    pub save_after_instance_id: i64,
+}
+
+impl SaveCurrentPresetAs {
+    /// Validate the source-backed save-as payload before transport.
+    pub fn validate(&self) -> Result<(), String> {
+        if self.bank_instance_id < 0
+            || self.save_after_instance_id < -1
+            || self.name.trim().is_empty()
+            || self.name.len() > 256
+        {
+            return Err("PiPedal preset save-as fields are invalid".into());
+        }
+        Ok(())
+    }
+}
+
+/// Body accepted by PiPedal's `savePluginPresetAs` operation.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SavePluginPresetAs {
+    #[serde(rename = "instanceId")]
+    pub instance_id: i64,
+    pub name: String,
+}
+
+impl SavePluginPresetAs {
+    /// Validate the source-backed plugin-preset save-as payload.
+    pub fn validate(&self) -> Result<(), String> {
+        if self.instance_id <= 0 || self.name.trim().is_empty() || self.name.len() > 256 {
+            return Err("PiPedal plugin-preset save-as fields are invalid".into());
+        }
+        Ok(())
+    }
+}
+
+impl PresetIndex {
+    /// Validate the installed PiPedal preset-index shape and bounds.
+    pub fn validate(&self) -> Result<(), String> {
+        if self.presets.len() > MAX_PRESET_ENTRIES {
+            return Err("PiPedal preset catalog exceeds configured entry limit".into());
+        }
+        let mut ids = HashSet::with_capacity(self.presets.len());
+        for preset in &self.presets {
+            if preset.instance_id < 0 || preset.name.is_empty() || !ids.insert(preset.instance_id) {
+                return Err("PiPedal preset catalog has invalid or duplicate entry".into());
+            }
+        }
+        Ok(())
+    }
+}
+
+/// Decode and validate a `getPresets` response body from the installed PiPedal schema.
+pub fn decode_preset_index(body: Option<serde_json::Value>) -> Result<PresetIndex, String> {
+    let index: PresetIndex = decode_body(body)?;
+    index.validate()?;
+    Ok(index)
+}
+
+/// One entry returned by PiPedal's `getBankIndex` response.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BankIndexEntry {
+    #[serde(rename = "instanceId")]
+    pub instance_id: i64,
+    pub name: String,
+}
+
+/// Bounded readback returned by PiPedal's `getBankIndex` operation.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BankIndex {
+    #[serde(rename = "selectedBank")]
+    pub selected_bank: i64,
+    pub entries: Vec<BankIndexEntry>,
+}
+
+impl BankIndex {
+    /// Validate the installed PiPedal bank-index shape and bounds.
+    pub fn validate(&self) -> Result<(), String> {
+        if self.entries.len() > MAX_BANK_ENTRIES {
+            return Err("PiPedal bank catalog exceeds configured entry limit".into());
+        }
+        let mut ids = HashSet::with_capacity(self.entries.len());
+        for bank in &self.entries {
+            if bank.instance_id < 0 || bank.name.is_empty() || !ids.insert(bank.instance_id) {
+                return Err("PiPedal bank catalog has invalid or duplicate entry".into());
+            }
+        }
+        Ok(())
+    }
+}
+
+/// Decode and validate a `getBankIndex` response body from the installed PiPedal schema.
+pub fn decode_bank_index(body: Option<serde_json::Value>) -> Result<BankIndex, String> {
+    let index: BankIndex = decode_body(body)?;
+    index.validate()?;
+    Ok(index)
+}
+
+/// One bounded runtime item in PiPedal's `currentPedalboard` response.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct CurrentPedalboardItem {
+    #[serde(rename = "instanceId")]
+    pub instance_id: u64,
+    pub uri: String,
+    #[serde(rename = "controlValues", default)]
+    pub control_values: Vec<CurrentControlValue>,
+}
+
+/// Current value readback for one pedalboard control.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct CurrentControlValue {
+    pub key: String,
+    pub value: f64,
+}
+
+/// Bounded readback returned by PiPedal's `currentPedalboard` operation.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct CurrentPedalboard {
+    pub items: Vec<CurrentPedalboardItem>,
+}
+
+impl CurrentPedalboard {
+    /// Validate runtime identities and finite control values without inventing plugin metadata.
+    pub fn validate(&self) -> Result<(), String> {
+        if self.items.len() > MAX_PEDALBOARD_ITEMS {
+            return Err("PiPedal pedalboard exceeds configured item limit".into());
+        }
+        let mut ids = HashSet::with_capacity(self.items.len());
+        for item in &self.items {
+            if item.instance_id == 0 || item.uri.is_empty() || !ids.insert(item.instance_id) {
+                return Err("PiPedal pedalboard has invalid or duplicate runtime item".into());
+            }
+            for control in &item.control_values {
+                if control.key.is_empty() || !control.value.is_finite() {
+                    return Err("PiPedal pedalboard has invalid control readback".into());
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
+/// Decode and validate a `currentPedalboard` response body.
+pub fn decode_current_pedalboard(
+    body: Option<serde_json::Value>,
+) -> Result<CurrentPedalboard, String> {
+    let pedalboard: CurrentPedalboard = decode_body(body)?;
+    pedalboard.validate()?;
+    Ok(pedalboard)
+}
+
+/// Minimal source-backed identity envelope for one `plugins` response entry.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct PluginCatalogEntry {
+    pub uri: String,
+    #[serde(rename = "instanceId", default)]
+    pub instance_id: Option<u64>,
+    pub name: String,
+    #[serde(default)]
+    pub controls: Vec<serde_json::Value>,
+}
+
+/// Typed control metadata used by the adapter's plugin catalog projection.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct PluginControlMetadata {
+    pub symbol: String,
+    #[serde(rename = "minValue", alias = "min_value")]
+    pub min_value: f64,
+    #[serde(rename = "maxValue", alias = "max_value")]
+    pub max_value: f64,
+    #[serde(default, rename = "value", alias = "default_value")]
+    pub value: Option<f64>,
+    #[serde(default, alias = "is_input")]
+    pub writable: bool,
+    #[serde(default)]
+    pub label: Option<String>,
+}
+
+/// Decode bounded control metadata from one plugin catalog entry.
+pub fn decode_control_metadata(
+    body: Option<serde_json::Value>,
+) -> Result<Vec<PluginControlMetadata>, String> {
+    let controls: Vec<PluginControlMetadata> = decode_body(body)?;
+    if controls.len() > MAX_CATALOG_CONTROLS {
+        return Err("PiPedal control metadata exceeds configured limit".into());
+    }
+    let mut symbols = HashSet::with_capacity(controls.len());
+    for control in &controls {
+        if control.symbol.is_empty()
+            || !symbols.insert(&control.symbol)
+            || !control.min_value.is_finite()
+            || !control.max_value.is_finite()
+            || control.min_value > control.max_value
+            || control.value.is_some_and(|value| !value.is_finite())
+        {
+            return Err("PiPedal control metadata is invalid or duplicated".into());
+        }
+    }
+    Ok(controls)
+}
+
+/// Source-backed plugin class node used for bounded catalog readback.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PluginClassNode {
+    pub uri: String,
+    pub display_name: String,
+    pub parent_uri: String,
+    pub plugin_type: String,
+    #[serde(default)]
+    pub children: Vec<Self>,
+}
+
+fn validate_plugin_class_node(node: &PluginClassNode) -> Result<(), String> {
+    if node.uri.is_empty()
+        || node.display_name.is_empty()
+        || node.children.len() > MAX_PLUGIN_CLASS_CHILDREN
+    {
+        return Err("PiPedal plugin class node is invalid or exceeds child limit".into());
+    }
+    for child in &node.children {
+        validate_plugin_class_node(child)?;
+    }
+    Ok(())
+}
+
+/// Decode the `pluginClasses` tree without enabling class-driven writes.
+pub fn decode_plugin_classes(body: Option<serde_json::Value>) -> Result<PluginClassNode, String> {
+    let root: PluginClassNode = decode_body(body)?;
+    validate_plugin_class_node(&root)?;
+    Ok(root)
+}
+
+/// Decode PiPedal's source-backed `getFavorites` URI-to-flag map.
+pub fn decode_favorites(
+    body: Option<serde_json::Value>,
+) -> Result<std::collections::BTreeMap<String, bool>, String> {
+    let favorites: std::collections::BTreeMap<String, bool> = decode_body(body)?;
+    if favorites.len() > MAX_FAVORITES || favorites.keys().any(String::is_empty) {
+        return Err("PiPedal favorites contain invalid or excessive identities".into());
+    }
+    Ok(favorites)
+}
+
+/// Decode PiPedal's scalar `getGovernorSettings` response.
+pub fn decode_governor_settings(body: Option<serde_json::Value>) -> Result<String, String> {
+    let governor: String = decode_body(body)?;
+    if governor.trim().is_empty() || governor.len() > MAX_GOVERNOR_TEXT {
+        return Err("PiPedal governor setting is empty or excessive".into());
+    }
+    Ok(governor)
+}
+
+/// Decode PiPedal's scalar `getShowStatusMonitor` response.
+pub fn decode_show_status_monitor(body: Option<serde_json::Value>) -> Result<bool, String> {
+    decode_body(body)
+}
+
+/// Decode PiPedal's bounded Wi-Fi regulatory-domain label map.
+pub fn decode_wifi_regulatory_domains(
+    body: Option<serde_json::Value>,
+) -> Result<std::collections::BTreeMap<String, String>, String> {
+    let domains: std::collections::BTreeMap<String, String> = decode_body(body)?;
+    if domains.len() > MAX_WIFI_REGULATORY_DOMAINS
+        || domains.iter().any(|(key, value)| {
+            key.is_empty() || key.len() > 16 || value.trim().is_empty() || value.len() > 128
+        })
+    {
+        return Err("PiPedal Wi-Fi regulatory domains are invalid or excessive".into());
+    }
+    Ok(domains)
+}
+
+/// Validate a URI-to-favorite map before sending PiPedal's `setFavorites`.
+pub fn validate_favorites(
+    favorites: &std::collections::BTreeMap<String, bool>,
+) -> Result<(), String> {
+    if favorites.len() > MAX_FAVORITES || favorites.keys().any(String::is_empty) {
+        return Err("PiPedal favorites contain invalid or excessive identities".into());
+    }
+    Ok(())
+}
+
+/// Read-only version metadata returned by PiPedal's `version` request.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PiPedalVersion {
+    #[serde(default)]
+    pub server: String,
+    pub server_version: String,
+    #[serde(default)]
+    pub operating_system: String,
+    #[serde(default)]
+    pub os_version: String,
+    #[serde(default)]
+    pub debug: bool,
+}
+
+/// Decode and bound the version handshake response.
+pub fn decode_version(body: Option<serde_json::Value>) -> Result<PiPedalVersion, String> {
+    let version: PiPedalVersion = decode_body(body)?;
+    if version.server_version.is_empty()
+        || version.server.len() > MAX_VERSION_TEXT
+        || version.server_version.len() > MAX_VERSION_TEXT
+        || version.operating_system.len() > MAX_VERSION_TEXT
+        || version.os_version.len() > MAX_VERSION_TEXT
+    {
+        return Err("PiPedal version metadata is invalid or oversized".into());
+    }
+    Ok(version)
+}
+
+/// Decode the qualified plugin catalog envelope while leaving version-specific control metadata
+/// to the adapter's existing bounded projection.
+pub fn decode_plugin_catalog(
+    body: Option<serde_json::Value>,
+) -> Result<Vec<PluginCatalogEntry>, String> {
+    let entries: Vec<PluginCatalogEntry> = decode_body(body)?;
+    if entries.is_empty() || entries.len() > MAX_PLUGIN_ENTRIES {
+        return Err("PiPedal plugin catalog is empty or exceeds configured entry limit".into());
+    }
+    let mut uris = HashSet::with_capacity(entries.len());
+    for entry in &entries {
+        if entry.uri.is_empty() || entry.name.is_empty() || !uris.insert(&entry.uri) {
+            return Err("PiPedal plugin catalog has invalid or duplicate URI".into());
+        }
+        decode_control_metadata(Some(serde_json::Value::Array(entry.controls.clone())))?;
+    }
+    Ok(entries)
+}
+
 /// Ordered phases of a PiPedal control session.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum SessionPhase {
@@ -564,8 +1083,8 @@ pub enum SessionPhase {
 
 /// The bounded read-only requests used to populate a fresh PiPedal session.
 #[must_use]
-pub const fn startup_requests() -> [&'static str; 5] {
-    ["hello", "version", "plugins", "currentPedalboard", "getSystemMidiBindings"]
+pub const fn startup_requests() -> [&'static str; 6] {
+    ["hello", "version", "plugins", "currentPedalboard", "getSystemMidiBindings", "getFavorites"]
 }
 
 impl SessionPhase {
@@ -585,7 +1104,7 @@ impl SessionPhase {
             (
                 Self::LoadingCatalog,
                 "plugins" | "currentPedalboard" | "pluginClasses" | "getPresets" | "getBankIndex"
-                | "getFavorites" | "imageList",
+                | "imageList",
             ) => Ok(Self::LoadingCatalog),
             (Self::Ready, _) => Ok(Self::Ready),
             (phase, message) => {
@@ -646,6 +1165,154 @@ impl SetControl {
     }
 }
 
+/// Body accepted by PiPedal's pedalboard-item enable/bypass operation.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct SetPedalboardItemEnable {
+    /// PiPedal client identity that owns the session.
+    #[serde(rename = "clientId")]
+    pub client_id: u64,
+    /// Runtime pedalboard instance identifier.
+    #[serde(rename = "instanceId")]
+    pub instance_id: u64,
+    /// Whether the item should be enabled (false means bypassed).
+    pub enabled: bool,
+}
+
+impl SetPedalboardItemEnable {
+    /// Validate the runtime identity before encoding a write.
+    pub fn validate(&self) -> Result<(), String> {
+        if self.instance_id == 0 {
+            return Err("PiPedal pedalboard item identity is invalid".into());
+        }
+        Ok(())
+    }
+}
+
+/// Body accepted by PiPedal's pedalboard-item plugin-UI mode operation.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct SetPedalboardItemUseModUi {
+    /// PiPedal client identity that owns the session.
+    #[serde(rename = "clientId")]
+    pub client_id: u64,
+    /// Runtime pedalboard instance identifier.
+    #[serde(rename = "instanceId")]
+    pub instance_id: u64,
+    /// Whether the item should use its plugin-provided UI.
+    #[serde(rename = "useModUi")]
+    pub use_mod_ui: bool,
+}
+
+impl SetPedalboardItemUseModUi {
+    /// Validate the runtime identity before encoding.
+    pub fn validate(&self) -> Result<(), String> {
+        if self.instance_id == 0 {
+            return Err("PiPedal pedalboard item identity is invalid".into());
+        }
+        Ok(())
+    }
+}
+
+/// Body accepted by PiPedal's pedalboard-item title operation.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct SetPedalboardItemTitle {
+    /// Runtime pedalboard instance identifier.
+    #[serde(rename = "instanceId")]
+    pub instance_id: u64,
+    /// User-visible pedalboard item title.
+    pub title: String,
+    /// PiPedal icon color key.
+    #[serde(rename = "colorKey")]
+    pub color_key: String,
+}
+
+impl SetPedalboardItemTitle {
+    /// Validate the runtime identity and title fields before encoding.
+    pub fn validate(&self) -> Result<(), String> {
+        if self.instance_id == 0 || self.title.trim().is_empty() || self.color_key.trim().is_empty()
+        {
+            return Err("PiPedal pedalboard item title fields are invalid".into());
+        }
+        Ok(())
+    }
+}
+
+/// Body accepted by PiPedal's MIDI listener operation.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ListenForMidiEvent {
+    /// Client-generated listener handle.
+    pub handle: u64,
+}
+
+/// Body accepted by PiPedal's patch-property monitor operation.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct MonitorPatchProperty {
+    /// Runtime pedalboard instance identifier.
+    #[serde(rename = "instanceId")]
+    pub instance_id: u64,
+    /// Client-generated monitor handle.
+    #[serde(rename = "clientHandle")]
+    pub client_handle: u64,
+    /// Patch property URI to monitor.
+    #[serde(rename = "propertyUri")]
+    pub property_uri: String,
+}
+
+/// Body accepted by PiPedal's plugin-preset load operation.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct LoadPluginPreset {
+    /// Runtime plugin instance identifier.
+    #[serde(rename = "pluginInstanceId")]
+    pub plugin_instance_id: u64,
+    /// Preset instance identifier returned by PiPedal.
+    #[serde(rename = "presetInstanceId")]
+    pub preset_instance_id: u64,
+}
+
+/// Preset instance identifier accepted by PiPedal's current-preset load operation.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct LoadPreset(pub i64);
+
+impl LoadPreset {
+    /// Validate the preset identity before encoding.
+    pub fn validate(&self) -> Result<(), String> {
+        if self.0 <= 0 {
+            return Err("PiPedal preset instance identity is invalid".into());
+        }
+        Ok(())
+    }
+}
+
+impl LoadPluginPreset {
+    /// Validate both runtime identities before encoding.
+    pub fn validate(&self) -> Result<(), String> {
+        if self.plugin_instance_id == 0 || self.preset_instance_id == 0 {
+            return Err("PiPedal plugin-preset identities are invalid".into());
+        }
+        Ok(())
+    }
+}
+
+impl MonitorPatchProperty {
+    /// Validate identities and the property URI before encoding.
+    pub fn validate(&self) -> Result<(), String> {
+        if self.instance_id == 0 || self.client_handle == 0 || self.property_uri.trim().is_empty() {
+            return Err("PiPedal patch-property monitor fields are invalid".into());
+        }
+        Ok(())
+    }
+}
+
+impl ListenForMidiEvent {
+    /// Validate the listener handle before encoding.
+    pub fn validate(&self) -> Result<(), String> {
+        if self.handle == 0 {
+            return Err("PiPedal MIDI listener handle is invalid".into());
+        }
+        Ok(())
+    }
+}
+
 /// `PiPedal` system or plugin MIDI binding metadata.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -694,6 +1361,15 @@ impl SystemMidiBindings {
         }
         Ok(())
     }
+}
+
+/// Decode the read-only array returned by `getSystemMidiBindings`.
+pub fn decode_system_midi_bindings(
+    body: Option<serde_json::Value>,
+) -> Result<Vec<MidiBinding>, String> {
+    let bindings: Vec<MidiBinding> = decode_body(body)?;
+    SystemMidiBindings { bindings: bindings.clone() }.validate()?;
+    Ok(bindings)
 }
 
 /// Stable identity for a discovered PiPedal plugin instance.
@@ -1231,6 +1907,7 @@ mod tests {
             "getPresets",
             "getBankIndex",
             "getSystemMidiBindings",
+            "getFavorites",
         ] {
             session.accept(message).expect("handshake");
         }
@@ -1316,13 +1993,163 @@ mod tests {
     }
 
     #[test]
+    fn preset_readback_decoder_accepts_qualified_source_shape() {
+        let body = serde_json::json!({
+            "selectedInstanceId": 7,
+            "presetChanged": true,
+            "presets": [
+                {"instanceId": 7, "name": "Clean"},
+                {"instanceId": 8, "name": "Drive"}
+            ]
+        });
+        let index = decode_preset_index(Some(body)).expect("preset index");
+        assert_eq!(index.selected_instance_id, 7);
+        assert!(index.preset_changed);
+        assert_eq!(index.presets[1].name, "Drive");
+    }
+
+    #[test]
+    fn preset_readback_decoder_rejects_duplicates_and_oversized_catalogs() {
+        let duplicate = serde_json::json!({
+            "selectedInstanceId": -1,
+            "presetChanged": false,
+            "presets": [{"instanceId": 1, "name": "A"}, {"instanceId": 1, "name": "B"}]
+        });
+        assert!(decode_preset_index(Some(duplicate)).is_err());
+        let oversized = serde_json::json!({
+            "selectedInstanceId": -1,
+            "presetChanged": false,
+            "presets": (0..=MAX_PRESET_ENTRIES).map(|id| serde_json::json!({"instanceId": id, "name": id.to_string()})).collect::<Vec<_>>()
+        });
+        assert!(decode_preset_index(Some(oversized)).is_err());
+    }
+
+    #[test]
+    fn bank_readback_decoder_accepts_qualified_source_shape() {
+        let body = serde_json::json!({
+            "selectedBank": 11,
+            "entries": [
+                {"instanceId": 11, "name": "Factory"},
+                {"instanceId": 12, "name": "User"}
+            ]
+        });
+        let index = decode_bank_index(Some(body)).expect("bank index");
+        assert_eq!(index.selected_bank, 11);
+        assert_eq!(index.entries[1].name, "User");
+    }
+
+    #[test]
+    fn bank_readback_decoder_rejects_duplicates_and_oversized_catalogs() {
+        let duplicate = serde_json::json!({
+            "selectedBank": -1,
+            "entries": [{"instanceId": 1, "name": "A"}, {"instanceId": 1, "name": "B"}]
+        });
+        assert!(decode_bank_index(Some(duplicate)).is_err());
+        let oversized = serde_json::json!({
+            "selectedBank": -1,
+            "entries": (0..=MAX_BANK_ENTRIES).map(|id| serde_json::json!({"instanceId": id, "name": id.to_string()})).collect::<Vec<_>>()
+        });
+        assert!(decode_bank_index(Some(oversized)).is_err());
+    }
+
+    #[test]
+    fn current_pedalboard_decoder_accepts_qualified_source_shape() {
+        let body = serde_json::json!({
+            "items": [{"instanceId": 7, "uri": "urn:eq", "controlValues": [{"key": "gain", "value": 0.5}]}]
+        });
+        let state = decode_current_pedalboard(Some(body)).expect("pedalboard");
+        assert_eq!(state.items[0].instance_id, 7);
+        assert_eq!(state.items[0].control_values[0].key, "gain");
+    }
+
+    #[test]
+    fn current_pedalboard_decoder_rejects_duplicates_nonfinite_and_oversized_state() {
+        let duplicate = serde_json::json!({
+            "items": [{"instanceId": 1, "uri": "urn:a"}, {"instanceId": 1, "uri": "urn:b"}]
+        });
+        assert!(decode_current_pedalboard(Some(duplicate)).is_err());
+        let nonfinite = serde_json::json!({
+            "items": [{"instanceId": 1, "uri": "urn:a", "controlValues": [{"key": "x", "value": "NaN"}]}]
+        });
+        assert!(decode_current_pedalboard(Some(nonfinite)).is_err());
+        let oversized = serde_json::json!({
+            "items": (1..=MAX_PEDALBOARD_ITEMS + 1).map(|id| serde_json::json!({"instanceId": id, "uri": id.to_string()})).collect::<Vec<_>>()
+        });
+        assert!(decode_current_pedalboard(Some(oversized)).is_err());
+    }
+
+    #[test]
+    fn plugin_catalog_decoder_bounds_identity_envelope() {
+        let body = serde_json::json!([{"uri": "urn:eq", "name": "EQ", "controls": []}]);
+        let entries = decode_plugin_catalog(Some(body)).expect("plugin catalog");
+        assert_eq!(entries[0].uri, "urn:eq");
+        let duplicate = serde_json::json!([
+            {"uri": "urn:eq", "name": "EQ"}, {"uri": "urn:eq", "name": "EQ 2"}
+        ]);
+        assert!(decode_plugin_catalog(Some(duplicate)).is_err());
+    }
+
+    #[test]
+    fn control_metadata_decoder_validates_ranges_and_aliases() {
+        let body = serde_json::json!([{
+            "symbol": "gain", "minValue": -12, "maxValue": 12,
+            "value": 0, "writable": true, "label": "Gain"
+        }]);
+        let controls = decode_control_metadata(Some(body)).expect("control metadata");
+        assert_eq!(controls[0].symbol, "gain");
+        assert_eq!(controls[0].value, Some(0.0));
+        let invalid = serde_json::json!([{"symbol": "gain", "minValue": 2, "maxValue": 1}]);
+        assert!(decode_control_metadata(Some(invalid)).is_err());
+    }
+
+    #[test]
+    fn plugin_class_decoder_bounds_source_tree() {
+        let body = serde_json::json!({
+            "uri": "urn:root", "display_name": "Root", "parent_uri": "", "plugin_type": "None",
+            "children": [{"uri": "urn:fx", "display_name": "Effects", "parent_uri": "urn:root", "plugin_type": "Effect"}]
+        });
+        let root = decode_plugin_classes(Some(body)).expect("plugin classes");
+        assert_eq!(root.children[0].uri, "urn:fx");
+        let invalid = serde_json::json!({"uri":"", "display_name":"Root", "parent_uri":"", "plugin_type":"None"});
+        assert!(decode_plugin_classes(Some(invalid)).is_err());
+    }
+
+    #[test]
+    fn favorites_decoder_accepts_source_map_and_rejects_empty_key() {
+        let value = decode_favorites(Some(serde_json::json!({"urn:eq": true}))).expect("favorites");
+        assert!(value.get("urn:eq").copied().unwrap_or(false));
+        assert!(decode_favorites(Some(serde_json::json!({"": true}))).is_err());
+    }
+
+    #[test]
+    fn version_decoder_accepts_source_shape_and_bounds_text() {
+        let body = serde_json::json!({"server":"PiPedal","serverVersion":"2.0","operatingSystem":"Linux","osVersion":"6","debug":false});
+        assert_eq!(decode_version(Some(body)).expect("version").server_version, "2.0");
+        let invalid = serde_json::json!({"server":"PiPedal","serverVersion":"","operatingSystem":"Linux","osVersion":"6","debug":false});
+        assert!(decode_version(Some(invalid)).is_err());
+    }
+
+    #[test]
+    fn system_midi_readback_decoder_accepts_array_and_enforces_limits() {
+        let body = serde_json::json!([{
+            "symbol":"gain", "channel":1, "bindingType":0, "note":0, "control":7,
+            "minControlValue":0, "maxControlValue":127, "minValue":0.0, "maxValue":1.0,
+            "rotaryScale":1.0, "linearControlType":0, "switchControlType":0
+        }]);
+        assert_eq!(decode_system_midi_bindings(Some(body)).expect("bindings").len(), 1);
+        let invalid = serde_json::json!([{"symbol":"gain","channel":99,"control":7,"minValue":0,"maxValue":1,"minControlValue":0,"maxControlValue":127,"bindingType":0,"note":0,"rotaryScale":1,"linearControlType":0,"switchControlType":0}]);
+        assert!(decode_system_midi_bindings(Some(invalid)).is_err());
+    }
+
+    #[test]
     fn session_requires_hello_and_version_before_catalog_ready() {
         assert_eq!(SessionPhase::Connected.accept("ehlo").expect("ehlo"), SessionPhase::Identified);
         assert!(SessionPhase::Connected.accept("hello").is_err());
         assert!(SessionPhase::Connected.accept("getSystemMidiBindings").is_err());
         let phase = SessionPhase::Identified.accept("version").expect("version");
         let phase = phase.accept("plugins").expect("plugins");
-        assert_eq!(phase.accept("getSystemMidiBindings").expect("bindings"), SessionPhase::Ready);
+        let phase = phase.accept("getSystemMidiBindings").expect("bindings");
+        assert_eq!(phase.accept("getFavorites").expect("favorites"), SessionPhase::Ready);
         assert_eq!(phase.reset(), SessionPhase::Disconnected);
     }
 
@@ -1331,7 +2158,8 @@ mod tests {
         let requests = startup_requests();
         assert_eq!(requests[0], "hello");
         assert_eq!(requests[1], "version");
-        assert_eq!(requests.last(), Some(&"getSystemMidiBindings"));
+        assert_eq!(requests[4], "getSystemMidiBindings");
+        assert_eq!(requests.last(), Some(&"getFavorites"));
         assert!(requests.len() <= 16);
     }
 
@@ -1352,7 +2180,7 @@ mod tests {
                 assert!(!operation.is_read_only());
             }
         }
-        assert_eq!(Operation::all().len(), 18);
+        assert_eq!(Operation::all().len(), 42);
         assert!(Operation::all().iter().all(|operation| !operation.wire_name().is_empty()));
         assert_eq!(serde_json::to_string(&Operation::SetControl).expect("json"), "\"setControl\"");
     }
@@ -1523,5 +2351,27 @@ mod tests {
             duplicate_control.resolve_mapping(&mapping),
             Err("PiPedal mapping control is ambiguous".into())
         );
+    }
+
+    #[test]
+    fn monitoring_payloads_match_source_names_and_reject_zero_handles() {
+        let listen = ListenForMidiEvent { handle: 4 };
+        assert_eq!(
+            serde_json::to_value(&listen).expect("listen payload"),
+            serde_json::json!({"handle": 4})
+        );
+        assert!(ListenForMidiEvent { handle: 0 }.validate().is_err());
+        let monitor = MonitorPatchProperty {
+            instance_id: 7,
+            client_handle: 4,
+            property_uri: "urn:property".into(),
+        };
+        assert_eq!(
+            serde_json::to_value(&monitor).expect("monitor payload"),
+            serde_json::json!({"instanceId": 7, "clientHandle": 4, "propertyUri": "urn:property"})
+        );
+        assert!(MonitorPatchProperty { property_uri: String::new(), ..monitor }
+            .validate()
+            .is_err());
     }
 }
