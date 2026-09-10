@@ -12376,3 +12376,6 @@ Evidence (2026-09-08): Devices browser gate initially observed a transient daemo
 - **Tone3000 download boundary slice (2026-09-10):** Confirmed `DownloadModelsFromTone3000` carries
   PKCE parameters, response authorization URI, and download destination; catalogued it without
   connector exposure until a dedicated credential-safe design exists.
+- **Audio-file ordering slice (2026-09-10):** Added the source-registered `moveAudioFile` confirmed
+  scalar/object mutation with generation-checked path and position bounds. Daemon/browser and
+  installed qualification remain pending W150.

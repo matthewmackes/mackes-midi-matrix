@@ -486,6 +486,8 @@ pub enum Operation {
     GetChannelRouterSettings,
     /// Replace channel-router settings.
     SetChannelRouterSettings,
+    /// Move an audio file within a bounded ordering.
+    MoveAudioFile,
     /// Create Tone3000 PKCE parameters.
     MakeTone3000Pkce,
     /// Cancel an active Tone3000 download.
@@ -596,6 +598,7 @@ impl Operation {
             Self::CopyPresetsToBank,
             Self::GetChannelRouterSettings,
             Self::SetChannelRouterSettings,
+            Self::MoveAudioFile,
             Self::MakeTone3000Pkce,
             Self::CancelTone3000Download,
             Self::LoadPluginPreset,
@@ -691,6 +694,7 @@ impl Operation {
             Self::CopyPresetsToBank => "copyPresetsToBank",
             Self::GetChannelRouterSettings => "getChannelRouterSettings",
             Self::SetChannelRouterSettings => "setChannelRouterSettings",
+            Self::MoveAudioFile => "moveAudioFile",
             Self::MakeTone3000Pkce => "makeTone3000Pkce",
             Self::CancelTone3000Download => "cancelTone3000Download",
             Self::LoadPluginPreset => "loadPluginPreset",
@@ -742,6 +746,7 @@ impl Operation {
                 | Self::ImportPresetsFromBank
                 | Self::CopyPresetsToBank
                 | Self::SetChannelRouterSettings
+                | Self::MoveAudioFile
                 | Self::CancelTone3000Download
                 | Self::DeletePresetItems
                 | Self::SetOnboarding
@@ -843,6 +848,7 @@ impl Operation {
             Self::GetKnownWifiNetworks => "diagnostics",
             Self::GetImageList => "diagnostics",
             Self::GetChannelRouterSettings | Self::SetChannelRouterSettings => "preferences",
+            Self::MoveAudioFile => "assets",
             Self::MakeTone3000Pkce => "assets",
             Self::CancelTone3000Download => "assets",
             Self::RequestFileList2 => "assets",
@@ -1666,6 +1672,15 @@ pub struct ChannelRouterSettings {
     pub main_output_channels: Vec<i64>,
     pub aux_input_channels: Vec<i64>,
     pub aux_output_channels: Vec<i64>,
+}
+
+/// Source-shaped audio-file ordering mutation.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MoveAudioFileRequest {
+    pub path: String,
+    pub from: i32,
+    pub to: i32,
 }
 
 impl ChannelRouterSettings {
@@ -3278,7 +3293,7 @@ mod tests {
                 assert!(!operation.is_read_only());
             }
         }
-        assert_eq!(Operation::all().len(), 88);
+        assert_eq!(Operation::all().len(), 89);
         assert!(Operation::all().iter().all(|operation| !operation.wire_name().is_empty()));
         assert_eq!(serde_json::to_string(&Operation::SetControl).expect("json"), "\"setControl\"");
     }

@@ -935,6 +935,37 @@ impl Worker {
         .map_err(|error| error.to_string())
     }
 
+    /// Prepares a generation-checked, confirmed audio-file move.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the generation, path, or positions are invalid.
+    pub fn prepare_move_audio_file(
+        &self,
+        generation: u64,
+        request: mackes_pipedal_connector::MoveAudioFileRequest,
+        reply_to: Option<u64>,
+    ) -> Result<Vec<u8>, String> {
+        if generation != self.session.generation() {
+            return Err("PiPedal audio-file move belongs to an old session generation".into());
+        }
+        if request.path.is_empty()
+            || request.path.len() > 1024
+            || request.path.contains("..")
+            || request.from < 0
+            || request.to < 0
+            || request.from == request.to
+        {
+            return Err("PiPedal audio-file move is invalid or excessive".into());
+        }
+        mackes_pipedal_connector::encode_request(&mackes_pipedal_connector::Request {
+            message: "moveAudioFile".into(),
+            reply_to,
+            body: Some(request),
+        })
+        .map_err(|error| error.to_string())
+    }
+
     /// Prepares a generation-checked Tone3000 digest query.
     ///
     /// # Errors

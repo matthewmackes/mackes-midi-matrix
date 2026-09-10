@@ -188,7 +188,7 @@ user-facing workflow without needing an independent button; require a documented
 | renameFilePropertyFile | catalogued | Device assets/library | confirmed bounded adapter write implemented; daemon/browser/installed qualification pending W150 |
 | copyFilePropertyFile | missing | Device assets/library | pending W150 |
 | getFilePropertyDirectoryTree | missing | Device assets/library | pending W150 |
-| moveAudioFile | missing | Device assets/library | pending W150 |
+| moveAudioFile | catalogued | Device assets/library | confirmed bounded adapter write implemented; daemon/browser/installed qualification pending W150 |
 | setOnboarding | catalogued | Device system settings | confirmed bounded adapter write implemented; daemon/browser/installed qualification pending W150 |
 | getWifiRegulatoryDomains | catalogued | Device system settings | bounded startup readback and adapter projection implemented; daemon/browser/installed qualification pending W150 |
 | setAlsaSequencerConfiguration | catalogued | Device system settings | confirmed bounded adapter write implemented; daemon/browser/installed qualification pending W150 |
