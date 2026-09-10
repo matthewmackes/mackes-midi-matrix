@@ -11224,6 +11224,11 @@ Execution board: `docs/worklist-execution-board.md`.
   `scripts/browser-novice-surface-smoke.py` to installed qualification. It passed against the local
   host, finding no textarea/pre/code-editor surface and confirming guided selectors for device,
   control, channel, destination, and PiPedal repair choices alongside graphical studio content.
+- **Qualification boundary (2026-09-10):** The aggregate installed gate reaches the PiPedal catalog
+  fixture but stops because the authoritative live PiPedal projection currently reports zero controls
+  and zero targets (`pipedald.service` is active; PiPedal v2.0.110). The fixture remains fail-closed;
+  no hand-built pedalboard or guessed preset was injected. Generation ordering and visual draft
+  preservation were updated for the graphical UI and pass independently.
 
 #### [ ] W177 — Install and close the graphical studio release
 
