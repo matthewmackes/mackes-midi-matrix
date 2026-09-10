@@ -11305,6 +11305,10 @@ Execution board: `docs/worklist-execution-board.md`.
   connected device inventory, and four MIDISPORT ports. A bounded 10-second soak produced 4 samples
   with zero status failures, zero dropped events, zero restarts, and stable 119,268 KiB daemon RSS.
   This confirms service stability; physical write, LED, and native readback claims remain unasserted.
+- **Extended soak checkpoint (2026-09-10):** A bounded 60-second observation soak produced 6 samples
+  with zero status failures, zero dropped events, zero restarts, and stable 119,268 KiB daemon RSS.
+  This strengthens the installed service evidence without changing the physical-write qualification
+  boundary.
 
 ## 4. Dependency and parallelization map
 
