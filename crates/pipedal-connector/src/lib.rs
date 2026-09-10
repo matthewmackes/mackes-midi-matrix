@@ -1240,6 +1240,47 @@ pub fn decode_jack_settings(
     Ok(selection)
 }
 
+/// Source-backed JACK runtime configuration readback.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[allow(clippy::struct_excessive_bools)]
+pub struct JackConfiguration {
+    pub is_valid: bool,
+    pub is_onboarding: bool,
+    pub is_restarting: bool,
+    pub error_status: String,
+    pub sample_rate: u32,
+    pub block_length: u64,
+    pub midi_buffer_size: u64,
+    pub max_allowed_midi_delta: f64,
+    pub input_audio_ports: Vec<String>,
+    pub output_audio_ports: Vec<String>,
+    pub input_midi_devices: Vec<JackMidiDeviceInfo>,
+}
+
+/// Decode and bound PiPedal's JACK runtime configuration response.
+pub fn decode_jack_configuration(
+    body: Option<serde_json::Value>,
+) -> Result<JackConfiguration, String> {
+    let configuration: JackConfiguration = decode_body(body)?;
+    let valid_text = |value: &String| value.len() <= MAX_JACK_DEVICE_TEXT;
+    if !configuration.max_allowed_midi_delta.is_finite()
+        || configuration.input_audio_ports.len() > 256
+        || configuration.output_audio_ports.len() > 256
+        || configuration.input_midi_devices.len() > 256
+        || configuration.error_status.len() > MAX_JACK_DEVICE_TEXT
+        || configuration.input_audio_ports.iter().any(|value| !valid_text(value))
+        || configuration.output_audio_ports.iter().any(|value| !valid_text(value))
+        || configuration
+            .input_midi_devices
+            .iter()
+            .any(|device| !valid_text(&device.name) || !valid_text(&device.description))
+    {
+        return Err("PiPedal JACK configuration is invalid or excessive".into());
+    }
+    Ok(configuration)
+}
+
 /// Validate a URI-to-favorite map before sending PiPedal's `setFavorites`.
 pub fn validate_favorites(
     favorites: &std::collections::BTreeMap<String, bool>,

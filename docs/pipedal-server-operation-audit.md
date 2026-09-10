@@ -129,7 +129,7 @@ user-facing workflow without needing an independent button; require a documented
 | getGovernorSettings | catalogued | Device system settings | bounded startup readback and adapter projection implemented; daemon/browser/installed qualification pending W150 |
 | getJackServerSettings | catalogued | Device system settings | bounded response decoder and adapter projection implemented; daemon/browser/installed qualification pending W150 |
 | getBankIndex | catalogued | Presets and snapshots | bounded readback implemented; full browser/installed qualification pending W150 |
-| getJackConfiguration | missing | Device system settings | pending W150 |
+| getJackConfiguration | catalogued | Device system settings | bounded response decoder and adapter projection implemented; daemon/browser/installed qualification pending W150 |
 | getJackSettings | catalogued | Device system settings | bounded response decoder and adapter projection implemented; daemon/browser/installed qualification pending W150 |
 | saveCurrentPreset | catalogued | Presets and snapshots | pending W150 |
 | saveCurrentPresetAs | catalogued | Presets and snapshots | source-backed payload; execution/readback pending W150 |

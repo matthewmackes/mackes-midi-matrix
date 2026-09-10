@@ -12240,3 +12240,6 @@ Evidence (2026-09-08): Devices browser gate initially observed a transient daemo
 - **JACK-channel-settings readback slice (2026-09-10):** Added bounded decoding and generation-checked
   adapter query/retention for source-registered `getJackSettings` channel selections. Daemon,
   browser, and installed qualification remain pending W150.
+- **JACK-configuration readback slice (2026-09-10):** Added bounded decoding and generation-checked
+  adapter query/retention for source-registered `getJackConfiguration` runtime configuration.
+  Daemon, browser, and installed qualification remain pending W150.

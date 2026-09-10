@@ -253,6 +253,7 @@ pub struct Worker {
     jack_status: Option<mackes_pipedal_connector::JackHostStatus>,
     jack_server_settings: Option<mackes_pipedal_connector::JackServerSettings>,
     jack_settings: Option<mackes_pipedal_connector::JackChannelSelection>,
+    jack_configuration: Option<mackes_pipedal_connector::JackConfiguration>,
     plugin_presets: std::collections::BTreeMap<String, mackes_pipedal_connector::PluginUiPresets>,
     wifi_regulatory_domains: std::collections::BTreeMap<String, String>,
     system_midi_bindings: Vec<mackes_pipedal_connector::MidiBinding>,
@@ -294,6 +295,7 @@ impl Worker {
             jack_status: None,
             jack_server_settings: None,
             jack_settings: None,
+            jack_configuration: None,
             plugin_presets: std::collections::BTreeMap::new(),
             wifi_regulatory_domains: std::collections::BTreeMap::new(),
             system_midi_bindings: Vec::new(),
@@ -359,6 +361,7 @@ impl Worker {
                     self.jack_status = None;
                     self.jack_server_settings = None;
                     self.jack_settings = None;
+                    self.jack_configuration = None;
                     self.plugin_presets.clear();
                     self.wifi_regulatory_domains.clear();
                     self.system_midi_bindings.clear();
@@ -574,6 +577,13 @@ impl Worker {
                 );
                 Ok(())
             }
+            "getJackConfiguration" => {
+                self.jack_configuration = Some(
+                    mackes_pipedal_connector::decode_jack_configuration(body)
+                        .map_err(|_| TransportError::Protocol)?,
+                );
+                Ok(())
+            }
             "getPluginPresets" => {
                 let catalog = mackes_pipedal_connector::decode_plugin_presets(body)
                     .map_err(|_| TransportError::Protocol)?;
@@ -750,6 +760,12 @@ impl Worker {
     #[must_use]
     pub const fn jack_settings(&self) -> Option<&mackes_pipedal_connector::JackChannelSelection> {
         self.jack_settings.as_ref()
+    }
+
+    /// Last validated JACK runtime configuration.
+    #[must_use]
+    pub const fn jack_configuration(&self) -> Option<&mackes_pipedal_connector::JackConfiguration> {
+        self.jack_configuration.as_ref()
     }
 
     /// Last validated plugin-preset catalogs keyed by plugin URI.
@@ -1980,6 +1996,47 @@ impl Worker {
             return Err("PiPedal session is not ready for JACK-settings queries".into());
         }
         let frame = self.prepare_get_jack_settings(generation, reply_to)?;
+        self.session.enqueue(generation, frame)
+    }
+
+    /// Prepares a generation-checked, read-only JACK configuration query.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the generation is stale or encoding fails.
+    pub fn prepare_get_jack_configuration(
+        &self,
+        generation: u64,
+        reply_to: Option<u64>,
+    ) -> Result<Vec<u8>, String> {
+        if generation != self.session.generation() {
+            return Err(
+                "PiPedal JACK configuration query belongs to an old session generation".into()
+            );
+        }
+        mackes_pipedal_connector::encode_request(&mackes_pipedal_connector::Request::<()> {
+            message: "getJackConfiguration".into(),
+            reply_to,
+            body: None,
+        })
+        .map_err(|error| error.to_string())
+    }
+
+    /// Queues a read-only JACK configuration query for a ready session.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the session is not ready, the generation is stale, or queue
+    /// admission fails.
+    pub fn query_jack_configuration(
+        &mut self,
+        generation: u64,
+        reply_to: Option<u64>,
+    ) -> Result<(), String> {
+        if !self.session.is_ready() {
+            return Err("PiPedal session is not ready for JACK configuration queries".into());
+        }
+        let frame = self.prepare_get_jack_configuration(generation, reply_to)?;
         self.session.enqueue(generation, frame)
     }
 
