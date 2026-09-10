@@ -166,7 +166,7 @@ user-facing workflow without needing an independent button; require a documented
 | renamePresetItem | catalogued | Presets and snapshots | confirmed bounded adapter write implemented; daemon/browser/installed qualification pending W150 |
 | copyPreset | catalogued | Presets and snapshots | confirmed bounded adapter write implemented; daemon/browser/installed qualification pending W150 |
 | copyPluginPreset | catalogued | Presets and snapshots | confirmed bounded adapter write implemented; daemon/browser/installed qualification pending W150 |
-| setPatchProperty | missing | Pedalboard and parameter inspector | pending W150 |
+| setPatchProperty | catalogued | Pedalboard and parameter inspector | confirmed bounded raw JSON adapter write implemented; daemon/browser/installed qualification pending W150 |
 | setPedalboardItemTitle | catalogued | Pedalboard and parameter inspector | pending W150 |
 | getPatchProperty | missing | Pedalboard and parameter inspector | pending W150 |
 | monitorPort | missing | Monitoring and MIDI | pending W150 |

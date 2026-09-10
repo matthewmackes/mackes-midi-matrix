@@ -12318,3 +12318,6 @@ Evidence (2026-09-08): Devices browser gate initially observed a transient daemo
 - **Forced-update-check write slice (2026-09-10):** Added the source-registered `forceUpdateCheck`
   no-body command with confirmed, generation-checked adapter encoding. Daemon/browser and
   installed qualification remain pending W150.
+- **Patch-property write slice (2026-09-10):** Added the source-registered `setPatchProperty` raw
+  JSON payload with confirmed, generation-checked identity and 16 KiB value bounds. Daemon,
+  browser, and installed qualification remain pending W150.
