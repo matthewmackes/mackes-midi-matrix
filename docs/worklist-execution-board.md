@@ -16,7 +16,9 @@ The PiPedal generation boundary was corrected and reinstalled; snapshot and conn
 match, and the approved typed `loadPreset(16)` request was accepted/queued. The generation fixture now
 asserts the Devices workspace's applied-generation marker, avoiding interference from an independent
 PiPedal subrefresh. The final installed aggregate passed all 16 fixtures, including lossless-route and
-task-ownership checks.
+task-ownership checks. The subsequently added visual-accessibility fixture also passes independently
+with light theme, reduced motion, 200% zoom, and 56 non-color-labeled controls; the assignment
+fixture was hardened against concurrent DOM refresh races and passes independently.
 The visual review pass also confirms the installed signal-flow canvas keeps 32 devices distinct in a
 scrollable layout and the normal Devices/Routing text avoids internal URIs and runtime identities.
 The formal `scripts/release-gate.sh` also passes end to end, including workspace tests, emulator,
