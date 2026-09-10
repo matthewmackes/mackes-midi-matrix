@@ -11163,6 +11163,10 @@ Execution board: `docs/worklist-execution-board.md`.
   status panel, added guided settings and qualified-command entry points, and preserved raw backup
   and diagnostics downloads as file boundaries. Full graphical health timelines and recovery flows
   remain open.
+- **Implementation checkpoint (2026-09-10, follow-up):** Replaced free-form device profile,
+  control, channel, and destination fields with named selectors and a bounded value slider; system
+  status cards now summarize nested values as readable availability/counts. The remaining PiPedal
+  repair/preset prompts and full graphical diagnostics/recovery flows remain open.
 
 #### [ ] W175 — Version graphical capability, draft, and renderer contracts
 

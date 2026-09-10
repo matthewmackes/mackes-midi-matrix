@@ -210,7 +210,7 @@ function renderDeviceBoard(body) {
   const devices = Array.isArray(body) ? body : (body?.endpoints || body?.devices || []);
   renderStudioFlow(devices);
   deviceBoard.replaceChildren();
-  const endpointOptions = document.querySelector('#endpoint-options'); endpointOptions.replaceChildren();
+  const endpointOptions = document.querySelector('#device-destination'); endpointOptions.replaceChildren();
   devices.forEach(device => { const option = document.createElement('option'); option.value = device.id || device.name || device.alias || ''; option.label = device.name || device.alias || option.value; if (option.value) endpointOptions.append(option); });
   if (!devices.length) { deviceBoard.hidden = true; return; }
   deviceBoard.hidden = false;
@@ -301,7 +301,16 @@ function renderFilteredFeatures() {
 }
 function configureDeviceControl(profile, control) {
   document.querySelector('#device-profile').value = profile;
-  document.querySelector('#device-control-name').value = control;
+  const controls = {
+    'novation.launch-control-xl': ['Knob', 'Channel button', 'Utility control', 'Fader'],
+    'eventide.micropitch': ['Expression', 'Tap trigger', 'Active / bypass', 'FLEX', 'Mix', 'Pitch A', 'Pitch B', 'Depth', 'Tone', 'Delay A', 'Delay B', 'Feedback', 'Output level'],
+    'lexicon.reflex': ['Algorithm', 'Parameter', 'Echo Rhythm', 'MIDI patch', 'Register recall', 'Register store', 'Bypass'],
+    pipedal: ['Plugin control', 'Snapshot', 'Preset', 'Pedalboard item'],
+  }[profile] || [];
+  const controlChoice = document.querySelector('#device-control-name');
+  controlChoice.replaceChildren(new Option('Choose a device control', ''));
+  controls.forEach(value => controlChoice.add(new Option(value, value.toLowerCase().replace(/[^a-z0-9]+/g, '-'))));
+  controlChoice.value = control || '';
   const reset = profile === 'lexicon.reflex' && control === 'system-reset';
   for (const id of ['device-channel', 'device-value']) {
     const input = document.querySelector(`#${id}`);
@@ -309,8 +318,10 @@ function configureDeviceControl(profile, control) {
     input.closest('label').hidden = reset;
   }
   if (!reset) document.querySelector('#device-value').value = 0;
+  document.querySelector('#device-value-display').textContent = document.querySelector('#device-value').value;
   document.querySelector('#device-control-name').focus();
 }
+document.querySelector('#device-value').addEventListener('input', event => { document.querySelector('#device-value-display').textContent = event.target.value; });
 featureFilter.addEventListener('input', renderFilteredFeatures);
 function renderCapabilityBoard(body) {
   capabilityBoard.replaceChildren();
@@ -332,8 +343,8 @@ function renderSystemBoard(body) {
     const card = document.createElement('article'); card.className = 'feature-card';
     const heading = document.createElement('h3'); heading.textContent = name; card.append(heading);
     const list = document.createElement('dl'); Object.entries(values).forEach(([key, value]) => {
-      const term = document.createElement('dt'); term.textContent = key.replaceAll('_', ' ');
-      const detail = document.createElement('dd'); detail.textContent = typeof value === 'string' ? value : JSON.stringify(value); list.append(term, detail);
+      const term = document.createElement('dt'); term.textContent = key.replaceAll('_', ' ').replace(/\b\w/g, character => character.toUpperCase());
+      const detail = document.createElement('dd'); detail.textContent = Array.isArray(value) ? `${value.length} items` : (value && typeof value === 'object' ? 'Available' : String(value)); list.append(term, detail);
     }); card.append(list); board.append(card);
   });
   board.hidden = !board.children.length;
