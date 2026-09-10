@@ -11309,6 +11309,10 @@ Execution board: `docs/worklist-execution-board.md`.
   with zero status failures, zero dropped events, zero restarts, and stable 119,268 KiB daemon RSS.
   This strengthens the installed service evidence without changing the physical-write qualification
   boundary.
+- **Human sign-off artifact (2026-09-10):** Added
+  `docs/graphical-studio-human-signoff-checklist.md`, a moderated nontechnical walkthrough covering
+  device discovery, signal flow, mapping, routing drafts, scenes, recovery, keyboard operation,
+  themes, zoom, reduced motion, no-code boundaries, and explicit native-write safety disposition.
 
 ## 4. Dependency and parallelization map
 

@@ -28,6 +28,9 @@ The installed baseline and bounded service soak also pass: four samples, zero st
 dropped events, zero restarts, and four MIDISPORT ports observed on `NAM-MIDI`.
 W177 is therefore in progress with software release evidence recorded; W176 novice/human sign-off
 and final release sign-off remain open.
+The executable moderated-review record is
+`docs/graphical-studio-human-signoff-checklist.md`; it remains intentionally uncompleted until a
+reviewer records each scenario and disposition.
 The existing focused
 fixtures and post-fixture health soak remain valid; these checks do not constitute human visual
 sign-off or native hardware observation.
