@@ -1770,6 +1770,24 @@ impl Worker {
         .map_err(|error| error.to_string())
     }
 
+    /// Queues a read-only JACK-settings query for a ready session.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the session is not ready, the generation is stale, or queue
+    /// admission fails.
+    pub fn query_jack_server_settings(
+        &mut self,
+        generation: u64,
+        reply_to: Option<u64>,
+    ) -> Result<(), String> {
+        if !self.session.is_ready() {
+            return Err("PiPedal session is not ready for JACK-settings queries".into());
+        }
+        let frame = self.prepare_get_jack_server_settings(generation, reply_to)?;
+        self.session.enqueue(generation, frame)
+    }
+
     /// Prepares a confirmed CPU-governor settings request with a bounded scalar body.
     ///
     /// # Errors
@@ -2865,6 +2883,16 @@ mod tests {
             .is_err());
         assert!(worker.prepare_set_governor_settings(0, String::new(), None, true).is_err());
         assert!(worker.prepare_set_governor_settings(1, "performance".into(), None, true).is_err());
+    }
+
+    #[test]
+    fn jack_server_settings_query_is_generation_checked_and_read_only() {
+        let worker = Worker::default();
+        let frame =
+            worker.prepare_get_jack_server_settings(0, Some(46)).expect("JACK query encodes");
+        let text = String::from_utf8_lossy(&frame);
+        assert!(text.contains("getJackServerSettings"));
+        assert!(worker.prepare_get_jack_server_settings(1, None).is_err());
     }
 
     #[test]

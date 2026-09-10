@@ -5274,6 +5274,10 @@ tests, strict Clippy, architecture/worklist policy, and the complete release gat
   `docs/pipedal-server-operation-audit.md`. Current source evidence includes bounded connector
   decoders, adapter validation/projection, and session-scoped version lifecycle handling; browser
   and installed qualification remain explicitly pending W150. Audit and worklist guards pass.
+- **JACK-settings query slice (2026-09-10):** Added a generation-checked, ready-session adapter
+  queue path for the source-backed `getJackServerSettings` read operation, with regression coverage
+  for the wire name and stale-generation rejection. The audit now records the implemented adapter
+  boundary; daemon/browser/installed qualification remains explicitly pending W150.
 - **Connector-design synchronization (2026-09-09):** The PiPedal connector handoff now records
   that validated version metadata is session-scoped diagnostic readback, cleared on reconnect and
   never sufficient to authorize version-dependent writes. Documentation, worklist, and diff checks
