@@ -61,6 +61,7 @@ pub const MAX_ALSA_DEVICES: usize = 256;
 pub const MAX_JACK_STATUS_TEXT: usize = 256;
 /// Maximum device-name text length in JACK server settings.
 pub const MAX_JACK_DEVICE_TEXT: usize = 256;
+pub const MAX_WIFI_CONFIG_TEXT: usize = 256;
 /// Maximum system MIDI bindings accepted in one PiPedal update.
 pub const MAX_SYSTEM_MIDI_BINDINGS: usize = 128;
 /// Maximum requests waiting for the PiPedal transport worker.
@@ -413,6 +414,8 @@ pub enum Operation {
     SetShowStatusMonitor,
     /// Query Wi-Fi regulatory-domain labels.
     GetWifiRegulatoryDomains,
+    /// Query password-redacted Wi-Fi configuration.
+    GetWifiConfigSettings,
     /// Restart the PiPedal engine.
     Restart,
     /// Shut down the PiPedal host.
@@ -467,6 +470,7 @@ impl Operation {
             Self::GetShowStatusMonitor,
             Self::SetShowStatusMonitor,
             Self::GetWifiRegulatoryDomains,
+            Self::GetWifiConfigSettings,
             Self::Restart,
             Self::Shutdown,
         ]
@@ -519,6 +523,7 @@ impl Operation {
             Self::GetShowStatusMonitor => "getShowStatusMonitor",
             Self::SetShowStatusMonitor => "setShowStatusMonitor",
             Self::GetWifiRegulatoryDomains => "getWifiRegulatoryDomains",
+            Self::GetWifiConfigSettings => "getWifiConfigSettings",
             Self::Restart => "restart",
             Self::Shutdown => "shutdown",
         }
@@ -574,6 +579,7 @@ impl Operation {
                 | Self::GetGovernorSettings
                 | Self::GetShowStatusMonitor
                 | Self::GetWifiRegulatoryDomains
+                | Self::GetWifiConfigSettings
                 | Self::GetSystemMidiBindings
         )
     }
@@ -620,6 +626,7 @@ impl Operation {
             Self::GetJackServerSettings | Self::GetGovernorSettings => "diagnostics",
             Self::GetShowStatusMonitor => "monitoring",
             Self::GetWifiRegulatoryDomains => "diagnostics",
+            Self::GetWifiConfigSettings => "diagnostics",
             Self::SetGovernorSettings => "host",
             Self::SetJackServerSettings => "host",
             Self::UpdateNow => "host",
@@ -1297,6 +1304,48 @@ pub fn decode_jack_configuration(
         return Err("PiPedal JACK configuration is invalid or excessive".into());
     }
     Ok(configuration)
+}
+
+/// Password-redacted Wi-Fi configuration returned by PiPedal.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[allow(clippy::struct_excessive_bools)]
+pub struct WifiConfigSettings {
+    pub valid: bool,
+    pub wifi_warning_given: bool,
+    pub reboot_required: bool,
+    pub enable: bool,
+    pub hotspot_name: String,
+    pub mdns_name: String,
+    pub has_password: bool,
+    pub password: String,
+    pub country_code: String,
+    pub channel: String,
+    pub auto_start_mode: i16,
+    pub home_network: String,
+    pub has_saved_password: bool,
+}
+
+/// Decode PiPedal's password-redacted Wi-Fi configuration response.
+pub fn decode_wifi_config_settings(
+    body: Option<serde_json::Value>,
+) -> Result<WifiConfigSettings, String> {
+    let settings: WifiConfigSettings = decode_body(body)?;
+    let text = [
+        &settings.hotspot_name,
+        &settings.mdns_name,
+        &settings.password,
+        &settings.country_code,
+        &settings.channel,
+        &settings.home_network,
+    ];
+    if settings.auto_start_mode < 0
+        || text.iter().any(|value| value.len() > MAX_WIFI_CONFIG_TEXT)
+        || !settings.password.is_empty()
+    {
+        return Err("PiPedal Wi-Fi configuration is invalid, excessive, or secret-bearing".into());
+    }
+    Ok(settings)
 }
 
 /// Validate a URI-to-favorite map before sending PiPedal's `setFavorites`.
@@ -2573,7 +2622,7 @@ mod tests {
                 assert!(!operation.is_read_only());
             }
         }
-        assert_eq!(Operation::all().len(), 45);
+        assert_eq!(Operation::all().len(), 46);
         assert!(Operation::all().iter().all(|operation| !operation.wire_name().is_empty()));
         assert_eq!(serde_json::to_string(&Operation::SetControl).expect("json"), "\"setControl\"");
     }

@@ -123,7 +123,7 @@ user-facing workflow without needing an independent button; require a documented
 | setJackServerSettings | catalogued | Device system settings | confirmed bounded adapter write implemented; daemon/browser/installed qualification pending W150 |
 | setGovernorSettings | catalogued | Device system settings | pending W150 |
 | setWifiConfigSettings | missing | Device system settings | pending W150 |
-| getWifiConfigSettings | missing | Device system settings | pending W150 |
+| getWifiConfigSettings | catalogued | Device system settings | password-redacted bounded readback and adapter projection implemented; daemon/browser/installed qualification pending W150 |
 | setWifiDirectConfigSettings | missing | Device system settings | pending W150 |
 | getWifiDirectConfigSettings | missing | Device system settings | pending W150 |
 | getGovernorSettings | catalogued | Device system settings | bounded startup readback and adapter projection implemented; daemon/browser/installed qualification pending W150 |

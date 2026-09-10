@@ -246,6 +246,7 @@ pub struct Worker {
     governor_settings: String,
     show_status_monitor: Option<bool>,
     has_wifi: Option<bool>,
+    wifi_config_settings: Option<mackes_pipedal_connector::WifiConfigSettings>,
     update_status: Option<mackes_pipedal_connector::UpdateStatus>,
     known_wifi_networks: Vec<String>,
     wifi_channels: Vec<mackes_pipedal_connector::WifiChannel>,
@@ -288,6 +289,7 @@ impl Worker {
             governor_settings: String::new(),
             show_status_monitor: None,
             has_wifi: None,
+            wifi_config_settings: None,
             update_status: None,
             known_wifi_networks: Vec::new(),
             wifi_channels: Vec::new(),
@@ -354,6 +356,7 @@ impl Worker {
                     self.governor_settings.clear();
                     self.show_status_monitor = None;
                     self.has_wifi = None;
+                    self.wifi_config_settings = None;
                     self.update_status = None;
                     self.known_wifi_networks.clear();
                     self.wifi_channels.clear();
@@ -494,6 +497,7 @@ impl Worker {
         Ok(phase)
     }
 
+    #[allow(clippy::too_many_lines)]
     fn accept_auxiliary_readback(
         &mut self,
         message: &str,
@@ -529,6 +533,13 @@ impl Worker {
             "getHasWifi" => {
                 self.has_wifi = Some(
                     mackes_pipedal_connector::decode_has_wifi(body)
+                        .map_err(|_| TransportError::Protocol)?,
+                );
+                Ok(())
+            }
+            "getWifiConfigSettings" => {
+                self.wifi_config_settings = Some(
+                    mackes_pipedal_connector::decode_wifi_config_settings(body)
                         .map_err(|_| TransportError::Protocol)?,
                 );
                 Ok(())
@@ -746,6 +757,14 @@ impl Worker {
     #[must_use]
     pub const fn jack_status(&self) -> Option<&mackes_pipedal_connector::JackHostStatus> {
         self.jack_status.as_ref()
+    }
+
+    /// Last validated password-redacted Wi-Fi configuration.
+    #[must_use]
+    pub const fn wifi_config_settings(
+        &self,
+    ) -> Option<&mackes_pipedal_connector::WifiConfigSettings> {
+        self.wifi_config_settings.as_ref()
     }
 
     /// Last validated JACK server configuration.

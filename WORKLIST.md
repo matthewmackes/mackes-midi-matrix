@@ -12252,3 +12252,6 @@ Evidence (2026-09-08): Devices browser gate initially observed a transient daemo
 - **Status-monitor write slice (2026-09-10):** Added the source-registered
   `setShowStatusMonitor` boolean operation with a confirmed, generation-checked adapter path.
   Daemon/browser and installed qualification remain pending W150.
+- **Password-redacted Wi-Fi readback slice (2026-09-10):** Added bounded decoding and session
+  retention for source-registered `getWifiConfigSettings`, rejecting any non-redacted password
+  payload. Daemon/browser and installed qualification remain pending W150.
