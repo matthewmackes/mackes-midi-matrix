@@ -5288,6 +5288,10 @@ tests, strict Clippy, architecture/worklist policy, and the complete release gat
   refresh the session-scoped monitoring projection automatically. Existing decoder, lifecycle
   reset, and UI consumers are reused; daemon/browser and installed qualification remain pending
   W150.
+- **Source-reconciliation count repair (2026-09-10):** Synchronized
+  `docs/pipedal-source-reconciliation-2026-09-08.md` with the governed audit after the operation
+  ledger updates: pending W150 registrations are 58, with 3 session/preferences and 2 pedalboard
+  rows. No operation was promoted by count alone; the audit guard remains authoritative.
 - **Connector-design synchronization (2026-09-09):** The PiPedal connector handoff now records
   that validated version metadata is session-scoped diagnostic readback, cleared on reconnect and
   never sufficient to authorize version-dependent writes. Documentation, worklist, and diff checks

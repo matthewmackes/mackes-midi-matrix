@@ -9,7 +9,7 @@ before changing the connector boundary; do not infer unsupported operations from
 |---|---:|---|
 | Pinned PiPedal server registrations | 104 | Source operations found in the audited server implementation |
 | Connector operation families | 42 | Operations currently exposed by the typed connector boundary |
-| Explicit pending W150 rows | 62 | Registrations intentionally not enabled until payload/event semantics are qualified |
+| Explicit pending W150 rows | 58 | Registrations intentionally not enabled until payload/event semantics are qualified |
 | Live catalog controls | 3,076 | Installed read-only catalog projection |
 | Live catalog targets | 265 | Installed target projection |
 
@@ -18,10 +18,10 @@ before changing the connector boundary; do not infer unsupported operations from
 | Family | Pending rows |
 |---|---:|
 | Device assets/library | 15 |
-| Device session/preferences | 4 |
+| Device session/preferences | 3 |
 | Device system settings | 14 |
 | Monitoring and MIDI | 5 |
-| Pedalboard and parameter inspector | 5 |
+| Pedalboard and parameter inspector | 2 |
 | Presets and snapshots | 19 |
 
 The installed catalog currently qualifies all 42 connector operation families. The 62 pending
