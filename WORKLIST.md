@@ -11149,6 +11149,10 @@ Execution board: `docs/worklist-execution-board.md`.
   screen-reader-accessible summary of state, ports, and family-relevant controls. The registry fixture
   requires at least three entries per renderer, and the rebuilt installed host passes the renderer,
   graphical-inventory, and visual-accessibility fixtures.
+- **Native inventory checkpoint (2026-09-10):** Observation-only qualification on `NAM-MIDI` found
+  connected Eventide MicroPitch, Launch Control XL, and M-Audio MIDISPORT 4x4 USB devices, four
+  MIDISPORT MIDI ports, and live PiPedal/application endpoints. No physical writes or LED/readback
+  claims were made; vendor-specific interaction qualification remains explicitly open.
 
 #### [>] W172 — Replace mapping and routing editors with visual builders
 
