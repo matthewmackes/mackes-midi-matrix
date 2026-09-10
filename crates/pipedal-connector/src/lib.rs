@@ -472,6 +472,12 @@ pub enum Operation {
     PingTone3000Server,
     /// Calculate a Tone3000-compatible SHA-256 digest.
     Sha256Base64url,
+    /// Query presets associated with a bank instance.
+    RequestBankPresets,
+    /// Import selected presets from a bank.
+    ImportPresetsFromBank,
+    /// Copy selected presets into a bank.
+    CopyPresetsToBank,
     /// Load a plugin preset into a runtime instance.
     LoadPluginPreset,
     /// Query JACK server settings.
@@ -573,6 +579,9 @@ impl Operation {
             Self::RenameFilePropertyFile,
             Self::PingTone3000Server,
             Self::Sha256Base64url,
+            Self::RequestBankPresets,
+            Self::ImportPresetsFromBank,
+            Self::CopyPresetsToBank,
             Self::LoadPluginPreset,
             Self::GetJackServerSettings,
             Self::SetJackServerSettings,
@@ -661,6 +670,9 @@ impl Operation {
             Self::RenameFilePropertyFile => "renameFilePropertyFile",
             Self::PingTone3000Server => "pingTone3000Server",
             Self::Sha256Base64url => "sha256Base64url",
+            Self::RequestBankPresets => "requestBankPresets",
+            Self::ImportPresetsFromBank => "importPresetsFromBank",
+            Self::CopyPresetsToBank => "copyPresetsToBank",
             Self::LoadPluginPreset => "loadPluginPreset",
             Self::GetJackServerSettings => "getJackServerSettings",
             Self::SetJackServerSettings => "setJackServerSettings",
@@ -707,6 +719,8 @@ impl Operation {
                 | Self::CopyPreset
                 | Self::CopyPluginPreset
                 | Self::DeleteBankItem
+                | Self::ImportPresetsFromBank
+                | Self::CopyPresetsToBank
                 | Self::DeletePresetItems
                 | Self::SetOnboarding
                 | Self::SaveCurrentPreset
@@ -752,6 +766,7 @@ impl Operation {
                 | Self::RequestFileList2
                 | Self::PingTone3000Server
                 | Self::Sha256Base64url
+                | Self::RequestBankPresets
                 | Self::GetJackServerSettings
                 | Self::GetGovernorSettings
                 | Self::GetShowStatusMonitor
@@ -808,6 +823,9 @@ impl Operation {
             Self::CreateNewSampleDirectory | Self::RenameFilePropertyFile => "assets",
             Self::PingTone3000Server => "assets",
             Self::Sha256Base64url => "assets",
+            Self::RequestBankPresets | Self::ImportPresetsFromBank | Self::CopyPresetsToBank => {
+                "presets"
+            }
             Self::LoadPluginPreset => "presets",
             Self::UpdatePresets => "presets",
             Self::MoveBank => "presets",
@@ -1582,6 +1600,21 @@ pub struct RenameFilePropertyRequest {
     pub old_relative_path: String,
     pub new_relative_path: String,
     pub ui_file_property: serde_json::Value,
+}
+
+/// Source-shaped bank selector.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BankInstanceRequest {
+    pub bank_instance_id: i64,
+}
+
+/// Source-shaped bank and preset-id selection.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BankPresetRequest {
+    pub bank_instance_id: i64,
+    pub presets: Vec<i64>,
 }
 
 /// Decode and bound PiPedal's v2 file-browser response while preserving its UI metadata shape.
@@ -3164,7 +3197,7 @@ mod tests {
                 assert!(!operation.is_read_only());
             }
         }
-        assert_eq!(Operation::all().len(), 81);
+        assert_eq!(Operation::all().len(), 84);
         assert!(Operation::all().iter().all(|operation| !operation.wire_name().is_empty()));
         assert_eq!(serde_json::to_string(&Operation::SetControl).expect("json"), "\"setControl\"");
     }

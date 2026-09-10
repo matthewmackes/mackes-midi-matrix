@@ -12356,3 +12356,6 @@ Evidence (2026-09-08): Devices browser gate initially observed a transient daemo
 - **Tone3000 digest slice (2026-09-10):** Added bounded `sha256Base64url` input encoding and scalar
   digest readback projection with reconnect-safe adapter retention. Daemon/browser and installed
   qualification remain pending W150.
+- **Bank-preset slice (2026-09-10):** Added bounded bank selector/preset-list encoders for
+  `requestBankPresets`, `importPresetsFromBank`, and `copyPresetsToBank`, with generation checks and
+  confirmation policy for mutations. Daemon/browser and installed qualification remain pending W150.

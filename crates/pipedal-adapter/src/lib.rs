@@ -2793,6 +2793,86 @@ impl Worker {
         .map_err(|error| error.to_string())
     }
 
+    fn validate_bank_presets(bank: i64, presets: &[i64]) -> Result<(), String> {
+        if bank < 0 || presets.is_empty() || presets.len() > 256 || presets.iter().any(|id| *id < 0)
+        {
+            Err("PiPedal bank preset selection is invalid or excessive".into())
+        } else {
+            Ok(())
+        }
+    }
+
+    /// Prepares a generation-checked bank-preset query.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the generation or bank identity is invalid.
+    pub fn prepare_request_bank_presets(
+        &self,
+        generation: u64,
+        bank_instance_id: i64,
+        reply_to: Option<u64>,
+    ) -> Result<Vec<u8>, String> {
+        if generation != self.session.generation() {
+            return Err("PiPedal bank query belongs to an old session generation".into());
+        }
+        if bank_instance_id < 0 {
+            return Err("PiPedal bank identity is invalid".into());
+        }
+        mackes_pipedal_connector::encode_request(&mackes_pipedal_connector::Request {
+            message: "requestBankPresets".into(),
+            reply_to,
+            body: Some(mackes_pipedal_connector::BankInstanceRequest { bank_instance_id }),
+        })
+        .map_err(|error| error.to_string())
+    }
+
+    /// Prepares a generation-checked, confirmed bank-preset mutation.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the generation or preset selection is invalid.
+    pub fn prepare_import_presets_from_bank(
+        &self,
+        generation: u64,
+        request: mackes_pipedal_connector::BankPresetRequest,
+        reply_to: Option<u64>,
+    ) -> Result<Vec<u8>, String> {
+        if generation != self.session.generation() {
+            return Err("PiPedal preset import belongs to an old session generation".into());
+        }
+        Self::validate_bank_presets(request.bank_instance_id, &request.presets)?;
+        mackes_pipedal_connector::encode_request(&mackes_pipedal_connector::Request {
+            message: "importPresetsFromBank".into(),
+            reply_to,
+            body: Some(request),
+        })
+        .map_err(|error| error.to_string())
+    }
+
+    /// Prepares a generation-checked, confirmed bank-preset copy.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the generation or preset selection is invalid.
+    pub fn prepare_copy_presets_to_bank(
+        &self,
+        generation: u64,
+        request: mackes_pipedal_connector::BankPresetRequest,
+        reply_to: Option<u64>,
+    ) -> Result<Vec<u8>, String> {
+        if generation != self.session.generation() {
+            return Err("PiPedal preset copy belongs to an old session generation".into());
+        }
+        Self::validate_bank_presets(request.bank_instance_id, &request.presets)?;
+        mackes_pipedal_connector::encode_request(&mackes_pipedal_connector::Request {
+            message: "copyPresetsToBank".into(),
+            reply_to,
+            body: Some(request),
+        })
+        .map_err(|error| error.to_string())
+    }
+
     fn validate_file_property_path(path: &str) -> Result<(), String> {
         if path.len() > 1024 || path.contains("..") {
             Err("PiPedal file-property path is invalid or excessive".into())

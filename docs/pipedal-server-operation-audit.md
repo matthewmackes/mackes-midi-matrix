@@ -194,9 +194,9 @@ user-facing workflow without needing an independent button; require a documented
 | setAlsaSequencerConfiguration | catalogued | Device system settings | confirmed bounded adapter write implemented; daemon/browser/installed qualification pending W150 |
 | getAlsaSequencerConfiguration | catalogued | Device system settings | bounded response decoder and adapter projection implemented; daemon/browser/installed qualification pending W150 |
 | getAlsaSequencerPorts | catalogued | Device system settings | bounded response decoder and adapter projection implemented; daemon/browser/installed qualification pending W150 |
-| requestBankPresets | missing | Presets and snapshots | pending W150 |
-| importPresetsFromBank | missing | Presets and snapshots | pending W150 |
-| copyPresetsToBank | missing | Presets and snapshots | pending W150 |
+| requestBankPresets | catalogued | Presets and snapshots | bounded bank query implemented; daemon/browser/installed qualification pending W150 |
+| importPresetsFromBank | catalogued | Presets and snapshots | confirmed bounded adapter write implemented; daemon/browser/installed qualification pending W150 |
+| copyPresetsToBank | catalogued | Presets and snapshots | confirmed bounded adapter write implemented; daemon/browser/installed qualification pending W150 |
 | getChannelRouterSettings | missing | Device session/preferences | pending W150 |
 | setChannelRouterSettings | missing | Device session/preferences | pending W150 |
 | DownloadModelsFromTone3000 | missing | Device assets/library | pending W150 |
