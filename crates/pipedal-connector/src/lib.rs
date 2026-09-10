@@ -462,6 +462,10 @@ pub enum Operation {
     RequestFileList2,
     /// Delete a user audio/sample file.
     DeleteUserFile,
+    /// Create a sample directory for a file property.
+    CreateNewSampleDirectory,
+    /// Rename a file-property sample file.
+    RenameFilePropertyFile,
     /// Load a plugin preset into a runtime instance.
     LoadPluginPreset,
     /// Query JACK server settings.
@@ -559,6 +563,8 @@ impl Operation {
             Self::GetImageList,
             Self::RequestFileList2,
             Self::DeleteUserFile,
+            Self::CreateNewSampleDirectory,
+            Self::RenameFilePropertyFile,
             Self::LoadPluginPreset,
             Self::GetJackServerSettings,
             Self::SetJackServerSettings,
@@ -643,6 +649,8 @@ impl Operation {
             Self::GetImageList => "imageList",
             Self::RequestFileList2 => "requestFileList2",
             Self::DeleteUserFile => "deleteUserFile",
+            Self::CreateNewSampleDirectory => "createNewSampleDirectory",
+            Self::RenameFilePropertyFile => "renameFilePropertyFile",
             Self::LoadPluginPreset => "loadPluginPreset",
             Self::GetJackServerSettings => "getJackServerSettings",
             Self::SetJackServerSettings => "setJackServerSettings",
@@ -785,6 +793,7 @@ impl Operation {
             Self::GetImageList => "diagnostics",
             Self::RequestFileList2 => "assets",
             Self::DeleteUserFile => "assets",
+            Self::CreateNewSampleDirectory | Self::RenameFilePropertyFile => "assets",
             Self::LoadPluginPreset => "presets",
             Self::UpdatePresets => "presets",
             Self::MoveBank => "presets",
@@ -1533,6 +1542,23 @@ pub fn decode_image_list(body: Option<serde_json::Value>) -> Result<Vec<String>,
 pub struct FileListRequest {
     pub relative_path: String,
     pub file_property: serde_json::Value,
+}
+
+/// Source-shaped request for file-property directory/file mutations.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FilePropertyRequest {
+    pub relative_path: String,
+    pub file_property: serde_json::Value,
+}
+
+/// Source-shaped request for renaming a file-property file.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RenameFilePropertyRequest {
+    pub old_relative_path: String,
+    pub new_relative_path: String,
+    pub ui_file_property: serde_json::Value,
 }
 
 /// Decode and bound PiPedal's v2 file-browser response while preserving its UI metadata shape.
@@ -3115,7 +3141,7 @@ mod tests {
                 assert!(!operation.is_read_only());
             }
         }
-        assert_eq!(Operation::all().len(), 77);
+        assert_eq!(Operation::all().len(), 79);
         assert!(Operation::all().iter().all(|operation| !operation.wire_name().is_empty()));
         assert_eq!(serde_json::to_string(&Operation::SetControl).expect("json"), "\"setControl\"");
     }

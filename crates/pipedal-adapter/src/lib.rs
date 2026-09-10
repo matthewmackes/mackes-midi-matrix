@@ -2731,6 +2731,71 @@ impl Worker {
         .map_err(|error| error.to_string())
     }
 
+    fn validate_file_property_path(path: &str) -> Result<(), String> {
+        if path.len() > 1024 || path.contains("..") {
+            Err("PiPedal file-property path is invalid or excessive".into())
+        } else {
+            Ok(())
+        }
+    }
+
+    /// Prepares a generation-checked, confirmed sample-directory creation.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the generation, path, or property payload is invalid.
+    pub fn prepare_create_new_sample_directory(
+        &self,
+        generation: u64,
+        request: mackes_pipedal_connector::FilePropertyRequest,
+        reply_to: Option<u64>,
+    ) -> Result<Vec<u8>, String> {
+        if generation != self.session.generation() {
+            return Err("PiPedal directory creation belongs to an old session generation".into());
+        }
+        Self::validate_file_property_path(&request.relative_path)?;
+        if serde_json::to_vec(&request.file_property).map_or(true, |bytes| bytes.len() > 16 * 1024)
+        {
+            return Err("PiPedal file property is invalid or excessive".into());
+        }
+        mackes_pipedal_connector::encode_request(&mackes_pipedal_connector::Request {
+            message: "createNewSampleDirectory".into(),
+            reply_to,
+            body: Some(request),
+        })
+        .map_err(|error| error.to_string())
+    }
+
+    /// Prepares a generation-checked, confirmed file-property rename.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the generation, paths, or property payload is invalid.
+    pub fn prepare_rename_file_property_file(
+        &self,
+        generation: u64,
+        request: mackes_pipedal_connector::RenameFilePropertyRequest,
+        reply_to: Option<u64>,
+    ) -> Result<Vec<u8>, String> {
+        if generation != self.session.generation() {
+            return Err("PiPedal file rename belongs to an old session generation".into());
+        }
+        Self::validate_file_property_path(&request.old_relative_path)?;
+        Self::validate_file_property_path(&request.new_relative_path)?;
+        if request.old_relative_path == request.new_relative_path
+            || serde_json::to_vec(&request.ui_file_property)
+                .map_or(true, |bytes| bytes.len() > 16 * 1024)
+        {
+            return Err("PiPedal file rename is invalid or excessive".into());
+        }
+        mackes_pipedal_connector::encode_request(&mackes_pipedal_connector::Request {
+            message: "renameFilePropertyFile".into(),
+            reply_to,
+            body: Some(request),
+        })
+        .map_err(|error| error.to_string())
+    }
+
     /// Prepares a generation-checked, read-only known-network query.
     ///
     /// # Errors

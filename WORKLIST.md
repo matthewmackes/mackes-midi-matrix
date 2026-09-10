@@ -12345,3 +12345,6 @@ Evidence (2026-09-08): Devices browser gate initially observed a transient daemo
 - **User-file deletion slice (2026-09-10):** Added the source-registered `deleteUserFile` scalar
   command with confirmed, generation-checked relative-path bounds. Daemon/browser and installed
   qualification remain pending W150.
+- **File-property mutation slice (2026-09-10):** Added bounded, generation-checked encoders for
+  source-registered `createNewSampleDirectory` and `renameFilePropertyFile`. Daemon/browser and
+  installed qualification remain pending W150.

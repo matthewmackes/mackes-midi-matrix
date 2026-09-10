@@ -184,8 +184,8 @@ user-facing workflow without needing an independent button; require a documented
 | requestFileList2 | catalogued | Device assets/library | bounded source-shaped request and file-entry response projection implemented; daemon/browser/installed qualification pending W150 |
 | newPreset | catalogued | Presets and snapshots | confirmed bounded adapter write implemented; daemon/browser/installed qualification pending W150 |
 | deleteUserFile | catalogued | Device assets/library | confirmed bounded adapter write implemented; daemon/browser/installed qualification pending W150 |
-| createNewSampleDirectory | missing | Device assets/library | pending W150 |
-| renameFilePropertyFile | missing | Device assets/library | pending W150 |
+| createNewSampleDirectory | catalogued | Device assets/library | confirmed bounded adapter write implemented; daemon/browser/installed qualification pending W150 |
+| renameFilePropertyFile | catalogued | Device assets/library | confirmed bounded adapter write implemented; daemon/browser/installed qualification pending W150 |
 | copyFilePropertyFile | missing | Device assets/library | pending W150 |
 | getFilePropertyDirectoryTree | missing | Device assets/library | pending W150 |
 | moveAudioFile | missing | Device assets/library | pending W150 |
