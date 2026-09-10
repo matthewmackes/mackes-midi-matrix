@@ -27,6 +27,7 @@ run_fixture "device inventory" python3 scripts/browser-device-inventory-smoke.py
 run_fixture "graphical inventory" python3 scripts/browser-graphical-inventory-smoke.py "$origin"
 run_fixture "renderer registry" python3 scripts/browser-renderer-registry-smoke.py "$origin"
 run_fixture "novice surface" python3 scripts/browser-novice-surface-smoke.py "$origin"
+run_fixture "visual accessibility" python3 scripts/browser-visual-accessibility-smoke.py "$origin"
 run_fixture "PiPedal catalog" python3 scripts/pipedal-catalog-smoke.py "$origin"
 run_fixture "generation ordering" python3 scripts/browser-generation-smoke.py "$origin"
 run_fixture "request cancellation" python3 scripts/browser-abort-smoke.py "$origin"

@@ -11262,6 +11262,9 @@ Execution board: `docs/worklist-execution-board.md`.
   graphical “view-only” explanation and confirms Apply is blocked when endpoint identifiers exceed
   the browser's lossless numeric contract. The assignment inspector fixture likewise confirms friendly
   labels and authoritative source/destination/behavior details without exposing mapping IDs.
+- **Presentation checkpoint (2026-09-10):** Added an installed visual-accessibility fixture covering
+  light-theme selection, reduced-motion preference, 200% zoom survival, and non-color assignment
+  labels on all 56 Novation controls. The fixture passes; full moderated walkthrough remains open.
 
 #### [>] W177 — Install and close the graphical studio release
 
