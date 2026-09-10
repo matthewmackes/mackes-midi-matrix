@@ -245,6 +245,7 @@ pub struct Worker {
     favorites: std::collections::BTreeMap<String, bool>,
     governor_settings: String,
     show_status_monitor: Option<bool>,
+    has_wifi: Option<bool>,
     wifi_regulatory_domains: std::collections::BTreeMap<String, String>,
     system_midi_bindings: Vec<mackes_pipedal_connector::MidiBinding>,
     version: Option<mackes_pipedal_connector::PiPedalVersion>,
@@ -277,6 +278,7 @@ impl Worker {
             favorites: std::collections::BTreeMap::new(),
             governor_settings: String::new(),
             show_status_monitor: None,
+            has_wifi: None,
             wifi_regulatory_domains: std::collections::BTreeMap::new(),
             system_midi_bindings: Vec::new(),
             version: None,
@@ -333,6 +335,7 @@ impl Worker {
                     self.favorites.clear();
                     self.governor_settings.clear();
                     self.show_status_monitor = None;
+                    self.has_wifi = None;
                     self.wifi_regulatory_domains.clear();
                     self.system_midi_bindings.clear();
                     self.version = None;
@@ -440,6 +443,12 @@ impl Worker {
         if header.message == "getShowStatusMonitor" {
             self.show_status_monitor = Some(
                 mackes_pipedal_connector::decode_show_status_monitor(body.clone())
+                    .map_err(|_| TransportError::Protocol)?,
+            );
+        }
+        if header.message == "getHasWifi" {
+            self.has_wifi = Some(
+                mackes_pipedal_connector::decode_has_wifi(body.clone())
                     .map_err(|_| TransportError::Protocol)?,
             );
         }
@@ -602,6 +611,12 @@ impl Worker {
     #[must_use]
     pub const fn show_status_monitor(&self) -> Option<bool> {
         self.show_status_monitor
+    }
+
+    /// Last validated Wi-Fi availability projection.
+    #[must_use]
+    pub const fn has_wifi(&self) -> Option<bool> {
+        self.has_wifi
     }
 
     /// Last validated Wi-Fi regulatory-domain labels.

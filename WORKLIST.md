@@ -5299,6 +5299,10 @@ tests, strict Clippy, architecture/worklist policy, and the complete release gat
   `getWifiRegulatoryDomains` response into the nine-request startup sequence so reconnects refresh
   the validated domain projection automatically. Existing decoder, lifecycle reset, and UI
   consumers are reused; daemon/browser and installed qualification remain pending W150.
+- **Wi-Fi-availability startup-read slice (2026-09-10):** Added the source-backed boolean
+  `getHasWifi` decoder and session projection, cleared on reconnect, and promoted it into the
+  bounded ten-request startup sequence. Connector/adapter consumers retain fail-closed typed state;
+  daemon/browser and installed qualification remain pending W150.
 - **Connector-design synchronization (2026-09-09):** The PiPedal connector handoff now records
   that validated version metadata is session-scoped diagnostic readback, cleared on reconnect and
   never sufficient to authorize version-dependent writes. Documentation, worklist, and diff checks

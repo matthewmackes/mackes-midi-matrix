@@ -993,6 +993,11 @@ pub fn decode_show_status_monitor(body: Option<serde_json::Value>) -> Result<boo
     decode_body(body)
 }
 
+/// Decode PiPedal's source-backed Wi-Fi availability flag.
+pub fn decode_has_wifi(body: Option<serde_json::Value>) -> Result<bool, String> {
+    decode_body(body)
+}
+
 /// Decode PiPedal's bounded Wi-Fi regulatory-domain label map.
 pub fn decode_wifi_regulatory_domains(
     body: Option<serde_json::Value>,
@@ -1083,7 +1088,7 @@ pub enum SessionPhase {
 
 /// The bounded read-only requests used to populate a fresh PiPedal session.
 #[must_use]
-pub const fn startup_requests() -> [&'static str; 9] {
+pub const fn startup_requests() -> [&'static str; 10] {
     [
         "hello",
         "version",
@@ -1094,6 +1099,7 @@ pub const fn startup_requests() -> [&'static str; 9] {
         "getGovernorSettings",
         "getShowStatusMonitor",
         "getWifiRegulatoryDomains",
+        "getHasWifi",
     ]
 }
 
@@ -2140,6 +2146,13 @@ mod tests {
     }
 
     #[test]
+    fn has_wifi_decoder_accepts_only_boolean_source_shape() {
+        assert_eq!(decode_has_wifi(Some(serde_json::json!(true))).expect("Wi-Fi flag"), true);
+        assert!(decode_has_wifi(Some(serde_json::json!("true"))).is_err());
+        assert!(decode_has_wifi(None).is_err());
+    }
+
+    #[test]
     fn system_midi_readback_decoder_accepts_array_and_enforces_limits() {
         let body = serde_json::json!([{
             "symbol":"gain", "channel":1, "bindingType":0, "note":0, "control":7,
@@ -2169,7 +2182,7 @@ mod tests {
         assert_eq!(requests[0], "hello");
         assert_eq!(requests[1], "version");
         assert_eq!(requests[4], "getSystemMidiBindings");
-        assert_eq!(requests.last(), Some(&"getWifiRegulatoryDomains"));
+        assert_eq!(requests.last(), Some(&"getHasWifi"));
         assert!(requests.len() <= 16);
     }
 
