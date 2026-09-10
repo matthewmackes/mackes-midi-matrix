@@ -146,7 +146,7 @@ user-facing workflow without needing an independent button; require a documented
 | pluginClasses | catalogued | Pedalboard and parameter inspector | bounded class-tree decoder and adapter validation implemented; full browser/installed qualification pending W150 |
 | hello | missing | Device session/preferences | pending W150 |
 | setShowStatusMonitor | missing | Monitoring and MIDI | pending W150 |
-| getShowStatusMonitor | catalogued | Monitoring and MIDI | source-backed boolean response; execution/readback pending W150 |
+| getShowStatusMonitor | catalogued | Monitoring and MIDI | bounded startup readback and adapter projection implemented; daemon/browser/installed qualification pending W150 |
 | version | catalogued | Device session/preferences | bounded session-scoped readback and adapter projection implemented; full installed qualification pending W150 |
 | loadPreset | catalogued | Presets and snapshots | pending W150 |
 | updatePresets | missing | Presets and snapshots | pending W150 |

@@ -5283,6 +5283,11 @@ tests, strict Clippy, architecture/worklist policy, and the complete release gat
   governor projection automatically. Existing decoder, lifecycle reset, and snapshot consumers are
   reused; connector startup-order coverage and the audit boundary are updated, while daemon/browser
   and installed qualification remain pending W150.
+- **Status-monitor startup-read slice (2026-09-10):** Promoted the validated
+  `getShowStatusMonitor` response into the bounded eight-request startup sequence so reconnects
+  refresh the session-scoped monitoring projection automatically. Existing decoder, lifecycle
+  reset, and UI consumers are reused; daemon/browser and installed qualification remain pending
+  W150.
 - **Connector-design synchronization (2026-09-09):** The PiPedal connector handoff now records
   that validated version metadata is session-scoped diagnostic readback, cleared on reconnect and
   never sufficient to authorize version-dependent writes. Documentation, worklist, and diff checks
