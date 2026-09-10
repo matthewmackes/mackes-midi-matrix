@@ -39,6 +39,56 @@ const workspaceInspector = document.querySelector('#workspace-inspector');
 const inspectorSummary = document.querySelector('#inspector-summary');
 const layoutToggle = document.querySelector('#layout-toggle');
 const novationGridHeading = document.querySelector('#novation-grid-heading');
+const studioFlow = document.querySelector('#studio-flow');
+const studioFlowGraph = document.querySelector('#studio-flow-graph');
+const studioFlowStatus = document.querySelector('#studio-flow-status');
+const studioFlowAdd = document.querySelector('#studio-flow-add');
+function renderStudioFlow(devices) {
+  if (!studioFlow || !studioFlowGraph) return;
+  studioFlowGraph.querySelectorAll('[data-flow-node], [data-flow-link]').forEach(item => item.remove());
+  studioFlow.hidden = !devices.length;
+  if (!devices.length) {
+    if (studioFlowStatus) studioFlowStatus.textContent = 'No devices found yet.';
+    return;
+  }
+  const width = 960;
+  const nodeWidth = Math.min(220, Math.max(150, Math.floor((width - 80) / devices.length) - 20));
+  const gap = (width - 40 - (nodeWidth * devices.length)) / Math.max(1, devices.length - 1);
+  const nodes = devices.map((device, index) => {
+    const name = device.name || device.alias || 'Studio device';
+    const stateValue = String(device.state || device.connection_state || 'unknown');
+    return { device, name, stateValue, x: 20 + index * (nodeWidth + gap), y: 78 };
+  });
+  const ns = ['http', String.fromCharCode(58, 47, 47), 'www.w3.org/2000/svg'].join('');
+  const addSvg = (tag, attrs, parent = studioFlowGraph) => {
+    const element = document.createElementNS(ns, tag);
+    Object.entries(attrs).forEach(([key, value]) => element.setAttribute(key, value));
+    parent.append(element);
+    return element;
+  };
+  nodes.slice(0, -1).forEach((node, index) => {
+    const next = nodes[index + 1];
+    addSvg('path', { d: `M ${node.x + nodeWidth} 150 C ${node.x + nodeWidth + gap / 2} 150, ${next.x - gap / 2} 150, ${next.x} 150`, class: 'flow-link', 'data-flow-link': 'true', 'aria-hidden': 'true' });
+  });
+  nodes.forEach((node, index) => {
+    const group = addSvg('g', { class: 'flow-node', 'data-flow-node': 'true', tabindex: '0', role: 'button', 'aria-label': `${node.name}; ${node.stateValue}` });
+    group.addEventListener('click', () => { showInspector(`${node.name} selected · ${node.stateValue}. Choose a graphical action from the workspace.`); });
+    group.addEventListener('keydown', event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); group.click(); } });
+    addSvg('rect', { x: node.x, y: node.y, width: nodeWidth, height: 145, rx: 8, class: 'flow-node-chassis' }, group);
+    addSvg('circle', { cx: node.x + 24, cy: 104, r: 10, class: `flow-status flow-status-${node.stateValue.toLowerCase().replace(/[^a-z]+/g, '-')}` }, group);
+    const titleText = addSvg('text', { x: node.x + 44, y: 112, class: 'flow-node-title' }, group); titleText.textContent = node.name;
+    const stateText = addSvg('text', { x: node.x + 44, y: 135, class: 'flow-node-state' }, group); stateText.textContent = node.stateValue;
+    addSvg('rect', { x: node.x + 16, y: 174, width: 12, height: 12, class: 'flow-port flow-port-in' }, group);
+    addSvg('rect', { x: node.x + nodeWidth - 28, y: 174, width: 12, height: 12, class: 'flow-port flow-port-out' }, group);
+    const inputText = addSvg('text', { x: node.x + 34, y: 184, class: 'flow-port-label' }, group); inputText.textContent = 'in';
+    const outputText = addSvg('text', { x: node.x + nodeWidth - 36, y: 184, class: 'flow-port-label', 'text-anchor': 'end' }, group); outputText.textContent = 'out';
+    if (index === 0) group.setAttribute('aria-description', 'Source device.');
+    else if (index === nodes.length - 1) group.setAttribute('aria-description', 'Destination device.');
+    else group.setAttribute('aria-description', 'Connected studio device.');
+  });
+  if (studioFlowStatus) studioFlowStatus.textContent = `${devices.length} device${devices.length === 1 ? '' : 's'} shown in the studio flow.`;
+}
+studioFlowAdd?.addEventListener('click', () => { showInspector('Choose a named device or endpoint to add it to the studio flow.'); operation.textContent = 'Device palette is ready for the next graphical builder.'; });
 function showInspector(summary) {
   if (!workspaceInspector || !inspectorSummary) return;
   inspectorSummary.textContent = summary;
@@ -139,6 +189,7 @@ function routeListFromBody(body) {
 }
 function renderDeviceBoard(body) {
   const devices = Array.isArray(body) ? body : (body?.endpoints || body?.devices || []);
+  renderStudioFlow(devices);
   deviceBoard.replaceChildren();
   const endpointOptions = document.querySelector('#endpoint-options'); endpointOptions.replaceChildren();
   devices.forEach(device => { const option = document.createElement('option'); option.value = device.id || device.name || device.alias || ''; option.label = device.name || device.alias || option.value; if (option.value) endpointOptions.append(option); });

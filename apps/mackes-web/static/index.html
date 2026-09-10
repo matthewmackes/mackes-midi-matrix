@@ -12,6 +12,13 @@
     <nav class="workspace-sidebar" aria-label="Workspaces"><button data-view="state">Live</button><button data-view="mappings">Map Controls</button><button data-view="routes">Routing</button><button data-view="scenes">Scenes &amp; Setlists</button><button data-view="devices">Devices</button><button data-view="recovery">Recovery</button><button data-view="system">System</button><button data-view="monitor">Monitor</button></nav>
     <details id="keyboard-help"><summary>Keyboard help</summary><p>Use Tab and Shift+Tab to move through controls, Enter or Space to activate a focused control, and browser back/forward to move between workspaces.</p></details>
     <section class="workspace-stage"><nav id="breadcrumbs" class="breadcrumbs" aria-label="Breadcrumb"></nav><h2 id="view-title">Live</h2>
+      <section id="studio-flow" class="studio-flow" hidden aria-labelledby="studio-flow-heading">
+        <div class="studio-flow-header"><div><h3 id="studio-flow-heading">Studio signal flow</h3><p>See how your equipment is connected. Select a device to inspect it.</p></div><button id="studio-flow-add" type="button">Add device</button></div>
+        <div class="studio-flow-canvas" tabindex="0" role="application" aria-label="Studio signal-flow canvas">
+          <svg id="studio-flow-graph" viewBox="0 0 960 300" role="img" aria-labelledby="studio-flow-title studio-flow-description"><title id="studio-flow-title">Connected studio devices</title><desc id="studio-flow-description">Graphical view of devices and their connections.</desc></svg>
+        </div>
+        <p id="studio-flow-status" class="studio-flow-status" role="status" aria-live="polite">No devices found yet.</p>
+      </section>
       <div id="device-board" class="device-board" hidden aria-label="Device connection inventory"></div>
       <label id="feature-filter-label" hidden>Filter product features <input id="feature-filter" type="search" maxlength="96" placeholder="e.g. preset, LED, snapshot"></label>
       <div id="feature-board" class="feature-board" hidden aria-label="Product feature workspaces"></div>

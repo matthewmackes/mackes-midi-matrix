@@ -86,6 +86,26 @@ h2 { margin-top: 0; font-size: 1.5rem; }
 .route-card .route-enabled input { width: auto; min-height: auto; }
 .route-remove { padding: .35rem .5rem; background: transparent; color: var(--cds-link); }
 .empty-state { padding: 1rem; border: 1px dashed var(--cds-border-subtle); }
+.studio-flow { grid-column: 1 / -1 !important; margin: 0 0 1rem; padding: 1rem; background: var(--cds-background); border: 1px solid var(--cds-border-subtle); }
+.studio-flow-header { display: flex; align-items: start; justify-content: space-between; gap: 1rem; }
+.studio-flow-header h3 { margin: 0; font-size: 1.125rem; }
+.studio-flow-header p { margin: .25rem 0 0; color: var(--cds-text-secondary); }
+.studio-flow-canvas { margin-top: 1rem; overflow-x: auto; border: 1px solid var(--cds-border-subtle); background: var(--cds-layer); }
+.studio-flow-canvas:focus-visible { outline: 3px solid var(--cds-focus); outline-offset: 2px; }
+#studio-flow-graph { display: block; width: 100%; min-width: 36rem; height: auto; min-height: 14rem; }
+.flow-link { fill: none; stroke: var(--cds-interactive); stroke-width: 4; stroke-dasharray: 8 6; }
+.flow-node { cursor: pointer; outline: none; }
+.flow-node-chassis { fill: var(--cds-layer-accent); stroke: var(--cds-border-subtle); stroke-width: 2; }
+.flow-node:hover .flow-node-chassis, .flow-node:focus-visible .flow-node-chassis { stroke: var(--cds-focus); stroke-width: 5; }
+.flow-node-title { fill: var(--cds-text-primary); font: 600 16px "IBM Plex Sans", sans-serif; pointer-events: none; }
+.flow-node-state, .flow-port-label { fill: var(--cds-text-secondary); font: 13px "IBM Plex Sans", sans-serif; pointer-events: none; }
+.flow-port { stroke: var(--cds-text-primary); stroke-width: 2; }
+.flow-port-in { fill: #4589ff; }
+.flow-port-out { fill: #42be65; }
+.flow-status { stroke: var(--cds-background); stroke-width: 3; fill: #f1c21b; }
+.flow-status-connected, .flow-status-ready, .flow-status-online { fill: #42be65; }
+.flow-status-disconnected, .flow-status-error { fill: #da1e28; }
+.studio-flow-status { margin: .65rem 0 0; color: var(--cds-text-secondary); font-size: .875rem; }
 .device-board { min-width: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: .75rem; margin: 1rem 0; max-height: 34rem; overflow: auto; overscroll-behavior: contain; padding-right: .35rem; }
 .device-card { padding: 1rem; background: var(--cds-background); border-left: 3px solid var(--cds-interactive); }
 .device-card h3 { margin: 0 0 .75rem; font-size: 1rem; }

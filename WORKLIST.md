@@ -11069,14 +11069,19 @@ Execution board: `docs/worklist-execution-board.md`.
   W168 remains in progress until the later visual-builder and renderer packets remove those
   findings.
 
-#### [ ] W169 — Build the responsive studio signal-flow shell
+#### [>] W169 — Build the responsive studio signal-flow shell
 
-- **Status:** `NOT_STARTED`
+- **Status:** `IN_PROGRESS`
 - **Owner:** Codex
 - **Depends on:** W168
 - **Objective:** Make the home view a clear left-to-right studio signal-flow canvas with device nodes, visible ports, connection lines, status badges, readable names, and an obvious add-device path.
 - **Acceptance:** Desktop palette/canvas/inspector, tablet layout, and phone staged flow work at 320, 768, and 1440 CSS pixels. Users can add, select, connect, reorder, zoom, pan, undo, cancel, and apply with pointer and keyboard. Essential actions never depend on hover or horizontal scrolling.
 - **Evidence:** Browser fixtures and screenshots at required widths, keyboard traversal checks, empty/loading/unavailable states, and clean-console evidence.
+- **Implementation checkpoint (2026-09-10):** Added the responsive studio-flow shell with a
+  graphical SVG canvas, device nodes, visible in/out ports, connection links, status cues, keyboard
+  activation, accessible names/descriptions, an add-device entry point, and responsive canvas styling.
+  This is the shell baseline; palette operations, real route edges, pan/zoom, and full device
+  renderers remain open in W170–W172.
 
 #### [ ] W170 — Deliver faithful physical-device schematics
 
