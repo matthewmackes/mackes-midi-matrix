@@ -176,7 +176,7 @@ user-facing workflow without needing an independent button; require a documented
 | imageList | missing | Device assets/library | pending W150 |
 | getFavorites | catalogued | Device session/preferences | bounded startup readback and snapshot projection implemented; full browser/installed qualification pending W150 |
 | setFavorites | catalogued | Device session/preferences | source-backed map and event; execution/readback pending W150 |
-| setUpdatePolicy | missing | Device system settings | pending W150 |
+| setUpdatePolicy | catalogued | Device system settings | confirmed bounded adapter write implemented; daemon/browser/installed qualification pending W150 |
 | forceUpdateCheck | missing | Device system settings | pending W150 |
 | setSystemMidiBindings | catalogued | Monitoring and MIDI | pending W150 |
 | getSystemMidiBindings | catalogued | Monitoring and MIDI | bounded startup/read-only query path; installed qualification pending W150 |

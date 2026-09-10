@@ -1862,6 +1862,35 @@ impl Worker {
         .map_err(|error| error.to_string())
     }
 
+    /// Prepares a confirmed, generation-checked update-policy change.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when confirmation, generation, policy bounds, or encoding fails.
+    pub fn prepare_set_update_policy(
+        &self,
+        generation: u64,
+        policy: i32,
+        reply_to: Option<u64>,
+        confirmed: bool,
+    ) -> Result<Vec<u8>, String> {
+        if !confirmed {
+            return Err("PiPedal update-policy changes require explicit confirmation".into());
+        }
+        if generation != self.session.generation() {
+            return Err("PiPedal update policy belongs to an old session generation".into());
+        }
+        if !(0..=3).contains(&policy) {
+            return Err("PiPedal update policy is invalid".into());
+        }
+        mackes_pipedal_connector::encode_request(&mackes_pipedal_connector::Request {
+            message: "setUpdatePolicy".into(),
+            reply_to,
+            body: Some(policy),
+        })
+        .map_err(|error| error.to_string())
+    }
+
     /// Prepares a confirmed, generation-checked onboarding-state change.
     ///
     /// # Errors
