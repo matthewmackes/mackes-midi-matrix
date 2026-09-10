@@ -12261,3 +12261,6 @@ Evidence (2026-09-08): Devices browser gate initially observed a transient daemo
 - **Preset-index write slice (2026-09-10):** Added the source-registered `updatePresets` operation
   with confirmed, generation-checked, bounded preset-index validation. Daemon/browser and installed
   qualification remain pending W150.
+- **Bank-move write slice (2026-09-10):** Added the source-registered `moveBank` operation with
+  confirmed, generation-checked, bounded distinct bank identities. Daemon/browser and installed
+  qualification remain pending W150.

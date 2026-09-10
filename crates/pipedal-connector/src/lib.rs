@@ -370,6 +370,8 @@ pub enum Operation {
     LoadPreset,
     /// Replace the current preset index.
     UpdatePresets,
+    /// Move a bank between two preset positions.
+    MoveBank,
     /// Save the current preset.
     SaveCurrentPreset,
     /// Save the current pedalboard as a new preset.
@@ -452,6 +454,7 @@ impl Operation {
             Self::GetSystemMidiBindings,
             Self::LoadPreset,
             Self::UpdatePresets,
+            Self::MoveBank,
             Self::SaveCurrentPreset,
             Self::SaveCurrentPresetAs,
             Self::SavePluginPresetAs,
@@ -507,6 +510,7 @@ impl Operation {
             Self::GetSystemMidiBindings => "getSystemMidiBindings",
             Self::LoadPreset => "loadPreset",
             Self::UpdatePresets => "updatePresets",
+            Self::MoveBank => "moveBank",
             Self::SaveCurrentPreset => "saveCurrentPreset",
             Self::SaveCurrentPresetAs => "saveCurrentPresetAs",
             Self::SavePluginPresetAs => "savePluginPresetAs",
@@ -555,6 +559,7 @@ impl Operation {
                 | Self::GetSystemMidiBindings
                 | Self::LoadPreset
                 | Self::UpdatePresets
+                | Self::MoveBank
                 | Self::SaveCurrentPreset
                 | Self::SaveCurrentPresetAs
                 | Self::SavePluginPresetAs
@@ -634,6 +639,7 @@ impl Operation {
             Self::GetKnownWifiNetworks => "diagnostics",
             Self::LoadPluginPreset => "presets",
             Self::UpdatePresets => "presets",
+            Self::MoveBank => "presets",
             Self::GetJackServerSettings | Self::GetGovernorSettings => "diagnostics",
             Self::GetShowStatusMonitor => "monitoring",
             Self::GetWifiRegulatoryDomains => "diagnostics",
@@ -775,6 +781,23 @@ pub struct PresetIndex {
     #[serde(rename = "presetChanged")]
     pub preset_changed: bool,
     pub presets: Vec<PresetIndexEntry>,
+}
+
+/// Source-backed bank move range.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FromTo {
+    pub from: i64,
+    pub to: i64,
+}
+
+impl FromTo {
+    /// Validate nonnegative, distinct bank identities.
+    pub fn validate(&self) -> Result<(), String> {
+        if self.from < 0 || self.to < 0 || self.from == self.to {
+            return Err("PiPedal bank move identities are invalid".into());
+        }
+        Ok(())
+    }
 }
 
 /// Body accepted by PiPedal's `saveCurrentPresetAs` operation.
@@ -2634,7 +2657,7 @@ mod tests {
                 assert!(!operation.is_read_only());
             }
         }
-        assert_eq!(Operation::all().len(), 48);
+        assert_eq!(Operation::all().len(), 49);
         assert!(Operation::all().iter().all(|operation| !operation.wire_name().is_empty()));
         assert_eq!(serde_json::to_string(&Operation::SetControl).expect("json"), "\"setControl\"");
     }

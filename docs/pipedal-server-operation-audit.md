@@ -151,7 +151,7 @@ user-facing workflow without needing an independent button; require a documented
 | loadPreset | catalogued | Presets and snapshots | pending W150 |
 | updatePresets | catalogued | Presets and snapshots | confirmed bounded adapter write implemented; daemon/browser/installed qualification pending W150 |
 | updatePluginPresets | catalogued | Presets and snapshots | confirmed bounded adapter write implemented; daemon/browser/installed qualification pending W150 |
-| moveBank | missing | Presets and snapshots | pending W150 |
+| moveBank | catalogued | Presets and snapshots | confirmed bounded adapter write implemented; daemon/browser/installed qualification pending W150 |
 | shutdown | catalogued | Device system settings | pending W150 |
 | restart | catalogued | Device system settings | pending W150 |
 | deletePresetItems | missing | Presets and snapshots | pending W150 |
