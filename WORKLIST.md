@@ -12303,3 +12303,6 @@ Evidence (2026-09-08): Devices browser gate initially observed a transient daemo
 - **ALSA-sequencer readback slice (2026-09-10):** Added bounded decoding and adapter retention for
   source-registered `getAlsaSequencerConfiguration`, including MIDI-channel and selected-port
   validation. Daemon/browser and installed qualification remain pending W150.
+- **ALSA-sequencer-port readback slice (2026-09-10):** Added bounded decoding and adapter
+  retention/query support for source-registered `getAlsaSequencerPorts`. Daemon/browser and
+  installed qualification remain pending W150.

@@ -400,6 +400,8 @@ pub enum Operation {
     SetOnboarding,
     /// Query ALSA sequencer configuration.
     GetAlsaSequencerConfiguration,
+    /// Query available ALSA sequencer ports.
+    GetAlsaSequencerPorts,
     /// Save the current preset.
     SaveCurrentPreset,
     /// Save the current pedalboard as a new preset.
@@ -497,6 +499,7 @@ impl Operation {
             Self::DeletePresetItems,
             Self::SetOnboarding,
             Self::GetAlsaSequencerConfiguration,
+            Self::GetAlsaSequencerPorts,
             Self::SaveCurrentPreset,
             Self::SaveCurrentPresetAs,
             Self::SavePluginPresetAs,
@@ -567,6 +570,7 @@ impl Operation {
             Self::DeletePresetItems => "deletePresetItems",
             Self::SetOnboarding => "setOnboarding",
             Self::GetAlsaSequencerConfiguration => "getAlsaSequencerConfiguration",
+            Self::GetAlsaSequencerPorts => "getAlsaSequencerPorts",
             Self::SaveCurrentPreset => "saveCurrentPreset",
             Self::SaveCurrentPresetAs => "saveCurrentPresetAs",
             Self::SavePluginPresetAs => "savePluginPresetAs",
@@ -665,6 +669,7 @@ impl Operation {
                 | Self::GetWifiRegulatoryDomains
                 | Self::GetWifiConfigSettings
                 | Self::GetAlsaSequencerConfiguration
+                | Self::GetAlsaSequencerPorts
                 | Self::GetSystemMidiBindings
         )
     }
@@ -724,6 +729,7 @@ impl Operation {
             Self::DeletePresetItems => "presets",
             Self::SetOnboarding => "diagnostics",
             Self::GetAlsaSequencerConfiguration => "diagnostics",
+            Self::GetAlsaSequencerPorts => "diagnostics",
             Self::GetJackServerSettings | Self::GetGovernorSettings => "diagnostics",
             Self::GetShowStatusMonitor => "monitoring",
             Self::GetWifiRegulatoryDomains => "diagnostics",
@@ -963,6 +969,21 @@ pub struct AlsaSequencerConnection {
     pub id: String,
     pub name: String,
     pub sort_order: i32,
+}
+
+/// Decode and bound the available ALSA sequencer port selections.
+pub fn decode_alsa_sequencer_ports(
+    body: Option<serde_json::Value>,
+) -> Result<Vec<AlsaSequencerConnection>, String> {
+    let ports: Vec<AlsaSequencerConnection> = decode_body(body)?;
+    if ports.len() > 512
+        || ports
+            .iter()
+            .any(|port| port.id.is_empty() || port.id.len() > 256 || port.name.len() > 256)
+    {
+        return Err("PiPedal ALSA sequencer ports are invalid or excessive".into());
+    }
+    Ok(ports)
 }
 
 /// Source-backed ALSA sequencer configuration.
@@ -2890,7 +2911,7 @@ mod tests {
                 assert!(!operation.is_read_only());
             }
         }
-        assert_eq!(Operation::all().len(), 63);
+        assert_eq!(Operation::all().len(), 64);
         assert!(Operation::all().iter().all(|operation| !operation.wire_name().is_empty()));
         assert_eq!(serde_json::to_string(&Operation::SetControl).expect("json"), "\"setControl\"");
     }
