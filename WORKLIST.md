@@ -12359,3 +12359,6 @@ Evidence (2026-09-08): Devices browser gate initially observed a transient daemo
 - **Bank-preset slice (2026-09-10):** Added bounded bank selector/preset-list encoders for
   `requestBankPresets`, `importPresetsFromBank`, and `copyPresetsToBank`, with generation checks and
   confirmation policy for mutations. Daemon/browser and installed qualification remain pending W150.
+- **Channel-router slice (2026-09-10):** Added bounded typed readback and generation-checked query/write
+  support for `getChannelRouterSettings` and `setChannelRouterSettings`. Daemon/browser and installed
+  qualification remain pending W150.

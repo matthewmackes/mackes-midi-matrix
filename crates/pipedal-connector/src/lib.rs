@@ -61,6 +61,8 @@ pub const MAX_IMAGE_FILENAME_TEXT: usize = 256;
 pub const MAX_FILE_LIST_ENTRIES: usize = 256;
 /// Maximum digest text accepted from the Tone3000 helper.
 pub const MAX_TONE3000_DIGEST_TEXT: usize = 128;
+/// Maximum channel-router vector length accepted from PiPedal.
+pub const MAX_CHANNEL_ROUTER_CHANNELS: usize = 64;
 /// Maximum Wi-Fi channel selectors accepted in one response.
 pub const MAX_WIFI_CHANNELS: usize = 256;
 /// Maximum ALSA devices accepted in one PiPedal response.
@@ -478,6 +480,10 @@ pub enum Operation {
     ImportPresetsFromBank,
     /// Copy selected presets into a bank.
     CopyPresetsToBank,
+    /// Query channel-router settings.
+    GetChannelRouterSettings,
+    /// Replace channel-router settings.
+    SetChannelRouterSettings,
     /// Load a plugin preset into a runtime instance.
     LoadPluginPreset,
     /// Query JACK server settings.
@@ -582,6 +588,8 @@ impl Operation {
             Self::RequestBankPresets,
             Self::ImportPresetsFromBank,
             Self::CopyPresetsToBank,
+            Self::GetChannelRouterSettings,
+            Self::SetChannelRouterSettings,
             Self::LoadPluginPreset,
             Self::GetJackServerSettings,
             Self::SetJackServerSettings,
@@ -673,6 +681,8 @@ impl Operation {
             Self::RequestBankPresets => "requestBankPresets",
             Self::ImportPresetsFromBank => "importPresetsFromBank",
             Self::CopyPresetsToBank => "copyPresetsToBank",
+            Self::GetChannelRouterSettings => "getChannelRouterSettings",
+            Self::SetChannelRouterSettings => "setChannelRouterSettings",
             Self::LoadPluginPreset => "loadPluginPreset",
             Self::GetJackServerSettings => "getJackServerSettings",
             Self::SetJackServerSettings => "setJackServerSettings",
@@ -721,6 +731,7 @@ impl Operation {
                 | Self::DeleteBankItem
                 | Self::ImportPresetsFromBank
                 | Self::CopyPresetsToBank
+                | Self::SetChannelRouterSettings
                 | Self::DeletePresetItems
                 | Self::SetOnboarding
                 | Self::SaveCurrentPreset
@@ -763,6 +774,7 @@ impl Operation {
                 | Self::GetBankIndex
                 | Self::GetKnownWifiNetworks
                 | Self::GetImageList
+                | Self::GetChannelRouterSettings
                 | Self::RequestFileList2
                 | Self::PingTone3000Server
                 | Self::Sha256Base64url
@@ -818,6 +830,7 @@ impl Operation {
             Self::GetPresets | Self::GetBankIndex => "presets",
             Self::GetKnownWifiNetworks => "diagnostics",
             Self::GetImageList => "diagnostics",
+            Self::GetChannelRouterSettings | Self::SetChannelRouterSettings => "preferences",
             Self::RequestFileList2 => "assets",
             Self::DeleteUserFile => "assets",
             Self::CreateNewSampleDirectory | Self::RenameFilePropertyFile => "assets",
@@ -1615,6 +1628,49 @@ pub struct BankInstanceRequest {
 pub struct BankPresetRequest {
     pub bank_instance_id: i64,
     pub presets: Vec<i64>,
+}
+
+/// Source-shaped channel-router settings.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChannelRouterSettings {
+    pub configured: bool,
+    pub changed: bool,
+    pub channel_router_preset_id: i64,
+    pub main_input_channels: Vec<i64>,
+    pub main_output_channels: Vec<i64>,
+    pub aux_input_channels: Vec<i64>,
+    pub aux_output_channels: Vec<i64>,
+}
+
+impl ChannelRouterSettings {
+    fn validate(&self) -> Result<(), String> {
+        let channels = [
+            &self.main_input_channels,
+            &self.main_output_channels,
+            &self.aux_input_channels,
+            &self.aux_output_channels,
+        ];
+        if self.channel_router_preset_id < -1
+            || channels.iter().any(|values| {
+                values.is_empty()
+                    || values.len() > MAX_CHANNEL_ROUTER_CHANNELS
+                    || values.iter().any(|value| *value < -1)
+            })
+        {
+            return Err("PiPedal channel-router settings are invalid or excessive".into());
+        }
+        Ok(())
+    }
+}
+
+/// Decode and validate channel-router settings.
+pub fn decode_channel_router_settings(
+    body: Option<serde_json::Value>,
+) -> Result<ChannelRouterSettings, String> {
+    let settings: ChannelRouterSettings = decode_body(body)?;
+    settings.validate()?;
+    Ok(settings)
 }
 
 /// Decode and bound PiPedal's v2 file-browser response while preserving its UI metadata shape.
@@ -3197,7 +3253,7 @@ mod tests {
                 assert!(!operation.is_read_only());
             }
         }
-        assert_eq!(Operation::all().len(), 84);
+        assert_eq!(Operation::all().len(), 86);
         assert!(Operation::all().iter().all(|operation| !operation.wire_name().is_empty()));
         assert_eq!(serde_json::to_string(&Operation::SetControl).expect("json"), "\"setControl\"");
     }

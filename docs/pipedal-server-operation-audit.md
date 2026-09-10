@@ -197,8 +197,8 @@ user-facing workflow without needing an independent button; require a documented
 | requestBankPresets | catalogued | Presets and snapshots | bounded bank query implemented; daemon/browser/installed qualification pending W150 |
 | importPresetsFromBank | catalogued | Presets and snapshots | confirmed bounded adapter write implemented; daemon/browser/installed qualification pending W150 |
 | copyPresetsToBank | catalogued | Presets and snapshots | confirmed bounded adapter write implemented; daemon/browser/installed qualification pending W150 |
-| getChannelRouterSettings | missing | Device session/preferences | pending W150 |
-| setChannelRouterSettings | missing | Device session/preferences | pending W150 |
+| getChannelRouterSettings | catalogued | Device session/preferences | bounded typed readback and adapter projection implemented; daemon/browser/installed qualification pending W150 |
+| setChannelRouterSettings | catalogued | Device session/preferences | confirmed bounded typed adapter write implemented; daemon/browser/installed qualification pending W150 |
 | DownloadModelsFromTone3000 | missing | Device assets/library | pending W150 |
 | cancelTone3000Download | missing | Device assets/library | pending W150 |
 | pingTone3000Server | catalogued | Device assets/library | bounded read-only adapter query implemented; asynchronous service qualification pending W150 |

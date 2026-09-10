@@ -254,6 +254,7 @@ pub struct Worker {
     image_list: Vec<String>,
     file_list: Option<serde_json::Value>,
     tone3000_digest: Option<String>,
+    channel_router_settings: Option<mackes_pipedal_connector::ChannelRouterSettings>,
     wifi_channels: Vec<mackes_pipedal_connector::WifiChannel>,
     alsa_devices: Vec<mackes_pipedal_connector::AlsaDeviceInfo>,
     jack_status: Option<mackes_pipedal_connector::JackHostStatus>,
@@ -302,6 +303,7 @@ impl Worker {
             image_list: Vec::new(),
             file_list: None,
             tone3000_digest: None,
+            channel_router_settings: None,
             wifi_channels: Vec::new(),
             alsa_devices: Vec::new(),
             jack_status: None,
@@ -374,6 +376,7 @@ impl Worker {
                     self.image_list.clear();
                     self.file_list = None;
                     self.tone3000_digest = None;
+                    self.channel_router_settings = None;
                     self.wifi_channels.clear();
                     self.alsa_devices.clear();
                     self.jack_status = None;
@@ -604,6 +607,13 @@ impl Worker {
                 );
                 Ok(())
             }
+            "getChannelRouterSettings" => {
+                self.channel_router_settings = Some(
+                    mackes_pipedal_connector::decode_channel_router_settings(body)
+                        .map_err(|_| TransportError::Protocol)?,
+                );
+                Ok(())
+            }
             "getWifiChannels" => {
                 self.wifi_channels = mackes_pipedal_connector::decode_wifi_channels(body)
                     .map_err(|_| TransportError::Protocol)?;
@@ -804,6 +814,59 @@ impl Worker {
     #[must_use]
     pub fn tone3000_digest(&self) -> Option<&str> {
         self.tone3000_digest.as_deref()
+    }
+
+    /// Last validated channel-router settings.
+    #[must_use]
+    pub const fn channel_router_settings(
+        &self,
+    ) -> Option<&mackes_pipedal_connector::ChannelRouterSettings> {
+        self.channel_router_settings.as_ref()
+    }
+
+    /// Prepares a generation-checked channel-router query.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the requested generation is stale or encoding fails.
+    pub fn prepare_get_channel_router_settings(
+        &self,
+        generation: u64,
+        reply_to: Option<u64>,
+    ) -> Result<Vec<u8>, String> {
+        if generation != self.session.generation() {
+            return Err("PiPedal channel-router query belongs to an old session generation".into());
+        }
+        mackes_pipedal_connector::encode_request(&mackes_pipedal_connector::Request::<()> {
+            message: "getChannelRouterSettings".into(),
+            reply_to,
+            body: None,
+        })
+        .map_err(|error| error.to_string())
+    }
+
+    /// Prepares a generation-checked, confirmed channel-router update.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the generation or settings are invalid, or encoding fails.
+    pub fn prepare_set_channel_router_settings(
+        &self,
+        generation: u64,
+        settings: mackes_pipedal_connector::ChannelRouterSettings,
+        reply_to: Option<u64>,
+    ) -> Result<Vec<u8>, String> {
+        if generation != self.session.generation() {
+            return Err("PiPedal channel-router update belongs to an old session generation".into());
+        }
+        let value = serde_json::to_value(&settings).map_err(|error| error.to_string())?;
+        mackes_pipedal_connector::decode_channel_router_settings(Some(value))?;
+        mackes_pipedal_connector::encode_request(&mackes_pipedal_connector::Request {
+            message: "setChannelRouterSettings".into(),
+            reply_to,
+            body: Some(settings),
+        })
+        .map_err(|error| error.to_string())
     }
 
     /// Prepares a generation-checked Tone3000 digest query.
