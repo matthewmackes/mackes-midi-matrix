@@ -190,7 +190,7 @@ user-facing workflow without needing an independent button; require a documented
 | getFilePropertyDirectoryTree | missing | Device assets/library | pending W150 |
 | moveAudioFile | missing | Device assets/library | pending W150 |
 | setOnboarding | missing | Device system settings | pending W150 |
-| getWifiRegulatoryDomains | catalogued | Device system settings | source-backed bounded map response; execution/readback pending W150 |
+| getWifiRegulatoryDomains | catalogued | Device system settings | bounded startup readback and adapter projection implemented; daemon/browser/installed qualification pending W150 |
 | setAlsaSequencerConfiguration | missing | Device system settings | pending W150 |
 | getAlsaSequencerConfiguration | missing | Device system settings | pending W150 |
 | getAlsaSequencerPorts | missing | Device system settings | pending W150 |

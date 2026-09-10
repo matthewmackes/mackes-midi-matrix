@@ -5295,6 +5295,10 @@ tests, strict Clippy, architecture/worklist policy, and the complete release gat
 - **Source-reconciliation prose repair (2026-09-10):** Corrected the explanatory text in the
   reconciliation artifact to match its already-correct 58-row table, eliminating contradictory
   historical count text. Audit, worklist, and diff checks pass.
+- **Wi-Fi-domain startup-read slice (2026-09-10):** Promoted the bounded
+  `getWifiRegulatoryDomains` response into the nine-request startup sequence so reconnects refresh
+  the validated domain projection automatically. Existing decoder, lifecycle reset, and UI
+  consumers are reused; daemon/browser and installed qualification remain pending W150.
 - **Connector-design synchronization (2026-09-09):** The PiPedal connector handoff now records
   that validated version metadata is session-scoped diagnostic readback, cleared on reconnect and
   never sufficient to authorize version-dependent writes. Documentation, worklist, and diff checks
