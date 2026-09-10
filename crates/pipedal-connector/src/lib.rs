@@ -51,6 +51,8 @@ pub const MAX_VERSION_TEXT: usize = 256;
 pub const MAX_GOVERNOR_TEXT: usize = 64;
 /// Maximum Wi-Fi regulatory-domain entries accepted from PiPedal.
 pub const MAX_WIFI_REGULATORY_DOMAINS: usize = 256;
+/// Maximum known Wi-Fi network names retained from one PiPedal response.
+pub const MAX_KNOWN_WIFI_NETWORKS: usize = 256;
 /// Maximum system MIDI bindings accepted in one PiPedal update.
 pub const MAX_SYSTEM_MIDI_BINDINGS: usize = 128;
 /// Maximum requests waiting for the PiPedal transport worker.
@@ -1013,6 +1015,17 @@ pub fn decode_wifi_regulatory_domains(
     Ok(domains)
 }
 
+/// Decode PiPedal's source-backed known-network string array.
+pub fn decode_known_wifi_networks(body: Option<serde_json::Value>) -> Result<Vec<String>, String> {
+    let networks: Vec<String> = decode_body(body)?;
+    if networks.len() > MAX_KNOWN_WIFI_NETWORKS
+        || networks.iter().any(|network| network.is_empty() || network.len() > 128)
+    {
+        return Err("PiPedal known Wi-Fi networks are invalid or excessive".into());
+    }
+    Ok(networks)
+}
+
 /// Validate a URI-to-favorite map before sending PiPedal's `setFavorites`.
 pub fn validate_favorites(
     favorites: &std::collections::BTreeMap<String, bool>,
@@ -1160,7 +1173,7 @@ pub enum SessionPhase {
 
 /// The bounded read-only requests used to populate a fresh PiPedal session.
 #[must_use]
-pub const fn startup_requests() -> [&'static str; 11] {
+pub const fn startup_requests() -> [&'static str; 12] {
     [
         "hello",
         "version",
@@ -1173,6 +1186,7 @@ pub const fn startup_requests() -> [&'static str; 11] {
         "getWifiRegulatoryDomains",
         "getHasWifi",
         "getUpdateStatus",
+        "getKnownWifiNetworks",
     ]
 }
 
@@ -2226,6 +2240,16 @@ mod tests {
     }
 
     #[test]
+    fn known_wifi_network_decoder_is_bounded_and_rejects_empty_names() {
+        assert_eq!(
+            decode_known_wifi_networks(Some(serde_json::json!(["studio", "backup"])))
+                .expect("known networks"),
+            vec!["studio", "backup"]
+        );
+        assert!(decode_known_wifi_networks(Some(serde_json::json!([""]))).is_err());
+    }
+
+    #[test]
     fn system_midi_readback_decoder_accepts_array_and_enforces_limits() {
         let body = serde_json::json!([{
             "symbol":"gain", "channel":1, "bindingType":0, "note":0, "control":7,
@@ -2255,7 +2279,7 @@ mod tests {
         assert_eq!(requests[0], "hello");
         assert_eq!(requests[1], "version");
         assert_eq!(requests[4], "getSystemMidiBindings");
-        assert_eq!(requests.last(), Some(&"getUpdateStatus"));
+        assert_eq!(requests.last(), Some(&"getKnownWifiNetworks"));
         assert!(requests.len() <= 16);
     }
 

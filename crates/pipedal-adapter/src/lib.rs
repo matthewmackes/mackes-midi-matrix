@@ -247,6 +247,7 @@ pub struct Worker {
     show_status_monitor: Option<bool>,
     has_wifi: Option<bool>,
     update_status: Option<mackes_pipedal_connector::UpdateStatus>,
+    known_wifi_networks: Vec<String>,
     wifi_regulatory_domains: std::collections::BTreeMap<String, String>,
     system_midi_bindings: Vec<mackes_pipedal_connector::MidiBinding>,
     version: Option<mackes_pipedal_connector::PiPedalVersion>,
@@ -281,6 +282,7 @@ impl Worker {
             show_status_monitor: None,
             has_wifi: None,
             update_status: None,
+            known_wifi_networks: Vec::new(),
             wifi_regulatory_domains: std::collections::BTreeMap::new(),
             system_midi_bindings: Vec::new(),
             version: None,
@@ -339,6 +341,7 @@ impl Worker {
                     self.show_status_monitor = None;
                     self.has_wifi = None;
                     self.update_status = None;
+                    self.known_wifi_networks.clear();
                     self.wifi_regulatory_domains.clear();
                     self.system_midi_bindings.clear();
                     self.version = None;
@@ -425,47 +428,7 @@ impl Worker {
             self.catalog = decode_catalog(body.as_ref().ok_or(TransportError::Protocol)?)
                 .map_err(|_| TransportError::Protocol)?;
         }
-        if header.message == "pluginClasses" {
-            mackes_pipedal_connector::decode_plugin_classes(body.clone())
-                .map_err(|_| TransportError::Protocol)?;
-        }
-        if header.message == "getFavorites" {
-            self.favorites = mackes_pipedal_connector::decode_favorites(body.clone())
-                .map_err(|_| TransportError::Protocol)?;
-        }
-        if header.message == "getSystemMidiBindings" {
-            self.system_midi_bindings =
-                mackes_pipedal_connector::decode_system_midi_bindings(body.clone())
-                    .map_err(|_| TransportError::Protocol)?;
-        }
-        if header.message == "getGovernorSettings" {
-            self.governor_settings =
-                mackes_pipedal_connector::decode_governor_settings(body.clone())
-                    .map_err(|_| TransportError::Protocol)?;
-        }
-        if header.message == "getShowStatusMonitor" {
-            self.show_status_monitor = Some(
-                mackes_pipedal_connector::decode_show_status_monitor(body.clone())
-                    .map_err(|_| TransportError::Protocol)?,
-            );
-        }
-        if header.message == "getHasWifi" {
-            self.has_wifi = Some(
-                mackes_pipedal_connector::decode_has_wifi(body.clone())
-                    .map_err(|_| TransportError::Protocol)?,
-            );
-        }
-        if header.message == "getUpdateStatus" {
-            self.update_status = Some(
-                mackes_pipedal_connector::decode_update_status(body.clone())
-                    .map_err(|_| TransportError::Protocol)?,
-            );
-        }
-        if header.message == "getWifiRegulatoryDomains" {
-            self.wifi_regulatory_domains =
-                mackes_pipedal_connector::decode_wifi_regulatory_domains(body.clone())
-                    .map_err(|_| TransportError::Protocol)?;
-        }
+        self.accept_auxiliary_readback(&header.message, body.clone())?;
         if header.message == "ehlo" {
             self.pipedal_client_id = body.as_ref().and_then(serde_json::Value::as_u64);
         }
@@ -508,6 +471,68 @@ impl Worker {
         let phase = self.session.accept(&header.message).map_err(|_| TransportError::Protocol)?;
         self.successful_reads = self.successful_reads.saturating_add(1);
         Ok(phase)
+    }
+
+    fn accept_auxiliary_readback(
+        &mut self,
+        message: &str,
+        body: Option<serde_json::Value>,
+    ) -> Result<(), TransportError> {
+        match message {
+            "pluginClasses" => mackes_pipedal_connector::decode_plugin_classes(body)
+                .map(|_| ())
+                .map_err(|_| TransportError::Protocol),
+            "getFavorites" => {
+                self.favorites = mackes_pipedal_connector::decode_favorites(body)
+                    .map_err(|_| TransportError::Protocol)?;
+                Ok(())
+            }
+            "getSystemMidiBindings" => {
+                self.system_midi_bindings =
+                    mackes_pipedal_connector::decode_system_midi_bindings(body)
+                        .map_err(|_| TransportError::Protocol)?;
+                Ok(())
+            }
+            "getGovernorSettings" => {
+                self.governor_settings = mackes_pipedal_connector::decode_governor_settings(body)
+                    .map_err(|_| TransportError::Protocol)?;
+                Ok(())
+            }
+            "getShowStatusMonitor" => {
+                self.show_status_monitor = Some(
+                    mackes_pipedal_connector::decode_show_status_monitor(body)
+                        .map_err(|_| TransportError::Protocol)?,
+                );
+                Ok(())
+            }
+            "getHasWifi" => {
+                self.has_wifi = Some(
+                    mackes_pipedal_connector::decode_has_wifi(body)
+                        .map_err(|_| TransportError::Protocol)?,
+                );
+                Ok(())
+            }
+            "getUpdateStatus" => {
+                self.update_status = Some(
+                    mackes_pipedal_connector::decode_update_status(body)
+                        .map_err(|_| TransportError::Protocol)?,
+                );
+                Ok(())
+            }
+            "getKnownWifiNetworks" => {
+                self.known_wifi_networks =
+                    mackes_pipedal_connector::decode_known_wifi_networks(body)
+                        .map_err(|_| TransportError::Protocol)?;
+                Ok(())
+            }
+            "getWifiRegulatoryDomains" => {
+                self.wifi_regulatory_domains =
+                    mackes_pipedal_connector::decode_wifi_regulatory_domains(body)
+                        .map_err(|_| TransportError::Protocol)?;
+                Ok(())
+            }
+            _ => Ok(()),
+        }
     }
 
     /// Returns the numeric client identifier assigned by `PiPedal` during `hello`.
@@ -632,6 +657,12 @@ impl Worker {
     #[must_use]
     pub const fn update_status(&self) -> Option<&mackes_pipedal_connector::UpdateStatus> {
         self.update_status.as_ref()
+    }
+
+    /// Last validated known Wi-Fi network names.
+    #[must_use]
+    pub fn known_wifi_networks(&self) -> &[String] {
+        &self.known_wifi_networks
     }
 
     /// Last validated Wi-Fi regulatory-domain labels.

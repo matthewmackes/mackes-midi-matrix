@@ -116,7 +116,7 @@ user-facing workflow without needing an independent button; require a documented
 | updateNow | missing | Device system settings | pending W150 |
 | getJackStatus | catalogued | Device system settings | pending W150 |
 | getAlsaDevices | catalogued | Device system settings | pending W150 |
-| getKnownWifiNetworks | catalogued | Device system settings | pending W150 |
+| getKnownWifiNetworks | catalogued | Device system settings | bounded startup readback and adapter projection implemented; daemon/browser/installed qualification pending W150 |
 | getWifiChannels | catalogued | Device system settings | pending W150 |
 | getPluginPresets | catalogued | Presets and snapshots | pending W150 |
 | loadPluginPreset | catalogued | Presets and snapshots | pending W150 |
