@@ -63,6 +63,8 @@ pub const MAX_FILE_LIST_ENTRIES: usize = 256;
 pub const MAX_TONE3000_DIGEST_TEXT: usize = 128;
 /// Maximum channel-router vector length accepted from PiPedal.
 pub const MAX_CHANNEL_ROUTER_CHANNELS: usize = 64;
+/// Maximum serialized PKCE response accepted from Tone3000.
+pub const MAX_TONE3000_PKCE_BYTES: usize = 2048;
 /// Maximum Wi-Fi channel selectors accepted in one response.
 pub const MAX_WIFI_CHANNELS: usize = 256;
 /// Maximum ALSA devices accepted in one PiPedal response.
@@ -484,6 +486,8 @@ pub enum Operation {
     GetChannelRouterSettings,
     /// Replace channel-router settings.
     SetChannelRouterSettings,
+    /// Create Tone3000 PKCE parameters.
+    MakeTone3000Pkce,
     /// Load a plugin preset into a runtime instance.
     LoadPluginPreset,
     /// Query JACK server settings.
@@ -590,6 +594,7 @@ impl Operation {
             Self::CopyPresetsToBank,
             Self::GetChannelRouterSettings,
             Self::SetChannelRouterSettings,
+            Self::MakeTone3000Pkce,
             Self::LoadPluginPreset,
             Self::GetJackServerSettings,
             Self::SetJackServerSettings,
@@ -683,6 +688,7 @@ impl Operation {
             Self::CopyPresetsToBank => "copyPresetsToBank",
             Self::GetChannelRouterSettings => "getChannelRouterSettings",
             Self::SetChannelRouterSettings => "setChannelRouterSettings",
+            Self::MakeTone3000Pkce => "makeTone3000Pkce",
             Self::LoadPluginPreset => "loadPluginPreset",
             Self::GetJackServerSettings => "getJackServerSettings",
             Self::SetJackServerSettings => "setJackServerSettings",
@@ -775,6 +781,7 @@ impl Operation {
                 | Self::GetKnownWifiNetworks
                 | Self::GetImageList
                 | Self::GetChannelRouterSettings
+                | Self::MakeTone3000Pkce
                 | Self::RequestFileList2
                 | Self::PingTone3000Server
                 | Self::Sha256Base64url
@@ -831,6 +838,7 @@ impl Operation {
             Self::GetKnownWifiNetworks => "diagnostics",
             Self::GetImageList => "diagnostics",
             Self::GetChannelRouterSettings | Self::SetChannelRouterSettings => "preferences",
+            Self::MakeTone3000Pkce => "assets",
             Self::RequestFileList2 => "assets",
             Self::DeleteUserFile => "assets",
             Self::CreateNewSampleDirectory | Self::RenameFilePropertyFile => "assets",
@@ -1588,6 +1596,17 @@ pub fn decode_tone3000_digest(body: Option<serde_json::Value>) -> Result<String,
         return Err("Tone3000 digest is empty or excessive".into());
     }
     Ok(digest)
+}
+
+/// Decode a bounded Tone3000 PKCE parameter object.
+pub fn decode_tone3000_pkce(body: Option<serde_json::Value>) -> Result<serde_json::Value, String> {
+    let value = body.ok_or_else(|| "Tone3000 PKCE response has no body".to_string())?;
+    if !value.is_object()
+        || serde_json::to_vec(&value).map_or(true, |bytes| bytes.len() > MAX_TONE3000_PKCE_BYTES)
+    {
+        return Err("Tone3000 PKCE response is invalid or excessive".into());
+    }
+    Ok(value)
 }
 
 /// Source-shaped request for PiPedal's v2 file browser.
@@ -3253,7 +3272,7 @@ mod tests {
                 assert!(!operation.is_read_only());
             }
         }
-        assert_eq!(Operation::all().len(), 86);
+        assert_eq!(Operation::all().len(), 87);
         assert!(Operation::all().iter().all(|operation| !operation.wire_name().is_empty()));
         assert_eq!(serde_json::to_string(&Operation::SetControl).expect("json"), "\"setControl\"");
     }

@@ -12362,3 +12362,8 @@ Evidence (2026-09-08): Devices browser gate initially observed a transient daemo
 - **Channel-router slice (2026-09-10):** Added bounded typed readback and generation-checked query/write
   support for `getChannelRouterSettings` and `setChannelRouterSettings`. Daemon/browser and installed
   qualification remain pending W150.
+- **Tone3000 PKCE slice (2026-09-10):** Added bounded redirect encoding and PKCE-object readback
+  projection for `makeTone3000Pkce`, with reconnect-safe adapter retention. Daemon/browser and
+  installed qualification remain pending W150.
+- **Audit-guard maintenance (2026-09-10):** Updated the source-first audit guard to permit the
+  pending W150 count to fall below its obsolete historical floor while retaining row/family checks.

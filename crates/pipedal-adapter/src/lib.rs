@@ -255,6 +255,7 @@ pub struct Worker {
     file_list: Option<serde_json::Value>,
     tone3000_digest: Option<String>,
     channel_router_settings: Option<mackes_pipedal_connector::ChannelRouterSettings>,
+    tone3000_pkce: Option<serde_json::Value>,
     wifi_channels: Vec<mackes_pipedal_connector::WifiChannel>,
     alsa_devices: Vec<mackes_pipedal_connector::AlsaDeviceInfo>,
     jack_status: Option<mackes_pipedal_connector::JackHostStatus>,
@@ -304,6 +305,7 @@ impl Worker {
             file_list: None,
             tone3000_digest: None,
             channel_router_settings: None,
+            tone3000_pkce: None,
             wifi_channels: Vec::new(),
             alsa_devices: Vec::new(),
             jack_status: None,
@@ -377,6 +379,7 @@ impl Worker {
                     self.file_list = None;
                     self.tone3000_digest = None;
                     self.channel_router_settings = None;
+                    self.tone3000_pkce = None;
                     self.wifi_channels.clear();
                     self.alsa_devices.clear();
                     self.jack_status = None;
@@ -614,6 +617,13 @@ impl Worker {
                 );
                 Ok(())
             }
+            "makeTone3000Pkce" => {
+                self.tone3000_pkce = Some(
+                    mackes_pipedal_connector::decode_tone3000_pkce(body)
+                        .map_err(|_| TransportError::Protocol)?,
+                );
+                Ok(())
+            }
             "getWifiChannels" => {
                 self.wifi_channels = mackes_pipedal_connector::decode_wifi_channels(body)
                     .map_err(|_| TransportError::Protocol)?;
@@ -822,6 +832,37 @@ impl Worker {
         &self,
     ) -> Option<&mackes_pipedal_connector::ChannelRouterSettings> {
         self.channel_router_settings.as_ref()
+    }
+
+    /// Last validated Tone3000 PKCE parameter object.
+    #[must_use]
+    pub const fn tone3000_pkce(&self) -> Option<&serde_json::Value> {
+        self.tone3000_pkce.as_ref()
+    }
+
+    /// Prepares a generation-checked Tone3000 PKCE query.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the generation or redirect URL is invalid.
+    pub fn prepare_make_tone3000_pkce(
+        &self,
+        generation: u64,
+        redirect_url: String,
+        reply_to: Option<u64>,
+    ) -> Result<Vec<u8>, String> {
+        if generation != self.session.generation() {
+            return Err("Tone3000 PKCE query belongs to an old session generation".into());
+        }
+        if redirect_url.is_empty() || redirect_url.len() > 2048 {
+            return Err("Tone3000 redirect URL is invalid or excessive".into());
+        }
+        mackes_pipedal_connector::encode_request(&mackes_pipedal_connector::Request {
+            message: "makeTone3000Pkce".into(),
+            reply_to,
+            body: Some(redirect_url),
+        })
+        .map_err(|error| error.to_string())
     }
 
     /// Prepares a generation-checked channel-router query.

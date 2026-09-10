@@ -99,7 +99,7 @@ user-facing workflow without needing an independent button; require a documented
 | Handler / feature suffix | Connector catalog | Proposed UI home | Qualification |
 |---|---|---|---|
 | setControl | catalogued | Pedalboard and parameter inspector | pending W150 |
-| makeTone3000Pkce | missing | Device assets/library | pending W150 |
+| makeTone3000Pkce | catalogued | Device assets/library | bounded redirect query and PKCE-object readback projection implemented; daemon/browser/installed qualification pending W150 |
 | writeTone3000Readme | missing | Device assets/library | pending W150 |
 | sha256Base64url | catalogued | Device assets/library | bounded adapter query and digest readback projection implemented; daemon/browser/installed qualification pending W150 |
 | previewControl | catalogued | Pedalboard and parameter inspector | pending W150 |
