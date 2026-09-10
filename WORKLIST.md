@@ -11300,6 +11300,11 @@ Execution board: `docs/worklist-execution-board.md`.
   web contract assertions, `scripts/release-gate.sh` passed end to end: 56 web tests, workspace
   tests, emulator qualification, strict Clippy, routing benchmark, hermetic integration, installer
   smoke, and release artifact checksum/contents validation.
+- **Installed baseline/soak checkpoint (2026-09-10):** `scripts/capture-qualification-baseline.sh`
+  captured revision `a4fba15`, active daemon/console service state, installed artifact hashes, the
+  connected device inventory, and four MIDISPORT ports. A bounded 10-second soak produced 4 samples
+  with zero status failures, zero dropped events, zero restarts, and stable 119,268 KiB daemon RSS.
+  This confirms service stability; physical write, LED, and native readback claims remain unasserted.
 
 ## 4. Dependency and parallelization map
 

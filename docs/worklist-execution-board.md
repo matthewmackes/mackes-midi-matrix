@@ -24,6 +24,8 @@ The renderer registry now also supplies an accessible summary list for every fam
 the rebuilt installed host passed renderer, graphical-inventory, and visual-accessibility fixtures.
 The formal `scripts/release-gate.sh` also passes end to end, including workspace tests, emulator,
 clippy, benchmark, hermetic integration, installer smoke, and release artifact checksum/contents.
+The installed baseline and bounded service soak also pass: four samples, zero status failures, zero
+dropped events, zero restarts, and four MIDISPORT ports observed on `NAM-MIDI`.
 W177 is therefore in progress with software release evidence recorded; W176 novice/human sign-off
 and final release sign-off remain open.
 The existing focused
