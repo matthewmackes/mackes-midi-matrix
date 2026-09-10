@@ -11286,12 +11286,12 @@ Execution board: `docs/worklist-execution-board.md`.
 - **Release-gate checkpoint (2026-09-10):** `scripts/release-gate.sh` passed end to end after the
   catalog-bound fix: formatting/policy, workspace tests, emulator qualification, clippy, routing
   benchmark, 16 passing hermetic scenarios (1 explicitly post-release ignored), installer smoke, and
-  packaged release checksum/contents validation. The final installed web qualification passed all 17
+  packaged release checksum/contents validation. The final installed web qualification passed all 18
   fixtures, including graphical inventory, renderer registry, PiPedal catalog (3,076 controls / 265
   targets), lifecycle, responsive, accessibility, and lossless-route checks. W176 novice/human sign-off
   and final release artifacts/sign-off remain open before this packet can close.
 - **Aggregate requalification checkpoint (2026-09-10):** After the renderer accessible-list addition,
-  the final installed `scripts/qualify-web-installed.sh` run passed all 17 fixtures against
+  the final installed `scripts/qualify-web-installed.sh` run passed all 18 fixtures against
   `http://172.20.222.222:8081`, including the full browser capture, graphical inventory, nine-family
   renderer registry with accessible lists, novice surface, visual accessibility, PiPedal catalog,
   generation/lifecycle preservation, mobile overflow, assignment inspection, lossless-route safety,

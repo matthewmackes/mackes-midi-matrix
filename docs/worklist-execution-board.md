@@ -15,9 +15,10 @@ controls and 265 targets from PiPedal v2.0.110.
 The PiPedal generation boundary was corrected and reinstalled; snapshot and connector generations now
 match, and the approved typed `loadPreset(16)` request was accepted/queued. The generation fixture now
 asserts the Devices workspace's applied-generation marker, avoiding interference from an independent
-PiPedal subrefresh. The final installed aggregate passed all 17 fixtures, including visual
+PiPedal subrefresh. The final installed aggregate passed all 18 fixtures, including visual
 accessibility, lossless-route, and task-ownership checks. This includes light theme, reduced motion,
-200% zoom, 56 non-color-labeled controls, and the race-hardened assignment inspector.
+200% zoom, 56 non-color-labeled controls, the sequential five-workspace walkthrough, and the
+race-hardened assignment inspector.
 The visual review pass also confirms the installed signal-flow canvas keeps 32 devices distinct in a
 scrollable layout and the normal Devices/Routing text avoids internal URIs and runtime identities.
 The renderer registry now also supplies an accessible summary list for every family and fallback;
