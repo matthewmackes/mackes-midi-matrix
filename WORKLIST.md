@@ -12370,3 +12370,6 @@ Evidence (2026-09-08): Devices browser gate initially observed a transient daemo
 - **Tone3000 cancellation slice (2026-09-10):** Added the source-registered
   `cancelTone3000Download` confirmed scalar command with generation-checked handle validation.
   Daemon/browser and installed qualification remain pending W150.
+- **Wi-Fi secret-boundary audit slice (2026-09-10):** Confirmed `setWifiConfigSettings`,
+  `setWifiDirectConfigSettings`, and `getWifiDirectConfigSettings` carry password/PIN fields in
+  their source models; catalogued them without connector exposure or secret retention.

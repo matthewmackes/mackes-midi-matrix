@@ -122,10 +122,10 @@ user-facing workflow without needing an independent button; require a documented
 | loadPluginPreset | catalogued | Presets and snapshots | pending W150 |
 | setJackServerSettings | catalogued | Device system settings | confirmed bounded adapter write implemented; daemon/browser/installed qualification pending W150 |
 | setGovernorSettings | catalogued | Device system settings | pending W150 |
-| setWifiConfigSettings | missing | Device system settings | pending W150 |
+| setWifiConfigSettings | catalogued | Device system settings | source payload contains Wi-Fi credentials; intentionally not exposed by the bounded connector |
 | getWifiConfigSettings | catalogued | Device system settings | password-redacted bounded readback and adapter projection implemented; daemon/browser/installed qualification pending W150 |
-| setWifiDirectConfigSettings | missing | Device system settings | pending W150 |
-| getWifiDirectConfigSettings | missing | Device system settings | pending W150 |
+| setWifiDirectConfigSettings | catalogued | Device system settings | source payload contains Wi-Fi Direct PIN; intentionally not exposed by the bounded connector |
+| getWifiDirectConfigSettings | catalogued | Device system settings | source response contains Wi-Fi Direct PIN; intentionally not retained by the bounded connector |
 | getGovernorSettings | catalogued | Device system settings | bounded startup readback and adapter projection implemented; daemon/browser/installed qualification pending W150 |
 | getJackServerSettings | catalogued | Device system settings | bounded response decoder and adapter projection implemented; daemon/browser/installed qualification pending W150 |
 | getBankIndex | catalogued | Presets and snapshots | bounded readback implemented; full browser/installed qualification pending W150 |
