@@ -12282,3 +12282,6 @@ Evidence (2026-09-08): Devices browser gate initially observed a transient daemo
 - **Save-bank-as write slice (2026-09-10):** Added the source-registered `saveBankAs` payload with
   confirmed, generation-checked, bounded bank identity and name validation. Daemon/browser and
   installed qualification remain pending W150.
+- **Preset-rename write slice (2026-09-10):** Added the source-registered `renamePresetItem`
+  payload with confirmed, generation-checked, bounded client/instance identity and name validation.
+  Daemon/browser and installed qualification remain pending W150.

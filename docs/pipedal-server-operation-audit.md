@@ -163,7 +163,7 @@ user-facing workflow without needing an independent button; require a documented
 | previousBank | catalogued | Presets and snapshots | confirmed bounded adapter write implemented; daemon/browser/installed qualification pending W150 |
 | nextPreset | catalogued | Presets and snapshots | confirmed bounded adapter write implemented; daemon/browser/installed qualification pending W150 |
 | previousPreset | catalogued | Presets and snapshots | confirmed bounded adapter write implemented; daemon/browser/installed qualification pending W150 |
-| renamePresetItem | missing | Presets and snapshots | pending W150 |
+| renamePresetItem | catalogued | Presets and snapshots | confirmed bounded adapter write implemented; daemon/browser/installed qualification pending W150 |
 | copyPreset | missing | Presets and snapshots | pending W150 |
 | copyPluginPreset | missing | Presets and snapshots | pending W150 |
 | setPatchProperty | missing | Pedalboard and parameter inspector | pending W150 |

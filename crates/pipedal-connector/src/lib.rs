@@ -386,6 +386,8 @@ pub enum Operation {
     OpenBank,
     /// Save a bank under a new name.
     SaveBankAs,
+    /// Rename a preset item.
+    RenamePresetItem,
     /// Save the current preset.
     SaveCurrentPreset,
     /// Save the current pedalboard as a new preset.
@@ -476,6 +478,7 @@ impl Operation {
             Self::RenameBank,
             Self::OpenBank,
             Self::SaveBankAs,
+            Self::RenamePresetItem,
             Self::SaveCurrentPreset,
             Self::SaveCurrentPresetAs,
             Self::SavePluginPresetAs,
@@ -539,6 +542,7 @@ impl Operation {
             Self::RenameBank => "renameBank",
             Self::OpenBank => "openBank",
             Self::SaveBankAs => "saveBankAs",
+            Self::RenamePresetItem => "renamePresetItem",
             Self::SaveCurrentPreset => "saveCurrentPreset",
             Self::SaveCurrentPresetAs => "saveCurrentPresetAs",
             Self::SavePluginPresetAs => "savePluginPresetAs",
@@ -595,6 +599,7 @@ impl Operation {
                 | Self::RenameBank
                 | Self::OpenBank
                 | Self::SaveBankAs
+                | Self::RenamePresetItem
                 | Self::SaveCurrentPreset
                 | Self::SaveCurrentPresetAs
                 | Self::SavePluginPresetAs
@@ -682,6 +687,7 @@ impl Operation {
             Self::RenameBank => "presets",
             Self::OpenBank => "presets",
             Self::SaveBankAs => "presets",
+            Self::RenamePresetItem => "presets",
             Self::GetJackServerSettings | Self::GetGovernorSettings => "diagnostics",
             Self::GetShowStatusMonitor => "monitoring",
             Self::GetWifiRegulatoryDomains => "diagnostics",
@@ -866,6 +872,29 @@ impl FromTo {
 pub struct SaveBankAs {
     pub bank_id: i64,
     pub new_name: String,
+}
+
+/// Source-backed preset rename payload.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RenamePresetItem {
+    pub client_id: i64,
+    pub instance_id: i64,
+    pub name: String,
+}
+
+impl RenamePresetItem {
+    /// Validate identities and the bounded preset name.
+    pub fn validate(&self) -> Result<(), String> {
+        if self.client_id < 0
+            || self.instance_id < 0
+            || self.name.trim().is_empty()
+            || self.name.len() > 256
+        {
+            return Err("PiPedal preset rename is invalid or excessive".into());
+        }
+        Ok(())
+    }
 }
 
 impl SaveBankAs {
@@ -2735,7 +2764,7 @@ mod tests {
                 assert!(!operation.is_read_only());
             }
         }
-        assert_eq!(Operation::all().len(), 56);
+        assert_eq!(Operation::all().len(), 57);
         assert!(Operation::all().iter().all(|operation| !operation.wire_name().is_empty()));
         assert_eq!(serde_json::to_string(&Operation::SetControl).expect("json"), "\"setControl\"");
     }
