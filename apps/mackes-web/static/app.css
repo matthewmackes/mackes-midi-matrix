@@ -109,6 +109,19 @@ h2 { margin-top: 0; font-size: 1.5rem; }
 .device-board { min-width: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: .75rem; margin: 1rem 0; max-height: 34rem; overflow: auto; overscroll-behavior: contain; padding-right: .35rem; }
 .device-card { padding: 1rem; background: var(--cds-background); border-left: 3px solid var(--cds-interactive); }
 .device-card h3 { margin: 0 0 .75rem; font-size: 1rem; }
+.device-graphic { display: block; width: 100%; height: auto; margin: 0 0 .75rem; background: var(--cds-layer); }
+.device-graphic-chassis { fill: var(--cds-layer); stroke: var(--cds-border-subtle); stroke-width: 2; }
+.device-graphic-title { fill: var(--cds-text-primary); font: 700 16px "IBM Plex Sans", sans-serif; text-transform: capitalize; }
+.device-graphic-state, .device-graphic-caption { fill: var(--cds-text-secondary); font: 12px "IBM Plex Sans", sans-serif; }
+.device-graphic-panel { fill: var(--cds-background); stroke: var(--cds-border-subtle); stroke-width: 1; }
+.device-graphic-control { fill: var(--cds-layer-accent); stroke: var(--cds-text-primary); stroke-width: 2; }
+.device-graphic-switch { fill: #42be65; stroke: var(--cds-text-primary); stroke-width: 2; }
+.device-graphic-fader { stroke: var(--cds-text-secondary); stroke-width: 5; }
+.device-graphic-port-in, .device-graphic-port-out { stroke: var(--cds-text-primary); stroke-width: 2; }
+.device-graphic-port-in { fill: #4589ff; }
+.device-graphic-port-out { fill: #42be65; }
+.device-graphic-port { fill: var(--cds-layer-accent); stroke: var(--cds-text-primary); stroke-width: 2; }
+.device-graphic-network { fill: none; stroke: #f1c21b; stroke-width: 5; stroke-dasharray: 8 5; }
 .device-card dl { display: grid; grid-template-columns: minmax(5rem, auto) 1fr; gap: .35rem .75rem; margin: 0; font-size: .875rem; }
 .device-card dt { color: var(--cds-text-secondary); }
 .device-card dd { margin: 0; overflow-wrap: anywhere; }

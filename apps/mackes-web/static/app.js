@@ -199,6 +199,7 @@ function renderDeviceBoard(body) {
     const card = document.createElement('article'); card.className = 'device-card';
     const name = device.name || device.alias || device.id || `Endpoint ${index + 1}`;
     const title = document.createElement('h3'); title.textContent = name; card.append(title);
+    window.MackesDeviceRenderer?.appendGraphic(device, card);
     if (/novation|launch control/i.test(name)) {
       const editorLink = document.createElement('a'); editorLink.href = '/devices/novation'; editorLink.textContent = 'Open Novation editor'; editorLink.className = 'device-editor-link'; card.append(editorLink);
     }

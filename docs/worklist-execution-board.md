@@ -5,7 +5,7 @@ step for the active Web Interface drain packets and must be updated with command
 
 Latest automated checkpoint (2026-09-08): `cargo test -p mackes-web` passed 54/54; strict Clippy,
 web asset budget (25,699 compressed bytes), web coverage (40 capabilities), worklist validation
-current worklist state: 146 complete, 6 in progress, 9 not started (161 total; measured 2026-09-10)
+current worklist state: 146 complete, 7 in progress, 8 not started (161 total; measured 2026-09-10)
 (161 items), and `git diff --check` all pass. Focused installed browser fixtures for inventory,
 PiPedal, assignment, lossless routing, and task ownership pass; a post-fixture 1,000-cycle health
 soak passes with p95 8.964ms and max 13.213ms. These checks verify contracts and packaging, not

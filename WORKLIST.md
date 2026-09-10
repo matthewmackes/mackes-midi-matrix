@@ -11092,14 +11092,19 @@ Execution board: `docs/worklist-execution-board.md`.
 - **Acceptance:** Each faceplate exposes real controls and ports as selectable graphical targets with labels, tooltips/help, state indication, supported/unsupported semantics, and accessible names. Novation controls support pointer/keyboard selection and emulator fixtures without claiming native observation.
 - **Evidence:** Model-specific renderer fixtures, geometry/source references, interaction tests, reduced-motion/theme checks, and unknown/disconnected state tests.
 
-#### [ ] W171 — Deliver processor, interface, and virtual endpoint graphics
+#### [>] W171 — Deliver processor, interface, and virtual endpoint graphics
 
-- **Status:** `NOT_STARTED`
+- **Status:** `IN_PROGRESS`
 - **Owner:** Codex
 - **Depends on:** W169
 - **Objective:** Provide graphical representations for PiPedal, M-Audio MIDISPORT 4x4, RTP-MIDI, generic MIDI, MACKES virtual/monitor endpoints, and unknown future endpoint kinds.
 - **Acceptance:** Every endpoint has a graphical chassis or topology representation, visible port roles, connection state, and accessible list equivalent. Generic and unknown devices remain useful without invented controls or unsupported capabilities.
 - **Evidence:** Connected/disconnected/observed/unknown renderer matrix, endpoint fixtures, fallback tests, and inventory governance links.
+- **Implementation checkpoint (2026-09-10):** Added the bundled `MackesDeviceRenderer` registry and
+  graphical mini-faceplates for all ledger families plus `generic.endpoint` fallback coverage. The
+  inventory cards now include SVG chassis, ports, controls, status, and accessible image labels.
+  Model-faithful geometry, richer control interaction, and authoritative capability projection remain
+  open before this item can close.
 
 #### [ ] W172 — Replace mapping and routing editors with visual builders
 

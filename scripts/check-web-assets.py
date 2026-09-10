@@ -12,6 +12,7 @@ ASSETS = (
     ROOT / "apps" / "mackes-web" / "static" / "index.html",
     ROOT / "apps" / "mackes-web" / "static" / "feature_catalog.js",
     ROOT / "apps" / "mackes-web" / "static" / "feature_renderer.js",
+    ROOT / "apps" / "mackes-web" / "static" / "device_renderer.js",
     ROOT / "apps" / "mackes-web" / "static" / "state_store.js",
     ROOT / "apps" / "mackes-web" / "static" / "app.js",
     ROOT / "apps" / "mackes-web" / "static" / "app.css",
