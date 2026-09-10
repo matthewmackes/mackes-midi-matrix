@@ -51,13 +51,16 @@ function renderStudioFlow(devices) {
     if (studioFlowStatus) studioFlowStatus.textContent = 'No devices found yet.';
     return;
   }
-  const width = 960;
-  const nodeWidth = Math.min(220, Math.max(150, Math.floor((width - 80) / devices.length) - 20));
-  const gap = (width - 40 - (nodeWidth * devices.length)) / Math.max(1, devices.length - 1);
+  const nodeWidth = 180;
+  const gap = 24;
+  const width = Math.max(960, 40 + (nodeWidth + gap) * devices.length);
+  studioFlowGraph.setAttribute('viewBox', `0 0 ${width} 300`);
+  studioFlowGraph.style.minWidth = `${width}px`;
   const nodes = devices.map((device, index) => {
-    const name = device.name || device.alias || 'Studio device';
+    const name = friendlyEndpointName(device) || 'Studio device';
     const stateValue = String(device.state || device.connection_state || 'unknown');
-    return { device, name, stateValue, x: 20 + index * (nodeWidth + gap), y: 78 };
+    const displayName = name.length > 20 ? `${name.slice(0, 19)}…` : name;
+    return { device, name, displayName, stateValue, x: 20 + index * (nodeWidth + gap), y: 78 };
   });
   const ns = ['http', String.fromCharCode(58, 47, 47), 'www.w3.org/2000/svg'].join('');
   const addSvg = (tag, attrs, parent = studioFlowGraph) => {
@@ -76,7 +79,8 @@ function renderStudioFlow(devices) {
     group.addEventListener('keydown', event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); group.click(); } });
     addSvg('rect', { x: node.x, y: node.y, width: nodeWidth, height: 145, rx: 8, class: 'flow-node-chassis' }, group);
     addSvg('circle', { cx: node.x + 24, cy: 104, r: 10, class: `flow-status flow-status-${node.stateValue.toLowerCase().replace(/[^a-z]+/g, '-')}` }, group);
-    const titleText = addSvg('text', { x: node.x + 44, y: 112, class: 'flow-node-title' }, group); titleText.textContent = node.name;
+    const titleText = addSvg('text', { x: node.x + 44, y: 112, class: 'flow-node-title' }, group); titleText.textContent = node.displayName;
+    const title = addSvg('title', {}, group); title.textContent = node.name;
     const stateText = addSvg('text', { x: node.x + 44, y: 135, class: 'flow-node-state' }, group); stateText.textContent = node.stateValue;
     addSvg('rect', { x: node.x + 16, y: 174, width: 12, height: 12, class: 'flow-port flow-port-in' }, group);
     addSvg('rect', { x: node.x + nodeWidth - 28, y: 174, width: 12, height: 12, class: 'flow-port flow-port-out' }, group);
@@ -210,6 +214,27 @@ function updateMonitorStats() {
 function routeListFromBody(body) {
   if (Array.isArray(body)) return body;
   return Array.isArray(body?.routes) ? body.routes : [];
+}
+function friendlyEndpointName(endpoint, direction = '') {
+  let name = String(endpoint?.display_name || endpoint?.name || endpoint?.alias || '').trim();
+  name = name.split(':')[0].replace(/\b\d{8,}\b/g, '').replace(/\s+/g, ' ').trim();
+  if (!name || /^current endpoint$/i.test(name)) name = direction === 'input' ? 'Named source port' : direction === 'output' ? 'Named destination port' : 'Named studio port';
+  return direction ? `${name} (${direction === 'input' ? 'source' : 'destination'})` : name;
+}
+function friendlyPhysicalControlName(id) {
+  const text = String(id || 'control');
+  const knob = text.match(/^knob-r(\d+)-c(\d+)$/);
+  if (knob) return `Knob ${knob[1]}, ${knob[2]}`;
+  const fader = text.match(/^fader-(\d+)$/);
+  if (fader) return `Fader ${fader[1]}`;
+  const button = text.match(/^button-r(\d+)-c(\d+)$/);
+  if (button) return `Channel button ${button[1]}, ${button[2]}`;
+  const utility = text.match(/^utility-(\d+)$/);
+  if (utility) return `Utility control ${utility[1]}`;
+  return 'Selected control';
+}
+function friendlyCapabilityLabel(value) {
+  return String(value || 'assigned').replace(/([a-z])([A-Z])/g, '$1 $2').replace(/[-_]+/g, ' ').replace(/\bcontrol\s+(\d+)\b/i, 'Control $1').trim();
 }
 function renderDeviceBoard(body) {
   const devices = Array.isArray(body) ? body : (body?.endpoints || body?.devices || []);
@@ -522,7 +547,7 @@ function appendSceneActionBuilder(card, sceneId, sourceActions) {
   const summary = document.createElement('summary'); summary.textContent = 'Edit actions visually'; builder.append(summary);
   const list = document.createElement('div'); list.className = 'visual-action-list';
   const actions = sourceActions.map(action => typeof action === 'object' && action ? { ...action } : { description: String(action), operation: 'note' });
-  const namedTargets = routeEndpointCatalog.filter(endpoint => endpoint?.id != null).map(endpoint => ({ id: String(endpoint.id), name: endpoint.name || `Named device ${endpoint.id}` }));
+  const namedTargets = routeEndpointCatalog.filter(endpoint => endpoint?.id != null).map(endpoint => ({ id: String(endpoint.id), name: friendlyEndpointName(endpoint, endpoint.direction) }));
   const render = () => {
     list.replaceChildren();
     actions.forEach((action, index) => {
@@ -575,10 +600,10 @@ function renderRoutingBoard(routes) {
       const input = document.createElement('select'); input.dataset.routeKey = key;
       const direction = key === 'source' ? 'input' : 'output';
       const choices = routeEndpointCatalog.filter(endpoint => !endpoint.direction || endpoint.direction === direction);
-      if (choices.length) choices.forEach(endpoint => input.add(new Option(`${endpoint.name} (${endpoint.direction})`, endpoint.id)));
+      if (choices.length) choices.forEach(endpoint => input.add(new Option(friendlyEndpointName(endpoint, endpoint.direction || direction), endpoint.id)));
       else input.add(new Option('Refresh endpoints to choose a named port', ''));
       const current = Number.isFinite(route[key]) ? String(route[key]) : '';
-      if (current && !choices.some(endpoint => String(endpoint.id) === current)) input.add(new Option(`Current endpoint ${current}`, current));
+      if (current && !choices.some(endpoint => String(endpoint.id) === current)) input.add(new Option('Current connection (preserved)', current));
       input.value = Number.isFinite(route[key]) ? String(route[key]) : '';
       field.append(input); card.append(field);
     });
@@ -745,7 +770,7 @@ async function load(view) {
       routeEndpointCatalog = Array.isArray(body.endpoint_catalog) ? body.endpoint_catalog : [];
       routeEndpointLossless = routeEndpointCatalog.every(endpoint => Number.isSafeInteger(endpoint?.id));
       if (!routeEndpointLossless) {
-        showInspector('Named-port route editing is read-only: endpoint identifiers exceed JavaScript safe-integer precision. Use the raw configuration boundary until a lossless backend contract is enabled.');
+        showInspector('This connection is view-only because its device identity is too large for this browser. Ask an administrator to update the connection format.');
       }
       const routes = routeListFromBody(body);
       if (!routeDraftDirty) { routeDraft = routes; renderRoutingBoard(routes); }
@@ -1030,18 +1055,17 @@ function renderFaceplate(body) {
   mappingRegistry = mappings;
   if (assignmentCatalog) {
     const lifecycle = body?.lifecycle || body?.device?.lifecycle || 'unknown';
-    const stableId = body?.stable_id || body?.device?.stable_id || 'unbound';
     const ledPhase = body?.led?.phase || 'unknown';
     const feedback = body?.led?.feedback_enabled === false ? 'disabled' : 'enabled/unknown';
     const currentLines = mappings.filter(item => item && item.enabled !== false).map(item => {
       const control = item.physical_control_id || item.physical_control || 'control';
-      const destination = [item.destination_profile, item.destination_effect, item.destination_parameter].filter(Boolean).join(' / ') || item.id || 'unresolved';
-      return `${control} → ${destination} · value unavailable (no authoritative readback)`;
+      const destination = [item.destination_profile, item.destination_effect, item.destination_parameter].filter(Boolean).map(friendlyCapabilityLabel).join(' / ') || 'unresolved';
+      return `${friendlyPhysicalControlName(control)} → ${destination} · value unavailable (no authoritative readback)`;
     });
     setHidden(assignmentCatalog, false);
     if (assignmentCatalogHeading) setHidden(assignmentCatalogHeading, false);
     const refreshedAt = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    assignmentCatalog.textContent = `Novation ${lifecycle} · identity ${stableId} · LED ${ledPhase} · feedback ${feedback}\nCurrent assignments (${currentLines.length}) · refreshed ${refreshedAt}${currentLines.length ? `\n${currentLines.join('\n')}` : '\nNo active assignments reported by the authoritative mapping registry.'}`;
+    assignmentCatalog.textContent = `Novation ${lifecycle} · LED ${ledPhase} · feedback ${feedback}\nCurrent assignments (${currentLines.length}) · refreshed ${refreshedAt}${currentLines.length ? `\n${currentLines.join('\n')}` : '\nNo active assignments reported by the authoritative mapping registry.'}`;
   }
   const rows = ['Novation Launch Control XL — text alternative', 'Knobs:'];
   const state = mapping => mapping ? `${mapping.enabled ? 'assigned' : 'disabled'}; led=${mapping.led || 'unspecified'}` : 'off';
@@ -1049,21 +1073,21 @@ function renderFaceplate(body) {
     rows.push(Array.from({ length: 8 }, (_, col) => {
       const id = `knob-r${row}-c${col + 1}`;
       const mapping = mappings.find(item => (item.physical_control_id || item.physical_control) === id);
-      return `${id}=${state(mapping)}`;
+      return `${friendlyPhysicalControlName(id)}=${state(mapping)}`;
     }).join(' | '));
   }
   rows.push('Faders:');
   rows.push(Array.from({ length: 8 }, (_, index) => {
     const id = `fader-${index + 1}`;
     const mapping = mappings.find(item => (item.physical_control_id || item.physical_control) === id);
-    return `${id}=${state(mapping)}`;
+    return `${friendlyPhysicalControlName(id)}=${state(mapping)}`;
   }).join(' | '));
   rows.push('Buttons:');
   for (let row = 1; row <= 3; row += 1) {
     rows.push(Array.from({ length: 8 }, (_, col) => {
       const id = `button-r${row}-c${col + 1}`;
       const mapping = mappings.find(item => (item.physical_control_id || item.physical_control) === id);
-      return `${id}=${state(mapping)}`;
+      return `${friendlyPhysicalControlName(id)}=${state(mapping)}`;
     }).join(' | '));
   }
   setHidden(faceplate, false);
@@ -1096,7 +1120,7 @@ function renderFaceplate(body) {
     const y = kind === 'knob' ? 70 + (row - 1) * 82 : kind === 'fader' ? 305 : kind === 'utility' ? 535 : 420 + (row - 1) * 55;
     const control = svg('g', {
       class: `faceplate-control ${mapping ? (mapping.enabled ? 'assigned' : 'disabled') : 'unassigned'}`,
-      tabindex: 0, role: 'button', 'aria-label': `Select ${id}; ${mapping ? (mapping.enabled ? 'assigned' : 'disabled') : 'unassigned'}; current value unavailable until device readback`,
+      tabindex: 0, role: 'button', 'aria-label': `Select ${friendlyPhysicalControlName(id)}; ${mapping ? (mapping.enabled ? 'assigned' : 'disabled') : 'unassigned'}; current value unavailable until device readback`,
       'aria-pressed': selectedPhysicalControlId === id, 'data-physical-control-id': id
     });
     const shape = kind === 'knob'
@@ -1105,22 +1129,22 @@ function renderFaceplate(body) {
     const label = svg('text', { x, y: y + 5 });
     label.textContent = kind === 'knob' ? `K${row}.${col}` : kind === 'fader' ? `F${col}` : kind === 'utility' ? ['Device', 'Mute', 'Solo', 'Record', 'Up', 'Down', 'Left', 'Right'][col - 1] : `B${row}.${col}`;
     const assignmentLabel = svg('text', { x, y: y + (kind === 'knob' ? 48 : kind === 'fader' ? 38 : kind === 'utility' ? 18 : 30), class: 'assignment-label' });
-    const assignment = mapping ? (mapping.destination_parameter || mapping.destination_effect || mapping.id || 'assigned') : '—';
+    const assignment = mapping ? friendlyCapabilityLabel(mapping.destination_parameter || mapping.destination_effect || 'assigned') : '—';
     assignmentLabel.textContent = assignment.length > 14 ? `${assignment.slice(0, 13)}…` : assignment;
     const title = svg('title');
-    title.textContent = mapping ? `${mapping.enabled ? 'Assigned' : 'Disabled'}: ${mapping.destination_parameter || mapping.id}; LED ${mapping.led || 'unspecified'}` : 'Unassigned';
+    title.textContent = mapping ? `${mapping.enabled ? 'Assigned' : 'Disabled'}: ${mapping.destination_parameter || mapping.destination_effect || 'destination'}; LED ${mapping.led || 'unspecified'}` : 'Unassigned';
     control.append(title, shape, label, assignmentLabel);
     const select = () => {
       selectedPhysicalControlId = id;
       selectedMappingId = mapping?.id || '';
-      selectedPhysicalControl.textContent = `Selected physical control: ${id}`;
+      selectedPhysicalControl.textContent = `Selected physical control: ${friendlyPhysicalControlName(id)}`;
       if (mapping) {
-        const destination = [mapping.destination_profile, mapping.destination_effect, mapping.destination_parameter].filter(Boolean).join(' / ') || 'destination not specified';
-        const source = [mapping.source_endpoint, mapping.source_kind, Number.isInteger(mapping.source_channel) ? `ch ${mapping.source_channel}` : '', Number.isInteger(mapping.source_number) ? `#${mapping.source_number}` : ''].filter(Boolean).join(' · ') || 'source not specified';
+        const destination = [mapping.destination_profile, mapping.destination_effect, mapping.destination_parameter].filter(Boolean).map(friendlyCapabilityLabel).join(' / ') || 'destination not specified';
+        const source = [mapping.source_endpoint, mapping.source_kind].filter(Boolean).join(' · ') || 'source not specified';
         const behavior = mapping.behavior ? `${mapping.behavior.curve || 'linear'}${mapping.behavior.invert ? ' · inverted' : ''} · ${mapping.behavior.source_range?.join('–') || '0–127'} → ${mapping.behavior.destination_range?.join('–') || '0–127'}` : 'behavior not specified';
-        showInspector(`Novation ${id} selected · ${mapping.enabled === false ? 'disabled' : 'assigned'}\nDestination: ${destination}\nSource: ${source}\nBehavior: ${behavior}\nLED: ${mapping.led || 'unspecified'} · mapping id: ${mapping.id || 'unnamed'}\nCurrent value: unavailable until authoritative device readback.`);
+        showInspector(`${friendlyPhysicalControlName(id)} selected · ${mapping.enabled === false ? 'disabled' : 'assigned'}\nDestination: ${destination}\nSource: ${source}\nBehavior: ${behavior}\nLED: ${mapping.led || 'unspecified'}\nCurrent value: unavailable until authoritative device readback.`);
       } else {
-        showInspector(`Novation ${id} selected · unassigned\nNo authoritative mapping exists for this control. Use the assignment workflow to create one; current value is unavailable until device readback.`);
+        showInspector(`${friendlyPhysicalControlName(id)} selected · unassigned\nNo authoritative mapping exists for this control. Use the assignment workflow to create one; current value is unavailable until device readback.`);
       }
       workspaceInspector?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
       const behavior = mapping?.behavior;
@@ -1144,12 +1168,11 @@ function renderFaceplate(body) {
   if (!selectedPhysicalControlId) {
     const assigned = mappings.filter(item => item && item.enabled !== false);
     const assignmentSummary = `Novation assignments: ${assigned.length} active of ${ids.length}`;
-    const examples = assigned.slice(0, 4).map(item => `${item.physical_control_id || item.physical_control}: ${item.destination_parameter || item.destination_effect || item.id}`).join(' · ');
+    const examples = assigned.slice(0, 4).map(item => `${friendlyPhysicalControlName(item.physical_control_id || item.physical_control)}: ${friendlyCapabilityLabel(item.destination_parameter || item.destination_effect || 'assigned')}`).join(' · ');
     const refreshedAt = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
     const lifecycle = body?.lifecycle || body?.device?.lifecycle || 'unknown';
-    const stableId = body?.stable_id || body?.device?.stable_id || 'unbound';
     const ledPhase = body?.led?.phase || 'unknown';
-    showInspector(`${assignmentSummary}. Novation ${lifecycle} · identity ${stableId} · LED ${ledPhase} · refreshed ${refreshedAt}. ${examples || 'No active assignments reported by the authoritative mapping registry.'} Select a control for details.`);
+    showInspector(`${assignmentSummary}. Novation ${lifecycle} · LED ${ledPhase} · refreshed ${refreshedAt}. ${examples || 'No active assignments reported by the authoritative mapping registry.'} Select a control for details.`);
   }
   const supportsGenericLayout = body?.novation_capabilities?.generic_layout === true || body?.device?.supports_generic_layout === true;
   if (layoutToggle) {
@@ -1594,16 +1617,15 @@ document.querySelector('#pipedal-refresh').addEventListener('click', async () =>
       : 'currentPedalboard control values unavailable in this snapshot';
     const controlRows = pipedalCatalogControls.slice(0, 3).map(control => {
       const label = control?.label || control?.symbol;
-      const symbol = control?.symbol;
       if (!label) return null;
       const value = Number.isFinite(Number(control.value)) ? `value ${control.value}` : 'value unavailable';
       const domain = Number.isFinite(Number(control.min_value)) && Number.isFinite(Number(control.max_value)) ? `range ${control.min_value}..${control.max_value}` : 'range unavailable';
-      return `${label}${symbol && symbol !== label ? ` [${symbol}]` : ''} (${value}; ${domain})`;
+      return `${label} (${value}; ${domain})`;
     }).filter(Boolean);
     const controlReadback = controlRows.length ? `controls: ${controlRows.join(' · ')}` : 'control rows unavailable';
     const lifecycleReadback = body.pipedal && typeof body.pipedal.phase === 'string' ? `daemon ${body.pipedal.phase}` : 'daemon lifecycle unavailable';
     const targetReadback = Array.isArray(pipedalCatalogTargets)
-      ? `${pipedalCatalogTargets.length} pedalboard/plugin targets${pipedalCatalogTargets.slice(0, 3).map(target => { const instanceId = target?.instance_id ?? target?.instanceId; return target?.name && Number.isInteger(instanceId) ? `${target.name} (#${instanceId}; ${target.uri || 'plugin class unavailable'})${typeof target.bypassed === 'boolean' ? (target.bypassed ? ' bypassed' : ' active') : ' bypass unavailable'}` : null; }).filter(Boolean).length ? `: ${pipedalCatalogTargets.slice(0, 3).map(target => { const instanceId = target?.instance_id ?? target?.instanceId; return target?.name && Number.isInteger(instanceId) ? `${target.name} (#${instanceId}; ${target.uri || 'plugin class unavailable'})${typeof target.bypassed === 'boolean' ? (target.bypassed ? ' bypassed' : ' active') : ' bypass unavailable'}` : null; }).filter(Boolean).join(', ')}` : ''}`
+      ? `${pipedalCatalogTargets.length} pedalboard/plugin targets${pipedalCatalogTargets.slice(0, 3).map(target => target?.name ? `${target.name}${typeof target.bypassed === 'boolean' ? (target.bypassed ? ' bypassed' : ' active') : ''}` : null).filter(Boolean).length ? `: ${pipedalCatalogTargets.slice(0, 3).map(target => target?.name ? `${target.name}${typeof target.bypassed === 'boolean' ? (target.bypassed ? ' bypassed' : ' active') : ''}` : null).filter(Boolean).join(', ')}` : ''}`
       : 'currentPedalboard readback unavailable in this snapshot';
     const presetIndex = body.preset_index && typeof body.preset_index === 'object' ? body.preset_index : null;
     const bankIndex = body.bank_index && typeof body.bank_index === 'object' ? body.bank_index : null;
@@ -1624,8 +1646,8 @@ document.querySelector('#pipedal-refresh').addEventListener('click', async () =>
       : 'status monitor readback unavailable in this snapshot';
     const version = body.version && typeof body.version === 'object' ? body.version
       : (body.pipedal_version && typeof body.pipedal_version === 'object' ? body.pipedal_version : null);
-    const versionReadback = version && typeof version.server_version === 'string' && version.server_version
-      ? `PiPedal ${version.server_version}`
+    const versionReadback = version && typeof (version.server_version || version.serverVersion) === 'string' && (version.server_version || version.serverVersion)
+      ? `PiPedal ${version.server_version || version.serverVersion}`
       : 'PiPedal version readback unavailable in this snapshot';
     const wifiDomains = body.wifi_regulatory_domains && typeof body.wifi_regulatory_domains === 'object' && !Array.isArray(body.wifi_regulatory_domains)
       ? `Wi-Fi regulatory domains ${Object.keys(body.wifi_regulatory_domains).length}`
@@ -1653,14 +1675,14 @@ document.querySelector('#pipedal-operation').addEventListener('click', async () 
     const request = { operation: operationName, generation: pipedalGeneration, confirm: pipedalConfirm.checked };
   if (operationName === 'bypass' || operationName === 'enable') {
     const instanceId = Number(pipedalInstanceId.value);
-    if (!Number.isSafeInteger(instanceId) || instanceId <= 0) { operation.textContent = 'PiPedal instance ID is required for bypass.'; return; }
+    if (!Number.isSafeInteger(instanceId) || instanceId <= 0) { operation.textContent = 'Choose a named pedalboard item for bypass.'; return; }
     request.instance_id = instanceId;
     request.operation = 'apply';
     request.enabled = operationName === 'enable';
   }
   if (operationName === 'plugin_ui') {
     const instanceId = Number(pipedalInstanceId.value);
-    if (!Number.isSafeInteger(instanceId) || instanceId <= 0) { operation.textContent = 'PiPedal instance ID is required for plugin UI mode.'; return; }
+    if (!Number.isSafeInteger(instanceId) || instanceId <= 0) { operation.textContent = 'Choose a named pedalboard item for its plugin interface.'; return; }
     request.operation = 'apply'; request.instance_id = instanceId; request.use_mod_ui = true;
   }
   if (operationName === 'rename') {
@@ -1705,7 +1727,7 @@ document.querySelector('#pipedal-operation').addEventListener('click', async () 
     const instanceId = Number(pipedalInstanceId.value);
     const presetName = window.prompt('New plugin preset name', '')?.trim();
     if (!Number.isSafeInteger(instanceId) || instanceId <= 0 || !presetName) {
-      operation.textContent = 'A valid plugin instance ID and preset name are required.';
+      operation.textContent = 'Choose a named plugin item and enter a preset name.';
       return;
     }
     request.operation = 'apply';
@@ -1719,12 +1741,12 @@ document.querySelector('#pipedal-operation').addEventListener('click', async () 
     if (operationName === 'repair') {
       const pluginUri = pipedalRepairPlugin.value.trim();
       const symbol = pipedalRepairSymbol.value.trim();
-      if (!pluginUri || !symbol) { operation.textContent = 'Repair plugin URI and parameter symbol are required.'; return; }
+      if (!pluginUri || !symbol) { operation.textContent = 'Choose a named plugin and parameter.'; return; }
       request.mapping = { physical_control_id: selected.physical_control_id, plugin_uri: pluginUri, symbol, scope: selected.scope || null };
     }
     request.instance_id = pipedalInstanceId.value.trim();
     request.value = Number(pipedalValue.value);
-    if (operationName === 'apply' && !request.instance_id) { operation.textContent = 'PiPedal instance ID is required.'; return; }
+    if (operationName === 'apply' && !request.instance_id) { operation.textContent = 'Choose a named pedalboard item first.'; return; }
     const min = pipedalValue.min === '' ? Number.NEGATIVE_INFINITY : Number(pipedalValue.min);
     const max = pipedalValue.max === '' ? Number.POSITIVE_INFINITY : Number(pipedalValue.max);
     if (operationName === 'apply' && (!Number.isFinite(request.value) || request.value < min || request.value > max)) {

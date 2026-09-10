@@ -32,6 +32,16 @@ try:
             raise RuntimeError(f"{element_id} is not a guided selector")
     if not driver.find_elements(By.CSS_SELECTOR, "#studio-flow, svg.device-graphic"):
         raise RuntimeError("graphical studio representation is absent")
+    device_text = driver.find_element(By.TAG_NAME, "body").text
+    for forbidden_text in ("raw configuration boundary", "plugin URI", "parameter symbol", "instance ID", "http://"):
+        if forbidden_text.lower() in device_text.lower():
+            raise RuntimeError(f"technical detail is visible in Devices workspace: {forbidden_text}")
+    driver.get(f"{origin}/routes")
+    wait.until(lambda browser: browser.find_element(By.ID, "routing-add").is_displayed())
+    route_text = driver.find_element(By.TAG_NAME, "body").text
+    for forbidden_text in ("raw configuration boundary", "Current endpoint", "http://"):
+        if forbidden_text.lower() in route_text.lower():
+            raise RuntimeError(f"technical detail is visible in Routing workspace: {forbidden_text}")
     print(f"browser-novice-surface: PASS origin={origin}")
 finally:
     driver.quit()

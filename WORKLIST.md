@@ -11095,6 +11095,10 @@ Execution board: `docs/worklist-execution-board.md`.
   `browser-interaction-smoke.py` passed with 56 visible Novation controls and 151 named accessibility
   buttons; `browser-mobile-overflow-smoke.py` passed at the narrow viewport. This proves the SVG
   faceplate is interactable in the installed browser, not merely present in dumped markup.
+- **Layout review checkpoint (2026-09-10):** Corrected the signal-flow canvas to use a bounded,
+  horizontally scrollable node layout for large inventories instead of squeezing all devices into a
+  fixed viewport. Fresh installed screenshots show distinct device cards, visible ports, and concise
+  labels; the narrow-viewport overflow fixture passes.
 
 #### [>] W170 — Deliver faithful physical-device schematics
 
@@ -11231,6 +11235,11 @@ Execution board: `docs/worklist-execution-board.md`.
   `scripts/browser-novice-surface-smoke.py` to installed qualification. It passed against the local
   host, finding no textarea/pre/code-editor surface and confirming guided selectors for device,
   control, channel, destination, and PiPedal repair choices alongside graphical studio content.
+- **Visual review checkpoint (2026-09-10):** Fresh installed Devices and Routing screenshots were
+  reviewed after the layout and language fixes. Device cards no longer overlap; normal Inspector and
+  route labels no longer show plugin URIs, runtime identities, or raw-configuration instructions.
+  Automated novice, graphical-inventory, and responsive checks pass; moderated walkthrough and final
+  human sign-off remain open.
 - **Qualification boundary (2026-09-10):** The initial aggregate installed gate stopped because the
   authoritative live PiPedal projection reported zero controls and zero targets. The fixture remained
   fail-closed; no hand-built pedalboard or guessed preset was injected. Generation ordering and visual
