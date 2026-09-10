@@ -58,7 +58,7 @@ timeout --signal=TERM 25s "$browser" "${base_args[@]}" --dump-dom \
 test -s "$light_html"
 rg -q 'class="light"' "$light_html"
 rg -q 'Novation control grid|Current assignments' "$light_html"
-for asset in navigation.js health.js feature_catalog.js feature_renderer.js state_store.js app.js app.css; do
+for asset in navigation.js health.js feature_catalog.js feature_renderer.js device_renderer.js state_store.js app.js app.css; do
   local_hash=$(sha256sum "apps/mackes-web/static/$asset" | awk '{print $1}')
   live_hash=$(curl --silent --show-error --fail --max-time 10 -H "Host: ${origin#http://}" "$origin/assets/$asset" | sha256sum | awk '{print $1}')
   [[ "$local_hash" == "$live_hash" ]] || {

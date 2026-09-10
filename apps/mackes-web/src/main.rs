@@ -448,6 +448,14 @@ fn route(request: &HttpRequest, socket: &PathBuf, origin: &str) -> HttpResponse 
             )
             .expect("bounded feature renderer script response");
         }
+        ("GET", "/assets/device_renderer.js") => {
+            return HttpResponse::asset(
+                200,
+                include_bytes!("../static/device_renderer.js").to_vec(),
+                "text/javascript; charset=utf-8",
+            )
+            .expect("bounded device renderer script response");
+        }
         ("GET", "/assets/state_store.js") => {
             return HttpResponse::asset(
                 200,
@@ -3176,6 +3184,19 @@ mod tests {
         assert_eq!(response.status, 200);
         assert!(script.contains("MackesFeatureRenderer"));
         assert!(script.contains("searchableText"));
+    }
+
+    #[test]
+    fn bundled_device_renderer_asset_is_served_same_origin() {
+        let request = HttpRequest::parse(
+            b"GET /assets/device_renderer.js HTTP/1.1\r\nHost: localhost:8081\r\n\r\n",
+        )
+        .expect("request");
+        let response = route(&request, &PathBuf::from("/missing"), "http://localhost:8081");
+        let script = String::from_utf8(response.body).expect("JavaScript");
+        assert_eq!(response.status, 200);
+        assert!(script.contains("MackesDeviceRenderer"));
+        assert!(script.contains("generic.endpoint"));
     }
 
     #[test]
