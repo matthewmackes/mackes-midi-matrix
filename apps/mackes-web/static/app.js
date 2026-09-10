@@ -376,6 +376,7 @@ function renderSceneBoard(body) {
       if (scene.actions.length > 3) { const item = document.createElement('li'); item.textContent = `+${scene.actions.length - 3} more`; actions.append(item); }
       card.append(actions);
     }
+    appendSceneActionBuilder(card, id, Array.isArray(scene.actions) ? scene.actions : []);
     const select = document.createElement('button'); select.type = 'button'; select.textContent = 'Select scene'; select.dataset.sceneId = id; select.addEventListener('click', () => { document.querySelector('#scene-id').value = id; showInspector(`Scene ${id} selected. Refresh to inspect authoritative state.`); }); card.append(select);
     sceneBoard.append(card);
   });
@@ -499,6 +500,47 @@ function renderSceneBoard(body) {
     }
     sceneBoard.append(card);
   });
+}
+function appendSceneActionBuilder(card, sceneId, sourceActions) {
+  const builder = document.createElement('details'); builder.className = 'scene-action-builder';
+  const summary = document.createElement('summary'); summary.textContent = 'Edit actions visually'; builder.append(summary);
+  const list = document.createElement('div'); list.className = 'visual-action-list';
+  const actions = sourceActions.map(action => typeof action === 'object' && action ? { ...action } : { description: String(action), operation: 'note' });
+  const namedTargets = routeEndpointCatalog.filter(endpoint => endpoint?.id != null).map(endpoint => ({ id: String(endpoint.id), name: endpoint.name || `Named device ${endpoint.id}` }));
+  const render = () => {
+    list.replaceChildren();
+    actions.forEach((action, index) => {
+      const item = document.createElement('article'); item.className = 'visual-action-card';
+      const heading = document.createElement('strong'); heading.textContent = `Action ${index + 1}`; item.append(heading);
+      const operationField = document.createElement('label'); operationField.textContent = 'Do';
+      const operationChoice = document.createElement('select');
+      [['set', 'Set a value'], ['select', 'Select a preset'], ['enable', 'Enable'], ['bypass', 'Bypass'], ['wait', 'Wait'], ['note', 'Show a note']].forEach(([value, label]) => operationChoice.add(new Option(label, value)));
+      operationChoice.value = action.operation || 'note'; operationChoice.addEventListener('change', () => { action.operation = operationChoice.value; }); operationField.append(operationChoice); item.append(operationField);
+      const targetField = document.createElement('label'); targetField.textContent = 'On';
+      const targetChoice = document.createElement('select'); targetChoice.add(new Option('Choose a named device', ''));
+      namedTargets.forEach(target => targetChoice.add(new Option(target.name, target.id)));
+      targetChoice.value = action.target == null ? '' : String(action.target); targetChoice.addEventListener('change', () => { action.target = targetChoice.value; }); targetField.append(targetChoice); item.append(targetField);
+      const valueField = document.createElement('label'); valueField.textContent = action.operation === 'wait' ? 'Seconds' : 'Value';
+      const valueInput = document.createElement('input'); valueInput.type = 'number'; valueInput.min = '0'; valueInput.max = action.operation === 'wait' ? '60' : '16383'; valueInput.step = 'any'; valueInput.value = action.value == null ? '0' : action.value; valueInput.addEventListener('input', () => { action.value = Number(valueInput.value); }); valueField.append(valueInput); item.append(valueField);
+      const moveUp = document.createElement('button'); moveUp.type = 'button'; moveUp.textContent = 'Move earlier'; moveUp.disabled = index === 0; moveUp.addEventListener('click', () => { [actions[index - 1], actions[index]] = [actions[index], actions[index - 1]]; render(); }); item.append(moveUp);
+      const moveDown = document.createElement('button'); moveDown.type = 'button'; moveDown.textContent = 'Move later'; moveDown.disabled = index === actions.length - 1; moveDown.addEventListener('click', () => { [actions[index], actions[index + 1]] = [actions[index + 1], actions[index]]; render(); }); item.append(moveDown);
+      const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'scene-action-remove'; remove.textContent = 'Remove'; remove.addEventListener('click', () => { actions.splice(index, 1); render(); }); item.append(remove);
+      list.append(item);
+    });
+    if (!actions.length) { const empty = document.createElement('p'); empty.className = 'empty-state'; empty.textContent = 'No actions yet. Add a visual action to this scene.'; list.append(empty); }
+  };
+  render(); builder.append(list);
+  const add = document.createElement('button'); add.type = 'button'; add.textContent = 'Add visual action'; add.addEventListener('click', () => { actions.push({ operation: 'set', target: '', value: 0 }); render(); }); builder.append(add);
+  const save = document.createElement('button'); save.type = 'button'; save.textContent = 'Save visual actions'; save.addEventListener('click', async () => {
+    operation.dataset.state = 'pending'; operation.setAttribute('aria-busy', 'true'); operation.textContent = `Saving visual actions for ${sceneId}…`;
+    try {
+      const response = await fetch('/api/v1/scenes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ scene: sceneId, actions }) });
+      const result = await response.json().catch(() => ({}));
+      operation.textContent = response.ok ? `Visual actions for ${sceneId} saved.` : `Scene action save failed (${response.status}): ${result.error || 'daemon rejected the action list'}`;
+      if (response.ok) await load('scenes');
+    } catch (error) { operation.dataset.state = 'unknown'; operation.textContent = `Scene action outcome unknown; inspect authoritative state before retrying (${error})`; }
+    finally { if (operation.dataset.state === 'pending') operation.dataset.state = 'complete'; operation.setAttribute('aria-busy', 'false'); }
+  }); builder.append(save); card.append(builder);
 }
 function renderRoutingBoard(routes) {
   routingCards.replaceChildren();

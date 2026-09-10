@@ -11143,6 +11143,9 @@ Execution board: `docs/worklist-execution-board.md`.
 - **Implementation checkpoint (2026-09-10):** Removed the scene-action JSON editor and retained
   scene/setlist cards, previews, selection, execution, import, and export as the user-facing path.
   Guided ordered-action creation and richer action-card editing remain open.
+- **Implementation checkpoint (2026-09-10, follow-up):** Added visual ordered-action cards with
+  operation choices, named target selectors, bounded value/timeout controls, move-earlier/move-later
+  ordering, remove/add actions, and daemon-backed visual save with unknown-outcome handling.
 
 #### [>] W174 — Make settings, diagnostics, and recovery graphical
 

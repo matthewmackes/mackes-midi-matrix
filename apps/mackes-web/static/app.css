@@ -158,6 +158,15 @@ h2 { margin-top: 0; font-size: 1.5rem; }
 .scene-card p { margin: .35rem 0 .75rem; color: var(--cds-text-secondary); font-size: .875rem; }
 .scene-actions { margin: 0 0 .75rem; padding-left: 1.15rem; color: var(--cds-text-secondary); font-size: .8125rem; }
 .scene-card button { margin: 0; }
+.scene-action-builder { margin-top: .75rem; padding: .65rem; border-top: 1px solid var(--cds-border-subtle); }
+.scene-action-builder > summary { color: var(--cds-link); cursor: pointer; font-size: .82rem; }
+.visual-action-list { display: grid; gap: .5rem; margin: .65rem 0; }
+.visual-action-card { display: grid; grid-template-columns: 1fr 1fr; gap: .4rem; padding: .6rem; background: var(--cds-layer); border-left: 3px solid var(--cds-interactive); }
+.visual-action-card strong { grid-column: 1 / -1; font-size: .8rem; }
+.visual-action-card label { min-width: 0; font-size: .72rem; }
+.visual-action-card input, .visual-action-card select { min-width: 0; width: 100%; min-height: 2.1rem; padding: .3rem .4rem; font-size: .78rem; }
+.visual-action-card button, .scene-action-builder > button { min-height: 2.1rem; margin: 0; padding: .3rem .5rem; font-size: .75rem; }
+.scene-action-remove { background: var(--cds-support-error); }
 .faceplate-controls { display: block; width: 100%; height: auto; max-height: 38rem; padding: .5rem; background: var(--cds-background); border: 1px solid var(--cds-border-subtle); }
 .faceplate-control { cursor: pointer; color: var(--cds-text-primary); outline: none; pointer-events: all; }
 .faceplate-control .control-shape { fill: var(--cds-layer-accent); stroke: var(--cds-border-subtle); stroke-width: 2; }
