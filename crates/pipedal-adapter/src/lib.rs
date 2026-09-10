@@ -966,6 +966,36 @@ impl Worker {
         .map_err(|error| error.to_string())
     }
 
+    /// Prepares a generation-checked, confirmed file-property copy.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the generation, paths, or property payload is invalid.
+    pub fn prepare_copy_file_property_file(
+        &self,
+        generation: u64,
+        request: mackes_pipedal_connector::CopyFilePropertyRequest,
+        reply_to: Option<u64>,
+    ) -> Result<Vec<u8>, String> {
+        if generation != self.session.generation() {
+            return Err("PiPedal file copy belongs to an old session generation".into());
+        }
+        Self::validate_file_property_path(&request.old_relative_path)?;
+        Self::validate_file_property_path(&request.new_relative_path)?;
+        if request.old_relative_path == request.new_relative_path
+            || serde_json::to_vec(&request.ui_file_property)
+                .map_or(true, |bytes| bytes.len() > 16 * 1024)
+        {
+            return Err("PiPedal file copy is invalid or excessive".into());
+        }
+        mackes_pipedal_connector::encode_request(&mackes_pipedal_connector::Request {
+            message: "copyFilePropertyFile".into(),
+            reply_to,
+            body: Some(request),
+        })
+        .map_err(|error| error.to_string())
+    }
+
     /// Prepares a generation-checked Tone3000 digest query.
     ///
     /// # Errors

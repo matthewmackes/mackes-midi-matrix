@@ -488,6 +488,8 @@ pub enum Operation {
     SetChannelRouterSettings,
     /// Move an audio file within a bounded ordering.
     MoveAudioFile,
+    /// Copy a file-property file.
+    CopyFilePropertyFile,
     /// Create Tone3000 PKCE parameters.
     MakeTone3000Pkce,
     /// Cancel an active Tone3000 download.
@@ -599,6 +601,7 @@ impl Operation {
             Self::GetChannelRouterSettings,
             Self::SetChannelRouterSettings,
             Self::MoveAudioFile,
+            Self::CopyFilePropertyFile,
             Self::MakeTone3000Pkce,
             Self::CancelTone3000Download,
             Self::LoadPluginPreset,
@@ -695,6 +698,7 @@ impl Operation {
             Self::GetChannelRouterSettings => "getChannelRouterSettings",
             Self::SetChannelRouterSettings => "setChannelRouterSettings",
             Self::MoveAudioFile => "moveAudioFile",
+            Self::CopyFilePropertyFile => "copyFilePropertyFile",
             Self::MakeTone3000Pkce => "makeTone3000Pkce",
             Self::CancelTone3000Download => "cancelTone3000Download",
             Self::LoadPluginPreset => "loadPluginPreset",
@@ -747,6 +751,7 @@ impl Operation {
                 | Self::CopyPresetsToBank
                 | Self::SetChannelRouterSettings
                 | Self::MoveAudioFile
+                | Self::CopyFilePropertyFile
                 | Self::CancelTone3000Download
                 | Self::DeletePresetItems
                 | Self::SetOnboarding
@@ -849,6 +854,7 @@ impl Operation {
             Self::GetImageList => "diagnostics",
             Self::GetChannelRouterSettings | Self::SetChannelRouterSettings => "preferences",
             Self::MoveAudioFile => "assets",
+            Self::CopyFilePropertyFile => "assets",
             Self::MakeTone3000Pkce => "assets",
             Self::CancelTone3000Download => "assets",
             Self::RequestFileList2 => "assets",
@@ -1644,6 +1650,16 @@ pub struct RenameFilePropertyRequest {
     pub old_relative_path: String,
     pub new_relative_path: String,
     pub ui_file_property: serde_json::Value,
+}
+
+/// Source-shaped request for copying a file-property file.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CopyFilePropertyRequest {
+    pub old_relative_path: String,
+    pub new_relative_path: String,
+    pub ui_file_property: serde_json::Value,
+    pub overwrite: bool,
 }
 
 /// Source-shaped bank selector.
@@ -3293,7 +3309,7 @@ mod tests {
                 assert!(!operation.is_read_only());
             }
         }
-        assert_eq!(Operation::all().len(), 89);
+        assert_eq!(Operation::all().len(), 90);
         assert!(Operation::all().iter().all(|operation| !operation.wire_name().is_empty()));
         assert_eq!(serde_json::to_string(&Operation::SetControl).expect("json"), "\"setControl\"");
     }

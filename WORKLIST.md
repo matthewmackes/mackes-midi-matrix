@@ -12379,3 +12379,6 @@ Evidence (2026-09-08): Devices browser gate initially observed a transient daemo
 - **Audio-file ordering slice (2026-09-10):** Added the source-registered `moveAudioFile` confirmed
   scalar/object mutation with generation-checked path and position bounds. Daemon/browser and
   installed qualification remain pending W150.
+- **File-property copy slice (2026-09-10):** Added bounded, generation-checked confirmed support for
+  `copyFilePropertyFile`, including source-shaped overwrite semantics. Daemon/browser and installed
+  qualification remain pending W150.
