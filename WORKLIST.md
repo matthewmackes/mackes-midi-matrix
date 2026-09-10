@@ -11062,6 +11062,12 @@ Execution board: `docs/worklist-execution-board.md`.
 - **Objective:** Inventory every rendered and editable code/protocol surface, map each governed endpoint kind to a renderer, and create a failing static guard for regressions.
 - **Acceptance:** No normal route, scene, device, settings, diagnostics, or recovery screen renders a code textbox, raw protocol editor, internal identifier field, or state dump. The renderer ledger covers Novation Launch Control XL, Eventide MicroPitch, Lexicon Reflex, PiPedal, MIDISPORT 4x4, RTP-MIDI, generic MIDI, MACKES virtual/monitor, and unknown fallback endpoints.
 - **Evidence:** Static source/DOM guard, renderer coverage matrix, accessibility-equivalent inventory, and documented exceptions for downloadable raw artifacts.
+- **Audit checkpoint (2026-09-10):** Added `docs/graphical-device-renderer-ledger.md` and
+  `scripts/check-graphical-interface.py`. The ledger records all nine required renderer keys and
+  the source/qualification boundary for each endpoint family. The guard correctly fails on the
+  current raw JSON5, route JSON, scene-action JSON, SysEx bytes, and `<pre>` state/catalog surfaces;
+  W168 remains in progress until the later visual-builder and renderer packets remove those
+  findings.
 
 #### [ ] W169 — Build the responsive studio signal-flow shell
 
