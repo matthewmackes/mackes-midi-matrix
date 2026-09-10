@@ -27,7 +27,7 @@ const requestedTheme = new URLSearchParams(window.location.search).get('theme')
 const savedTheme = requestedTheme === 'light' || requestedTheme === 'dark'
   ? requestedTheme : window.localStorage.getItem('mackes-theme');
 const routingCards = document.querySelector('#routing-cards');
-const routesJson = document.querySelector('#routes-json');
+let routeDraft = [];
 const deviceBoard = document.querySelector('#device-board');
 const featureBoard = document.querySelector('#feature-board');
 const featureFilterLabel = document.querySelector('#feature-filter-label');
@@ -93,6 +93,25 @@ function showInspector(summary) {
   if (!workspaceInspector || !inspectorSummary) return;
   inspectorSummary.textContent = summary;
   workspaceInspector.hidden = false;
+}
+function presentStatus(value) {
+  if (!state) return;
+  if (Array.isArray(value)) {
+    state.textContent = `${value.length} item${value.length === 1 ? '' : 's'} received from the daemon.`;
+    return;
+  }
+  if (!value || typeof value !== 'object') {
+    state.textContent = String(value ?? 'No live status available.');
+    return;
+  }
+  const entries = Object.entries(value).filter(([key]) => !['content', 'bytes', 'raw', 'configuration'].includes(key));
+  const meaningful = entries.slice(0, 8).map(([key, item]) => {
+    const label = key.replace(/[_-]+/g, ' ').replace(/\b\w/g, character => character.toUpperCase());
+    if (Array.isArray(item)) return `${label}: ${item.length} items`;
+    if (item && typeof item === 'object') return `${label}: available`;
+    return `${label}: ${String(item)}`;
+  });
+  state.textContent = meaningful.length ? meaningful.join(' · ') : 'The daemon returned no additional displayable status.';
 }
 function publishUiState(extra = {}) {
   window.MackesStateStore?.publish({ view: activeView, generation: currentGeneration,
@@ -512,8 +531,11 @@ function renderRoutingBoard(routes) {
     const checkbox = document.createElement('input'); checkbox.type = 'checkbox'; checkbox.checked = route.enabled !== false; checkbox.dataset.routeKey = 'enabled'; enabled.append(checkbox, document.createTextNode(' Connection enabled')); card.append(enabled);
     const cycle = document.createElement('label'); cycle.className = 'route-enabled';
     const cycleInput = document.createElement('input'); cycleInput.type = 'checkbox'; cycleInput.checked = route.allow_cycle === true; cycleInput.dataset.routeKey = 'allow_cycle'; cycle.append(cycleInput, document.createTextNode(' Allow cycles')); card.append(cycle);
-    const predicates = document.createElement('label'); predicates.className = 'route-advanced'; predicates.textContent = 'Predicates (JSON)';
-    const predicatesInput = document.createElement('textarea'); predicatesInput.rows = 2; predicatesInput.value = JSON.stringify(route.predicates || []); predicatesInput.dataset.routeKey = 'predicates'; predicates.append(predicatesInput); card.append(predicates);
+    const predicates = document.createElement('div'); predicates.className = 'route-advanced route-condition-summary';
+    const predicateCount = Array.isArray(route.predicates) ? route.predicates.length : 0;
+    predicates.dataset.routeKey = 'predicates'; predicates.dataset.predicates = JSON.stringify(route.predicates || []);
+    predicates.textContent = predicateCount ? `${predicateCount} guided condition${predicateCount === 1 ? '' : 's'} saved` : 'No extra conditions';
+    card.append(predicates);
     routingCards.append(card);
   });
 }
@@ -529,11 +551,11 @@ function routesFromBoard() {
       priority: Number(card.querySelector('[data-route-key="priority"]').value),
       curve: card.querySelector('[data-route-key="curve"]').value,
       allow_cycle: card.querySelector('[data-route-key="allow_cycle"]').checked,
-      predicates: (() => { try { const value = JSON.parse(card.querySelector('[data-route-key="predicates"]').value || '[]'); if (!Array.isArray(value)) throw new Error('must be an array'); return value; } catch (_) { operation.textContent = 'Route draft has invalid predicate JSON; previous predicates retained until corrected.'; return route.predicates || []; } })()
+      predicates: (() => { try { const value = JSON.parse(card.querySelector('[data-route-key="predicates"]').dataset.predicates || '[]'); if (!Array.isArray(value)) throw new Error('must be an array'); return value; } catch (_) { return route.predicates || []; } })()
     };
   });
 }
-function syncRoutesJson() { routesJson.value = JSON.stringify(routesFromBoard(), null, 2); dirtyForm = true; routeDraftDirty = true; publishUiState(); }
+function syncRoutesJson() { routeDraft = routesFromBoard(); dirtyForm = true; routeDraftDirty = true; publishUiState(); }
 routingCards.addEventListener('input', syncRoutesJson);
 routingCards.addEventListener('change', syncRoutesJson);
 routingCards.addEventListener('click', event => {
@@ -546,7 +568,6 @@ routingCards.addEventListener('click', event => {
   const routes = routesFromBoard(); routes.splice(Number(remove.dataset.removeRoute), 1); renderRoutingBoard(routes); syncRoutesJson();
 });
 document.querySelector('#routing-add').addEventListener('click', () => { const routes = routesFromBoard(); routes.push({ source: 0, destination: 0, enabled: true }); renderRoutingBoard(routes); syncRoutesJson(); });
-routesJson.addEventListener('input', () => { routeDraftDirty = true; dirtyForm = true; try { const routes = JSON.parse(routesJson.value || '[]'); if (Array.isArray(routes)) renderRoutingBoard(routes); } catch (_) { /* keep the text editor usable while JSON is incomplete */ } });
 themeButton.addEventListener('click', () => {
   document.body.classList.toggle('light');
   window.localStorage.setItem('mackes-theme', document.body.classList.contains('light') ? 'light' : 'dark');
@@ -613,7 +634,7 @@ async function load(view) {
         showInspector('Named-port route editing is read-only: endpoint identifiers exceed JavaScript safe-integer precision. Use the raw configuration boundary until a lossless backend contract is enabled.');
       }
       const routes = routeListFromBody(body);
-      if (!routeDraftDirty) { renderRoutingBoard(routes); routesJson.value = JSON.stringify(routes, null, 2); }
+      if (!routeDraftDirty) { routeDraft = routes; renderRoutingBoard(routes); }
     }
     if (view === 'devices') {
       const [endpointResponse, novationResponse] = await Promise.all([
@@ -662,7 +683,7 @@ async function load(view) {
     if (view === 'mappings') renderMappingLayers(body);
     if (view === 'scenes') renderSceneBoard(body);
     if (view === 'scenes' && operation.dataset.state === 'pending') { operation.dataset.state = 'complete'; operation.textContent = 'Authoritative scenes, projects, and setlists refreshed.'; }
-    if (view !== 'monitor' || (!monitorPaused && !monitorCleared)) state.textContent = JSON.stringify(body, null, 2);
+    if (view !== 'monitor' || (!monitorPaused && !monitorCleared)) presentStatus(body);
     if (view === 'monitor' && monitorCleared) monitorCleared = false;
     if (response.ok) {
       consecutiveHealthFailures = 0;
@@ -724,7 +745,7 @@ async function pollEvents() {
       }
     }
     updateMonitorStats();
-    if (activeView === 'monitor' && !monitorPaused && !monitorCleared) state.textContent = JSON.stringify(visibleEvents(), null, 2);
+    if (activeView === 'monitor' && !monitorPaused && !monitorCleared) presentStatus({ events: visibleEvents() });
   } catch (_) { /* the regular view poll reports daemon availability */ }
 }
 let eventStream = null;
@@ -743,7 +764,7 @@ function consumeStreamEvent(event) {
       lastSequence = value.sequence; eventLog.push(value); eventTimes.push(Date.now());
       if (eventLog.length > 256) eventLog.shift();
       updateMonitorStats();
-      if (activeView === 'monitor' && !monitorPaused && !monitorCleared) state.textContent = JSON.stringify(visibleEvents(), null, 2);
+      if (activeView === 'monitor' && !monitorPaused && !monitorCleared) presentStatus({ events: visibleEvents() });
     }
   } catch (_) { /* malformed stream data is ignored; the next resnapshot repairs state */ }
 }
@@ -841,9 +862,9 @@ document.querySelector('#download-monitor').addEventListener('click', () => {
   URL.revokeObjectURL(link.href);
   operation.textContent = `Downloaded ${visibleEvents().length} bounded monitor events.`;
 });
-document.querySelector('#monitor-endpoint').addEventListener('input', event => { monitorFilter.endpoint = event.target.value.trim(); if (!monitorPaused) state.textContent = JSON.stringify(visibleEvents(), null, 2); });
-document.querySelector('#monitor-channel').addEventListener('input', event => { monitorFilter.channel = event.target.value; if (!monitorPaused) state.textContent = JSON.stringify(visibleEvents(), null, 2); });
-document.querySelector('#monitor-class').addEventListener('change', event => { monitorFilter.kind = event.target.value; if (!monitorPaused) state.textContent = JSON.stringify(visibleEvents(), null, 2); });
+document.querySelector('#monitor-endpoint').addEventListener('input', event => { monitorFilter.endpoint = event.target.value.trim(); if (!monitorPaused) presentStatus({ events: visibleEvents() }); });
+document.querySelector('#monitor-channel').addEventListener('input', event => { monitorFilter.channel = event.target.value; if (!monitorPaused) presentStatus({ events: visibleEvents() }); });
+document.querySelector('#monitor-class').addEventListener('change', event => { monitorFilter.kind = event.target.value; if (!monitorPaused) presentStatus({ events: visibleEvents() }); });
 document.querySelectorAll('[data-view]').forEach(button => button.addEventListener('click', () => {
   activeView = button.dataset.view;
   window.MackesStateStore?.publish({ view: activeView, generation: currentGeneration });
@@ -1151,7 +1172,7 @@ document.querySelector('#novation-refresh').addEventListener('click', async () =
     const body = await response.json();
     if (Number.isInteger(body.route_generation)) routeGeneration = body.route_generation;
     if (Number.isInteger(body.generation)) { currentGeneration = body.generation; publishUiState(); }
-    state.textContent = JSON.stringify(body, null, 2);
+    presentStatus(body);
     /* Repaint the existing projection from this authoritative snapshot so a
        manual refresh updates assignment/lifecycle/readback context together. */
     renderFaceplate(body);
@@ -1233,7 +1254,7 @@ async function loadAssignment() {
     const response = await fetch('/api/v1/assignment');
     const body = await response.json();
     if (Number.isInteger(body.generation)) { assignmentGeneration = body.generation; publishUiState(); }
-    state.textContent = JSON.stringify(body, null, 2);
+    presentStatus(body);
     const catalog = body.session?.catalog || body.catalog || {};
     state.dataset.assignmentPhase = body.session?.phase || '';
     const choices = ['devices', 'presets', 'effects', 'types', 'parameters']
@@ -1337,7 +1358,7 @@ document.querySelector('#routing-undo').addEventListener('click', async () => {
 });
 document.querySelector('#routing-preview').addEventListener('click', () => {
   try {
-    const routes = JSON.parse(document.querySelector('#routes-json').value || '[]');
+    const routes = routeDraft;
     const hopLimit = Number(document.querySelector('#route-hop-limit').value);
     if (!Array.isArray(routes)) throw new Error('routes must be an array');
     if (routes.length > 128) throw new Error('route count exceeds 128');
@@ -1373,13 +1394,8 @@ document.querySelector('#routing-apply').addEventListener('click', async () => {
     return;
   }
   let routes;
-  try {
-    routes = JSON.parse(document.querySelector('#routes-json').value || '[]');
-    if (!Array.isArray(routes)) throw new Error('routes must be an array');
-  } catch (error) {
-    operation.textContent = `Invalid route JSON: ${error.message}`;
-    return;
-  }
+  routes = routeDraft;
+  if (!Array.isArray(routes)) { operation.textContent = 'Route draft is not ready; refresh the graphical board.'; return; }
   const hopLimit = Number(document.querySelector('#route-hop-limit').value);
   if (!Number.isInteger(hopLimit) || hopLimit < 1 || hopLimit > 16) {
     operation.textContent = 'Hop limit must be an integer from 1 to 16.';
@@ -1413,7 +1429,7 @@ document.querySelector('#pipedal-refresh').addEventListener('click', async () =>
     const body = await response.json();
     if (Number.isInteger(body.generation)) pipedalGeneration = body.generation;
     if (Number.isInteger(body.generation)) { currentGeneration = body.generation; publishUiState(); }
-    state.textContent = JSON.stringify(body, null, 2);
+    presentStatus(body);
     pipedalMappings = Array.isArray(body.mapping_resolution) ? body.mapping_resolution.filter(entry => entry && entry.physical_control_id) : [];
     pipedalCatalogControls = body.catalog && Array.isArray(body.catalog.controls) ? body.catalog.controls : [];
     const pipedalCatalogTargets = body.catalog && Array.isArray(body.catalog.targets) ? body.catalog.targets : [];
@@ -1594,7 +1610,7 @@ document.querySelector('#pipedal-operation').addEventListener('click', async () 
     const body = await response.json();
     if (Number.isInteger(body.generation)) { pipedalGeneration = body.generation; publishUiState(); }
     operation.textContent = response.ok ? `PiPedal ${operationName} completed.` : `PiPedal failed (${response.status})`;
-    state.textContent = JSON.stringify(body, null, 2);
+    presentStatus(body);
     if (response.ok && operationName === 'repair') document.querySelector('#pipedal-refresh').click();
   } catch (error) { operation.textContent = `PiPedal unavailable: ${error}`; }
 });
@@ -1617,19 +1633,6 @@ document.querySelector('#next-scene').addEventListener('click', () => navigateSc
 document.querySelector('#scene-refresh').addEventListener('click', async () => {
   await load('scenes');
   operation.textContent = 'Scenes and setlists refreshed.';
-});
-document.querySelector('#save-scene-actions').addEventListener('click', async () => {
-  const scene = document.querySelector('#scene-id').value.trim();
-  if (!scene) { operation.textContent = 'Scene ID is required.'; return; }
-  let actions;
-  try { actions = JSON.parse(document.querySelector('#scene-actions-json').value || '[]'); } catch (_) { operation.textContent = 'Scene actions must be valid JSON.'; return; }
-  if (!Array.isArray(actions) || actions.length > 128) { operation.textContent = 'Scene actions must be an array of at most 128 actions.'; return; }
-  try {
-    const response = await fetch('/api/v1/scenes', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ scene, actions }) });
-    const body = await response.json();
-    operation.textContent = response.ok ? 'Scene actions saved.' : `Scene action save failed (${response.status})`;
-    if (response.ok) await load('scenes');
-  } catch (error) { operation.textContent = `Scene action save unavailable: ${error}`; }
 });
 document.querySelector('#preview-scene').addEventListener('click', async () => {
   const scene = document.querySelector('#scene-id').value.trim();
@@ -1681,7 +1684,7 @@ document.querySelector('#execute-scene').addEventListener('click', async () => {
     const body = await response.json();
     const outcomes = Array.isArray(body.activation_outcomes) ? body.activation_outcomes : [];
     operation.textContent = response.ok ? `Scene ${scene} executed (${outcomes.length} action outcomes).` : `Scene execution failed (${response.status})`;
-    state.textContent = JSON.stringify(body, null, 2);
+    presentStatus(body);
     await load('scenes');
   } catch (error) { operation.textContent = `Scene execution unavailable: ${error}`; }
 });
@@ -1716,7 +1719,6 @@ document.querySelector('#download-raw-configuration').addEventListener('click', 
     const response = await fetch('/api/v1/backups', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ action: 'export' }) });
     const body = await response.json();
     if (!response.ok || body.exported !== true) throw new Error(body.error || `HTTP ${response.status}`);
-    document.querySelector('#configuration-json5-draft').value = body.content;
     const blob = new Blob([body.content], { type: 'application/json5' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
@@ -1762,25 +1764,9 @@ document.querySelector('#validate-configuration').addEventListener('click', asyn
   try {
     const response = await fetch('/api/v1/validation');
     const body = await response.json();
-    state.textContent = JSON.stringify(body, null, 2);
+    presentStatus(body);
     operation.textContent = response.ok ? 'Configuration validation completed.' : `Validation failed (${response.status})`;
   } catch (error) { operation.textContent = `Validation unavailable: ${error}`; }
-});
-document.querySelector('#apply-configuration-json5').addEventListener('click', async () => {
-  const draft = document.querySelector('#configuration-json5-draft').value;
-  if (!draft || new TextEncoder().encode(draft).length > 1024 * 1024) { operation.textContent = 'JSON5 draft is empty or exceeds 1 MiB.'; return; }
-  if (!window.confirm('Apply this JSON5 draft atomically?')) return;
-  try {
-    const response = await fetch('/api/v1/configuration', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ operation: 'apply', configuration_json5: draft, confirm: true, request_id: crypto.randomUUID() }) });
-    const body = await response.json();
-    if (response.status === 409 && window.confirm('Configuration changed elsewhere. Reload the authoritative JSON5 and discard this stale draft?')) {
-      const latest = await fetch('/api/v1/backups', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ action: 'export' }) });
-      const latestBody = await latest.json();
-      if (latest.ok && latestBody.exported === true) document.querySelector('#configuration-json5-draft').value = latestBody.content;
-    }
-    operation.textContent = response.ok ? 'JSON5 draft applied.' : `JSON5 draft rejected (${response.status}): ${body.error || 'validation failed'}`;
-    if (response.ok) document.querySelector('#configuration-json5-draft').value = draft;
-  } catch (error) { operation.textContent = `JSON5 draft unavailable: ${error}`; }
 });
 document.querySelector('#inspect-backups').addEventListener('click', async () => {
   try {
@@ -1792,7 +1778,7 @@ document.querySelector('#inspect-backups').addEventListener('click', async () =>
       const name = typeof backup === 'string' ? backup : backup.name;
       if (name) backupChoice.add(new Option(name, name));
     }
-    state.textContent = JSON.stringify(body, null, 2);
+    presentStatus(body);
     operation.textContent = response.ok ? 'Backup inventory refreshed.' : `Backup inventory failed (${response.status})`;
   } catch (error) { operation.textContent = `Backups unavailable: ${error}`; }
 });
@@ -1802,7 +1788,7 @@ document.querySelector('#create-backup').addEventListener('click', async () => {
     const response = await fetch('/api/v1/backups', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ action: 'create', confirm: true }) });
     const body = await response.json();
     operation.textContent = response.ok ? 'Configuration backup created.' : `Backup failed (${response.status})`;
-    state.textContent = JSON.stringify(body, null, 2);
+    presentStatus(body);
   } catch (error) { operation.textContent = `Backup unavailable: ${error}`; }
 });
 document.querySelector('#restore-backup').addEventListener('click', async () => {
@@ -1812,30 +1798,11 @@ document.querySelector('#restore-backup').addEventListener('click', async () => 
     const response = await fetch('/api/v1/backups', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ action: 'restore', name, confirm: true }) });
     const body = await response.json();
     operation.textContent = response.ok ? 'Configuration backup restored.' : `Restore failed (${response.status})`;
-    state.textContent = JSON.stringify(body, null, 2);
+    presentStatus(body);
   } catch (error) { operation.textContent = `Restore unavailable: ${error}`; }
 });
-document.querySelector('#send-sysex').addEventListener('click', async () => {
-  const destination = document.querySelector('#sysex-destination').value.trim();
-  const text = document.querySelector('#sysex-bytes').value.trim();
-  if (!destination || !text) { operation.textContent = 'SysEx rejected: destination and data are required.'; return; }
-  if (!document.querySelector('#sysex-confirm').checked) { operation.textContent = 'Confirm the hardware-affecting SysEx action first.'; return; }
-  const bytes = text.trim().split(/\s+/).map(Number);
-  if (bytes.length > 1024 || !bytes.length || bytes.some(value => !Number.isInteger(value) || value < 0 || value > 127)) {
-    operation.textContent = 'SysEx rejected: use 1–1024 decimal data bytes in the 0–127 range.';
-    return;
-  }
-  try {
-    const response = await fetch('/api/v1/sysex', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ destination, bytes, confirm: true }) });
-    const body = await response.json();
-    operation.textContent = response.ok ? 'SysEx accepted by daemon.' : `SysEx failed (${response.status})`;
-    state.textContent = JSON.stringify(body, null, 2);
-    if (response.ok) {
-      document.querySelector('#sysex-bytes').value = '';
-      document.querySelector('#sysex-confirm').checked = false;
-    }
-  } catch (error) { operation.textContent = `SysEx unavailable: ${error}`; }
-});
+document.querySelector('#open-guided-settings').addEventListener('click', () => { navigate('devices'); operation.textContent = 'Guided settings opened. Choose a graphical device or connection to continue.'; });
+document.querySelector('#open-qualified-commands').addEventListener('click', () => { navigate('devices'); operation.textContent = 'Choose a qualified graphical device action. Unsupported protocol messages are not available in the normal workspace.'; });
 window.addEventListener('popstate', () => navigate(viewFromLocation(), false));
 if (!browserSmoke) {
   window.setInterval(pollHealth, 8000);

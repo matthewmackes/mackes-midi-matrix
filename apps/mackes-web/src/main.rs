@@ -1681,14 +1681,16 @@ mod tests {
     use super::*;
 
     #[test]
-    fn raw_configuration_editor_is_bound_to_shared_apply_boundary() {
+    fn guided_configuration_workspace_replaces_raw_editor() {
         let html = include_str!("../static/index.html");
         let js = include_str!("../static/app.js");
-        assert!(html.contains("configuration-json5-draft"));
-        assert!(html.contains("apply-configuration-json5"));
-        assert!(js.contains("configuration_json5: draft"));
+        assert!(html.contains("configuration-builder"));
+        assert!(html.contains("open-guided-settings"));
+        assert!(!html.contains("configuration-json5-draft"));
+        assert!(!html.contains("apply-configuration-json5"));
+        assert!(!js.contains("configuration_json5: draft"));
         assert!(js.contains("/api/v1/configuration"));
-        assert!(js.contains("Configuration changed elsewhere"));
+        assert!(html.contains("Export raw configuration"));
     }
 
     #[test]
@@ -2862,10 +2864,11 @@ mod tests {
         assert!(html.contains("id=\"backup-choice\""));
         assert!(html.contains("Create configuration backup"));
         assert!(html.contains("Restore configuration backup"));
-        assert!(html.contains("Send confirmed SysEx"));
-        assert!(html.contains("id=\"sysex-destination\""));
-        assert!(html.contains("id=\"sysex-bytes\""));
-        assert!(html.contains("id=\"sysex-confirm\""));
+        assert!(html.contains("Qualified device commands"));
+        assert!(html.contains("open-qualified-commands"));
+        assert!(!html.contains("id=\"sysex-destination\""));
+        assert!(!html.contains("id=\"sysex-bytes\""));
+        assert!(!html.contains("id=\"sysex-confirm\""));
         assert!(html.contains("Export configuration"));
         assert!(html.contains("Export raw configuration"));
         assert!(html.contains("Export portable configuration"));
@@ -2997,9 +3000,10 @@ mod tests {
         assert!(script.contains("file.size > 1024 * 1024"));
         assert!(script.contains("new TextEncoder().encode(content).length"));
         assert!(script.contains("portableImportFile.value = ''"));
-        assert!(script.contains("#sysex-confirm').checked"));
-        assert!(script.contains("bytes.length > 1024"));
-        assert!(script.contains("sysex-bytes').value = ''"));
+        assert!(script.contains("open-qualified-commands"));
+        assert!(!script.contains("#sysex-confirm').checked"));
+        assert!(!script.contains("bytes.length > 1024"));
+        assert!(!script.contains("sysex-bytes').value = ''"));
         assert!(script.contains("renderFaceplate(body)"));
         assert!(script.contains("function boundedFetch("));
         assert!(script.contains("const browserSmoke = window.location.hash.includes"));

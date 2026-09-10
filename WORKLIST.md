@@ -11054,9 +11054,9 @@ Execution board: `docs/worklist-execution-board.md`.
 - **Acceptance:** W168–W177 close with renderer coverage for the governed inventory, responsive pointer/keyboard workflows, lossless visual editing, draft/conflict/reconnect handling, accessible novice walkthroughs, release-gate evidence, and no visible code/protocol editor in the normal GUI.
 - **Execution:** Run W168–W177 in dependency order, keeping the daemon as the sole writer and generation authority. Unknown endpoint kinds must use the generic graphical fallback rather than a text-only card. Do not remove advanced capability; represent it through visual builders.
 
-#### [ ] W168 — Audit code surfaces and renderer coverage
+#### [x] W168 — Audit code surfaces and renderer coverage
 
-- **Status:** `NOT_STARTED`
+- **Status:** `DONE`
 - **Owner:** Codex
 - **Depends on:** W167
 - **Objective:** Inventory every rendered and editable code/protocol surface, map each governed endpoint kind to a renderer, and create a failing static guard for regressions.
@@ -11066,8 +11066,13 @@ Execution board: `docs/worklist-execution-board.md`.
   `scripts/check-graphical-interface.py`. The ledger records all nine required renderer keys and
   the source/qualification boundary for each endpoint family. The guard correctly fails on the
   current raw JSON5, route JSON, scene-action JSON, SysEx bytes, and `<pre>` state/catalog surfaces;
-  W168 remains in progress until the later visual-builder and renderer packets remove those
-  findings.
+  Those findings were removed from the normal GUI during the W168 closeout slice; remaining
+  model-specific qualification and browser visual fixtures stay governed by W170–W176.
+- **Closeout evidence (2026-09-10):** The normal GUI now uses guided settings, qualified device
+  command entry points, graphical route/scene workspaces, and a human-readable live status panel.
+  The guard passes; the nine-family ledger and runtime renderer registry are present;
+  `cargo test -p mackes-web` passes 55/55; the bundled asset budget and JavaScript syntax checks
+  pass. Raw backups and diagnostics remain download-only boundaries.
 
 #### [>] W169 — Build the responsive studio signal-flow shell
 
@@ -11106,32 +11111,42 @@ Execution board: `docs/worklist-execution-board.md`.
   Model-faithful geometry, richer control interaction, and authoritative capability projection remain
   open before this item can close.
 
-#### [ ] W172 — Replace mapping and routing editors with visual builders
+#### [>] W172 — Replace mapping and routing editors with visual builders
 
-- **Status:** `NOT_STARTED`
+- **Status:** `IN_PROGRESS`
 - **Owner:** Codex
 - **Depends on:** W169, W170, W171
 - **Objective:** Turn route creation and advanced predicates into guided source/target cards, signal lines, condition chips, ranges, curves, filters, and plain-language validation.
 - **Acceptance:** A novice can create a route without protocol knowledge. Every supported advanced field remains editable and lossless through visual controls; unsupported values are shown as preserved/locked with an explanation. Draft, conflict, stale, reconnect, undo, and authoritative apply behavior remain explicit.
 - **Evidence:** Lossless round-trip fixtures, schema/contract tests, keyboard builder flow, conflict/reconnect scenarios, and no-JSON DOM guard.
+- **Implementation checkpoint (2026-09-10):** Removed the route JSON editor and made the visual
+  routing board the sole normal route-draft surface. Route drafts remain in browser state and apply
+  from graphical cards. Predicate chips and full advanced visual editing remain open.
 
-#### [ ] W173 — Replace scene and setlist code entry with visual action cards
+#### [>] W173 — Replace scene and setlist code entry with visual action cards
 
-- **Status:** `NOT_STARTED`
+- **Status:** `IN_PROGRESS`
 - **Owner:** Codex
 - **Depends on:** W172
 - **Objective:** Represent scenes, modifiers, ordered actions, timing, assignments, and setlists as cards, chips, timelines, and previews rather than serialized action text.
 - **Acceptance:** Users can add, reorder, duplicate, edit, preview, apply, rename, and recover scenes using guided controls. Multiple destinations and modifier-layer rules from W165 remain visible and understandable; action failures identify the affected device and safe next step.
 - **Evidence:** Ordered-action fixtures, layer/scene reset tests, apply/reconnect recovery flows, and accessible action-card semantics.
+- **Implementation checkpoint (2026-09-10):** Removed the scene-action JSON editor and retained
+  scene/setlist cards, previews, selection, execution, import, and export as the user-facing path.
+  Guided ordered-action creation and richer action-card editing remain open.
 
-#### [ ] W174 — Make settings, diagnostics, and recovery graphical
+#### [>] W174 — Make settings, diagnostics, and recovery graphical
 
-- **Status:** `NOT_STARTED`
+- **Status:** `IN_PROGRESS`
 - **Owner:** Codex
 - **Depends on:** W168, W169, W172
 - **Objective:** Replace raw settings, diagnostic payloads, and recovery instructions with status tiles, meters, timelines, device health diagrams, guided forms, and one-action recovery choices.
 - **Acceptance:** Health, persistence, connector state, generation, last-known/unknown outcomes, and service recovery are understandable without raw dumps. Export/download may produce a support artifact, but the browser does not provide a code editor or dump viewer as the normal path.
 - **Evidence:** State matrix, failure/recovery fixtures, no-code rendered DOM audit, download boundary test, and screen-reader descriptions.
+- **Implementation checkpoint (2026-09-10):** Replaced the live `<pre>` dump with a human-readable
+  status panel, added guided settings and qualified-command entry points, and preserved raw backup
+  and diagnostics downloads as file boundaries. Full graphical health timelines and recovery flows
+  remain open.
 
 #### [ ] W175 — Version graphical capability, draft, and renderer contracts
 
