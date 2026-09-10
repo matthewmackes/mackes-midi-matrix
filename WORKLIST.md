@@ -12267,3 +12267,6 @@ Evidence (2026-09-08): Devices browser gate initially observed a transient daemo
 - **Next-bank write slice (2026-09-10):** Added the source-registered `nextBank` no-body command
   with confirmed, generation-checked adapter encoding. Daemon/browser and installed qualification
   remain pending W150.
+- **Previous-bank write slice (2026-09-10):** Added the source-registered `previousBank` no-body
+  command with confirmed, generation-checked adapter encoding. Daemon/browser and installed
+  qualification remain pending W150.
