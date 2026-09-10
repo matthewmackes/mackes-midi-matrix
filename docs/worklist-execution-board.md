@@ -7,7 +7,7 @@ Latest automated checkpoint (2026-09-10): `cargo test -p mackes-web` passed 56/5
 interface guard, web asset budget (37,951 compressed bytes), worklist validation, JavaScript syntax,
 and `git diff --check` all pass. Installed browser smoke passed against
 `http://172.20.222.222:8081` after release rebuild/reinstall, including deep links, 320/768 responsive
-captures, light theme, GUI surface checks, and installed asset hashes. current worklist state: 147 complete, 13 in progress, 1 not started (161 total; measured 2026-09-10).
+captures, light theme, GUI surface checks, and installed asset hashes. current worklist state: 147 complete, 14 in progress, 0 not started (161 total; measured 2026-09-10).
 The installed graphical-inventory, renderer-registry, and novice-surface fixtures pass (32 live device
 cards, 7 researched feature cards, all nine governed renderer keys, no visible code editor); generation ordering and visual draft-preservation fixtures also
 pass. The PiPedal catalog fixture now passes after the bounded 265-entry decoder fix, reporting 3,076
@@ -16,6 +16,10 @@ The PiPedal generation boundary was corrected and reinstalled; snapshot and conn
 match, and the approved typed `loadPreset(16)` request was accepted/queued. The aggregate gate is now
 advancing to generation and lifecycle fixtures; final release qualification remains open until the
 entire command completes.
+The formal `scripts/release-gate.sh` also passes end to end, including workspace tests, emulator,
+clippy, benchmark, hermetic integration, installer smoke, and release artifact checksum/contents.
+W177 is therefore in progress with software release evidence recorded; W176 novice/human sign-off
+and final release sign-off remain open.
 The existing focused
 fixtures and post-fixture health soak remain valid; these checks do not constitute human visual
 sign-off or native hardware observation.

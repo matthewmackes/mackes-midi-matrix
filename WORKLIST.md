@@ -11246,14 +11246,21 @@ Execution board: `docs/worklist-execution-board.md`.
   regression test, rebuilt/reinstalled, and verified the authoritative projection at 3,076 controls
   and 265 targets. The PiPedal catalog fixture now passes; aggregate lifecycle qualification continues.
 
-#### [ ] W177 — Install and close the graphical studio release
+#### [>] W177 — Install and close the graphical studio release
 
-- **Status:** `NOT_STARTED`
+- **Status:** `IN_PROGRESS`
 - **Owner:** Codex
 - **Depends on:** W176
 - **Objective:** Install the completed graphical interface, verify the packaged assets and service behavior, and close the epic with reproducible release evidence.
 - **Acceptance:** Browser, contract, service, emulator, hermetic integration, installer, asset, and full release gates pass. Installed UI has no code/protocol editor in normal flows, every endpoint renders graphically, console is clean, restart/reconnect behavior is qualified, and the worklist/spec/evidence are synchronized.
 - **Evidence:** Build/install logs, screenshots, hashes, service status, browser report, release-gate output, and final sign-off.
+- **Release-gate checkpoint (2026-09-10):** `scripts/release-gate.sh` passed end to end after the
+  catalog-bound fix: formatting/policy, workspace tests, emulator qualification, clippy, routing
+  benchmark, 16 passing hermetic scenarios (1 explicitly post-release ignored), installer smoke, and
+  packaged release checksum/contents validation. Installed web qualification also passed all 15
+  fixtures, including graphical inventory, renderer registry, PiPedal catalog (3,076 controls / 265
+  targets), lifecycle, responsive, accessibility, and lossless-route checks. W176 novice/human sign-off
+  and final release artifacts/sign-off remain open before this packet can close.
 
 ## 4. Dependency and parallelization map
 
