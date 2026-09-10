@@ -180,7 +180,7 @@ user-facing workflow without needing an independent button; require a documented
 | forceUpdateCheck | catalogued | Device system settings | confirmed bounded adapter write implemented; daemon/browser/installed qualification pending W150 |
 | setSystemMidiBindings | catalogued | Monitoring and MIDI | pending W150 |
 | getSystemMidiBindings | catalogued | Monitoring and MIDI | bounded startup/read-only query path; installed qualification pending W150 |
-| requestFileList | missing | Device assets/library | pending W150 |
+| requestFileList | catalogued | Device assets/library | source handler is registered but explicitly obsolete and always throws `No longer implemented`; no adapter operation exposed |
 | requestFileList2 | missing | Device assets/library | pending W150 |
 | newPreset | catalogued | Presets and snapshots | confirmed bounded adapter write implemented; daemon/browser/installed qualification pending W150 |
 | deleteUserFile | missing | Device assets/library | pending W150 |

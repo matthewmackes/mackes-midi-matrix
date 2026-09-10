@@ -12336,3 +12336,6 @@ Evidence (2026-09-08): Devices browser gate initially observed a transient daemo
 - **Image-list readback slice (2026-09-10):** Added bounded decoding and adapter retention/query
   support for source-registered `imageList` filename inventories. Daemon/browser and installed
   qualification remain pending W150.
+- **Legacy-file-list audit slice (2026-09-10):** Confirmed source-registered `requestFileList` is
+  explicitly obsolete and always throws `No longer implemented`; it is catalogued without exposing
+  a misleading adapter operation. The live `requestFileList2` path remains pending W150.
