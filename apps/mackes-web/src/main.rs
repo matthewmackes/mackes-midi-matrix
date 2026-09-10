@@ -2931,7 +2931,7 @@ mod tests {
         assert!(script.contains("viewFromLocation()"));
         assert!(script.contains("beforeunload"));
         assert!(script.contains("dirtyForm"));
-        assert!(script.contains("reconnectBanner.hidden"));
+        assert!(script.contains("setHidden(reconnectBanner"));
         assert!(script.contains("window.addEventListener('offline'"));
         assert!(script.contains("window.addEventListener('online'"));
         assert!(script.contains("if (eventLog.length > 256) eventLog.shift()"));
@@ -3029,7 +3029,7 @@ mod tests {
         assert!(script.contains("if (loadSequence !== viewLoadSequence) return;"));
         assert!(script.contains("fetch('/api/v1/mappings', { signal: controller.signal })"));
         assert!(script.contains("renderFaceplate({ ...novationBody, mapping_registry:"));
-        assert!(script.contains("novationGridHeading.hidden = false"));
+        assert!(script.contains("setHidden(novationGridHeading"));
         assert!(script.contains("body.mapping_registry"));
         assert!(script.contains("led=${mapping.led || 'unspecified'}"));
         assert!(script.contains("knob-r${row}-c${col + 1}"));

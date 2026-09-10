@@ -32,7 +32,7 @@ driver = webdriver.Chrome(service=Service("/usr/bin/chromedriver"), options=opti
 try:
     driver.get(f"{origin}/devices/novation#browser_smoke=1")
     wait = WebDriverWait(driver, 15)
-    controls = wait.until(lambda d: d.find_elements(By.CSS_SELECTOR, "[role='button'][aria-label^='Select']"))
+    controls = wait.until(lambda d: [control for control in d.find_elements(By.CSS_SELECTOR, "#faceplate-controls [role='button'][aria-label^='Select']") if control.is_displayed()])
     assert len(controls) >= 56, f"expected 56 controls, found {len(controls)}"
     first = controls[0]
     first.click()

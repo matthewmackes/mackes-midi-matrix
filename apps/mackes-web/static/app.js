@@ -46,7 +46,7 @@ const studioFlowAdd = document.querySelector('#studio-flow-add');
 function renderStudioFlow(devices) {
   if (!studioFlow || !studioFlowGraph) return;
   studioFlowGraph.querySelectorAll('[data-flow-node], [data-flow-link]').forEach(item => item.remove());
-  studioFlow.hidden = !devices.length;
+  setHidden(studioFlow, !devices.length);
   if (!devices.length) {
     if (studioFlowStatus) studioFlowStatus.textContent = 'No devices found yet.';
     return;
@@ -92,7 +92,7 @@ studioFlowAdd?.addEventListener('click', () => { showInspector('Choose a named d
 function showInspector(summary) {
   if (!workspaceInspector || !inspectorSummary) return;
   inspectorSummary.textContent = summary;
-  workspaceInspector.hidden = false;
+  setHidden(workspaceInspector, false);
 }
 function presentStatus(value) {
   if (!state) return;
@@ -113,27 +113,32 @@ function presentStatus(value) {
   });
   state.textContent = meaningful.length ? meaningful.join(' · ') : 'The daemon returned no additional displayable status.';
 }
+function setHidden(element, hidden) {
+  if (!element) return;
+  if (hidden) element.setAttribute('hidden', '');
+  else element.removeAttribute('hidden');
+}
 function publishUiState(extra = {}) {
   window.MackesStateStore?.publish({ view: activeView, generation: currentGeneration,
     monitorPaused, monitorCleared, dirtyForm, routeDraftDirty, ...extra });
 }
 const viewFromLocation = () => window.MackesNavigation.viewFromLocation();
 function syncViewPanels(view) {
-  if (deviceControl) deviceControl.hidden = view !== 'devices';
-  if (assignmentControls) assignmentControls.hidden = view !== 'mappings' && view !== 'devices';
-  if (routingControls) routingControls.hidden = view !== 'routes';
-  if (sceneControls) sceneControls.hidden = view !== 'scenes';
-  if (monitorControls) monitorControls.hidden = view !== 'monitor';
+  if (deviceControl) setHidden(deviceControl, view !== 'devices');
+  if (assignmentControls) setHidden(assignmentControls, view !== 'mappings' && view !== 'devices');
+  if (routingControls) setHidden(routingControls, view !== 'routes');
+  if (sceneControls) setHidden(sceneControls, view !== 'scenes');
+  if (monitorControls) setHidden(monitorControls, view !== 'monitor');
   const systemBoard = document.querySelector('#system-board');
-  if (systemBoard) systemBoard.hidden = view !== 'system';
+  if (systemBoard) setHidden(systemBoard, view !== 'system');
   const recoveryActions = document.querySelector('#recovery-actions');
-  if (recoveryActions) recoveryActions.hidden = false;
+  if (recoveryActions) setHidden(recoveryActions, false);
   const sceneActions = document.querySelector('#scene-actions');
-  if (sceneActions) sceneActions.hidden = view !== 'scenes';
+  if (sceneActions) setHidden(sceneActions, view !== 'scenes');
   const configurationActions = document.querySelector('#configuration-actions');
-  if (configurationActions) configurationActions.hidden = view !== 'system';
+  if (configurationActions) setHidden(configurationActions, view !== 'system');
   const hardwareActions = document.querySelector('#hardware-actions');
-  if (hardwareActions) hardwareActions.hidden = view !== 'system';
+  if (hardwareActions) setHidden(hardwareActions, view !== 'system');
 }
 function updateBreadcrumbs(view) {
   const breadcrumbs = document.querySelector('#breadcrumbs');
@@ -212,8 +217,8 @@ function renderDeviceBoard(body) {
   deviceBoard.replaceChildren();
   const endpointOptions = document.querySelector('#device-destination'); endpointOptions.replaceChildren();
   devices.forEach(device => { const option = document.createElement('option'); option.value = device.id || device.name || device.alias || ''; option.label = device.name || device.alias || option.value; if (option.value) endpointOptions.append(option); });
-  if (!devices.length) { deviceBoard.hidden = true; return; }
-  deviceBoard.hidden = false;
+  if (!devices.length) { setHidden(deviceBoard, true); return; }
+  setHidden(deviceBoard, false);
   devices.forEach((device, index) => {
     const card = document.createElement('article'); card.className = 'device-card';
     const name = device.name || device.alias || device.id || `Endpoint ${index + 1}`;
@@ -251,8 +256,8 @@ function renderFeatureBoard(devices) {
   featureEntries = window.MackesFeatureCatalog?.entriesFor
     ? window.MackesFeatureCatalog.entriesFor(devices)
     : catalog.map(item => ({ ...item, connected: devices.some(device => item.match.test(String(device.name || device.alias || device.id || ''))) }));
-  featureFilterLabel.hidden = !featureEntries.length;
-  featureBoard.hidden = !featureEntries.length;
+  setHidden(featureFilterLabel, !featureEntries.length);
+  setHidden(featureBoard, !featureEntries.length);
   renderFilteredFeatures();
 }
 function renderFilteredFeatures() {
@@ -272,7 +277,7 @@ function renderFilteredFeatures() {
       const li = document.createElement('li');
       const label = typeof feature === 'string' ? feature : `${feature.label}${feature.cc === undefined ? '' : ` (CC ${feature.cc})`}`;
       if (typeof feature === 'string') li.textContent = label;
-      else { const select = document.createElement('button'); select.type = 'button'; select.textContent = label; select.disabled = !item.connected; select.title = item.connected ? 'Select this qualified feature' : 'Unavailable: connect the qualified device first'; select.setAttribute('aria-description', item.connected ? (feature.cc === undefined ? 'Readback and value domain are unknown until the authoritative profile supplies them.' : `MIDI CC ${feature.cc}; value range 0 to 127.`) : 'Unavailable until the qualified device is connected.'); select.addEventListener('click', () => { deviceControl.hidden = false; configureDeviceControl(item.profile, feature.control); operation.textContent = `${item.name} ${label} selected; verify destination and value before sending.`; showInspector(`${item.name} · ${label} selected${feature.cc === undefined ? ' · readback/domain unknown' : ` · MIDI CC ${feature.cc}, range 0–127`}. Values and delivery remain governed by the live device state.`); }); li.append(select); }
+      else { const select = document.createElement('button'); select.type = 'button'; select.textContent = label; select.disabled = !item.connected; select.title = item.connected ? 'Select this qualified feature' : 'Unavailable: connect the qualified device first'; select.setAttribute('aria-description', item.connected ? (feature.cc === undefined ? 'Readback and value domain are unknown until the authoritative profile supplies them.' : `MIDI CC ${feature.cc}; value range 0 to 127.`) : 'Unavailable until the qualified device is connected.'); select.addEventListener('click', () => { setHidden(deviceControl, false); configureDeviceControl(item.profile, feature.control); operation.textContent = `${item.name} ${label} selected; verify destination and value before sending.`; showInspector(`${item.name} · ${label} selected${feature.cc === undefined ? ' · readback/domain unknown' : ` · MIDI CC ${feature.cc}, range 0–127`}. Values and delivery remain governed by the live device state.`); }); li.append(select); }
       list.append(li);
     }); card.append(list);
     if (Array.isArray(item.operations) && item.operations.length) {
@@ -291,7 +296,7 @@ function renderFilteredFeatures() {
     if (!item.connected) edit.textContent = 'Connect device to edit';
     edit.addEventListener('click', () => {
       if (!item.connected) return;
-      deviceControl.hidden = false;
+      setHidden(deviceControl, false);
       if (item.profile === 'pipedal') { document.querySelector('#pipedal-refresh').focus(); operation.textContent = 'PiPedal workspace ready; refresh the authoritative plugin and operation catalog before choosing an operation.'; }
       else { configureDeviceControl(item.profile, ''); operation.textContent = `${item.name} editor ready; choose a control, channel, value, and destination before sending.`; }
     });
@@ -315,7 +320,7 @@ function configureDeviceControl(profile, control) {
   for (const id of ['device-channel', 'device-value']) {
     const input = document.querySelector(`#${id}`);
     input.required = !reset;
-    input.closest('label').hidden = reset;
+    setHidden(input.closest('label'), reset);
   }
   if (!reset) document.querySelector('#device-value').value = 0;
   document.querySelector('#device-value-display').textContent = document.querySelector('#device-value').value;
@@ -326,7 +331,7 @@ featureFilter.addEventListener('input', renderFilteredFeatures);
 function renderCapabilityBoard(body) {
   capabilityBoard.replaceChildren();
   const operations = body?.operations && typeof body.operations === 'object' ? Object.entries(body.operations) : [];
-  capabilityBoard.hidden = !operations.length;
+  setHidden(capabilityBoard, !operations.length);
   if (!operations.length) return;
   const heading = document.createElement('h3'); heading.textContent = 'Platform capability coverage'; capabilityBoard.append(heading);
   const list = document.createElement('ul');
@@ -347,7 +352,7 @@ function renderSystemBoard(body) {
       const detail = document.createElement('dd'); detail.textContent = Array.isArray(value) ? `${value.length} items` : (value && typeof value === 'object' ? 'Available' : String(value)); list.append(term, detail);
     }); card.append(list); board.append(card);
   });
-  board.hidden = !board.children.length;
+  setHidden(board, !board.children.length);
 }
 function renderSceneBoard(body) {
   const scenes = Array.isArray(body?.scenes) ? body.scenes : [];
@@ -355,7 +360,7 @@ function renderSceneBoard(body) {
   const setlists = Array.isArray(catalog.setlists) ? catalog.setlists : [];
   const projects = Array.isArray(catalog.projects) ? catalog.projects : [];
   const activeScene = body?.active_scene || body?.activeScene || '';
-  sceneBoard.replaceChildren(); sceneBoard.hidden = false;
+  sceneBoard.replaceChildren(); setHidden(sceneBoard, false);
   const createSetlist = document.createElement('button'); createSetlist.type = 'button'; createSetlist.textContent = 'Create empty setlist';
   createSetlist.addEventListener('click', async () => {
     const id = window.prompt('New setlist ID (1–96 characters):');
@@ -474,7 +479,7 @@ function renderSceneBoard(body) {
       });
       card.append(exportSetlist);
       const importSetlist = document.createElement('button'); importSetlist.type = 'button'; importSetlist.textContent = 'Import setlist';
-      const importFile = document.createElement('input'); importFile.type = 'file'; importFile.accept = 'application/json,.json'; importFile.hidden = true;
+      const importFile = document.createElement('input'); importFile.type = 'file'; importFile.accept = 'application/json,.json'; setHidden(importFile, true);
       importSetlist.addEventListener('click', () => importFile.click());
       importFile.addEventListener('change', async () => {
         const file = importFile.files && importFile.files[0]; importFile.value = ''; if (!file) return;
@@ -693,8 +698,8 @@ layoutToggle?.addEventListener('click', () => {
 document.querySelectorAll('form').forEach(form => form.addEventListener('input', () => { dirtyForm = true; publishUiState(); }));
 document.querySelectorAll('form').forEach(form => form.addEventListener('change', () => { dirtyForm = true; publishUiState(); }));
 window.addEventListener('beforeunload', event => { if (dirtyForm) { event.preventDefault(); event.returnValue = ''; } });
-window.addEventListener('offline', () => { reconnectBanner.hidden = false; health.textContent = 'Network unavailable'; });
-window.addEventListener('online', () => { reconnectBanner.hidden = false; health.textContent = 'Reconnecting to daemon…'; load(activeView); });
+window.addEventListener('offline', () => { setHidden(reconnectBanner, false); health.textContent = 'Network unavailable'; });
+window.addEventListener('online', () => { setHidden(reconnectBanner, false); health.textContent = 'Reconnecting to daemon…'; load(activeView); });
 document.addEventListener('visibilitychange', () => {
   if (document.hidden || browserSmoke) return;
   pollHealth();
@@ -798,7 +803,7 @@ async function load(view) {
       consecutiveHealthFailures = 0;
       lastHealthSuccessAt = Date.now();
       health.textContent = `Backend ${body.health || 'online'} · /api/v1/health · checked now`;
-      reconnectBanner.hidden = true;
+      setHidden(reconnectBanner, true);
     }
     if (focusedId) {
       const focused = document.getElementById(focusedId);
@@ -817,12 +822,12 @@ async function pollHealth() {
     consecutiveHealthFailures = 0;
     lastHealthSuccessAt = Date.now();
     health.textContent = `Backend ${body.health || 'online'} · /api/v1/health · checked now`;
-    reconnectBanner.hidden = true;
+    setHidden(reconnectBanner, true);
   } catch (_) {
     consecutiveHealthFailures += 1;
     const status = window.MackesHealth.status({ failures: consecutiveHealthFailures, lastSuccessAt });
     health.textContent = status.text;
-    reconnectBanner.hidden = !status.offline;
+    setHidden(reconnectBanner, !status.offline);
   }
 }
 async function refreshActiveView() {
@@ -943,11 +948,11 @@ function updatePipedalValueDomain() {
   }
 }
 document.querySelectorAll('[data-view]').forEach(button => button.addEventListener('click', () => {
-  deviceControl.hidden = button.dataset.view !== 'devices';
-  assignmentControls.hidden = button.dataset.view !== 'mappings';
-  routingControls.hidden = button.dataset.view !== 'routes';
-  sceneControls.hidden = button.dataset.view !== 'scenes';
-  document.querySelector('#system-board').hidden = button.dataset.view !== 'system';
+  setHidden(deviceControl, button.dataset.view !== 'devices');
+  setHidden(assignmentControls, button.dataset.view !== 'mappings');
+  setHidden(routingControls, button.dataset.view !== 'routes');
+  setHidden(sceneControls, button.dataset.view !== 'scenes');
+  setHidden(document.querySelector('#system-board'), button.dataset.view !== 'system');
 }));
 document.querySelector('#pause-monitor').addEventListener('click', event => {
   monitorPaused = !monitorPaused;
@@ -977,7 +982,7 @@ document.querySelector('#monitor-class').addEventListener('change', event => { m
 document.querySelectorAll('[data-view]').forEach(button => button.addEventListener('click', () => {
   activeView = button.dataset.view;
   window.MackesStateStore?.publish({ view: activeView, generation: currentGeneration });
-  monitorControls.hidden = button.dataset.view !== 'monitor';
+  setHidden(monitorControls, button.dataset.view !== 'monitor');
 }));
 async function runOperation(name, confirm = false, payload) {
   const request = { request_id: `web-${Date.now()}-${++operationSequence}`, operation: name, generation: currentGeneration, confirm };
@@ -1033,8 +1038,8 @@ function renderFaceplate(body) {
       const destination = [item.destination_profile, item.destination_effect, item.destination_parameter].filter(Boolean).join(' / ') || item.id || 'unresolved';
       return `${control} → ${destination} · value unavailable (no authoritative readback)`;
     });
-    assignmentCatalog.hidden = false;
-    if (assignmentCatalogHeading) assignmentCatalogHeading.hidden = false;
+    setHidden(assignmentCatalog, false);
+    if (assignmentCatalogHeading) setHidden(assignmentCatalogHeading, false);
     const refreshedAt = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
     assignmentCatalog.textContent = `Novation ${lifecycle} · identity ${stableId} · LED ${ledPhase} · feedback ${feedback}\nCurrent assignments (${currentLines.length}) · refreshed ${refreshedAt}${currentLines.length ? `\n${currentLines.join('\n')}` : '\nNo active assignments reported by the authoritative mapping registry.'}`;
   }
@@ -1061,8 +1066,8 @@ function renderFaceplate(body) {
       return `${id}=${state(mapping)}`;
     }).join(' | '));
   }
-  faceplate.hidden = false;
-  if (novationGridHeading) novationGridHeading.hidden = false;
+  setHidden(faceplate, false);
+  if (novationGridHeading) setHidden(novationGridHeading, false);
   faceplate.textContent = rows.join('\n');
   faceplateControls.replaceChildren();
   const svg = (name, attributes = {}) => {
@@ -1119,7 +1124,7 @@ function renderFaceplate(body) {
       }
       workspaceInspector?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
       const behavior = mapping?.behavior;
-      document.querySelector('#mapping-behavior').hidden = !mapping?.id;
+      setHidden(document.querySelector('#mapping-behavior'), !mapping?.id);
       document.querySelector('#mapping-toggle-enabled').textContent = mapping?.enabled ? 'Disable mapping' : 'Enable mapping';
       if (behavior) {
         document.querySelector('#mapping-source-min').value = behavior.source_range?.[0] ?? 0;
@@ -1135,7 +1140,7 @@ function renderFaceplate(body) {
     control.addEventListener('keydown', event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); select(); } });
     faceplateControls.append(control);
   }
-  faceplateControls.hidden = false;
+  setHidden(faceplateControls, false);
   if (!selectedPhysicalControlId) {
     const assigned = mappings.filter(item => item && item.enabled !== false);
     const assignmentSummary = `Novation assignments: ${assigned.length} active of ${ids.length}`;
@@ -1148,14 +1153,14 @@ function renderFaceplate(body) {
   }
   const supportsGenericLayout = body?.novation_capabilities?.generic_layout === true || body?.device?.supports_generic_layout === true;
   if (layoutToggle) {
-    layoutToggle.hidden = !supportsGenericLayout;
+    setHidden(layoutToggle, !supportsGenericLayout);
     layoutToggle.dataset.supported = String(supportsGenericLayout);
   }
 }
 function renderMappingLayers(body) {
   const layers = body?.mapping_layers_v2;
   if (!mappingLayerControls || !mappingLayerSelect) return;
-  mappingLayerControls.hidden = !layers;
+  setHidden(mappingLayerControls, !layers);
   if (!layers) return;
   mappingLayerSelect.replaceChildren(new Option('Base layer', ''));
   for (const layer of layers.layers || []) mappingLayerSelect.add(new Option(layer.control_id, layer.control_id));
@@ -1369,8 +1374,8 @@ async function loadAssignment() {
     const choices = ['devices', 'presets', 'effects', 'types', 'parameters']
       .filter(key => Array.isArray(catalog[key]))
       .map(key => `${key}: ${catalog[key].length}`);
-    assignmentCatalog.hidden = false;
-    if (assignmentCatalogHeading) assignmentCatalogHeading.hidden = false;
+    setHidden(assignmentCatalog, false);
+    if (assignmentCatalogHeading) setHidden(assignmentCatalogHeading, false);
     const activeMappings = Array.isArray(body.active) ? body.active : (Array.isArray(body.mapping_registry) ? body.mapping_registry : []);
     const assignmentLines = activeMappings.slice(0, 64).map(item => `${item.physical_control_id || item.physical_control || 'control'} → ${item.destination_profile || ''}${item.destination_effect ? ` / ${item.destination_effect}` : ''}${item.destination_parameter ? ` / ${item.destination_parameter}` : ''}${item.enabled === false ? ' [disabled]' : ''}`);
     assignmentCatalog.textContent = `Current assignments (${activeMappings.length}) — phase: ${body.session?.phase || 'unknown'}${assignmentLines.length ? `\n${assignmentLines.join('\n')}` : '\nNo current assignments reported.'}${choices.length ? `\nCatalog: ${choices.join(', ')}` : ''}`;
@@ -1388,7 +1393,7 @@ function renderAssignmentChoices() {
   const entries = assignmentEntries.filter(entry => !query || `${entry.label || ''} ${entry.id || ''}`.toLowerCase().includes(query));
   assignmentChoice.replaceChildren(new Option('Choose an authoritative catalog entry', ''));
   for (const entry of entries) assignmentChoice.add(new Option(`${entry.label || entry.id} (${entry.id})`, entry.id));
-  assignmentChoiceLabel.hidden = assignmentEntries.length === 0;
+  setHidden(assignmentChoiceLabel, assignmentEntries.length === 0);
   if (assignmentSearch) assignmentSearch.disabled = assignmentEntries.length === 0;
 }
 assignmentChoice.addEventListener('change', () => {
