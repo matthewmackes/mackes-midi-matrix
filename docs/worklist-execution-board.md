@@ -31,6 +31,8 @@ and final release sign-off remain open.
 The executable moderated-review record is
 `docs/graphical-studio-human-signoff-checklist.md`; it remains intentionally uncompleted until a
 reviewer records each scenario and disposition.
+The installed sequential novice walkthrough also passes all five primary graphical workspaces; the
+moderated checklist remains the required human disposition.
 The existing focused
 fixtures and post-fixture health soak remain valid; these checks do not constitute human visual
 sign-off or native hardware observation.

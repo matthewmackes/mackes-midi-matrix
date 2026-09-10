@@ -11313,6 +11313,11 @@ Execution board: `docs/worklist-execution-board.md`.
   `docs/graphical-studio-human-signoff-checklist.md`, a moderated nontechnical walkthrough covering
   device discovery, signal flow, mapping, routing drafts, scenes, recovery, keyboard operation,
   themes, zoom, reduced motion, no-code boundaries, and explicit native-write safety disposition.
+- **Sequential walkthrough checkpoint (2026-09-10):** Added
+  `scripts/browser-novice-walkthrough-smoke.py` and verified the installed Devices, Routing, Scenes,
+  Recovery, and System workspaces in one browser session. All five graphical workspaces pass with no
+  visible textarea, preformatted dump, contenteditable editor, raw JSON5, SysEx-entry, state-dump, or
+  runtime-ID surface.
 
 ## 4. Dependency and parallelization map
 
