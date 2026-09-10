@@ -399,6 +399,8 @@ pub enum Operation {
     LoadPluginPreset,
     /// Query JACK server settings.
     GetJackServerSettings,
+    /// Set JACK server settings.
+    SetJackServerSettings,
     /// Set the CPU governor policy.
     SetGovernorSettings,
     /// Query the CPU governor policy.
@@ -454,6 +456,7 @@ impl Operation {
             Self::GetKnownWifiNetworks,
             Self::LoadPluginPreset,
             Self::GetJackServerSettings,
+            Self::SetJackServerSettings,
             Self::SetGovernorSettings,
             Self::GetGovernorSettings,
             Self::GetShowStatusMonitor,
@@ -503,6 +506,7 @@ impl Operation {
             Self::GetKnownWifiNetworks => "getKnownWifiNetworks",
             Self::LoadPluginPreset => "loadPluginPreset",
             Self::GetJackServerSettings => "getJackServerSettings",
+            Self::SetJackServerSettings => "setJackServerSettings",
             Self::SetGovernorSettings => "setGovernorSettings",
             Self::GetGovernorSettings => "getGovernorSettings",
             Self::GetShowStatusMonitor => "getShowStatusMonitor",
@@ -535,6 +539,7 @@ impl Operation {
                 | Self::SetFavorites
                 | Self::LoadPluginPreset
                 | Self::SetGovernorSettings
+                | Self::SetJackServerSettings
                 | Self::Restart
                 | Self::Shutdown
         )
@@ -606,6 +611,7 @@ impl Operation {
             Self::GetShowStatusMonitor => "monitoring",
             Self::GetWifiRegulatoryDomains => "diagnostics",
             Self::SetGovernorSettings => "host",
+            Self::SetJackServerSettings => "host",
             Self::Restart | Self::Shutdown => "host",
         }
     }
@@ -2555,7 +2561,7 @@ mod tests {
                 assert!(!operation.is_read_only());
             }
         }
-        assert_eq!(Operation::all().len(), 42);
+        assert_eq!(Operation::all().len(), 43);
         assert!(Operation::all().iter().all(|operation| !operation.wire_name().is_empty()));
         assert_eq!(serde_json::to_string(&Operation::SetControl).expect("json"), "\"setControl\"");
     }

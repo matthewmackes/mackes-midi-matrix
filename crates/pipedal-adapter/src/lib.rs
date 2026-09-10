@@ -2040,6 +2040,34 @@ impl Worker {
         self.session.enqueue(generation, frame)
     }
 
+    /// Prepares a confirmed, generation-checked JACK server settings mutation.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when confirmation, generation, validation, or encoding fails.
+    pub fn prepare_set_jack_server_settings(
+        &self,
+        generation: u64,
+        settings: mackes_pipedal_connector::JackServerSettings,
+        reply_to: Option<u64>,
+        confirmed: bool,
+    ) -> Result<Vec<u8>, String> {
+        if !confirmed {
+            return Err("PiPedal JACK server settings require explicit confirmation".into());
+        }
+        if generation != self.session.generation() {
+            return Err("PiPedal JACK server settings belong to an old session generation".into());
+        }
+        let value = serde_json::to_value(&settings).map_err(|error| error.to_string())?;
+        mackes_pipedal_connector::decode_jack_server_settings(Some(value))?;
+        mackes_pipedal_connector::encode_request(&mackes_pipedal_connector::Request {
+            message: "setJackServerSettings".into(),
+            reply_to,
+            body: Some(settings),
+        })
+        .map_err(|error| error.to_string())
+    }
+
     /// Prepares a confirmed CPU-governor settings request with a bounded scalar body.
     ///
     /// # Errors

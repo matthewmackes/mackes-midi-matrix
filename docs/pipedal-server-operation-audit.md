@@ -120,7 +120,7 @@ user-facing workflow without needing an independent button; require a documented
 | getWifiChannels | catalogued | Device system settings | bounded response decoder and adapter projection implemented; daemon/browser/installed qualification pending W150 |
 | getPluginPresets | catalogued | Presets and snapshots | bounded response decoder and adapter projection implemented; daemon/browser/installed qualification pending W150 |
 | loadPluginPreset | catalogued | Presets and snapshots | pending W150 |
-| setJackServerSettings | missing | Device system settings | pending W150 |
+| setJackServerSettings | catalogued | Device system settings | confirmed bounded adapter write implemented; daemon/browser/installed qualification pending W150 |
 | setGovernorSettings | catalogued | Device system settings | pending W150 |
 | setWifiConfigSettings | missing | Device system settings | pending W150 |
 | getWifiConfigSettings | missing | Device system settings | pending W150 |
