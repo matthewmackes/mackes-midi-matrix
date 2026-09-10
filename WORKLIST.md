@@ -11091,6 +11091,10 @@ Execution board: `docs/worklist-execution-board.md`.
   `scripts/browser-smoke.sh http://172.20.222.222:8081`; the installed smoke passed for all workspace
   views, deep links, responsive captures at 320/768, light theme, GUI surface checks, and local asset
   hashes. The service and web service both report `active`.
+- **Interaction verification (2026-09-10):** After the explicit visibility fix, the installed
+  `browser-interaction-smoke.py` passed with 56 visible Novation controls and 151 named accessibility
+  buttons; `browser-mobile-overflow-smoke.py` passed at the narrow viewport. This proves the SVG
+  faceplate is interactable in the installed browser, not merely present in dumped markup.
 
 #### [>] W170 — Deliver faithful physical-device schematics
 
@@ -11118,6 +11122,9 @@ Execution board: `docs/worklist-execution-board.md`.
   inventory cards now include SVG chassis, ports, controls, status, and accessible image labels.
   Model-faithful geometry, richer control interaction, and authoritative capability projection remain
   open before this item can close.
+- **Interaction verification (2026-09-10):** Installed pointer/keyboard fixture now selects all 56
+  Novation faceplate controls successfully after waiting for visible rendering. The remaining
+  Eventide/Reflex faithful schematics and model-specific qualification are still open.
 - **Integrity checkpoint (2026-09-10):** Added the server route and Rust test for
   `device_renderer.js`, and added that asset to the installed browser smoke hash set. Rebuilt and
   reinstalled the local release; browser smoke passed with the renderer asset present at the
@@ -11193,6 +11200,9 @@ Execution board: `docs/worklist-execution-board.md`.
 - **Objective:** Validate that the visual interface makes sense to nontechnical musicians across supported devices, states, themes, input methods, and viewport sizes.
 - **Acceptance:** A novice completes connect, map, edit, scene, apply, disconnect, and recover walkthroughs without entering code/protocol data. Focus order, names, status announcements, contrast, reduced motion, zoom, and non-color state cues pass.
 - **Evidence:** Moderated-style walkthrough scripts, accessibility-tree assertions, keyboard-only fixtures, responsive screenshots, and issue disposition.
+- **Qualification checkpoint (2026-09-10):** Installed accessibility interaction passed with 56
+  graphical Novation controls and 151 named accessibility buttons; mobile overflow passed at 500 CSS
+  pixels. Broader novice walkthroughs, themes/zoom, and full device coverage remain open.
 
 #### [ ] W177 — Install and close the graphical studio release
 
