@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mackes.invalid/schema/graphical-capability-v1.schema.json",
+  "title": "MACKES graphical capability envelope v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "generation", "fallback_renderer", "renderers", "devices"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "generation": { "type": "integer", "minimum": 0 },
+    "fallback_renderer": { "const": "generic.endpoint" },
+    "renderers": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 128,
+      "items": { "$ref": "#/$defs/renderer" }
+    },
+    "devices": {
+      "type": "array",
+      "maxItems": 512,
+      "items": { "$ref": "#/$defs/device" }
+    }
+  },
+  "$defs": {
+    "renderer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "device_kind", "graphic", "ports", "controls", "readback", "qualification"],
+      "properties": {
+        "key": { "type": "string", "minLength": 1, "maxLength": 96, "pattern": "^[a-z0-9][a-z0-9.-]*$" },
+        "device_kind": { "type": "string", "enum": ["controller", "pedal", "rack", "pedalboard", "interface", "network", "midi", "virtual", "unknown"] },
+        "model": { "type": ["string", "null"], "maxLength": 128 },
+        "graphic": { "$ref": "#/$defs/graphic" },
+        "ports": { "type": "array", "maxItems": 128, "items": { "$ref": "#/$defs/port" } },
+        "controls": { "type": "array", "maxItems": 512, "items": { "$ref": "#/$defs/control" } },
+        "readback": { "type": "string", "enum": ["confirmed", "observed", "sent-unverified", "unavailable", "unknown"] },
+        "qualification": { "type": "string", "enum": ["qualified", "generic", "unknown", "unsupported"] }
+      }
+    },
+    "graphic": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["format", "view_box", "accessible_name"],
+      "properties": {
+        "format": { "const": "svg" },
+        "view_box": { "type": "string", "pattern": "^0 0 [1-9][0-9]* [1-9][0-9]*$" },
+        "accessible_name": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "geometry_source": { "type": ["string", "null"], "maxLength": 256 }
+      }
+    },
+    "port": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "label", "direction", "media", "state"],
+      "properties": {
+        "key": { "type": "string", "minLength": 1, "maxLength": 96 },
+        "label": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "direction": { "type": "string", "enum": ["input", "output", "bidirectional"] },
+        "media": { "type": "string", "enum": ["midi", "network", "virtual", "unknown"] },
+        "state": { "type": "string", "enum": ["connected", "disconnected", "observed", "unknown", "unavailable"] }
+      }
+    },
+    "control": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "label", "type", "editable", "readback"],
+      "properties": {
+        "key": { "type": "string", "minLength": 1, "maxLength": 96 },
+        "label": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "type": { "type": "string", "enum": ["button", "toggle", "continuous", "enum", "text", "timeline", "unsupported"] },
+        "editable": { "type": "boolean" },
+        "unit": { "type": ["string", "null"], "maxLength": 32 },
+        "readback": { "type": "string", "enum": ["confirmed", "observed", "sent-unverified", "unavailable", "unknown"] },
+        "values": { "type": "array", "maxItems": 256, "items": { "type": "string", "maxLength": 128 } },
+        "minimum": { "type": ["number", "null"] },
+        "maximum": { "type": ["number", "null"] }
+      }
+    },
+    "device": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["renderer_key", "kind", "name", "availability", "ports", "readback"],
+      "properties": {
+        "renderer_key": { "type": "string", "minLength": 1, "maxLength": 96 },
+        "kind": { "type": "string", "minLength": 1, "maxLength": 96 },
+        "model": { "type": ["string", "null"], "maxLength": 128 },
+        "name": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "availability": { "type": "string", "enum": ["connected", "disconnected", "unavailable", "unknown"] },
+        "ports": { "type": "array", "maxItems": 128, "items": { "type": "string", "maxLength": 96 } },
+        "readback": { "type": "string", "enum": ["confirmed", "observed", "sent-unverified", "unavailable", "unknown"] }
+      }
+    }
+  }
+}

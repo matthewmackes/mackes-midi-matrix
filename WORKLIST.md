@@ -11183,14 +11183,20 @@ Execution board: `docs/worklist-execution-board.md`.
   catalog and plugin controls. Technical values remain daemon-bound while the normal workflow is
   graphical; broader health timelines and recovery actions remain open.
 
-#### [ ] W175 — Version graphical capability, draft, and renderer contracts
+#### [>] W175 — Version graphical capability, draft, and renderer contracts
 
-- **Status:** `NOT_STARTED`
+- **Status:** `IN_PROGRESS`
 - **Owner:** Codex
 - **Depends on:** W168, W172, W173
 - **Objective:** Define daemon-owned versioned contracts for renderer keys, device kind/model, geometry, port layout, controls, units/enums, readback semantics, qualification status, drafts, conflicts, and generic fallback.
 - **Acceptance:** The daemon remains the sole writer/generation authority; reconnect, stale apply, unknown write outcome, migration, and lossless preservation are tested. No UI-only capability invents hardware behavior or claims readback from an acknowledged write.
 - **Evidence:** Schemas/ADRs, golden payloads, migrations, generation checks, contract tests, and browser fixtures driven by authoritative projections.
+- **Contract checkpoint (2026-09-10):** Added versioned
+  `schemas/graphical-capability-v1.schema.json` and `scripts/check-graphical-contract.py`. The
+  contract closes renderer identity, device kind/model, SVG geometry, port roles/states, control
+  types/domains, readback semantics, qualification, availability, generation, and mandatory generic
+  fallback. Runtime daemon projection, draft migration, golden payloads, and browser contract
+  fixtures remain open.
 
 #### [>] W176 — Qualify novice usability and accessibility
 
