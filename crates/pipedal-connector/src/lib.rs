@@ -384,6 +384,8 @@ pub enum Operation {
     RenameBank,
     /// Open a preset bank by instance identity.
     OpenBank,
+    /// Save a bank under a new name.
+    SaveBankAs,
     /// Save the current preset.
     SaveCurrentPreset,
     /// Save the current pedalboard as a new preset.
@@ -473,6 +475,7 @@ impl Operation {
             Self::PreviousPreset,
             Self::RenameBank,
             Self::OpenBank,
+            Self::SaveBankAs,
             Self::SaveCurrentPreset,
             Self::SaveCurrentPresetAs,
             Self::SavePluginPresetAs,
@@ -535,6 +538,7 @@ impl Operation {
             Self::PreviousPreset => "previousPreset",
             Self::RenameBank => "renameBank",
             Self::OpenBank => "openBank",
+            Self::SaveBankAs => "saveBankAs",
             Self::SaveCurrentPreset => "saveCurrentPreset",
             Self::SaveCurrentPresetAs => "saveCurrentPresetAs",
             Self::SavePluginPresetAs => "savePluginPresetAs",
@@ -590,6 +594,7 @@ impl Operation {
                 | Self::PreviousPreset
                 | Self::RenameBank
                 | Self::OpenBank
+                | Self::SaveBankAs
                 | Self::SaveCurrentPreset
                 | Self::SaveCurrentPresetAs
                 | Self::SavePluginPresetAs
@@ -676,6 +681,7 @@ impl Operation {
             Self::PreviousPreset => "presets",
             Self::RenameBank => "presets",
             Self::OpenBank => "presets",
+            Self::SaveBankAs => "presets",
             Self::GetJackServerSettings | Self::GetGovernorSettings => "diagnostics",
             Self::GetShowStatusMonitor => "monitoring",
             Self::GetWifiRegulatoryDomains => "diagnostics",
@@ -849,6 +855,24 @@ impl FromTo {
     pub fn validate(&self) -> Result<(), String> {
         if self.from < 0 || self.to < 0 || self.from == self.to {
             return Err("PiPedal bank move identities are invalid".into());
+        }
+        Ok(())
+    }
+}
+
+/// Source-backed save-bank-as payload.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SaveBankAs {
+    pub bank_id: i64,
+    pub new_name: String,
+}
+
+impl SaveBankAs {
+    /// Validate the source identity and bounded display name.
+    pub fn validate(&self) -> Result<(), String> {
+        if self.bank_id < 0 || self.new_name.trim().is_empty() || self.new_name.len() > 256 {
+            return Err("PiPedal save-bank-as payload is invalid or excessive".into());
         }
         Ok(())
     }
@@ -2711,7 +2735,7 @@ mod tests {
                 assert!(!operation.is_read_only());
             }
         }
-        assert_eq!(Operation::all().len(), 55);
+        assert_eq!(Operation::all().len(), 56);
         assert!(Operation::all().iter().all(|operation| !operation.wire_name().is_empty()));
         assert_eq!(serde_json::to_string(&Operation::SetControl).expect("json"), "\"setControl\"");
     }

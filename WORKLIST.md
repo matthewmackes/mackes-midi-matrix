@@ -12279,3 +12279,6 @@ Evidence (2026-09-08): Devices browser gate initially observed a transient daemo
 - **Bank-open write slice (2026-09-10):** Added the source-registered `openBank` scalar command
   with confirmed, generation-checked nonnegative identity validation. Daemon/browser and installed
   qualification remain pending W150.
+- **Save-bank-as write slice (2026-09-10):** Added the source-registered `saveBankAs` payload with
+  confirmed, generation-checked, bounded bank identity and name validation. Daemon/browser and
+  installed qualification remain pending W150.

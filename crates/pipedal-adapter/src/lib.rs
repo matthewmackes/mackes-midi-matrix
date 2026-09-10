@@ -1622,6 +1622,33 @@ impl Worker {
         .map_err(|error| error.to_string())
     }
 
+    /// Prepares a confirmed, generation-checked save-bank-as command.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when confirmation, generation, payload validation, or encoding fails.
+    pub fn prepare_save_bank_as(
+        &self,
+        generation: u64,
+        request: mackes_pipedal_connector::SaveBankAs,
+        reply_to: Option<u64>,
+        confirmed: bool,
+    ) -> Result<Vec<u8>, String> {
+        if !confirmed {
+            return Err("PiPedal save-bank-as requires explicit confirmation".into());
+        }
+        if generation != self.session.generation() {
+            return Err("PiPedal save-bank-as belongs to an old session generation".into());
+        }
+        request.validate()?;
+        mackes_pipedal_connector::encode_request(&mackes_pipedal_connector::Request {
+            message: "saveBankAs".into(),
+            reply_to,
+            body: Some(request),
+        })
+        .map_err(|error| error.to_string())
+    }
+
     /// Prepares a confirmed, generation-checked next-bank command.
     ///
     /// # Errors
