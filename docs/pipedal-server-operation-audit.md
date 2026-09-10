@@ -182,7 +182,7 @@ user-facing workflow without needing an independent button; require a documented
 | getSystemMidiBindings | catalogued | Monitoring and MIDI | bounded startup/read-only query path; installed qualification pending W150 |
 | requestFileList | missing | Device assets/library | pending W150 |
 | requestFileList2 | missing | Device assets/library | pending W150 |
-| newPreset | missing | Presets and snapshots | pending W150 |
+| newPreset | catalogued | Presets and snapshots | confirmed bounded adapter write implemented; daemon/browser/installed qualification pending W150 |
 | deleteUserFile | missing | Device assets/library | pending W150 |
 | createNewSampleDirectory | missing | Device assets/library | pending W150 |
 | renameFilePropertyFile | missing | Device assets/library | pending W150 |
