@@ -1593,6 +1593,31 @@ impl Worker {
         .map_err(|error| error.to_string())
     }
 
+    /// Prepares a confirmed, generation-checked next-bank command.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when confirmation, generation, or encoding fails.
+    pub fn prepare_next_bank(
+        &self,
+        generation: u64,
+        reply_to: Option<u64>,
+        confirmed: bool,
+    ) -> Result<Vec<u8>, String> {
+        if !confirmed {
+            return Err("PiPedal bank navigation requires explicit confirmation".into());
+        }
+        if generation != self.session.generation() {
+            return Err("PiPedal next-bank command belongs to an old session generation".into());
+        }
+        mackes_pipedal_connector::encode_request(&mackes_pipedal_connector::Request::<()> {
+            message: "nextBank".into(),
+            reply_to,
+            body: None,
+        })
+        .map_err(|error| error.to_string())
+    }
+
     /// Prepares a confirmed, generation-checked current-preset load request.
     ///
     /// # Errors

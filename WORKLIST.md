@@ -12264,3 +12264,6 @@ Evidence (2026-09-08): Devices browser gate initially observed a transient daemo
 - **Bank-move write slice (2026-09-10):** Added the source-registered `moveBank` operation with
   confirmed, generation-checked, bounded distinct bank identities. Daemon/browser and installed
   qualification remain pending W150.
+- **Next-bank write slice (2026-09-10):** Added the source-registered `nextBank` no-body command
+  with confirmed, generation-checked adapter encoding. Daemon/browser and installed qualification
+  remain pending W150.

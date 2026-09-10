@@ -372,6 +372,8 @@ pub enum Operation {
     UpdatePresets,
     /// Move a bank between two preset positions.
     MoveBank,
+    /// Advance to the next bank.
+    NextBank,
     /// Save the current preset.
     SaveCurrentPreset,
     /// Save the current pedalboard as a new preset.
@@ -455,6 +457,7 @@ impl Operation {
             Self::LoadPreset,
             Self::UpdatePresets,
             Self::MoveBank,
+            Self::NextBank,
             Self::SaveCurrentPreset,
             Self::SaveCurrentPresetAs,
             Self::SavePluginPresetAs,
@@ -511,6 +514,7 @@ impl Operation {
             Self::LoadPreset => "loadPreset",
             Self::UpdatePresets => "updatePresets",
             Self::MoveBank => "moveBank",
+            Self::NextBank => "nextBank",
             Self::SaveCurrentPreset => "saveCurrentPreset",
             Self::SaveCurrentPresetAs => "saveCurrentPresetAs",
             Self::SavePluginPresetAs => "savePluginPresetAs",
@@ -560,6 +564,7 @@ impl Operation {
                 | Self::LoadPreset
                 | Self::UpdatePresets
                 | Self::MoveBank
+                | Self::NextBank
                 | Self::SaveCurrentPreset
                 | Self::SaveCurrentPresetAs
                 | Self::SavePluginPresetAs
@@ -640,6 +645,7 @@ impl Operation {
             Self::LoadPluginPreset => "presets",
             Self::UpdatePresets => "presets",
             Self::MoveBank => "presets",
+            Self::NextBank => "presets",
             Self::GetJackServerSettings | Self::GetGovernorSettings => "diagnostics",
             Self::GetShowStatusMonitor => "monitoring",
             Self::GetWifiRegulatoryDomains => "diagnostics",
@@ -2657,7 +2663,7 @@ mod tests {
                 assert!(!operation.is_read_only());
             }
         }
-        assert_eq!(Operation::all().len(), 49);
+        assert_eq!(Operation::all().len(), 50);
         assert!(Operation::all().iter().all(|operation| !operation.wire_name().is_empty()));
         assert_eq!(serde_json::to_string(&Operation::SetControl).expect("json"), "\"setControl\"");
     }

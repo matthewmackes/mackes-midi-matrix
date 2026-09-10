@@ -159,7 +159,7 @@ user-facing workflow without needing an independent button; require a documented
 | renameBank | missing | Presets and snapshots | pending W150 |
 | openBank | missing | Presets and snapshots | pending W150 |
 | saveBankAs | missing | Presets and snapshots | pending W150 |
-| nextBank | missing | Presets and snapshots | pending W150 |
+| nextBank | catalogued | Presets and snapshots | confirmed bounded adapter write implemented; daemon/browser/installed qualification pending W150 |
 | previousBank | missing | Presets and snapshots | pending W150 |
 | nextPreset | missing | Presets and snapshots | pending W150 |
 | previousPreset | missing | Presets and snapshots | pending W150 |
