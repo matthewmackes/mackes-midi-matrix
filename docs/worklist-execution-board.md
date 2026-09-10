@@ -7,7 +7,7 @@ Latest automated checkpoint (2026-09-10): `cargo test -p mackes-web` passed 56/5
 interface guard, web asset budget (37,540 compressed bytes), worklist validation, JavaScript syntax,
 and `git diff --check` all pass. Installed browser smoke passed against
 `http://172.20.222.222:8081` after release rebuild/reinstall, including deep links, 320/768 responsive
-captures, light theme, GUI surface checks, and installed asset hashes. current worklist state: 147 complete, 11 in progress, 3 not started (161 total; measured 2026-09-10).
+captures, light theme, GUI surface checks, and installed asset hashes. current worklist state: 147 complete, 12 in progress, 2 not started (161 total; measured 2026-09-10).
 The existing focused
 fixtures and post-fixture health soak remain valid; these checks do not constitute human visual
 sign-off or native hardware observation.

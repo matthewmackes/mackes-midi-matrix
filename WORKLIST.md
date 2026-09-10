@@ -11192,9 +11192,9 @@ Execution board: `docs/worklist-execution-board.md`.
 - **Acceptance:** The daemon remains the sole writer/generation authority; reconnect, stale apply, unknown write outcome, migration, and lossless preservation are tested. No UI-only capability invents hardware behavior or claims readback from an acknowledged write.
 - **Evidence:** Schemas/ADRs, golden payloads, migrations, generation checks, contract tests, and browser fixtures driven by authoritative projections.
 
-#### [ ] W176 — Qualify novice usability and accessibility
+#### [>] W176 — Qualify novice usability and accessibility
 
-- **Status:** `NOT_STARTED`
+- **Status:** `IN_PROGRESS`
 - **Owner:** Codex
 - **Depends on:** W170, W171, W172, W173, W174, W175
 - **Objective:** Validate that the visual interface makes sense to nontechnical musicians across supported devices, states, themes, input methods, and viewport sizes.
