@@ -5320,6 +5320,10 @@ tests, strict Clippy, architecture/worklist policy, and the complete release gat
   schema with bounded identities, names, sample-rate lists, and buffer ranges, plus adapter session
   retention and reconnect clearing for on-demand `getAlsaDevices` reads. Daemon/browser and
   installed qualification remain pending W150.
+- **JACK-status readback slice (2026-09-10):** Added the source-backed JACK host status schema
+  and bounded validation for CPU usage, frequencies, and diagnostic text, plus adapter session
+  retention and reconnect clearing for on-demand `getJackStatus` reads. Daemon/browser and
+  installed qualification remain pending W150.
 - **Connector-design synchronization (2026-09-09):** The PiPedal connector handoff now records
   that validated version metadata is session-scoped diagnostic readback, cleared on reconnect and
   never sufficient to authorize version-dependent writes. Documentation, worklist, and diff checks

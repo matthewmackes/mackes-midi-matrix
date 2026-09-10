@@ -57,6 +57,8 @@ pub const MAX_KNOWN_WIFI_NETWORKS: usize = 256;
 pub const MAX_WIFI_CHANNELS: usize = 256;
 /// Maximum ALSA devices accepted in one PiPedal response.
 pub const MAX_ALSA_DEVICES: usize = 256;
+/// Maximum JACK status error/governor text length.
+pub const MAX_JACK_STATUS_TEXT: usize = 256;
 /// Maximum system MIDI bindings accepted in one PiPedal update.
 pub const MAX_SYSTEM_MIDI_BINDINGS: usize = 128;
 /// Maximum requests waiting for the PiPedal transport worker.
@@ -1088,6 +1090,38 @@ pub fn decode_alsa_devices(body: Option<serde_json::Value>) -> Result<Vec<AlsaDe
         return Err("PiPedal ALSA device inventory is invalid or excessive".into());
     }
     Ok(devices)
+}
+
+/// Source-backed JACK/audio-host status readback.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct JackHostStatus {
+    pub active: bool,
+    pub error_message: String,
+    pub restarting: bool,
+    pub underruns: u64,
+    pub cpu_usage: f32,
+    pub ms_since_last_underrun: u64,
+    pub temperaturem_c: i32,
+    pub cpu_freq_max: u64,
+    pub cpu_freq_min: u64,
+    pub has_cpu_governor: bool,
+    pub governor: String,
+}
+
+/// Decode and validate JACK/audio-host status.
+pub fn decode_jack_status(body: Option<serde_json::Value>) -> Result<JackHostStatus, String> {
+    let status: JackHostStatus = decode_body(body)?;
+    if !status.cpu_usage.is_finite()
+        || status.cpu_usage < 0.0
+        || status.cpu_usage > 100.0
+        || status.cpu_freq_min > status.cpu_freq_max
+        || status.error_message.len() > MAX_JACK_STATUS_TEXT
+        || status.governor.len() > MAX_JACK_STATUS_TEXT
+    {
+        return Err("PiPedal JACK status is invalid or excessive".into());
+    }
+    Ok(status)
 }
 
 /// Validate a URI-to-favorite map before sending PiPedal's `setFavorites`.

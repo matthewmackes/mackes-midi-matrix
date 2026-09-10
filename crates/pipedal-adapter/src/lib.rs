@@ -250,6 +250,7 @@ pub struct Worker {
     known_wifi_networks: Vec<String>,
     wifi_channels: Vec<mackes_pipedal_connector::WifiChannel>,
     alsa_devices: Vec<mackes_pipedal_connector::AlsaDeviceInfo>,
+    jack_status: Option<mackes_pipedal_connector::JackHostStatus>,
     wifi_regulatory_domains: std::collections::BTreeMap<String, String>,
     system_midi_bindings: Vec<mackes_pipedal_connector::MidiBinding>,
     version: Option<mackes_pipedal_connector::PiPedalVersion>,
@@ -287,6 +288,7 @@ impl Worker {
             known_wifi_networks: Vec::new(),
             wifi_channels: Vec::new(),
             alsa_devices: Vec::new(),
+            jack_status: None,
             wifi_regulatory_domains: std::collections::BTreeMap::new(),
             system_midi_bindings: Vec::new(),
             version: None,
@@ -348,6 +350,7 @@ impl Worker {
                     self.known_wifi_networks.clear();
                     self.wifi_channels.clear();
                     self.alsa_devices.clear();
+                    self.jack_status = None;
                     self.wifi_regulatory_domains.clear();
                     self.system_midi_bindings.clear();
                     self.version = None;
@@ -541,6 +544,13 @@ impl Worker {
                     .map_err(|_| TransportError::Protocol)?;
                 Ok(())
             }
+            "getJackStatus" => {
+                self.jack_status = Some(
+                    mackes_pipedal_connector::decode_jack_status(body)
+                        .map_err(|_| TransportError::Protocol)?,
+                );
+                Ok(())
+            }
             "getWifiRegulatoryDomains" => {
                 self.wifi_regulatory_domains =
                     mackes_pipedal_connector::decode_wifi_regulatory_domains(body)
@@ -691,6 +701,12 @@ impl Worker {
     #[must_use]
     pub fn alsa_devices(&self) -> &[mackes_pipedal_connector::AlsaDeviceInfo] {
         &self.alsa_devices
+    }
+
+    /// Last validated JACK/audio-host status.
+    #[must_use]
+    pub const fn jack_status(&self) -> Option<&mackes_pipedal_connector::JackHostStatus> {
+        self.jack_status.as_ref()
     }
 
     /// Last validated Wi-Fi regulatory-domain labels.
