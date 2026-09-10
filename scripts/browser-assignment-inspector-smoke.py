@@ -23,14 +23,20 @@ try:
     driver.get(f"{origin}/devices#browser_smoke=1")
     wait = WebDriverWait(driver, 45)
     wait.until(lambda d: "active of" in d.find_element("id", "inspector-summary").text)
-    control = wait.until(lambda d: next(
-        (item for item in d.find_elements("css selector", "#faceplate-controls [data-physical-control-id]")
-         if item.get_attribute("data-physical-control-id") == "knob-r1-c1"
-         and "; assigned;" in (item.get_attribute("aria-label") or "")), None))
-    # SVG <g> controls are keyboard/pointer targets but Chromium may reject a
-    # synthetic WebDriver click on the group itself; dispatch the same DOM
-    # event path used by the browser surface.
-    driver.execute_script("arguments[0].dispatchEvent(new MouseEvent('click', {bubbles: true}));", control)
+    wait.until(lambda d: d.execute_script("""
+      return Array.from(document.querySelectorAll('#faceplate-controls [data-physical-control-id]'))
+        .some(item => item.getAttribute('data-physical-control-id') === 'knob-r1-c1'
+          && (item.getAttribute('aria-label') || '').includes('; assigned;'));
+    """))
+    # SVG <g> controls are keyboard/pointer targets. Find and dispatch in one
+    # browser task so a concurrent mapping refresh cannot leave a stale handle.
+    driver.execute_script("""
+      const item = Array.from(document.querySelectorAll('#faceplate-controls [data-physical-control-id]'))
+        .find(candidate => candidate.getAttribute('data-physical-control-id') === 'knob-r1-c1'
+          && (candidate.getAttribute('aria-label') || '').includes('; assigned;'));
+      if (!item) throw new Error('assigned graphical control disappeared');
+      item.dispatchEvent(new MouseEvent('click', {bubbles: true}));
+    """)
     summary = wait.until(lambda d: d.find_element("id", "inspector-summary").text)
     required = ("Destination:", "Source:", "Behavior:")
     missing = [marker for marker in required if marker not in summary]
