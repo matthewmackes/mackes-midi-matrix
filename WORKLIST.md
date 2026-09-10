@@ -11229,6 +11229,12 @@ Execution board: `docs/worklist-execution-board.md`.
   and zero targets (`pipedald.service` is active; PiPedal v2.0.110). The fixture remains fail-closed;
   no hand-built pedalboard or guessed preset was injected. Generation ordering and visual draft
   preservation were updated for the graphical UI and pass independently.
+- **Generation-boundary fix (2026-09-10):** The PiPedal snapshot had been publishing the unrelated
+  daemon-wide generation, causing every confirmed preset restore to be rejected as stale. Snapshot,
+  repair conflict, and repair acknowledgement responses now publish the PiPedal connector session
+  generation. Release rebuild/reinstall passed; the host reports matching generation `0`, and the
+  typed `loadPreset(16)` request was accepted and queued. The live catalog remains empty after the
+  authoritative restore attempt, so catalog qualification is still open.
 
 #### [ ] W177 — Install and close the graphical studio release
 

@@ -3985,8 +3985,9 @@ impl Daemon {
                             serde_json::json!({
                                 "ok": true,
                                 "generation": self.generation,
-                                "pipedal": self.pipedal_worker.ipc_status(),
+                            "pipedal": self.pipedal_worker.ipc_status(),
                                 "catalog": self.pipedal_worker.catalog(),
+                                "generation": self.pipedal_worker.health().generation,
                                 "favorites": self.pipedal_worker.favorites(),
                                 "system_midi_bindings": self.pipedal_worker.system_midi_bindings(),
                                 "version": self.pipedal_worker.version(),
@@ -4005,8 +4006,8 @@ impl Daemon {
                             if !request.confirm {
                                 return stream.write_all(b"{\"ok\":false,\"error\":\"PiPedal repair requires confirmation\"}\n");
                             }
-                            if request.generation != self.generation {
-                                return stream.write_all(serde_json::json!({"ok": false, "error": "PiPedal generation conflict", "generation": self.generation}).to_string().as_bytes()).and_then(|()| stream.write_all(b"\n"));
+                            if request.generation != self.pipedal_worker.health().generation {
+                                return stream.write_all(serde_json::json!({"ok": false, "error": "PiPedal generation conflict", "generation": self.pipedal_worker.health().generation}).to_string().as_bytes()).and_then(|()| stream.write_all(b"\n"));
                             }
                             let (Some(control_id), Some(target)) =
                                 (request.physical_control_id, request.mapping)
@@ -4036,7 +4037,7 @@ impl Daemon {
                                 return stream.write_all(serde_json::json!({"ok": false, "error": error.to_string()}).to_string().as_bytes()).and_then(|()| stream.write_all(b"\n"));
                             }
                             self.cache_pipedal_mappings(&document);
-                            serde_json::json!({"ok": true, "repaired": true, "generation": self.generation, "physical_control_id": control_id}).to_string() + "\n"
+                            serde_json::json!({"ok": true, "repaired": true, "generation": self.pipedal_worker.health().generation, "physical_control_id": control_id}).to_string() + "\n"
                         }
                         Some(request)
                             if matches!(request.operation, mackes_ipc::PiPedalOperation::Apply) =>

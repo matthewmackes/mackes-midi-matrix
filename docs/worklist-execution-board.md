@@ -13,6 +13,9 @@ feature cards, no visible code editor); generation ordering and visual draft-pre
 pass. The aggregate gate currently stops at PiPedal catalog because the authoritative live catalog reports
 zero controls and zero targets; this is recorded as an environment/device-state dependency and is not
 being masked by the release checks.
+The PiPedal generation boundary was corrected and reinstalled; snapshot and connector generations now
+match, and the approved typed `loadPreset(16)` request was accepted/queued. The catalog remains empty
+after that authoritative attempt, so the PiPedal fixture continues to fail closed.
 The existing focused
 fixtures and post-fixture health soak remain valid; these checks do not constitute human visual
 sign-off or native hardware observation.
