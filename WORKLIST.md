@@ -11118,6 +11118,10 @@ Execution board: `docs/worklist-execution-board.md`.
   inventory cards now include SVG chassis, ports, controls, status, and accessible image labels.
   Model-faithful geometry, richer control interaction, and authoritative capability projection remain
   open before this item can close.
+- **Integrity checkpoint (2026-09-10):** Added the server route and Rust test for
+  `device_renderer.js`, and added that asset to the installed browser smoke hash set. Rebuilt and
+  reinstalled the local release; browser smoke passed with the renderer asset present at the
+  configured host. `cargo test -p mackes-web` now passes 56/56.
 
 #### [>] W172 — Replace mapping and routing editors with visual builders
 
