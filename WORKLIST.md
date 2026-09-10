@@ -11145,6 +11145,10 @@ Execution board: `docs/worklist-execution-board.md`.
 - **Renderer-registry checkpoint (2026-09-10):** The installed registry fixture now exercises the
   exact nine-key family matrix and confirms every family, including the unknown fallback, produces a
   graphical SVG representation.
+- **Accessible-list checkpoint (2026-09-10):** Every registry renderer now appends a bundled,
+  screen-reader-accessible summary of state, ports, and family-relevant controls. The registry fixture
+  requires at least three entries per renderer, and the rebuilt installed host passes the renderer,
+  graphical-inventory, and visual-accessibility fixtures.
 
 #### [>] W172 — Replace mapping and routing editors with visual builders
 

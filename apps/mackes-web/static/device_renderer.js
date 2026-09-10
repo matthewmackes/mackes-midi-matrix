@@ -69,6 +69,28 @@
       for (let index = 0; index < renderer.controls; index += 1) svgElement('rect', { x: 55 + index * 120, y: 82, width: 52, height: 28, rx: 5, class: 'device-graphic-port' }, svg);
     }
     const ports = svgElement('text', { x: 24, y: 139, class: 'device-graphic-caption' }, svg); ports.textContent = renderer.kind === 'interface' ? '4 inputs · 4 outputs' : 'MIDI in · MIDI out';
+    const accessibleList = document.createElement('ul');
+    accessibleList.className = 'device-graphic-accessible-list';
+    accessibleList.setAttribute('aria-label', `${renderer.key} controls and connection summary`);
+    const summary = renderer.kind === 'controller'
+      ? ['24 knobs', '16 channel buttons', '8 utility controls', '8 faders', 'LED and assignment state']
+      : renderer.kind === 'interface'
+        ? ['4 MIDI inputs', '4 MIDI outputs', 'Cable and route state']
+        : renderer.key === 'pipedal'
+          ? ['Pedalboard plugin graph', 'Plugin controls and levels', 'Preset and snapshot state']
+          : renderer.key === 'eventide.micropitch'
+            ? ['Parameter controls', 'Two footswitches', 'Preset and sent-unverified state']
+            : renderer.key === 'lexicon.reflex'
+              ? ['Rack parameters', 'Algorithm and Echo Rhythm', 'Patch and register state']
+              : renderer.kind === 'network'
+                ? ['Peer and session state', 'Handshake and reconnect state', 'Virtual MIDI ports']
+                : ['Named MIDI ports', 'Availability state', 'Activity and capability summary'];
+    for (const item of [`State: ${state}`, ...summary]) {
+      const listItem = document.createElement('li');
+      listItem.textContent = item;
+      accessibleList.append(listItem);
+    }
+    parent.append(accessibleList);
     return renderer;
   }
   window.MackesDeviceRenderer = Object.freeze({

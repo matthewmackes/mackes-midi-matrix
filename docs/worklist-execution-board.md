@@ -4,7 +4,7 @@ Updated 2026-09-10. This board is subordinate to `WORKLIST.md`; it records the n
 step for the active Web Interface drain packets and must be updated with command output, not intent.
 
 Latest automated checkpoint (2026-09-10): `cargo test -p mackes-web` passed 56/56; graphical
-interface guard, web asset budget (38,260 compressed bytes), worklist validation, JavaScript syntax,
+interface guard, web asset budget (38,643 compressed bytes), worklist validation, JavaScript syntax,
 and `git diff --check` all pass. Installed browser smoke passed against
 `http://172.20.222.222:8081` after release rebuild/reinstall, including deep links, 320/768 responsive
 captures, light theme, GUI surface checks, and installed asset hashes. current worklist state: 147 complete, 14 in progress, 0 not started (161 total; measured 2026-09-10).
@@ -21,6 +21,8 @@ with light theme, reduced motion, 200% zoom, and 56 non-color-labeled controls; 
 fixture was hardened against concurrent DOM refresh races and passes independently.
 The visual review pass also confirms the installed signal-flow canvas keeps 32 devices distinct in a
 scrollable layout and the normal Devices/Routing text avoids internal URIs and runtime identities.
+The renderer registry now also supplies an accessible summary list for every family and fallback;
+the rebuilt installed host passed renderer, graphical-inventory, and visual-accessibility fixtures.
 The formal `scripts/release-gate.sh` also passes end to end, including workspace tests, emulator,
 clippy, benchmark, hermetic integration, installer smoke, and release artifact checksum/contents.
 W177 is therefore in progress with software release evidence recorded; W176 novice/human sign-off

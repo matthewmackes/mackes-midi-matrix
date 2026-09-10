@@ -41,7 +41,7 @@ try:
           const graphicHost = document.createElement('div');
           window.MackesDeviceRenderer.appendGraphic({name, state: 'unknown'}, graphicHost);
           host.append(graphicHost);
-          return {name, expected, actual, svg: Boolean(graphicHost.querySelector('svg.device-graphic'))};
+          return {name, expected, actual, svg: Boolean(graphicHost.querySelector('svg.device-graphic')), accessible: graphicHost.querySelectorAll('.device-graphic-accessible-list li').length};
         });
         return {keys: window.MackesDeviceRenderer.keys, resolved};
         """
@@ -51,7 +51,7 @@ try:
         "m-audio.midisport-4x4", "rtp-midi", "generic-midi", "mackes.virtual-monitor", "generic.endpoint",
     }
     assert set(result["keys"]) == expected_keys, result
-    assert all(item["actual"] == item["expected"] and item["svg"] for item in result["resolved"]), result
+    assert all(item["actual"] == item["expected"] and item["svg"] and item["accessible"] >= 3 for item in result["resolved"]), result
     print(f"browser-renderer-registry: PASS families={len(result['resolved'])} origin={origin}")
 finally:
     driver.quit()
