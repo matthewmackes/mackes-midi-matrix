@@ -416,6 +416,8 @@ pub enum Operation {
     GetWifiRegulatoryDomains,
     /// Query password-redacted Wi-Fi configuration.
     GetWifiConfigSettings,
+    /// Replace a plugin preset catalog.
+    UpdatePluginPresets,
     /// Restart the PiPedal engine.
     Restart,
     /// Shut down the PiPedal host.
@@ -471,6 +473,7 @@ impl Operation {
             Self::SetShowStatusMonitor,
             Self::GetWifiRegulatoryDomains,
             Self::GetWifiConfigSettings,
+            Self::UpdatePluginPresets,
             Self::Restart,
             Self::Shutdown,
         ]
@@ -524,6 +527,7 @@ impl Operation {
             Self::SetShowStatusMonitor => "setShowStatusMonitor",
             Self::GetWifiRegulatoryDomains => "getWifiRegulatoryDomains",
             Self::GetWifiConfigSettings => "getWifiConfigSettings",
+            Self::UpdatePluginPresets => "updatePluginPresets",
             Self::Restart => "restart",
             Self::Shutdown => "shutdown",
         }
@@ -555,6 +559,7 @@ impl Operation {
                 | Self::SetJackServerSettings
                 | Self::UpdateNow
                 | Self::SetShowStatusMonitor
+                | Self::UpdatePluginPresets
                 | Self::Restart
                 | Self::Shutdown
         )
@@ -627,6 +632,7 @@ impl Operation {
             Self::GetShowStatusMonitor => "monitoring",
             Self::GetWifiRegulatoryDomains => "diagnostics",
             Self::GetWifiConfigSettings => "diagnostics",
+            Self::UpdatePluginPresets => "presets",
             Self::SetGovernorSettings => "host",
             Self::SetJackServerSettings => "host",
             Self::UpdateNow => "host",
@@ -2622,7 +2628,7 @@ mod tests {
                 assert!(!operation.is_read_only());
             }
         }
-        assert_eq!(Operation::all().len(), 46);
+        assert_eq!(Operation::all().len(), 47);
         assert!(Operation::all().iter().all(|operation| !operation.wire_name().is_empty()));
         assert_eq!(serde_json::to_string(&Operation::SetControl).expect("json"), "\"setControl\"");
     }

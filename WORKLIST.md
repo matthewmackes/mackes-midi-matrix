@@ -12255,3 +12255,6 @@ Evidence (2026-09-08): Devices browser gate initially observed a transient daemo
 - **Password-redacted Wi-Fi readback slice (2026-09-10):** Added bounded decoding and session
   retention for source-registered `getWifiConfigSettings`, rejecting any non-redacted password
   payload. Daemon/browser and installed qualification remain pending W150.
+- **Plugin-preset catalog write slice (2026-09-10):** Added the source-registered
+  `updatePluginPresets` operation with confirmed, generation-checked, bounded catalog validation.
+  Daemon/browser and installed qualification remain pending W150.

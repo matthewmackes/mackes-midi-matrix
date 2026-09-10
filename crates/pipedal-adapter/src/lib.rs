@@ -2142,6 +2142,34 @@ impl Worker {
         .map_err(|error| error.to_string())
     }
 
+    /// Prepares a confirmed, generation-checked plugin-preset catalog update.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when confirmation, generation, catalog validation, or encoding fails.
+    pub fn prepare_update_plugin_presets(
+        &self,
+        generation: u64,
+        catalog: mackes_pipedal_connector::PluginUiPresets,
+        reply_to: Option<u64>,
+        confirmed: bool,
+    ) -> Result<Vec<u8>, String> {
+        if !confirmed {
+            return Err("PiPedal plugin-preset updates require explicit confirmation".into());
+        }
+        if generation != self.session.generation() {
+            return Err("PiPedal plugin-preset update belongs to an old session generation".into());
+        }
+        let value = serde_json::to_value(&catalog).map_err(|error| error.to_string())?;
+        mackes_pipedal_connector::decode_plugin_presets(Some(value))?;
+        mackes_pipedal_connector::encode_request(&mackes_pipedal_connector::Request {
+            message: "updatePluginPresets".into(),
+            reply_to,
+            body: Some(catalog),
+        })
+        .map_err(|error| error.to_string())
+    }
+
     /// Prepares a confirmed CPU-governor settings request with a bounded scalar body.
     ///
     /// # Errors
