@@ -17,15 +17,16 @@ for argument in ("--headless", "--no-sandbox", "--disable-gpu", "--disable-dev-s
     options.add_argument(argument)
 options.add_argument("--window-size=1440,1200")
 options.binary_location = "/usr/bin/chromium-browser"
+options.set_capability("pageLoadStrategy", "eager")
 driver = webdriver.Chrome(service=Service("/usr/bin/chromedriver"), options=options)
 try:
     driver.get(f"{origin}/routes#browser_smoke=1")
     def lossless_summary(browser):
         text = browser.find_element("id", "inspector-summary").text
-        return text if "read-only" in text else False
+        return text if "view-only" in text else False
 
     summary = WebDriverWait(driver, 45).until(lossless_summary)
-    if "read-only" not in summary or "safe-integer" not in summary:
+    if "view-only" not in summary or "too large" not in summary:
         raise RuntimeError(f"lossless route guard not visible: {summary!r}")
     apply_button = driver.find_element("id", "routing-apply")
     driver.execute_script("arguments[0].click();", apply_button)
