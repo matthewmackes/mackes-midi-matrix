@@ -12373,3 +12373,6 @@ Evidence (2026-09-08): Devices browser gate initially observed a transient daemo
 - **Wi-Fi secret-boundary audit slice (2026-09-10):** Confirmed `setWifiConfigSettings`,
   `setWifiDirectConfigSettings`, and `getWifiDirectConfigSettings` carry password/PIN fields in
   their source models; catalogued them without connector exposure or secret retention.
+- **Tone3000 download boundary slice (2026-09-10):** Confirmed `DownloadModelsFromTone3000` carries
+  PKCE parameters, response authorization URI, and download destination; catalogued it without
+  connector exposure until a dedicated credential-safe design exists.
