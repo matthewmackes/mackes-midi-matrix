@@ -1542,6 +1542,20 @@ document.querySelector('#pipedal-refresh').addEventListener('click', async () =>
     pipedalMappings = Array.isArray(body.mapping_resolution) ? body.mapping_resolution.filter(entry => entry && entry.physical_control_id) : [];
     pipedalCatalogControls = body.catalog && Array.isArray(body.catalog.controls) ? body.catalog.controls : [];
     const pipedalCatalogTargets = body.catalog && Array.isArray(body.catalog.targets) ? body.catalog.targets : [];
+    pipedalInstanceId.replaceChildren(new Option('Choose a plugin item', ''));
+    pipedalRepairPlugin.replaceChildren(new Option('Choose a plugin', ''));
+    pipedalRepairSymbol.replaceChildren(new Option('Choose a parameter', ''));
+    pipedalCatalogTargets.forEach(target => {
+      const instanceId = target?.instance_id ?? target?.instanceId;
+      if (Number.isInteger(instanceId)) {
+        pipedalInstanceId.add(new Option(target.name || `Plugin item ${instanceId}`, String(instanceId)));
+        if (target.uri) pipedalRepairPlugin.add(new Option(target.name || target.uri, target.uri));
+      }
+    });
+    pipedalCatalogControls.forEach(control => {
+      const symbol = control?.symbol;
+      if (symbol) pipedalRepairSymbol.add(new Option(control.label || symbol, symbol));
+    });
     pipedalMappingChoice.replaceChildren(new Option('Choose a persisted mapping', ''));
     for (const entry of pipedalMappings) {
       const label = `${entry.physical_control_id} → ${entry.symbol || 'parameter'} (${entry.status || 'unknown'})`;

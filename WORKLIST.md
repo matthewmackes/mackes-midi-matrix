@@ -11167,6 +11167,10 @@ Execution board: `docs/worklist-execution-board.md`.
   control, channel, and destination fields with named selectors and a bounded value slider; system
   status cards now summarize nested values as readable availability/counts. The remaining PiPedal
   repair/preset prompts and full graphical diagnostics/recovery flows remain open.
+- **Implementation checkpoint (2026-09-10, follow-up):** Replaced PiPedal repair plugin URI,
+  parameter symbol, and instance ID text inputs with named selectors populated from the authoritative
+  catalog and plugin controls. Technical values remain daemon-bound while the normal workflow is
+  graphical; broader health timelines and recovery actions remain open.
 
 #### [ ] W175 — Version graphical capability, draft, and renderer contracts
 

@@ -59,9 +59,9 @@
         <button id="pipedal-refresh" type="button">Refresh PiPedal catalog</button>
         <label>PiPedal operation <select id="pipedal-operation-choice"><option>Snapshot</option><option>Apply</option><option>Repair</option><option>Undo</option></select></label>
         <label>Persisted mapping <select id="pipedal-mapping-choice"><option value="">Refresh catalog first</option></select></label>
-        <label>Repair plugin URI <input id="pipedal-repair-plugin" maxlength="512" placeholder="Only for Repair"></label>
-        <label>Repair parameter symbol <input id="pipedal-repair-symbol" maxlength="256" placeholder="Only for Repair"></label>
-        <label>Instance ID <input id="pipedal-instance-id" maxlength="128" placeholder="plugin-instance"></label>
+        <label>Repair plugin <select id="pipedal-repair-plugin"><option value="">Choose a plugin</option></select></label>
+        <label>Repair parameter <select id="pipedal-repair-symbol"><option value="">Choose a parameter</option></select></label>
+        <label>Plugin item <select id="pipedal-instance-id"><option value="">Choose a plugin item</option></select></label>
         <label>Control-domain value <input id="pipedal-value" type="number" step="any" value="0"></label>
         <label><input id="pipedal-confirm" type="checkbox"> Confirm external change</label>
         <button id="pipedal-operation" type="button">Run PiPedal operation</button>
