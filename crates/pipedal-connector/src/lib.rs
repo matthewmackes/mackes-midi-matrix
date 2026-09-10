@@ -388,6 +388,8 @@ pub enum Operation {
     SaveBankAs,
     /// Rename a preset item.
     RenamePresetItem,
+    /// Copy a preset item.
+    CopyPreset,
     /// Save the current preset.
     SaveCurrentPreset,
     /// Save the current pedalboard as a new preset.
@@ -479,6 +481,7 @@ impl Operation {
             Self::OpenBank,
             Self::SaveBankAs,
             Self::RenamePresetItem,
+            Self::CopyPreset,
             Self::SaveCurrentPreset,
             Self::SaveCurrentPresetAs,
             Self::SavePluginPresetAs,
@@ -543,6 +546,7 @@ impl Operation {
             Self::OpenBank => "openBank",
             Self::SaveBankAs => "saveBankAs",
             Self::RenamePresetItem => "renamePresetItem",
+            Self::CopyPreset => "copyPreset",
             Self::SaveCurrentPreset => "saveCurrentPreset",
             Self::SaveCurrentPresetAs => "saveCurrentPresetAs",
             Self::SavePluginPresetAs => "savePluginPresetAs",
@@ -600,6 +604,7 @@ impl Operation {
                 | Self::OpenBank
                 | Self::SaveBankAs
                 | Self::RenamePresetItem
+                | Self::CopyPreset
                 | Self::SaveCurrentPreset
                 | Self::SaveCurrentPresetAs
                 | Self::SavePluginPresetAs
@@ -688,6 +693,7 @@ impl Operation {
             Self::OpenBank => "presets",
             Self::SaveBankAs => "presets",
             Self::RenamePresetItem => "presets",
+            Self::CopyPreset => "presets",
             Self::GetJackServerSettings | Self::GetGovernorSettings => "diagnostics",
             Self::GetShowStatusMonitor => "monitoring",
             Self::GetWifiRegulatoryDomains => "diagnostics",
@@ -881,6 +887,25 @@ pub struct RenamePresetItem {
     pub client_id: i64,
     pub instance_id: i64,
     pub name: String,
+}
+
+/// Source-backed preset copy payload.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CopyPreset {
+    pub client_id: i64,
+    pub from_id: i64,
+    pub to_id: i64,
+}
+
+impl CopyPreset {
+    /// Validate source identities and reject self-copy.
+    pub fn validate(&self) -> Result<(), String> {
+        if self.client_id < 0 || self.from_id < 0 || self.to_id < 0 || self.from_id == self.to_id {
+            return Err("PiPedal preset copy identities are invalid".into());
+        }
+        Ok(())
+    }
 }
 
 impl RenamePresetItem {
@@ -2764,7 +2789,7 @@ mod tests {
                 assert!(!operation.is_read_only());
             }
         }
-        assert_eq!(Operation::all().len(), 57);
+        assert_eq!(Operation::all().len(), 58);
         assert!(Operation::all().iter().all(|operation| !operation.wire_name().is_empty()));
         assert_eq!(serde_json::to_string(&Operation::SetControl).expect("json"), "\"setControl\"");
     }

@@ -1676,6 +1676,33 @@ impl Worker {
         .map_err(|error| error.to_string())
     }
 
+    /// Prepares a confirmed, generation-checked preset copy.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when confirmation, generation, payload validation, or encoding fails.
+    pub fn prepare_copy_preset(
+        &self,
+        generation: u64,
+        request: mackes_pipedal_connector::CopyPreset,
+        reply_to: Option<u64>,
+        confirmed: bool,
+    ) -> Result<Vec<u8>, String> {
+        if !confirmed {
+            return Err("PiPedal preset copies require explicit confirmation".into());
+        }
+        if generation != self.session.generation() {
+            return Err("PiPedal preset copy belongs to an old session generation".into());
+        }
+        request.validate()?;
+        mackes_pipedal_connector::encode_request(&mackes_pipedal_connector::Request {
+            message: "copyPreset".into(),
+            reply_to,
+            body: Some(request),
+        })
+        .map_err(|error| error.to_string())
+    }
+
     /// Prepares a confirmed, generation-checked next-bank command.
     ///
     /// # Errors

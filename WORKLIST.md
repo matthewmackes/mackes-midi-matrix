@@ -12285,3 +12285,6 @@ Evidence (2026-09-08): Devices browser gate initially observed a transient daemo
 - **Preset-rename write slice (2026-09-10):** Added the source-registered `renamePresetItem`
   payload with confirmed, generation-checked, bounded client/instance identity and name validation.
   Daemon/browser and installed qualification remain pending W150.
+- **Preset-copy write slice (2026-09-10):** Added the source-registered `copyPreset` payload with
+  confirmed, generation-checked, bounded distinct source/target identity validation. Daemon/browser
+  and installed qualification remain pending W150.
