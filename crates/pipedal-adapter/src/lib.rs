@@ -252,6 +252,7 @@ pub struct Worker {
     update_status: Option<mackes_pipedal_connector::UpdateStatus>,
     known_wifi_networks: Vec<String>,
     image_list: Vec<String>,
+    file_list: Option<serde_json::Value>,
     wifi_channels: Vec<mackes_pipedal_connector::WifiChannel>,
     alsa_devices: Vec<mackes_pipedal_connector::AlsaDeviceInfo>,
     jack_status: Option<mackes_pipedal_connector::JackHostStatus>,
@@ -298,6 +299,7 @@ impl Worker {
             update_status: None,
             known_wifi_networks: Vec::new(),
             image_list: Vec::new(),
+            file_list: None,
             wifi_channels: Vec::new(),
             alsa_devices: Vec::new(),
             jack_status: None,
@@ -368,6 +370,7 @@ impl Worker {
                     self.update_status = None;
                     self.known_wifi_networks.clear();
                     self.image_list.clear();
+                    self.file_list = None;
                     self.wifi_channels.clear();
                     self.alsa_devices.clear();
                     self.jack_status = None;
@@ -584,6 +587,13 @@ impl Worker {
                     .map_err(|_| TransportError::Protocol)?;
                 Ok(())
             }
+            "requestFileList2" => {
+                self.file_list = Some(
+                    mackes_pipedal_connector::decode_file_list(body)
+                        .map_err(|_| TransportError::Protocol)?,
+                );
+                Ok(())
+            }
             "getWifiChannels" => {
                 self.wifi_channels = mackes_pipedal_connector::decode_wifi_channels(body)
                     .map_err(|_| TransportError::Protocol)?;
@@ -772,6 +782,12 @@ impl Worker {
     #[must_use]
     pub fn image_list(&self) -> &[String] {
         &self.image_list
+    }
+
+    /// Last validated source-shaped v2 file browser response.
+    #[must_use]
+    pub const fn file_list(&self) -> Option<&serde_json::Value> {
+        self.file_list.as_ref()
     }
 
     /// Last validated Wi-Fi channel selectors.
@@ -2661,6 +2677,36 @@ impl Worker {
     }
 
     /// Prepares a generation-checked, read-only known-Wi-Fi-networks query.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the requested generation is stale or encoding fails.
+    /// Prepares a generation-checked, bounded v2 file-browser query.
+    pub fn prepare_request_file_list2(
+        &self,
+        generation: u64,
+        request: mackes_pipedal_connector::FileListRequest,
+        reply_to: Option<u64>,
+    ) -> Result<Vec<u8>, String> {
+        if generation != self.session.generation() {
+            return Err("PiPedal file-list query belongs to an old session generation".into());
+        }
+        if request.relative_path.len() > 1024
+            || request.relative_path.contains("..")
+            || serde_json::to_vec(&request.file_property)
+                .map_or(true, |bytes| bytes.len() > 16 * 1024)
+        {
+            return Err("PiPedal file-list query is invalid or excessive".into());
+        }
+        mackes_pipedal_connector::encode_request(&mackes_pipedal_connector::Request {
+            message: "requestFileList2".into(),
+            reply_to,
+            body: Some(request),
+        })
+        .map_err(|error| error.to_string())
+    }
+
+    /// Prepares a generation-checked, read-only known-network query.
     ///
     /// # Errors
     ///

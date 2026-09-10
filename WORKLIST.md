@@ -12339,3 +12339,6 @@ Evidence (2026-09-08): Devices browser gate initially observed a transient daemo
 - **Legacy-file-list audit slice (2026-09-10):** Confirmed source-registered `requestFileList` is
   explicitly obsolete and always throws `No longer implemented`; it is catalogued without exposing
   a misleading adapter operation. The live `requestFileList2` path remains pending W150.
+- **File-list v2 slice (2026-09-10):** Added bounded source-shaped `requestFileList2` query encoding,
+  response validation/projection, and reconnect-safe adapter retention. Daemon/browser and installed
+  qualification remain pending W150.

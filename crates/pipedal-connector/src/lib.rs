@@ -57,6 +57,8 @@ pub const MAX_KNOWN_WIFI_NETWORKS: usize = 256;
 pub const MAX_IMAGE_LIST_ENTRIES: usize = 512;
 /// Maximum image filename length accepted from PiPedal.
 pub const MAX_IMAGE_FILENAME_TEXT: usize = 256;
+/// Maximum file-list response entries accepted from PiPedal.
+pub const MAX_FILE_LIST_ENTRIES: usize = 256;
 /// Maximum Wi-Fi channel selectors accepted in one response.
 pub const MAX_WIFI_CHANNELS: usize = 256;
 /// Maximum ALSA devices accepted in one PiPedal response.
@@ -456,6 +458,8 @@ pub enum Operation {
     GetKnownWifiNetworks,
     /// Query the pre-loadable image filename inventory.
     GetImageList,
+    /// Query the source-backed file browser inventory.
+    RequestFileList2,
     /// Load a plugin preset into a runtime instance.
     LoadPluginPreset,
     /// Query JACK server settings.
@@ -551,6 +555,7 @@ impl Operation {
             Self::GetBankIndex,
             Self::GetKnownWifiNetworks,
             Self::GetImageList,
+            Self::RequestFileList2,
             Self::LoadPluginPreset,
             Self::GetJackServerSettings,
             Self::SetJackServerSettings,
@@ -633,6 +638,7 @@ impl Operation {
             Self::GetBankIndex => "getBankIndex",
             Self::GetKnownWifiNetworks => "getKnownWifiNetworks",
             Self::GetImageList => "imageList",
+            Self::RequestFileList2 => "requestFileList2",
             Self::LoadPluginPreset => "loadPluginPreset",
             Self::GetJackServerSettings => "getJackServerSettings",
             Self::SetJackServerSettings => "setJackServerSettings",
@@ -721,6 +727,7 @@ impl Operation {
                 | Self::GetBankIndex
                 | Self::GetKnownWifiNetworks
                 | Self::GetImageList
+                | Self::RequestFileList2
                 | Self::GetJackServerSettings
                 | Self::GetGovernorSettings
                 | Self::GetShowStatusMonitor
@@ -772,6 +779,7 @@ impl Operation {
             Self::GetPresets | Self::GetBankIndex => "presets",
             Self::GetKnownWifiNetworks => "diagnostics",
             Self::GetImageList => "diagnostics",
+            Self::RequestFileList2 => "assets",
             Self::LoadPluginPreset => "presets",
             Self::UpdatePresets => "presets",
             Self::MoveBank => "presets",
@@ -1512,6 +1520,31 @@ pub fn decode_image_list(body: Option<serde_json::Value>) -> Result<Vec<String>,
         return Err("PiPedal image list contains invalid or excessive filenames".into());
     }
     Ok(images)
+}
+
+/// Source-shaped request for PiPedal's v2 file browser.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FileListRequest {
+    pub relative_path: String,
+    pub file_property: serde_json::Value,
+}
+
+/// Decode and bound PiPedal's v2 file-browser response while preserving its UI metadata shape.
+pub fn decode_file_list(body: Option<serde_json::Value>) -> Result<serde_json::Value, String> {
+    let value = body.ok_or_else(|| "PiPedal file list response has no body".to_string())?;
+    let object =
+        value.as_object().ok_or_else(|| "PiPedal file list is not an object".to_string())?;
+    let files = object
+        .get("files")
+        .and_then(serde_json::Value::as_array)
+        .ok_or_else(|| "PiPedal file list has no files array".to_string())?;
+    if files.len() > MAX_FILE_LIST_ENTRIES
+        || serde_json::to_vec(&value).map_or(true, |bytes| bytes.len() > MAX_FRAME_BYTES)
+    {
+        return Err("PiPedal file list is invalid or excessive".into());
+    }
+    Ok(value)
 }
 
 /// One source-backed Wi-Fi channel selector.
@@ -3077,7 +3110,7 @@ mod tests {
                 assert!(!operation.is_read_only());
             }
         }
-        assert_eq!(Operation::all().len(), 75);
+        assert_eq!(Operation::all().len(), 76);
         assert!(Operation::all().iter().all(|operation| !operation.wire_name().is_empty()));
         assert_eq!(serde_json::to_string(&Operation::SetControl).expect("json"), "\"setControl\"");
     }
