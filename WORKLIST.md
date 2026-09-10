@@ -12324,3 +12324,6 @@ Evidence (2026-09-08): Devices browser gate initially observed a transient daemo
 - **Patch-property query slice (2026-09-10):** Added the source-registered `getPatchProperty`
   bounded instance/URI query payload and generation-checked adapter encoding. Raw asynchronous
   response projection remains explicitly pending W150.
+- **Port-monitor write slice (2026-09-10):** Added the source-registered `monitorPort` payload with
+  confirmed, generation-checked identity/rate bounds. Event readback and daemon/browser/installed
+  qualification remain pending W150.
