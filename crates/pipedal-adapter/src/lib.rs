@@ -248,6 +248,7 @@ pub struct Worker {
     has_wifi: Option<bool>,
     update_status: Option<mackes_pipedal_connector::UpdateStatus>,
     known_wifi_networks: Vec<String>,
+    wifi_channels: Vec<mackes_pipedal_connector::WifiChannel>,
     wifi_regulatory_domains: std::collections::BTreeMap<String, String>,
     system_midi_bindings: Vec<mackes_pipedal_connector::MidiBinding>,
     version: Option<mackes_pipedal_connector::PiPedalVersion>,
@@ -283,6 +284,7 @@ impl Worker {
             has_wifi: None,
             update_status: None,
             known_wifi_networks: Vec::new(),
+            wifi_channels: Vec::new(),
             wifi_regulatory_domains: std::collections::BTreeMap::new(),
             system_midi_bindings: Vec::new(),
             version: None,
@@ -342,6 +344,7 @@ impl Worker {
                     self.has_wifi = None;
                     self.update_status = None;
                     self.known_wifi_networks.clear();
+                    self.wifi_channels.clear();
                     self.wifi_regulatory_domains.clear();
                     self.system_midi_bindings.clear();
                     self.version = None;
@@ -525,6 +528,11 @@ impl Worker {
                         .map_err(|_| TransportError::Protocol)?;
                 Ok(())
             }
+            "getWifiChannels" => {
+                self.wifi_channels = mackes_pipedal_connector::decode_wifi_channels(body)
+                    .map_err(|_| TransportError::Protocol)?;
+                Ok(())
+            }
             "getWifiRegulatoryDomains" => {
                 self.wifi_regulatory_domains =
                     mackes_pipedal_connector::decode_wifi_regulatory_domains(body)
@@ -663,6 +671,12 @@ impl Worker {
     #[must_use]
     pub fn known_wifi_networks(&self) -> &[String] {
         &self.known_wifi_networks
+    }
+
+    /// Last validated Wi-Fi channel selectors.
+    #[must_use]
+    pub fn wifi_channels(&self) -> &[mackes_pipedal_connector::WifiChannel] {
+        &self.wifi_channels
     }
 
     /// Last validated Wi-Fi regulatory-domain labels.

@@ -53,6 +53,8 @@ pub const MAX_GOVERNOR_TEXT: usize = 64;
 pub const MAX_WIFI_REGULATORY_DOMAINS: usize = 256;
 /// Maximum known Wi-Fi network names retained from one PiPedal response.
 pub const MAX_KNOWN_WIFI_NETWORKS: usize = 256;
+/// Maximum Wi-Fi channel selectors accepted in one response.
+pub const MAX_WIFI_CHANNELS: usize = 256;
 /// Maximum system MIDI bindings accepted in one PiPedal update.
 pub const MAX_SYSTEM_MIDI_BINDINGS: usize = 128;
 /// Maximum requests waiting for the PiPedal transport worker.
@@ -1024,6 +1026,30 @@ pub fn decode_known_wifi_networks(body: Option<serde_json::Value>) -> Result<Vec
         return Err("PiPedal known Wi-Fi networks are invalid or excessive".into());
     }
     Ok(networks)
+}
+
+/// One source-backed Wi-Fi channel selector.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WifiChannel {
+    pub channel_id: String,
+    pub channel_name: String,
+}
+
+/// Decode PiPedal's bounded Wi-Fi channel selector array.
+pub fn decode_wifi_channels(body: Option<serde_json::Value>) -> Result<Vec<WifiChannel>, String> {
+    let channels: Vec<WifiChannel> = decode_body(body)?;
+    if channels.len() > MAX_WIFI_CHANNELS
+        || channels.iter().any(|channel| {
+            channel.channel_id.is_empty()
+                || channel.channel_id.len() > 16
+                || channel.channel_name.is_empty()
+                || channel.channel_name.len() > 128
+        })
+    {
+        return Err("PiPedal Wi-Fi channels are invalid or excessive".into());
+    }
+    Ok(channels)
 }
 
 /// Validate a URI-to-favorite map before sending PiPedal's `setFavorites`.

@@ -5311,6 +5311,11 @@ tests, strict Clippy, architecture/worklist policy, and the complete release gat
   for the source-backed `getKnownWifiNetworks` string array, with reconnect clearing and automatic
   startup refresh. The source reply-name mismatch remains documented; daemon/browser and installed
   qualification remain pending W150.
+- **Wi-Fi-channel readback slice (2026-09-10):** Added the source-backed
+  `{channelId, channelName}` response decoder with bounded identifiers/labels, adapter session
+  retention, and reconnect clearing for on-demand country-scoped `getWifiChannels` queries. The
+  audit now records the typed boundary; daemon/browser and installed qualification remain pending
+  W150.
 - **Connector-design synchronization (2026-09-09):** The PiPedal connector handoff now records
   that validated version metadata is session-scoped diagnostic readback, cleared on reconnect and
   never sufficient to authorize version-dependent writes. Documentation, worklist, and diff checks
