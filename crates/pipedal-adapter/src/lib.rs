@@ -1643,6 +1643,55 @@ impl Worker {
         .map_err(|error| error.to_string())
     }
 
+    /// Prepares a confirmed, generation-checked next-preset command.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when confirmation, generation, or encoding fails.
+    pub fn prepare_next_preset(
+        &self,
+        generation: u64,
+        reply_to: Option<u64>,
+        confirmed: bool,
+    ) -> Result<Vec<u8>, String> {
+        self.prepare_preset_navigation(generation, reply_to, confirmed, "nextPreset")
+    }
+
+    /// Prepares a confirmed, generation-checked previous-preset command.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when confirmation, generation, or encoding fails.
+    pub fn prepare_previous_preset(
+        &self,
+        generation: u64,
+        reply_to: Option<u64>,
+        confirmed: bool,
+    ) -> Result<Vec<u8>, String> {
+        self.prepare_preset_navigation(generation, reply_to, confirmed, "previousPreset")
+    }
+
+    fn prepare_preset_navigation(
+        &self,
+        generation: u64,
+        reply_to: Option<u64>,
+        confirmed: bool,
+        message: &'static str,
+    ) -> Result<Vec<u8>, String> {
+        if !confirmed {
+            return Err("PiPedal preset navigation requires explicit confirmation".into());
+        }
+        if generation != self.session.generation() {
+            return Err("PiPedal preset navigation belongs to an old session generation".into());
+        }
+        mackes_pipedal_connector::encode_request(&mackes_pipedal_connector::Request::<()> {
+            message: message.into(),
+            reply_to,
+            body: None,
+        })
+        .map_err(|error| error.to_string())
+    }
+
     /// Prepares a confirmed, generation-checked current-preset load request.
     ///
     /// # Errors
