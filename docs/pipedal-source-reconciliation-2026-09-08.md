@@ -24,7 +24,7 @@ before changing the connector boundary; do not infer unsupported operations from
 | Pedalboard and parameter inspector | 2 |
 | Presets and snapshots | 19 |
 
-The installed catalog currently qualifies all 42 connector operation families. The 62 pending
+The installed catalog currently qualifies all 42 connector operation families. The 58 pending
 rows are not silently represented as implemented features; each requires source-level payload,
 event, error, and persistence qualification before promotion. Firebox is removed from active
 scope; historical research remains governed separately.

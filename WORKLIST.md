@@ -5292,6 +5292,9 @@ tests, strict Clippy, architecture/worklist policy, and the complete release gat
   `docs/pipedal-source-reconciliation-2026-09-08.md` with the governed audit after the operation
   ledger updates: pending W150 registrations are 58, with 3 session/preferences and 2 pedalboard
   rows. No operation was promoted by count alone; the audit guard remains authoritative.
+- **Source-reconciliation prose repair (2026-09-10):** Corrected the explanatory text in the
+  reconciliation artifact to match its already-correct 58-row table, eliminating contradictory
+  historical count text. Audit, worklist, and diff checks pass.
 - **Connector-design synchronization (2026-09-09):** The PiPedal connector handoff now records
   that validated version metadata is session-scoped diagnostic readback, cleared on reconnect and
   never sufficient to authorize version-dependent writes. Documentation, worklist, and diff checks
