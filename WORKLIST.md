@@ -11129,6 +11129,10 @@ Execution board: `docs/worklist-execution-board.md`.
   `device_renderer.js`, and added that asset to the installed browser smoke hash set. Rebuilt and
   reinstalled the local release; browser smoke passed with the renderer asset present at the
   configured host. `cargo test -p mackes-web` now passes 56/56.
+- **Graphical inventory checkpoint (2026-09-10):** Added
+  `scripts/browser-graphical-inventory-smoke.py` and integrated it into installed qualification;
+  the configured host passed with 32 live device cards and all 7 researched feature cards containing
+  graphical SVG representations.
 
 #### [>] W172 — Replace mapping and routing editors with visual builders
 
@@ -11213,6 +11217,9 @@ Execution board: `docs/worklist-execution-board.md`.
 - **Qualification checkpoint (2026-09-10):** Installed accessibility interaction passed with 56
   graphical Novation controls and 151 named accessibility buttons; mobile overflow passed at 500 CSS
   pixels. Broader novice walkthroughs, themes/zoom, and full device coverage remain open.
+- **Graphical inventory checkpoint (2026-09-10):** The installed graphical inventory fixture passed
+  for 32 live cards and 7 researched feature cards, with no text-only card detected. Full novice
+  walkthrough and non-color state qualification remain open.
 
 #### [ ] W177 — Install and close the graphical studio release
 
