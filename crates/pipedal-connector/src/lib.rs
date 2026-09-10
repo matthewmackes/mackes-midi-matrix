@@ -416,6 +416,8 @@ pub enum Operation {
     GetPatchProperty,
     /// Monitor a plugin port.
     MonitorPort,
+    /// Remove a plugin port monitor.
+    UnmonitorPort,
     /// Save the current preset.
     SaveCurrentPreset,
     /// Save the current pedalboard as a new preset.
@@ -521,6 +523,7 @@ impl Operation {
             Self::SetPatchProperty,
             Self::GetPatchProperty,
             Self::MonitorPort,
+            Self::UnmonitorPort,
             Self::SaveCurrentPreset,
             Self::SaveCurrentPresetAs,
             Self::SavePluginPresetAs,
@@ -599,6 +602,7 @@ impl Operation {
             Self::SetPatchProperty => "setPatchProperty",
             Self::GetPatchProperty => "getPatchProperty",
             Self::MonitorPort => "monitorPort",
+            Self::UnmonitorPort => "unmonitorPort",
             Self::SaveCurrentPreset => "saveCurrentPreset",
             Self::SaveCurrentPresetAs => "saveCurrentPresetAs",
             Self::SavePluginPresetAs => "savePluginPresetAs",
@@ -676,6 +680,7 @@ impl Operation {
                 | Self::ForceUpdateCheck
                 | Self::SetPatchProperty
                 | Self::MonitorPort
+                | Self::UnmonitorPort
                 | Self::UpdatePluginPresets
                 | Self::Restart
                 | Self::Shutdown
@@ -772,6 +777,7 @@ impl Operation {
             Self::SetPatchProperty => "pedalboard",
             Self::GetPatchProperty => "pedalboard",
             Self::MonitorPort => "monitoring",
+            Self::UnmonitorPort => "monitoring",
             Self::GetJackServerSettings | Self::GetGovernorSettings => "diagnostics",
             Self::GetShowStatusMonitor => "monitoring",
             Self::GetWifiRegulatoryDomains => "diagnostics",
@@ -3023,7 +3029,7 @@ mod tests {
                 assert!(!operation.is_read_only());
             }
         }
-        assert_eq!(Operation::all().len(), 71);
+        assert_eq!(Operation::all().len(), 72);
         assert!(Operation::all().iter().all(|operation| !operation.wire_name().is_empty()));
         assert_eq!(serde_json::to_string(&Operation::SetControl).expect("json"), "\"setControl\"");
     }

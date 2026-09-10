@@ -1993,6 +1993,35 @@ impl Worker {
         .map_err(|error| error.to_string())
     }
 
+    /// Prepares a confirmed, generation-checked port-monitor removal.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when confirmation, generation, identity validation, or encoding fails.
+    pub fn prepare_unmonitor_port(
+        &self,
+        generation: u64,
+        subscription_handle: i64,
+        reply_to: Option<u64>,
+        confirmed: bool,
+    ) -> Result<Vec<u8>, String> {
+        if !confirmed {
+            return Err("PiPedal port-monitor removal requires explicit confirmation".into());
+        }
+        if generation != self.session.generation() {
+            return Err("PiPedal port-monitor removal belongs to an old session generation".into());
+        }
+        if subscription_handle < 0 {
+            return Err("PiPedal monitor subscription identity is invalid".into());
+        }
+        mackes_pipedal_connector::encode_request(&mackes_pipedal_connector::Request {
+            message: "unmonitorPort".into(),
+            reply_to,
+            body: Some(subscription_handle),
+        })
+        .map_err(|error| error.to_string())
+    }
+
     /// Prepares a confirmed, generation-checked onboarding-state change.
     ///
     /// # Errors

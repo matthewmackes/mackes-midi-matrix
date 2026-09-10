@@ -170,7 +170,7 @@ user-facing workflow without needing an independent button; require a documented
 | setPedalboardItemTitle | catalogued | Pedalboard and parameter inspector | pending W150 |
 | getPatchProperty | catalogued | Pedalboard and parameter inspector | bounded raw-property query payload and adapter boundary implemented; daemon/browser/installed qualification pending W150 |
 | monitorPort | catalogued | Monitoring and MIDI | confirmed bounded adapter write implemented; event readback and daemon/browser/installed qualification pending W150 |
-| unmonitorPort | missing | Monitoring and MIDI | pending W150 |
+| unmonitorPort | catalogued | Monitoring and MIDI | confirmed bounded adapter write implemented; event readback and daemon/browser/installed qualification pending W150 |
 | addVuSubscription | missing | Monitoring and MIDI | pending W150 |
 | removeVuSubscription | missing | Monitoring and MIDI | pending W150 |
 | imageList | missing | Device assets/library | pending W150 |

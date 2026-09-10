@@ -12327,3 +12327,6 @@ Evidence (2026-09-08): Devices browser gate initially observed a transient daemo
 - **Port-monitor write slice (2026-09-10):** Added the source-registered `monitorPort` payload with
   confirmed, generation-checked identity/rate bounds. Event readback and daemon/browser/installed
   qualification remain pending W150.
+- **Port-monitor removal slice (2026-09-10):** Added the source-registered `unmonitorPort` scalar
+  command with confirmed, generation-checked subscription identity validation. Event readback and
+  daemon/browser/installed qualification remain pending W150.
