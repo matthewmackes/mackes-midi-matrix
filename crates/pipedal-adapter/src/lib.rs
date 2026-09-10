@@ -2731,6 +2731,27 @@ impl Worker {
         .map_err(|error| error.to_string())
     }
 
+    /// Prepares a generation-checked, read-only Tone3000 connectivity query.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the requested generation is stale or encoding fails.
+    pub fn prepare_ping_tone3000_server(
+        &self,
+        generation: u64,
+        reply_to: Option<u64>,
+    ) -> Result<Vec<u8>, String> {
+        if generation != self.session.generation() {
+            return Err("Tone3000 query belongs to an old session generation".into());
+        }
+        mackes_pipedal_connector::encode_request(&mackes_pipedal_connector::Request::<()> {
+            message: "pingTone3000Server".into(),
+            reply_to,
+            body: None,
+        })
+        .map_err(|error| error.to_string())
+    }
+
     fn validate_file_property_path(path: &str) -> Result<(), String> {
         if path.len() > 1024 || path.contains("..") {
             Err("PiPedal file-property path is invalid or excessive".into())

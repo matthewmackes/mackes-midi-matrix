@@ -466,6 +466,8 @@ pub enum Operation {
     CreateNewSampleDirectory,
     /// Rename a file-property sample file.
     RenameFilePropertyFile,
+    /// Check connectivity to the Tone3000 service.
+    PingTone3000Server,
     /// Load a plugin preset into a runtime instance.
     LoadPluginPreset,
     /// Query JACK server settings.
@@ -565,6 +567,7 @@ impl Operation {
             Self::DeleteUserFile,
             Self::CreateNewSampleDirectory,
             Self::RenameFilePropertyFile,
+            Self::PingTone3000Server,
             Self::LoadPluginPreset,
             Self::GetJackServerSettings,
             Self::SetJackServerSettings,
@@ -651,6 +654,7 @@ impl Operation {
             Self::DeleteUserFile => "deleteUserFile",
             Self::CreateNewSampleDirectory => "createNewSampleDirectory",
             Self::RenameFilePropertyFile => "renameFilePropertyFile",
+            Self::PingTone3000Server => "pingTone3000Server",
             Self::LoadPluginPreset => "loadPluginPreset",
             Self::GetJackServerSettings => "getJackServerSettings",
             Self::SetJackServerSettings => "setJackServerSettings",
@@ -740,6 +744,7 @@ impl Operation {
                 | Self::GetKnownWifiNetworks
                 | Self::GetImageList
                 | Self::RequestFileList2
+                | Self::PingTone3000Server
                 | Self::GetJackServerSettings
                 | Self::GetGovernorSettings
                 | Self::GetShowStatusMonitor
@@ -794,6 +799,7 @@ impl Operation {
             Self::RequestFileList2 => "assets",
             Self::DeleteUserFile => "assets",
             Self::CreateNewSampleDirectory | Self::RenameFilePropertyFile => "assets",
+            Self::PingTone3000Server => "assets",
             Self::LoadPluginPreset => "presets",
             Self::UpdatePresets => "presets",
             Self::MoveBank => "presets",
@@ -3141,7 +3147,7 @@ mod tests {
                 assert!(!operation.is_read_only());
             }
         }
-        assert_eq!(Operation::all().len(), 79);
+        assert_eq!(Operation::all().len(), 80);
         assert!(Operation::all().iter().all(|operation| !operation.wire_name().is_empty()));
         assert_eq!(serde_json::to_string(&Operation::SetControl).expect("json"), "\"setControl\"");
     }

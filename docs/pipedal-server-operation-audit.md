@@ -201,7 +201,7 @@ user-facing workflow without needing an independent button; require a documented
 | setChannelRouterSettings | missing | Device session/preferences | pending W150 |
 | DownloadModelsFromTone3000 | missing | Device assets/library | pending W150 |
 | cancelTone3000Download | missing | Device assets/library | pending W150 |
-| pingTone3000Server | missing | Device assets/library | pending W150 |
+| pingTone3000Server | catalogued | Device assets/library | bounded read-only adapter query implemented; asynchronous service qualification pending W150 |
 
 ## Concrete semantic findings
 
