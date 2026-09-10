@@ -380,6 +380,8 @@ pub enum Operation {
     NextPreset,
     /// Return to the previous preset.
     PreviousPreset,
+    /// Rename a preset bank.
+    RenameBank,
     /// Save the current preset.
     SaveCurrentPreset,
     /// Save the current pedalboard as a new preset.
@@ -467,6 +469,7 @@ impl Operation {
             Self::PreviousBank,
             Self::NextPreset,
             Self::PreviousPreset,
+            Self::RenameBank,
             Self::SaveCurrentPreset,
             Self::SaveCurrentPresetAs,
             Self::SavePluginPresetAs,
@@ -527,6 +530,7 @@ impl Operation {
             Self::PreviousBank => "previousBank",
             Self::NextPreset => "nextPreset",
             Self::PreviousPreset => "previousPreset",
+            Self::RenameBank => "renameBank",
             Self::SaveCurrentPreset => "saveCurrentPreset",
             Self::SaveCurrentPresetAs => "saveCurrentPresetAs",
             Self::SavePluginPresetAs => "savePluginPresetAs",
@@ -580,6 +584,7 @@ impl Operation {
                 | Self::PreviousBank
                 | Self::NextPreset
                 | Self::PreviousPreset
+                | Self::RenameBank
                 | Self::SaveCurrentPreset
                 | Self::SaveCurrentPresetAs
                 | Self::SavePluginPresetAs
@@ -664,6 +669,7 @@ impl Operation {
             Self::PreviousBank => "presets",
             Self::NextPreset => "presets",
             Self::PreviousPreset => "presets",
+            Self::RenameBank => "presets",
             Self::GetJackServerSettings | Self::GetGovernorSettings => "diagnostics",
             Self::GetShowStatusMonitor => "monitoring",
             Self::GetWifiRegulatoryDomains => "diagnostics",
@@ -812,6 +818,24 @@ pub struct PresetIndex {
 pub struct FromTo {
     pub from: i64,
     pub to: i64,
+}
+
+/// Source-backed bank rename payload.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RenameBank {
+    pub bank_id: i64,
+    pub new_name: String,
+}
+
+impl RenameBank {
+    /// Validate the bank identity and bounded display name.
+    pub fn validate(&self) -> Result<(), String> {
+        if self.bank_id < 0 || self.new_name.trim().is_empty() || self.new_name.len() > 256 {
+            return Err("PiPedal bank rename is invalid or excessive".into());
+        }
+        Ok(())
+    }
 }
 
 impl FromTo {
@@ -2681,7 +2705,7 @@ mod tests {
                 assert!(!operation.is_read_only());
             }
         }
-        assert_eq!(Operation::all().len(), 53);
+        assert_eq!(Operation::all().len(), 54);
         assert!(Operation::all().iter().all(|operation| !operation.wire_name().is_empty()));
         assert_eq!(serde_json::to_string(&Operation::SetControl).expect("json"), "\"setControl\"");
     }

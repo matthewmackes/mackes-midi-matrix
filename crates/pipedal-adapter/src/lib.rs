@@ -1643,6 +1643,33 @@ impl Worker {
         .map_err(|error| error.to_string())
     }
 
+    /// Prepares a confirmed, generation-checked bank rename.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when confirmation, generation, payload validation, or encoding fails.
+    pub fn prepare_rename_bank(
+        &self,
+        generation: u64,
+        rename: mackes_pipedal_connector::RenameBank,
+        reply_to: Option<u64>,
+        confirmed: bool,
+    ) -> Result<Vec<u8>, String> {
+        if !confirmed {
+            return Err("PiPedal bank renames require explicit confirmation".into());
+        }
+        if generation != self.session.generation() {
+            return Err("PiPedal bank rename belongs to an old session generation".into());
+        }
+        rename.validate()?;
+        mackes_pipedal_connector::encode_request(&mackes_pipedal_connector::Request {
+            message: "renameBank".into(),
+            reply_to,
+            body: Some(rename),
+        })
+        .map_err(|error| error.to_string())
+    }
+
     /// Prepares a confirmed, generation-checked next-preset command.
     ///
     /// # Errors

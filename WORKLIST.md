@@ -12273,3 +12273,6 @@ Evidence (2026-09-08): Devices browser gate initially observed a transient daemo
 - **Preset-navigation write slice (2026-09-10):** Added source-registered `nextPreset` and
   `previousPreset` no-body commands with confirmed, generation-checked adapter encoding. Daemon,
   browser, and installed qualification remain pending W150.
+- **Bank-rename write slice (2026-09-10):** Added the source-registered `renameBank` payload with
+  confirmed, generation-checked, bounded name validation. Daemon/browser and installed
+  qualification remain pending W150.
