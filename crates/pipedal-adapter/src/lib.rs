@@ -253,6 +253,7 @@ pub struct Worker {
     known_wifi_networks: Vec<String>,
     image_list: Vec<String>,
     file_list: Option<serde_json::Value>,
+    tone3000_digest: Option<String>,
     wifi_channels: Vec<mackes_pipedal_connector::WifiChannel>,
     alsa_devices: Vec<mackes_pipedal_connector::AlsaDeviceInfo>,
     jack_status: Option<mackes_pipedal_connector::JackHostStatus>,
@@ -300,6 +301,7 @@ impl Worker {
             known_wifi_networks: Vec::new(),
             image_list: Vec::new(),
             file_list: None,
+            tone3000_digest: None,
             wifi_channels: Vec::new(),
             alsa_devices: Vec::new(),
             jack_status: None,
@@ -371,6 +373,7 @@ impl Worker {
                     self.known_wifi_networks.clear();
                     self.image_list.clear();
                     self.file_list = None;
+                    self.tone3000_digest = None;
                     self.wifi_channels.clear();
                     self.alsa_devices.clear();
                     self.jack_status = None;
@@ -594,6 +597,13 @@ impl Worker {
                 );
                 Ok(())
             }
+            "sha256Base64url" => {
+                self.tone3000_digest = Some(
+                    mackes_pipedal_connector::decode_tone3000_digest(body)
+                        .map_err(|_| TransportError::Protocol)?,
+                );
+                Ok(())
+            }
             "getWifiChannels" => {
                 self.wifi_channels = mackes_pipedal_connector::decode_wifi_channels(body)
                     .map_err(|_| TransportError::Protocol)?;
@@ -788,6 +798,37 @@ impl Worker {
     #[must_use]
     pub const fn file_list(&self) -> Option<&serde_json::Value> {
         self.file_list.as_ref()
+    }
+
+    /// Last validated Tone3000 digest response.
+    #[must_use]
+    pub fn tone3000_digest(&self) -> Option<&str> {
+        self.tone3000_digest.as_deref()
+    }
+
+    /// Prepares a generation-checked Tone3000 digest query.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the generation or input is invalid, or encoding fails.
+    pub fn prepare_sha256_base64url(
+        &self,
+        generation: u64,
+        input: String,
+        reply_to: Option<u64>,
+    ) -> Result<Vec<u8>, String> {
+        if generation != self.session.generation() {
+            return Err("Tone3000 digest belongs to an old session generation".into());
+        }
+        if input.is_empty() || input.len() > 16 * 1024 {
+            return Err("Tone3000 digest input is invalid or excessive".into());
+        }
+        mackes_pipedal_connector::encode_request(&mackes_pipedal_connector::Request {
+            message: "sha256Base64url".into(),
+            reply_to,
+            body: Some(input),
+        })
+        .map_err(|error| error.to_string())
     }
 
     /// Last validated Wi-Fi channel selectors.

@@ -59,6 +59,8 @@ pub const MAX_IMAGE_LIST_ENTRIES: usize = 512;
 pub const MAX_IMAGE_FILENAME_TEXT: usize = 256;
 /// Maximum file-list response entries accepted from PiPedal.
 pub const MAX_FILE_LIST_ENTRIES: usize = 256;
+/// Maximum digest text accepted from the Tone3000 helper.
+pub const MAX_TONE3000_DIGEST_TEXT: usize = 128;
 /// Maximum Wi-Fi channel selectors accepted in one response.
 pub const MAX_WIFI_CHANNELS: usize = 256;
 /// Maximum ALSA devices accepted in one PiPedal response.
@@ -468,6 +470,8 @@ pub enum Operation {
     RenameFilePropertyFile,
     /// Check connectivity to the Tone3000 service.
     PingTone3000Server,
+    /// Calculate a Tone3000-compatible SHA-256 digest.
+    Sha256Base64url,
     /// Load a plugin preset into a runtime instance.
     LoadPluginPreset,
     /// Query JACK server settings.
@@ -568,6 +572,7 @@ impl Operation {
             Self::CreateNewSampleDirectory,
             Self::RenameFilePropertyFile,
             Self::PingTone3000Server,
+            Self::Sha256Base64url,
             Self::LoadPluginPreset,
             Self::GetJackServerSettings,
             Self::SetJackServerSettings,
@@ -655,6 +660,7 @@ impl Operation {
             Self::CreateNewSampleDirectory => "createNewSampleDirectory",
             Self::RenameFilePropertyFile => "renameFilePropertyFile",
             Self::PingTone3000Server => "pingTone3000Server",
+            Self::Sha256Base64url => "sha256Base64url",
             Self::LoadPluginPreset => "loadPluginPreset",
             Self::GetJackServerSettings => "getJackServerSettings",
             Self::SetJackServerSettings => "setJackServerSettings",
@@ -745,6 +751,7 @@ impl Operation {
                 | Self::GetImageList
                 | Self::RequestFileList2
                 | Self::PingTone3000Server
+                | Self::Sha256Base64url
                 | Self::GetJackServerSettings
                 | Self::GetGovernorSettings
                 | Self::GetShowStatusMonitor
@@ -800,6 +807,7 @@ impl Operation {
             Self::DeleteUserFile => "assets",
             Self::CreateNewSampleDirectory | Self::RenameFilePropertyFile => "assets",
             Self::PingTone3000Server => "assets",
+            Self::Sha256Base64url => "assets",
             Self::LoadPluginPreset => "presets",
             Self::UpdatePresets => "presets",
             Self::MoveBank => "presets",
@@ -1540,6 +1548,15 @@ pub fn decode_image_list(body: Option<serde_json::Value>) -> Result<Vec<String>,
         return Err("PiPedal image list contains invalid or excessive filenames".into());
     }
     Ok(images)
+}
+
+/// Decode a bounded scalar Tone3000 digest response.
+pub fn decode_tone3000_digest(body: Option<serde_json::Value>) -> Result<String, String> {
+    let digest: String = decode_body(body)?;
+    if digest.is_empty() || digest.len() > MAX_TONE3000_DIGEST_TEXT {
+        return Err("Tone3000 digest is empty or excessive".into());
+    }
+    Ok(digest)
 }
 
 /// Source-shaped request for PiPedal's v2 file browser.
@@ -3147,7 +3164,7 @@ mod tests {
                 assert!(!operation.is_read_only());
             }
         }
-        assert_eq!(Operation::all().len(), 80);
+        assert_eq!(Operation::all().len(), 81);
         assert!(Operation::all().iter().all(|operation| !operation.wire_name().is_empty()));
         assert_eq!(serde_json::to_string(&Operation::SetControl).expect("json"), "\"setControl\"");
     }

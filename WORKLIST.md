@@ -12353,3 +12353,6 @@ Evidence (2026-09-08): Devices browser gate initially observed a transient daemo
   bounded; installed qualification remains pending W150.
 - **Tone3000 ping slice (2026-09-10):** Added the source-registered `pingTone3000Server` bounded,
   generation-checked read-only adapter query. Asynchronous service qualification remains pending W150.
+- **Tone3000 digest slice (2026-09-10):** Added bounded `sha256Base64url` input encoding and scalar
+  digest readback projection with reconnect-safe adapter retention. Daemon/browser and installed
+  qualification remain pending W150.
