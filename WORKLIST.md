@@ -12315,3 +12315,6 @@ Evidence (2026-09-08): Devices browser gate initially observed a transient daemo
 - **Update-policy write slice (2026-09-10):** Added the source-registered `setUpdatePolicy` scalar
   command with confirmed, generation-checked validation of PiPedal’s four policy ordinals. Daemon,
   browser, and installed qualification remain pending W150.
+- **Forced-update-check write slice (2026-09-10):** Added the source-registered `forceUpdateCheck`
+  no-body command with confirmed, generation-checked adapter encoding. Daemon/browser and
+  installed qualification remain pending W150.
