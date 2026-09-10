@@ -11220,6 +11220,10 @@ Execution board: `docs/worklist-execution-board.md`.
 - **Graphical inventory checkpoint (2026-09-10):** The installed graphical inventory fixture passed
   for 32 live cards and 7 researched feature cards, with no text-only card detected. Full novice
   walkthrough and non-color state qualification remain open.
+- **Novice-surface checkpoint (2026-09-10):** Added
+  `scripts/browser-novice-surface-smoke.py` to installed qualification. It passed against the local
+  host, finding no textarea/pre/code-editor surface and confirming guided selectors for device,
+  control, channel, destination, and PiPedal repair choices alongside graphical studio content.
 
 #### [ ] W177 — Install and close the graphical studio release
 
