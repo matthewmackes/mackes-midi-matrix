@@ -11282,6 +11282,11 @@ Execution board: `docs/worklist-execution-board.md`.
   fixtures, including graphical inventory, renderer registry, PiPedal catalog (3,076 controls / 265
   targets), lifecycle, responsive, accessibility, and lossless-route checks. W176 novice/human sign-off
   and final release artifacts/sign-off remain open before this packet can close.
+- **Aggregate requalification checkpoint (2026-09-10):** The installed host remained `health=ready`
+  and the newly added visual-accessibility and race-hardened assignment fixtures pass independently.
+  A subsequent full rerun was inconclusive because Chromium's long dump-dom capture timed out before
+  producing `devices.html`; this is a harness/environment stability finding, not a product pass claim.
+  The prior all-16 aggregate result remains the latest complete aggregate evidence.
 
 ## 4. Dependency and parallelization map
 
