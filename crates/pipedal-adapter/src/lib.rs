@@ -2022,6 +2022,73 @@ impl Worker {
         .map_err(|error| error.to_string())
     }
 
+    /// Prepares a confirmed, generation-checked VU subscription add.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when confirmation, generation, identity validation, or encoding fails.
+    pub fn prepare_add_vu_subscription(
+        &self,
+        generation: u64,
+        instance_id: i64,
+        reply_to: Option<u64>,
+        confirmed: bool,
+    ) -> Result<Vec<u8>, String> {
+        self.prepare_vu_subscription_command(
+            generation,
+            instance_id,
+            reply_to,
+            confirmed,
+            "addVuSubscription",
+        )
+    }
+
+    /// Prepares a confirmed, generation-checked VU subscription removal.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when confirmation, generation, identity validation, or encoding fails.
+    pub fn prepare_remove_vu_subscription(
+        &self,
+        generation: u64,
+        subscription_handle: i64,
+        reply_to: Option<u64>,
+        confirmed: bool,
+    ) -> Result<Vec<u8>, String> {
+        self.prepare_vu_subscription_command(
+            generation,
+            subscription_handle,
+            reply_to,
+            confirmed,
+            "removeVuSubscription",
+        )
+    }
+
+    fn prepare_vu_subscription_command(
+        &self,
+        generation: u64,
+        handle: i64,
+        reply_to: Option<u64>,
+        confirmed: bool,
+        message: &'static str,
+    ) -> Result<Vec<u8>, String> {
+        if !confirmed {
+            return Err("PiPedal VU subscription changes require explicit confirmation".into());
+        }
+        if generation != self.session.generation() {
+            return Err("PiPedal VU subscription belongs to an old session generation".into());
+        }
+        if handle < 0 {
+            return Err("PiPedal VU subscription identity is invalid".into());
+        }
+        mackes_pipedal_connector::encode_request(&mackes_pipedal_connector::Request {
+            message: message.into(),
+            reply_to,
+            body: Some(handle),
+        })
+        .map_err(|error| error.to_string())
+    }
+
     /// Prepares a confirmed, generation-checked onboarding-state change.
     ///
     /// # Errors

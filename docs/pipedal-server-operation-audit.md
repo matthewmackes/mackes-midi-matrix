@@ -171,8 +171,8 @@ user-facing workflow without needing an independent button; require a documented
 | getPatchProperty | catalogued | Pedalboard and parameter inspector | bounded raw-property query payload and adapter boundary implemented; daemon/browser/installed qualification pending W150 |
 | monitorPort | catalogued | Monitoring and MIDI | confirmed bounded adapter write implemented; event readback and daemon/browser/installed qualification pending W150 |
 | unmonitorPort | catalogued | Monitoring and MIDI | confirmed bounded adapter write implemented; event readback and daemon/browser/installed qualification pending W150 |
-| addVuSubscription | missing | Monitoring and MIDI | pending W150 |
-| removeVuSubscription | missing | Monitoring and MIDI | pending W150 |
+| addVuSubscription | catalogued | Monitoring and MIDI | confirmed bounded adapter write implemented; event readback and daemon/browser/installed qualification pending W150 |
+| removeVuSubscription | catalogued | Monitoring and MIDI | confirmed bounded adapter write implemented; event readback and daemon/browser/installed qualification pending W150 |
 | imageList | missing | Device assets/library | pending W150 |
 | getFavorites | catalogued | Device session/preferences | bounded startup readback and snapshot projection implemented; full browser/installed qualification pending W150 |
 | setFavorites | catalogued | Device session/preferences | source-backed map and event; execution/readback pending W150 |

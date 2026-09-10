@@ -418,6 +418,10 @@ pub enum Operation {
     MonitorPort,
     /// Remove a plugin port monitor.
     UnmonitorPort,
+    /// Add a VU-meter subscription.
+    AddVuSubscription,
+    /// Remove a VU-meter subscription.
+    RemoveVuSubscription,
     /// Save the current preset.
     SaveCurrentPreset,
     /// Save the current pedalboard as a new preset.
@@ -524,6 +528,8 @@ impl Operation {
             Self::GetPatchProperty,
             Self::MonitorPort,
             Self::UnmonitorPort,
+            Self::AddVuSubscription,
+            Self::RemoveVuSubscription,
             Self::SaveCurrentPreset,
             Self::SaveCurrentPresetAs,
             Self::SavePluginPresetAs,
@@ -603,6 +609,8 @@ impl Operation {
             Self::GetPatchProperty => "getPatchProperty",
             Self::MonitorPort => "monitorPort",
             Self::UnmonitorPort => "unmonitorPort",
+            Self::AddVuSubscription => "addVuSubscription",
+            Self::RemoveVuSubscription => "removeVuSubscription",
             Self::SaveCurrentPreset => "saveCurrentPreset",
             Self::SaveCurrentPresetAs => "saveCurrentPresetAs",
             Self::SavePluginPresetAs => "savePluginPresetAs",
@@ -681,6 +689,8 @@ impl Operation {
                 | Self::SetPatchProperty
                 | Self::MonitorPort
                 | Self::UnmonitorPort
+                | Self::AddVuSubscription
+                | Self::RemoveVuSubscription
                 | Self::UpdatePluginPresets
                 | Self::Restart
                 | Self::Shutdown
@@ -778,6 +788,8 @@ impl Operation {
             Self::GetPatchProperty => "pedalboard",
             Self::MonitorPort => "monitoring",
             Self::UnmonitorPort => "monitoring",
+            Self::AddVuSubscription => "monitoring",
+            Self::RemoveVuSubscription => "monitoring",
             Self::GetJackServerSettings | Self::GetGovernorSettings => "diagnostics",
             Self::GetShowStatusMonitor => "monitoring",
             Self::GetWifiRegulatoryDomains => "diagnostics",
@@ -3029,7 +3041,7 @@ mod tests {
                 assert!(!operation.is_read_only());
             }
         }
-        assert_eq!(Operation::all().len(), 72);
+        assert_eq!(Operation::all().len(), 74);
         assert!(Operation::all().iter().all(|operation| !operation.wire_name().is_empty()));
         assert_eq!(serde_json::to_string(&Operation::SetControl).expect("json"), "\"setControl\"");
     }

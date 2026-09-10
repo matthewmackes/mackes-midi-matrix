@@ -12330,3 +12330,6 @@ Evidence (2026-09-08): Devices browser gate initially observed a transient daemo
 - **Port-monitor removal slice (2026-09-10):** Added the source-registered `unmonitorPort` scalar
   command with confirmed, generation-checked subscription identity validation. Event readback and
   daemon/browser/installed qualification remain pending W150.
+- **VU-subscription slice (2026-09-10):** Added source-registered `addVuSubscription` and
+  `removeVuSubscription` scalar commands with confirmed, generation-checked identity validation.
+  Event readback and daemon/browser/installed qualification remain pending W150.
