@@ -144,7 +144,7 @@ user-facing workflow without needing an independent button; require a documented
 | currentPedalboard | catalogued | Pedalboard and parameter inspector | bounded readback decoder and adapter projection implemented; full browser/installed qualification pending W150 |
 | plugins | catalogued | Pedalboard and parameter inspector | bounded identity/catalog decoder and adapter projection implemented; full browser/installed qualification pending W150 |
 | pluginClasses | catalogued | Pedalboard and parameter inspector | bounded class-tree decoder and adapter validation implemented; full browser/installed qualification pending W150 |
-| hello | missing | Device session/preferences | pending W150 |
+| hello | catalogued | Device session/preferences | bounded startup handshake and correlated `ehlo` client-id readback already implemented; installed qualification pending W150 |
 | setShowStatusMonitor | catalogued | Monitoring and MIDI | confirmed bounded adapter write implemented; daemon/browser/installed qualification pending W150 |
 | getShowStatusMonitor | catalogued | Monitoring and MIDI | bounded startup readback and adapter projection implemented; daemon/browser/installed qualification pending W150 |
 | version | catalogued | Device session/preferences | bounded session-scoped readback and adapter projection implemented; full installed qualification pending W150 |

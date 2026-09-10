@@ -12348,3 +12348,6 @@ Evidence (2026-09-08): Devices browser gate initially observed a transient daemo
 - **File-property mutation slice (2026-09-10):** Added bounded, generation-checked encoders for
   source-registered `createNewSampleDirectory` and `renameFilePropertyFile`. Daemon/browser and
   installed qualification remain pending W150.
+- **Hello-handshake audit slice (2026-09-10):** Confirmed the source-registered `hello` handshake,
+  correlated `ehlo` client-id response, and session phase transition are already implemented and
+  bounded; installed qualification remains pending W150.
