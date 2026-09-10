@@ -5328,6 +5328,10 @@ tests, strict Clippy, architecture/worklist policy, and the complete release gat
   catalog schema with bounded identities and labels, adapter retention keyed by plugin URI, and
   reconnect clearing for on-demand `getPluginPresets` queries. Daemon/browser and installed
   qualification remain pending W150.
+- **JACK-server-settings readback slice (2026-09-10):** Added the source-backed JACK server
+  configuration schema with bounded device names and nonzero audio parameters, plus adapter
+  retention and reconnect clearing for on-demand `getJackServerSettings` reads. Daemon/browser and
+  installed qualification remain pending W150.
 - **Connector-design synchronization (2026-09-09):** The PiPedal connector handoff now records
   that validated version metadata is session-scoped diagnostic readback, cleared on reconnect and
   never sufficient to authorize version-dependent writes. Documentation, worklist, and diff checks

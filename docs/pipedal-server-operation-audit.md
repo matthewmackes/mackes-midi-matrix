@@ -127,7 +127,7 @@ user-facing workflow without needing an independent button; require a documented
 | setWifiDirectConfigSettings | missing | Device system settings | pending W150 |
 | getWifiDirectConfigSettings | missing | Device system settings | pending W150 |
 | getGovernorSettings | catalogued | Device system settings | bounded startup readback and adapter projection implemented; daemon/browser/installed qualification pending W150 |
-| getJackServerSettings | catalogued | Device system settings | bounded adapter query path implemented; daemon/browser/installed qualification pending W150 |
+| getJackServerSettings | catalogued | Device system settings | bounded response decoder and adapter projection implemented; daemon/browser/installed qualification pending W150 |
 | getBankIndex | catalogued | Presets and snapshots | bounded readback implemented; full browser/installed qualification pending W150 |
 | getJackConfiguration | missing | Device system settings | pending W150 |
 | getJackSettings | missing | Device system settings | pending W150 |

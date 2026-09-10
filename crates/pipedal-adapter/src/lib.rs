@@ -251,6 +251,7 @@ pub struct Worker {
     wifi_channels: Vec<mackes_pipedal_connector::WifiChannel>,
     alsa_devices: Vec<mackes_pipedal_connector::AlsaDeviceInfo>,
     jack_status: Option<mackes_pipedal_connector::JackHostStatus>,
+    jack_server_settings: Option<mackes_pipedal_connector::JackServerSettings>,
     plugin_presets: std::collections::BTreeMap<String, mackes_pipedal_connector::PluginUiPresets>,
     wifi_regulatory_domains: std::collections::BTreeMap<String, String>,
     system_midi_bindings: Vec<mackes_pipedal_connector::MidiBinding>,
@@ -290,6 +291,7 @@ impl Worker {
             wifi_channels: Vec::new(),
             alsa_devices: Vec::new(),
             jack_status: None,
+            jack_server_settings: None,
             plugin_presets: std::collections::BTreeMap::new(),
             wifi_regulatory_domains: std::collections::BTreeMap::new(),
             system_midi_bindings: Vec::new(),
@@ -353,6 +355,7 @@ impl Worker {
                     self.wifi_channels.clear();
                     self.alsa_devices.clear();
                     self.jack_status = None;
+                    self.jack_server_settings = None;
                     self.plugin_presets.clear();
                     self.wifi_regulatory_domains.clear();
                     self.system_midi_bindings.clear();
@@ -554,6 +557,13 @@ impl Worker {
                 );
                 Ok(())
             }
+            "getJackServerSettings" => {
+                self.jack_server_settings = Some(
+                    mackes_pipedal_connector::decode_jack_server_settings(body)
+                        .map_err(|_| TransportError::Protocol)?,
+                );
+                Ok(())
+            }
             "getPluginPresets" => {
                 let catalog = mackes_pipedal_connector::decode_plugin_presets(body)
                     .map_err(|_| TransportError::Protocol)?;
@@ -716,6 +726,14 @@ impl Worker {
     #[must_use]
     pub const fn jack_status(&self) -> Option<&mackes_pipedal_connector::JackHostStatus> {
         self.jack_status.as_ref()
+    }
+
+    /// Last validated JACK server configuration.
+    #[must_use]
+    pub const fn jack_server_settings(
+        &self,
+    ) -> Option<&mackes_pipedal_connector::JackServerSettings> {
+        self.jack_server_settings.as_ref()
     }
 
     /// Last validated plugin-preset catalogs keyed by plugin URI.

@@ -59,6 +59,8 @@ pub const MAX_WIFI_CHANNELS: usize = 256;
 pub const MAX_ALSA_DEVICES: usize = 256;
 /// Maximum JACK status error/governor text length.
 pub const MAX_JACK_STATUS_TEXT: usize = 256;
+/// Maximum device-name text length in JACK server settings.
+pub const MAX_JACK_DEVICE_TEXT: usize = 256;
 /// Maximum system MIDI bindings accepted in one PiPedal update.
 pub const MAX_SYSTEM_MIDI_BINDINGS: usize = 128;
 /// Maximum requests waiting for the PiPedal transport worker.
@@ -1153,6 +1155,53 @@ pub fn decode_jack_status(body: Option<serde_json::Value>) -> Result<JackHostSta
         return Err("PiPedal JACK status is invalid or excessive".into());
     }
     Ok(status)
+}
+
+/// Source-backed JACK server configuration readback.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[allow(clippy::struct_excessive_bools)]
+pub struct JackServerSettings {
+    pub valid: bool,
+    pub is_onboarding: bool,
+    pub reboot_required: bool,
+    pub is_jack_audio: bool,
+    #[serde(default)]
+    pub alsa_device: String,
+    #[serde(default)]
+    pub alsa_input_device: String,
+    #[serde(default)]
+    pub alsa_output_device: String,
+    #[serde(default)]
+    pub alsa_input_device_name: String,
+    #[serde(default)]
+    pub alsa_output_device_name: String,
+    pub sample_rate: u64,
+    pub buffer_size: u32,
+    pub number_of_buffers: u32,
+}
+
+/// Decode and validate JACK server settings.
+pub fn decode_jack_server_settings(
+    body: Option<serde_json::Value>,
+) -> Result<JackServerSettings, String> {
+    let settings: JackServerSettings = decode_body(body)?;
+    let names = [
+        &settings.alsa_device,
+        &settings.alsa_input_device,
+        &settings.alsa_output_device,
+        &settings.alsa_input_device_name,
+        &settings.alsa_output_device_name,
+    ];
+    if (settings.valid
+        && (settings.sample_rate == 0
+            || settings.buffer_size == 0
+            || settings.number_of_buffers == 0))
+        || names.iter().any(|name| name.len() > MAX_JACK_DEVICE_TEXT)
+    {
+        return Err("PiPedal JACK server settings are invalid or excessive".into());
+    }
+    Ok(settings)
 }
 
 /// Validate a URI-to-favorite map before sending PiPedal's `setFavorites`.
@@ -2622,5 +2671,37 @@ mod tests {
         assert!(MonitorPatchProperty { property_uri: String::new(), ..monitor }
             .validate()
             .is_err());
+    }
+
+    #[test]
+    fn jack_server_settings_decode_source_shape_and_invalid_active_audio() {
+        let body = serde_json::json!({
+            "valid": true,
+            "isOnboarding": false,
+            "rebootRequired": false,
+            "isJackAudio": true,
+            "alsaDevice": "",
+            "alsaInputDevice": "hw:1",
+            "alsaOutputDevice": "hw:1",
+            "alsaInputDeviceName": "USB Audio",
+            "alsaOutputDeviceName": "USB Audio",
+            "sampleRate": 48000,
+            "bufferSize": 64,
+            "numberOfBuffers": 3
+        });
+        let settings = decode_jack_server_settings(Some(body)).expect("settings response");
+        assert_eq!(settings.sample_rate, 48_000);
+        assert_eq!(settings.alsa_input_device, "hw:1");
+
+        let invalid = serde_json::json!({
+            "valid": true,
+            "isOnboarding": false,
+            "rebootRequired": false,
+            "isJackAudio": true,
+            "sampleRate": 0,
+            "bufferSize": 64,
+            "numberOfBuffers": 3
+        });
+        assert!(decode_jack_server_settings(Some(invalid)).is_err());
     }
 }
