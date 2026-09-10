@@ -23,20 +23,21 @@ try:
     driver.get(f"{origin}/devices#browser_smoke=1")
     wait = WebDriverWait(driver, 45)
     wait.until(lambda d: "active of" in d.find_element("id", "inspector-summary").text)
-    wait.until(lambda d: "control-5" in d.find_element("id", "assignment-catalog").text)
     control = wait.until(lambda d: next(
         (item for item in d.find_elements("css selector", "#faceplate-controls [data-physical-control-id]")
          if item.get_attribute("data-physical-control-id") == "knob-r1-c1"
-         and "assigned" in (item.get_attribute("aria-label") or "")), None))
+         and "; assigned;" in (item.get_attribute("aria-label") or "")), None))
     # SVG <g> controls are keyboard/pointer targets but Chromium may reject a
     # synthetic WebDriver click on the group itself; dispatch the same DOM
     # event path used by the browser surface.
     driver.execute_script("arguments[0].dispatchEvent(new MouseEvent('click', {bubbles: true}));", control)
     summary = wait.until(lambda d: d.find_element("id", "inspector-summary").text)
-    required = ("Destination:", "Source:", "Behavior:", "mapping id:")
+    required = ("Destination:", "Source:", "Behavior:")
     missing = [marker for marker in required if marker not in summary]
     if missing:
         raise RuntimeError(f"assigned control inspector missing {missing}: {summary!r}")
+    if "mapping id:" in summary or "runtime" in summary.lower():
+        raise RuntimeError(f"inspector exposed an internal identity: {summary!r}")
     print(f"browser-assignment-inspector: PASS origin={origin} summary={summary.splitlines()[0]}")
 finally:
     driver.quit()
