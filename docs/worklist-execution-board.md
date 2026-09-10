@@ -8,8 +8,8 @@ interface guard, web asset budget (37,951 compressed bytes), worklist validation
 and `git diff --check` all pass. Installed browser smoke passed against
 `http://172.20.222.222:8081` after release rebuild/reinstall, including deep links, 320/768 responsive
 captures, light theme, GUI surface checks, and installed asset hashes. current worklist state: 147 complete, 13 in progress, 1 not started (161 total; measured 2026-09-10).
-The installed graphical-inventory and novice-surface fixtures pass (32 live device cards, 7 researched
-feature cards, no visible code editor); generation ordering and visual draft-preservation fixtures also
+The installed graphical-inventory, renderer-registry, and novice-surface fixtures pass (32 live device
+cards, 7 researched feature cards, all nine governed renderer keys, no visible code editor); generation ordering and visual draft-preservation fixtures also
 pass. The aggregate gate currently stops at PiPedal catalog because the authoritative live catalog reports
 zero controls and zero targets; this is recorded as an environment/device-state dependency and is not
 being masked by the release checks.

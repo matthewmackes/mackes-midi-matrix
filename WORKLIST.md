@@ -11108,6 +11108,10 @@ Execution board: `docs/worklist-execution-board.md`.
   Eventide MicroPitch, and Lexicon Reflex now render graphical device representations even when the
   device is unavailable, so researched inventory is no longer text-only. Faithful model geometry,
   control-specific interaction, and qualification fixtures remain open.
+- **Renderer-registry checkpoint (2026-09-10):** Added
+  `scripts/browser-renderer-registry-smoke.py` to verify all nine governed renderer keys resolve
+  exactly in the installed browser, including SVG output for unknown endpoints through the generic
+  fallback. Model-specific control geometry and native qualification remain open.
 
 #### [>] W171 — Deliver processor, interface, and virtual endpoint graphics
 
@@ -11133,6 +11137,9 @@ Execution board: `docs/worklist-execution-board.md`.
   `scripts/browser-graphical-inventory-smoke.py` and integrated it into installed qualification;
   the configured host passed with 32 live device cards and all 7 researched feature cards containing
   graphical SVG representations.
+- **Renderer-registry checkpoint (2026-09-10):** The installed registry fixture now exercises the
+  exact nine-key family matrix and confirms every family, including the unknown fallback, produces a
+  graphical SVG representation.
 
 #### [>] W172 — Replace mapping and routing editors with visual builders
 
