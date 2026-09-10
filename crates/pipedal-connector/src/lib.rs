@@ -490,6 +490,8 @@ pub enum Operation {
     MoveAudioFile,
     /// Copy a file-property file.
     CopyFilePropertyFile,
+    /// Query the file-property directory tree.
+    GetFilePropertyDirectoryTree,
     /// Create Tone3000 PKCE parameters.
     MakeTone3000Pkce,
     /// Cancel an active Tone3000 download.
@@ -602,6 +604,7 @@ impl Operation {
             Self::SetChannelRouterSettings,
             Self::MoveAudioFile,
             Self::CopyFilePropertyFile,
+            Self::GetFilePropertyDirectoryTree,
             Self::MakeTone3000Pkce,
             Self::CancelTone3000Download,
             Self::LoadPluginPreset,
@@ -699,6 +702,7 @@ impl Operation {
             Self::SetChannelRouterSettings => "setChannelRouterSettings",
             Self::MoveAudioFile => "moveAudioFile",
             Self::CopyFilePropertyFile => "copyFilePropertyFile",
+            Self::GetFilePropertyDirectoryTree => "getFilePropertyDirectoryTree",
             Self::MakeTone3000Pkce => "makeTone3000Pkce",
             Self::CancelTone3000Download => "cancelTone3000Download",
             Self::LoadPluginPreset => "loadPluginPreset",
@@ -752,6 +756,7 @@ impl Operation {
                 | Self::SetChannelRouterSettings
                 | Self::MoveAudioFile
                 | Self::CopyFilePropertyFile
+                | Self::GetFilePropertyDirectoryTree
                 | Self::CancelTone3000Download
                 | Self::DeletePresetItems
                 | Self::SetOnboarding
@@ -855,6 +860,7 @@ impl Operation {
             Self::GetChannelRouterSettings | Self::SetChannelRouterSettings => "preferences",
             Self::MoveAudioFile => "assets",
             Self::CopyFilePropertyFile => "assets",
+            Self::GetFilePropertyDirectoryTree => "assets",
             Self::MakeTone3000Pkce => "assets",
             Self::CancelTone3000Download => "assets",
             Self::RequestFileList2 => "assets",
@@ -1660,6 +1666,27 @@ pub struct CopyFilePropertyRequest {
     pub new_relative_path: String,
     pub ui_file_property: serde_json::Value,
     pub overwrite: bool,
+}
+
+/// Source-shaped file-property directory-tree query.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FilePropertyDirectoryTreeRequest {
+    pub file_property: serde_json::Value,
+    pub selected_path: String,
+}
+
+/// Decode a bounded file-property directory tree.
+pub fn decode_file_property_directory_tree(
+    body: Option<serde_json::Value>,
+) -> Result<serde_json::Value, String> {
+    let value = body.ok_or_else(|| "PiPedal directory tree has no body".to_string())?;
+    if !value.is_object()
+        || serde_json::to_vec(&value).map_or(true, |bytes| bytes.len() > MAX_FRAME_BYTES)
+    {
+        return Err("PiPedal directory tree is invalid or excessive".into());
+    }
+    Ok(value)
 }
 
 /// Source-shaped bank selector.
@@ -3309,7 +3336,7 @@ mod tests {
                 assert!(!operation.is_read_only());
             }
         }
-        assert_eq!(Operation::all().len(), 90);
+        assert_eq!(Operation::all().len(), 91);
         assert!(Operation::all().iter().all(|operation| !operation.wire_name().is_empty()));
         assert_eq!(serde_json::to_string(&Operation::SetControl).expect("json"), "\"setControl\"");
     }

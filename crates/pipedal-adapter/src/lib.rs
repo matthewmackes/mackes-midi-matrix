@@ -256,6 +256,7 @@ pub struct Worker {
     tone3000_digest: Option<String>,
     channel_router_settings: Option<mackes_pipedal_connector::ChannelRouterSettings>,
     tone3000_pkce: Option<serde_json::Value>,
+    directory_tree: Option<serde_json::Value>,
     wifi_channels: Vec<mackes_pipedal_connector::WifiChannel>,
     alsa_devices: Vec<mackes_pipedal_connector::AlsaDeviceInfo>,
     jack_status: Option<mackes_pipedal_connector::JackHostStatus>,
@@ -306,6 +307,7 @@ impl Worker {
             tone3000_digest: None,
             channel_router_settings: None,
             tone3000_pkce: None,
+            directory_tree: None,
             wifi_channels: Vec::new(),
             alsa_devices: Vec::new(),
             jack_status: None,
@@ -380,6 +382,7 @@ impl Worker {
                     self.tone3000_digest = None;
                     self.channel_router_settings = None;
                     self.tone3000_pkce = None;
+                    self.directory_tree = None;
                     self.wifi_channels.clear();
                     self.alsa_devices.clear();
                     self.jack_status = None;
@@ -624,6 +627,13 @@ impl Worker {
                 );
                 Ok(())
             }
+            "getFilePropertyDirectoryTree" => {
+                self.directory_tree = Some(
+                    mackes_pipedal_connector::decode_file_property_directory_tree(body)
+                        .map_err(|_| TransportError::Protocol)?,
+                );
+                Ok(())
+            }
             "getWifiChannels" => {
                 self.wifi_channels = mackes_pipedal_connector::decode_wifi_channels(body)
                     .map_err(|_| TransportError::Protocol)?;
@@ -838,6 +848,41 @@ impl Worker {
     #[must_use]
     pub const fn tone3000_pkce(&self) -> Option<&serde_json::Value> {
         self.tone3000_pkce.as_ref()
+    }
+
+    /// Last validated file-property directory tree.
+    #[must_use]
+    pub const fn directory_tree(&self) -> Option<&serde_json::Value> {
+        self.directory_tree.as_ref()
+    }
+
+    /// Prepares a generation-checked directory-tree query.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the generation, path, or property payload is invalid.
+    pub fn prepare_get_file_property_directory_tree(
+        &self,
+        generation: u64,
+        request: mackes_pipedal_connector::FilePropertyDirectoryTreeRequest,
+        reply_to: Option<u64>,
+    ) -> Result<Vec<u8>, String> {
+        if generation != self.session.generation() {
+            return Err("PiPedal directory-tree query belongs to an old session generation".into());
+        }
+        if request.selected_path.len() > 1024
+            || request.selected_path.contains("..")
+            || serde_json::to_vec(&request.file_property)
+                .map_or(true, |bytes| bytes.len() > 16 * 1024)
+        {
+            return Err("PiPedal directory-tree query is invalid or excessive".into());
+        }
+        mackes_pipedal_connector::encode_request(&mackes_pipedal_connector::Request {
+            message: "getFilePropertyDirectoryTree".into(),
+            reply_to,
+            body: Some(request),
+        })
+        .map_err(|error| error.to_string())
     }
 
     /// Prepares a generation-checked Tone3000 PKCE query.

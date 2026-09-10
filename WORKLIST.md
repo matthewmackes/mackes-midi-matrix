@@ -12382,3 +12382,6 @@ Evidence (2026-09-08): Devices browser gate initially observed a transient daemo
 - **File-property copy slice (2026-09-10):** Added bounded, generation-checked confirmed support for
   `copyFilePropertyFile`, including source-shaped overwrite semantics. Daemon/browser and installed
   qualification remain pending W150.
+- **Directory-tree slice (2026-09-10):** Added bounded source-shaped query and response projection
+  for `getFilePropertyDirectoryTree`, with reconnect-safe adapter retention. Daemon/browser and
+  installed qualification remain pending W150.

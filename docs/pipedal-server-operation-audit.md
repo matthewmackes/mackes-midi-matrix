@@ -187,7 +187,7 @@ user-facing workflow without needing an independent button; require a documented
 | createNewSampleDirectory | catalogued | Device assets/library | confirmed bounded adapter write implemented; daemon/browser/installed qualification pending W150 |
 | renameFilePropertyFile | catalogued | Device assets/library | confirmed bounded adapter write implemented; daemon/browser/installed qualification pending W150 |
 | copyFilePropertyFile | catalogued | Device assets/library | confirmed bounded adapter write implemented; daemon/browser/installed qualification pending W150 |
-| getFilePropertyDirectoryTree | missing | Device assets/library | pending W150 |
+| getFilePropertyDirectoryTree | catalogued | Device assets/library | bounded source-shaped query and directory-tree projection implemented; daemon/browser/installed qualification pending W150 |
 | moveAudioFile | catalogued | Device assets/library | confirmed bounded adapter write implemented; daemon/browser/installed qualification pending W150 |
 | setOnboarding | catalogued | Device system settings | confirmed bounded adapter write implemented; daemon/browser/installed qualification pending W150 |
 | getWifiRegulatoryDomains | catalogued | Device system settings | bounded startup readback and adapter projection implemented; daemon/browser/installed qualification pending W150 |
