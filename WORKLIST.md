@@ -12367,3 +12367,6 @@ Evidence (2026-09-08): Devices browser gate initially observed a transient daemo
   installed qualification remain pending W150.
 - **Audit-guard maintenance (2026-09-10):** Updated the source-first audit guard to permit the
   pending W150 count to fall below its obsolete historical floor while retaining row/family checks.
+- **Tone3000 cancellation slice (2026-09-10):** Added the source-registered
+  `cancelTone3000Download` confirmed scalar command with generation-checked handle validation.
+  Daemon/browser and installed qualification remain pending W150.

@@ -865,6 +865,31 @@ impl Worker {
         .map_err(|error| error.to_string())
     }
 
+    /// Prepares a generation-checked, confirmed Tone3000 download cancellation.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the generation or download handle is invalid.
+    pub fn prepare_cancel_tone3000_download(
+        &self,
+        generation: u64,
+        handle: i64,
+        reply_to: Option<u64>,
+    ) -> Result<Vec<u8>, String> {
+        if generation != self.session.generation() {
+            return Err("Tone3000 cancellation belongs to an old session generation".into());
+        }
+        if handle < 0 {
+            return Err("Tone3000 download handle is invalid".into());
+        }
+        mackes_pipedal_connector::encode_request(&mackes_pipedal_connector::Request {
+            message: "cancelTone3000Download".into(),
+            reply_to,
+            body: Some(handle),
+        })
+        .map_err(|error| error.to_string())
+    }
+
     /// Prepares a generation-checked channel-router query.
     ///
     /// # Errors

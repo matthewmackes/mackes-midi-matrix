@@ -488,6 +488,8 @@ pub enum Operation {
     SetChannelRouterSettings,
     /// Create Tone3000 PKCE parameters.
     MakeTone3000Pkce,
+    /// Cancel an active Tone3000 download.
+    CancelTone3000Download,
     /// Load a plugin preset into a runtime instance.
     LoadPluginPreset,
     /// Query JACK server settings.
@@ -595,6 +597,7 @@ impl Operation {
             Self::GetChannelRouterSettings,
             Self::SetChannelRouterSettings,
             Self::MakeTone3000Pkce,
+            Self::CancelTone3000Download,
             Self::LoadPluginPreset,
             Self::GetJackServerSettings,
             Self::SetJackServerSettings,
@@ -689,6 +692,7 @@ impl Operation {
             Self::GetChannelRouterSettings => "getChannelRouterSettings",
             Self::SetChannelRouterSettings => "setChannelRouterSettings",
             Self::MakeTone3000Pkce => "makeTone3000Pkce",
+            Self::CancelTone3000Download => "cancelTone3000Download",
             Self::LoadPluginPreset => "loadPluginPreset",
             Self::GetJackServerSettings => "getJackServerSettings",
             Self::SetJackServerSettings => "setJackServerSettings",
@@ -738,6 +742,7 @@ impl Operation {
                 | Self::ImportPresetsFromBank
                 | Self::CopyPresetsToBank
                 | Self::SetChannelRouterSettings
+                | Self::CancelTone3000Download
                 | Self::DeletePresetItems
                 | Self::SetOnboarding
                 | Self::SaveCurrentPreset
@@ -839,6 +844,7 @@ impl Operation {
             Self::GetImageList => "diagnostics",
             Self::GetChannelRouterSettings | Self::SetChannelRouterSettings => "preferences",
             Self::MakeTone3000Pkce => "assets",
+            Self::CancelTone3000Download => "assets",
             Self::RequestFileList2 => "assets",
             Self::DeleteUserFile => "assets",
             Self::CreateNewSampleDirectory | Self::RenameFilePropertyFile => "assets",
@@ -3272,7 +3278,7 @@ mod tests {
                 assert!(!operation.is_read_only());
             }
         }
-        assert_eq!(Operation::all().len(), 87);
+        assert_eq!(Operation::all().len(), 88);
         assert!(Operation::all().iter().all(|operation| !operation.wire_name().is_empty()));
         assert_eq!(serde_json::to_string(&Operation::SetControl).expect("json"), "\"setControl\"");
     }
