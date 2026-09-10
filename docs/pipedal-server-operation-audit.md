@@ -183,7 +183,7 @@ user-facing workflow without needing an independent button; require a documented
 | requestFileList | catalogued | Device assets/library | source handler is registered but explicitly obsolete and always throws `No longer implemented`; no adapter operation exposed |
 | requestFileList2 | catalogued | Device assets/library | bounded source-shaped request and file-entry response projection implemented; daemon/browser/installed qualification pending W150 |
 | newPreset | catalogued | Presets and snapshots | confirmed bounded adapter write implemented; daemon/browser/installed qualification pending W150 |
-| deleteUserFile | missing | Device assets/library | pending W150 |
+| deleteUserFile | catalogued | Device assets/library | confirmed bounded adapter write implemented; daemon/browser/installed qualification pending W150 |
 | createNewSampleDirectory | missing | Device assets/library | pending W150 |
 | renameFilePropertyFile | missing | Device assets/library | pending W150 |
 | copyFilePropertyFile | missing | Device assets/library | pending W150 |

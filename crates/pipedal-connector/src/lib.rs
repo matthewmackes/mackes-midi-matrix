@@ -460,6 +460,8 @@ pub enum Operation {
     GetImageList,
     /// Query the source-backed file browser inventory.
     RequestFileList2,
+    /// Delete a user audio/sample file.
+    DeleteUserFile,
     /// Load a plugin preset into a runtime instance.
     LoadPluginPreset,
     /// Query JACK server settings.
@@ -556,6 +558,7 @@ impl Operation {
             Self::GetKnownWifiNetworks,
             Self::GetImageList,
             Self::RequestFileList2,
+            Self::DeleteUserFile,
             Self::LoadPluginPreset,
             Self::GetJackServerSettings,
             Self::SetJackServerSettings,
@@ -639,6 +642,7 @@ impl Operation {
             Self::GetKnownWifiNetworks => "getKnownWifiNetworks",
             Self::GetImageList => "imageList",
             Self::RequestFileList2 => "requestFileList2",
+            Self::DeleteUserFile => "deleteUserFile",
             Self::LoadPluginPreset => "loadPluginPreset",
             Self::GetJackServerSettings => "getJackServerSettings",
             Self::SetJackServerSettings => "setJackServerSettings",
@@ -780,6 +784,7 @@ impl Operation {
             Self::GetKnownWifiNetworks => "diagnostics",
             Self::GetImageList => "diagnostics",
             Self::RequestFileList2 => "assets",
+            Self::DeleteUserFile => "assets",
             Self::LoadPluginPreset => "presets",
             Self::UpdatePresets => "presets",
             Self::MoveBank => "presets",
@@ -3110,7 +3115,7 @@ mod tests {
                 assert!(!operation.is_read_only());
             }
         }
-        assert_eq!(Operation::all().len(), 76);
+        assert_eq!(Operation::all().len(), 77);
         assert!(Operation::all().iter().all(|operation| !operation.wire_name().is_empty()));
         assert_eq!(serde_json::to_string(&Operation::SetControl).expect("json"), "\"setControl\"");
     }

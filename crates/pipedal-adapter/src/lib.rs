@@ -2706,6 +2706,31 @@ impl Worker {
         .map_err(|error| error.to_string())
     }
 
+    /// Prepares a generation-checked, confirmed user-file deletion.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the generation or relative path is invalid, or encoding fails.
+    pub fn prepare_delete_user_file(
+        &self,
+        generation: u64,
+        file_name: String,
+        reply_to: Option<u64>,
+    ) -> Result<Vec<u8>, String> {
+        if generation != self.session.generation() {
+            return Err("PiPedal file deletion belongs to an old session generation".into());
+        }
+        if file_name.is_empty() || file_name.len() > 1024 || file_name.contains("..") {
+            return Err("PiPedal user-file path is invalid or excessive".into());
+        }
+        mackes_pipedal_connector::encode_request(&mackes_pipedal_connector::Request {
+            message: "deleteUserFile".into(),
+            reply_to,
+            body: Some(file_name),
+        })
+        .map_err(|error| error.to_string())
+    }
+
     /// Prepares a generation-checked, read-only known-network query.
     ///
     /// # Errors

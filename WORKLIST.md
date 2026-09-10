@@ -12342,3 +12342,6 @@ Evidence (2026-09-08): Devices browser gate initially observed a transient daemo
 - **File-list v2 slice (2026-09-10):** Added bounded source-shaped `requestFileList2` query encoding,
   response validation/projection, and reconnect-safe adapter retention. Daemon/browser and installed
   qualification remain pending W150.
+- **User-file deletion slice (2026-09-10):** Added the source-registered `deleteUserFile` scalar
+  command with confirmed, generation-checked relative-path bounds. Daemon/browser and installed
+  qualification remain pending W150.
