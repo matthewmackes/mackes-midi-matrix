@@ -173,7 +173,7 @@ user-facing workflow without needing an independent button; require a documented
 | unmonitorPort | catalogued | Monitoring and MIDI | confirmed bounded adapter write implemented; event readback and daemon/browser/installed qualification pending W150 |
 | addVuSubscription | catalogued | Monitoring and MIDI | confirmed bounded adapter write implemented; event readback and daemon/browser/installed qualification pending W150 |
 | removeVuSubscription | catalogued | Monitoring and MIDI | confirmed bounded adapter write implemented; event readback and daemon/browser/installed qualification pending W150 |
-| imageList | missing | Device assets/library | pending W150 |
+| imageList | catalogued | Device assets/library | bounded filename-list readback and adapter projection implemented; daemon/browser/installed qualification pending W150 |
 | getFavorites | catalogued | Device session/preferences | bounded startup readback and snapshot projection implemented; full browser/installed qualification pending W150 |
 | setFavorites | catalogued | Device session/preferences | source-backed map and event; execution/readback pending W150 |
 | setUpdatePolicy | catalogued | Device system settings | confirmed bounded adapter write implemented; daemon/browser/installed qualification pending W150 |

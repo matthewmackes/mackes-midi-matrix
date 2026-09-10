@@ -251,6 +251,7 @@ pub struct Worker {
     alsa_sequencer_ports: Vec<mackes_pipedal_connector::AlsaSequencerConnection>,
     update_status: Option<mackes_pipedal_connector::UpdateStatus>,
     known_wifi_networks: Vec<String>,
+    image_list: Vec<String>,
     wifi_channels: Vec<mackes_pipedal_connector::WifiChannel>,
     alsa_devices: Vec<mackes_pipedal_connector::AlsaDeviceInfo>,
     jack_status: Option<mackes_pipedal_connector::JackHostStatus>,
@@ -296,6 +297,7 @@ impl Worker {
             alsa_sequencer_ports: Vec::new(),
             update_status: None,
             known_wifi_networks: Vec::new(),
+            image_list: Vec::new(),
             wifi_channels: Vec::new(),
             alsa_devices: Vec::new(),
             jack_status: None,
@@ -365,6 +367,7 @@ impl Worker {
                     self.alsa_sequencer_ports.clear();
                     self.update_status = None;
                     self.known_wifi_networks.clear();
+                    self.image_list.clear();
                     self.wifi_channels.clear();
                     self.alsa_devices.clear();
                     self.jack_status = None;
@@ -576,6 +579,11 @@ impl Worker {
                         .map_err(|_| TransportError::Protocol)?;
                 Ok(())
             }
+            "imageList" => {
+                self.image_list = mackes_pipedal_connector::decode_image_list(body)
+                    .map_err(|_| TransportError::Protocol)?;
+                Ok(())
+            }
             "getWifiChannels" => {
                 self.wifi_channels = mackes_pipedal_connector::decode_wifi_channels(body)
                     .map_err(|_| TransportError::Protocol)?;
@@ -758,6 +766,12 @@ impl Worker {
     #[must_use]
     pub fn known_wifi_networks(&self) -> &[String] {
         &self.known_wifi_networks
+    }
+
+    /// Last validated image filename inventory.
+    #[must_use]
+    pub fn image_list(&self) -> &[String] {
+        &self.image_list
     }
 
     /// Last validated Wi-Fi channel selectors.

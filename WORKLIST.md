@@ -12333,3 +12333,6 @@ Evidence (2026-09-08): Devices browser gate initially observed a transient daemo
 - **VU-subscription slice (2026-09-10):** Added source-registered `addVuSubscription` and
   `removeVuSubscription` scalar commands with confirmed, generation-checked identity validation.
   Event readback and daemon/browser/installed qualification remain pending W150.
+- **Image-list readback slice (2026-09-10):** Added bounded decoding and adapter retention/query
+  support for source-registered `imageList` filename inventories. Daemon/browser and installed
+  qualification remain pending W150.

@@ -53,6 +53,10 @@ pub const MAX_GOVERNOR_TEXT: usize = 64;
 pub const MAX_WIFI_REGULATORY_DOMAINS: usize = 256;
 /// Maximum known Wi-Fi network names retained from one PiPedal response.
 pub const MAX_KNOWN_WIFI_NETWORKS: usize = 256;
+/// Maximum image filenames accepted from one PiPedal `imageList` response.
+pub const MAX_IMAGE_LIST_ENTRIES: usize = 512;
+/// Maximum image filename length accepted from PiPedal.
+pub const MAX_IMAGE_FILENAME_TEXT: usize = 256;
 /// Maximum Wi-Fi channel selectors accepted in one response.
 pub const MAX_WIFI_CHANNELS: usize = 256;
 /// Maximum ALSA devices accepted in one PiPedal response.
@@ -450,6 +454,8 @@ pub enum Operation {
     GetBankIndex,
     /// Query known Wi-Fi network names.
     GetKnownWifiNetworks,
+    /// Query the pre-loadable image filename inventory.
+    GetImageList,
     /// Load a plugin preset into a runtime instance.
     LoadPluginPreset,
     /// Query JACK server settings.
@@ -544,6 +550,7 @@ impl Operation {
             Self::GetPresets,
             Self::GetBankIndex,
             Self::GetKnownWifiNetworks,
+            Self::GetImageList,
             Self::LoadPluginPreset,
             Self::GetJackServerSettings,
             Self::SetJackServerSettings,
@@ -625,6 +632,7 @@ impl Operation {
             Self::GetPresets => "getPresets",
             Self::GetBankIndex => "getBankIndex",
             Self::GetKnownWifiNetworks => "getKnownWifiNetworks",
+            Self::GetImageList => "imageList",
             Self::LoadPluginPreset => "loadPluginPreset",
             Self::GetJackServerSettings => "getJackServerSettings",
             Self::SetJackServerSettings => "setJackServerSettings",
@@ -712,6 +720,7 @@ impl Operation {
                 | Self::GetPresets
                 | Self::GetBankIndex
                 | Self::GetKnownWifiNetworks
+                | Self::GetImageList
                 | Self::GetJackServerSettings
                 | Self::GetGovernorSettings
                 | Self::GetShowStatusMonitor
@@ -762,6 +771,7 @@ impl Operation {
             Self::GetPluginPresets => "presets",
             Self::GetPresets | Self::GetBankIndex => "presets",
             Self::GetKnownWifiNetworks => "diagnostics",
+            Self::GetImageList => "diagnostics",
             Self::LoadPluginPreset => "presets",
             Self::UpdatePresets => "presets",
             Self::MoveBank => "presets",
@@ -1476,6 +1486,32 @@ pub fn decode_known_wifi_networks(body: Option<serde_json::Value>) -> Result<Vec
         return Err("PiPedal known Wi-Fi networks are invalid or excessive".into());
     }
     Ok(networks)
+}
+
+/// Decode PiPedal's semicolon-delimited image filename inventory.
+pub fn decode_image_list(body: Option<serde_json::Value>) -> Result<Vec<String>, String> {
+    let encoded: String = decode_body(body)?;
+    if encoded.len() > MAX_IMAGE_LIST_ENTRIES * (MAX_IMAGE_FILENAME_TEXT + 1) {
+        return Err("PiPedal image list is excessive".into());
+    }
+    let images = if encoded.is_empty() {
+        Vec::new()
+    } else {
+        encoded.split(';').map(str::to_owned).collect()
+    };
+    if images.len() > MAX_IMAGE_LIST_ENTRIES
+        || images.iter().any(|image| {
+            image.is_empty()
+                || image.len() > MAX_IMAGE_FILENAME_TEXT
+                || image.contains('/')
+                || image.contains('\\')
+                || image == "."
+                || image == ".."
+        })
+    {
+        return Err("PiPedal image list contains invalid or excessive filenames".into());
+    }
+    Ok(images)
 }
 
 /// One source-backed Wi-Fi channel selector.
@@ -3041,7 +3077,7 @@ mod tests {
                 assert!(!operation.is_read_only());
             }
         }
-        assert_eq!(Operation::all().len(), 74);
+        assert_eq!(Operation::all().len(), 75);
         assert!(Operation::all().iter().all(|operation| !operation.wire_name().is_empty()));
         assert_eq!(serde_json::to_string(&Operation::SetControl).expect("json"), "\"setControl\"");
     }
