@@ -1052,6 +1052,78 @@ pub fn decode_version(body: Option<serde_json::Value>) -> Result<PiPedalVersion,
     Ok(version)
 }
 
+/// One bounded release candidate in PiPedal's update-status response.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateRelease {
+    pub update_available: bool,
+    #[serde(default)]
+    pub upgrade_version: String,
+    #[serde(default)]
+    pub upgrade_version_display_name: String,
+    #[serde(default)]
+    pub asset_name: String,
+    #[serde(default)]
+    pub update_url: String,
+    #[serde(default)]
+    pub gpg_signature_url: String,
+}
+
+/// Bounded source-backed `getUpdateStatus` readback.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateStatus {
+    #[serde(default)]
+    pub last_update_time: i64,
+    pub is_valid: bool,
+    #[serde(default)]
+    pub error_message: String,
+    pub update_policy: i32,
+    pub is_online: bool,
+    #[serde(default)]
+    pub current_version: String,
+    #[serde(default)]
+    pub current_version_display_name: String,
+    pub release_only_release: UpdateRelease,
+    pub release_or_beta_release: UpdateRelease,
+    pub dev_release: UpdateRelease,
+}
+
+impl UpdateStatus {
+    /// Validate bounded text and the source-defined update-policy ordinal.
+    pub fn validate(&self) -> Result<(), String> {
+        if !(0..=3).contains(&self.update_policy) {
+            return Err("PiPedal update policy is outside the source-defined range".into());
+        }
+        if self.error_message.len() > MAX_VERSION_TEXT
+            || self.current_version.len() > MAX_VERSION_TEXT
+            || self.current_version_display_name.len() > MAX_VERSION_TEXT
+        {
+            return Err("PiPedal update status contains oversized text".into());
+        }
+        for release in
+            [&self.release_only_release, &self.release_or_beta_release, &self.dev_release]
+        {
+            if release.upgrade_version.len() > MAX_VERSION_TEXT
+                || release.upgrade_version_display_name.len() > MAX_VERSION_TEXT
+                || release.asset_name.len() > MAX_VERSION_TEXT
+                || release.update_url.len() > MAX_VERSION_TEXT
+                || release.gpg_signature_url.len() > MAX_VERSION_TEXT
+            {
+                return Err("PiPedal update release contains oversized text".into());
+            }
+        }
+        Ok(())
+    }
+}
+
+/// Decode and validate PiPedal's nested update-status response.
+pub fn decode_update_status(body: Option<serde_json::Value>) -> Result<UpdateStatus, String> {
+    let status: UpdateStatus = decode_body(body)?;
+    status.validate()?;
+    Ok(status)
+}
+
 /// Decode the qualified plugin catalog envelope while leaving version-specific control metadata
 /// to the adapter's existing bounded projection.
 pub fn decode_plugin_catalog(
@@ -1088,7 +1160,7 @@ pub enum SessionPhase {
 
 /// The bounded read-only requests used to populate a fresh PiPedal session.
 #[must_use]
-pub const fn startup_requests() -> [&'static str; 10] {
+pub const fn startup_requests() -> [&'static str; 11] {
     [
         "hello",
         "version",
@@ -1100,6 +1172,7 @@ pub const fn startup_requests() -> [&'static str; 10] {
         "getShowStatusMonitor",
         "getWifiRegulatoryDomains",
         "getHasWifi",
+        "getUpdateStatus",
     ]
 }
 
@@ -2182,7 +2255,7 @@ mod tests {
         assert_eq!(requests[0], "hello");
         assert_eq!(requests[1], "version");
         assert_eq!(requests[4], "getSystemMidiBindings");
-        assert_eq!(requests.last(), Some(&"getHasWifi"));
+        assert_eq!(requests.last(), Some(&"getUpdateStatus"));
         assert!(requests.len() <= 16);
     }
 

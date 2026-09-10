@@ -246,6 +246,7 @@ pub struct Worker {
     governor_settings: String,
     show_status_monitor: Option<bool>,
     has_wifi: Option<bool>,
+    update_status: Option<mackes_pipedal_connector::UpdateStatus>,
     wifi_regulatory_domains: std::collections::BTreeMap<String, String>,
     system_midi_bindings: Vec<mackes_pipedal_connector::MidiBinding>,
     version: Option<mackes_pipedal_connector::PiPedalVersion>,
@@ -279,6 +280,7 @@ impl Worker {
             governor_settings: String::new(),
             show_status_monitor: None,
             has_wifi: None,
+            update_status: None,
             wifi_regulatory_domains: std::collections::BTreeMap::new(),
             system_midi_bindings: Vec::new(),
             version: None,
@@ -336,6 +338,7 @@ impl Worker {
                     self.governor_settings.clear();
                     self.show_status_monitor = None;
                     self.has_wifi = None;
+                    self.update_status = None;
                     self.wifi_regulatory_domains.clear();
                     self.system_midi_bindings.clear();
                     self.version = None;
@@ -449,6 +452,12 @@ impl Worker {
         if header.message == "getHasWifi" {
             self.has_wifi = Some(
                 mackes_pipedal_connector::decode_has_wifi(body.clone())
+                    .map_err(|_| TransportError::Protocol)?,
+            );
+        }
+        if header.message == "getUpdateStatus" {
+            self.update_status = Some(
+                mackes_pipedal_connector::decode_update_status(body.clone())
                     .map_err(|_| TransportError::Protocol)?,
             );
         }
@@ -617,6 +626,12 @@ impl Worker {
     #[must_use]
     pub const fn has_wifi(&self) -> Option<bool> {
         self.has_wifi
+    }
+
+    /// Last validated update-status readback.
+    #[must_use]
+    pub const fn update_status(&self) -> Option<&mackes_pipedal_connector::UpdateStatus> {
+        self.update_status.as_ref()
     }
 
     /// Last validated Wi-Fi regulatory-domain labels.

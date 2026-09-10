@@ -5303,6 +5303,10 @@ tests, strict Clippy, architecture/worklist policy, and the complete release gat
   `getHasWifi` decoder and session projection, cleared on reconnect, and promoted it into the
   bounded ten-request startup sequence. Connector/adapter consumers retain fail-closed typed state;
   daemon/browser and installed qualification remain pending W150.
+- **Update-status readback slice (2026-09-10):** Added the source-backed nested
+  `getUpdateStatus` decoder with bounded release/status text and source-defined policy validation,
+  retained it in the adapter session, cleared it on reconnect, and promoted it into startup
+  refresh. Daemon/browser and installed qualification remain pending W150.
 - **Connector-design synchronization (2026-09-09):** The PiPedal connector handoff now records
   that validated version metadata is session-scoped diagnostic readback, cleared on reconnect and
   never sufficient to authorize version-dependent writes. Documentation, worklist, and diff checks
