@@ -401,6 +401,8 @@ pub enum Operation {
     GetJackServerSettings,
     /// Set JACK server settings.
     SetJackServerSettings,
+    /// Apply an update from a release URL.
+    UpdateNow,
     /// Set the CPU governor policy.
     SetGovernorSettings,
     /// Query the CPU governor policy.
@@ -457,6 +459,7 @@ impl Operation {
             Self::LoadPluginPreset,
             Self::GetJackServerSettings,
             Self::SetJackServerSettings,
+            Self::UpdateNow,
             Self::SetGovernorSettings,
             Self::GetGovernorSettings,
             Self::GetShowStatusMonitor,
@@ -507,6 +510,7 @@ impl Operation {
             Self::LoadPluginPreset => "loadPluginPreset",
             Self::GetJackServerSettings => "getJackServerSettings",
             Self::SetJackServerSettings => "setJackServerSettings",
+            Self::UpdateNow => "updateNow",
             Self::SetGovernorSettings => "setGovernorSettings",
             Self::GetGovernorSettings => "getGovernorSettings",
             Self::GetShowStatusMonitor => "getShowStatusMonitor",
@@ -540,6 +544,7 @@ impl Operation {
                 | Self::LoadPluginPreset
                 | Self::SetGovernorSettings
                 | Self::SetJackServerSettings
+                | Self::UpdateNow
                 | Self::Restart
                 | Self::Shutdown
         )
@@ -612,6 +617,7 @@ impl Operation {
             Self::GetWifiRegulatoryDomains => "diagnostics",
             Self::SetGovernorSettings => "host",
             Self::SetJackServerSettings => "host",
+            Self::UpdateNow => "host",
             Self::Restart | Self::Shutdown => "host",
         }
     }
@@ -2561,7 +2567,7 @@ mod tests {
                 assert!(!operation.is_read_only());
             }
         }
-        assert_eq!(Operation::all().len(), 43);
+        assert_eq!(Operation::all().len(), 44);
         assert!(Operation::all().iter().all(|operation| !operation.wire_name().is_empty()));
         assert_eq!(serde_json::to_string(&Operation::SetControl).expect("json"), "\"setControl\"");
     }

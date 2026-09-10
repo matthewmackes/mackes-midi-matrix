@@ -2068,6 +2068,35 @@ impl Worker {
         .map_err(|error| error.to_string())
     }
 
+    /// Prepares a confirmed, generation-checked update request.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when confirmation, generation, URL bounds, or encoding fails.
+    pub fn prepare_update_now(
+        &self,
+        generation: u64,
+        update_url: String,
+        reply_to: Option<u64>,
+        confirmed: bool,
+    ) -> Result<Vec<u8>, String> {
+        if !confirmed {
+            return Err("PiPedal updates require explicit confirmation".into());
+        }
+        if generation != self.session.generation() {
+            return Err("PiPedal update belongs to an old session generation".into());
+        }
+        if update_url.is_empty() || update_url.len() > 1024 {
+            return Err("PiPedal update URL is invalid or excessive".into());
+        }
+        mackes_pipedal_connector::encode_request(&mackes_pipedal_connector::Request {
+            message: "updateNow".into(),
+            reply_to,
+            body: Some(update_url),
+        })
+        .map_err(|error| error.to_string())
+    }
+
     /// Prepares a confirmed CPU-governor settings request with a bounded scalar body.
     ///
     /// # Errors

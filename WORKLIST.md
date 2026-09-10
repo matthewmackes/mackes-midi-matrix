@@ -12246,3 +12246,6 @@ Evidence (2026-09-08): Devices browser gate initially observed a transient daemo
 - **JACK-server-settings write slice (2026-09-10):** Added the source-registered
   `setJackServerSettings` operation to the connector catalog and a confirmed, generation-checked,
   validated adapter payload path. Daemon/browser and installed qualification remain pending W150.
+- **Update-now write slice (2026-09-10):** Added the source-registered `updateNow` operation with
+  a bounded release URL and confirmed, generation-checked adapter payload path. Daemon/browser and
+  installed qualification remain pending W150.

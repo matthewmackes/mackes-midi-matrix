@@ -113,7 +113,7 @@ user-facing workflow without needing an independent button; require a documented
 | cancelMonitorPatchProperty | catalogued | Monitoring and MIDI | bounded adapter/daemon queue path; event readback pending W150 |
 | getUpdateStatus | catalogued | Device system settings | bounded nested readback and adapter projection implemented; daemon/browser/installed qualification pending W150 |
 | getHasWifi | catalogued | Device system settings | bounded startup readback and adapter projection implemented; daemon/browser/installed qualification pending W150 |
-| updateNow | missing | Device system settings | pending W150 |
+| updateNow | catalogued | Device system settings | confirmed bounded adapter write implemented; daemon/browser/installed qualification pending W150 |
 | getJackStatus | catalogued | Device system settings | bounded response decoder and adapter projection implemented; daemon/browser/installed qualification pending W150 |
 | getAlsaDevices | catalogued | Device system settings | bounded response decoder and adapter projection implemented; daemon/browser/installed qualification pending W150 |
 | getKnownWifiNetworks | catalogued | Device system settings | bounded startup readback and adapter projection implemented; daemon/browser/installed qualification pending W150 |
