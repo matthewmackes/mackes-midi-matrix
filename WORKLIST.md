@@ -11126,6 +11126,11 @@ Execution board: `docs/worklist-execution-board.md`.
 - **Implementation checkpoint (2026-09-10):** Removed the route JSON editor and made the visual
   routing board the sole normal route-draft surface. Route drafts remain in browser state and apply
   from graphical cards. Predicate chips and full advanced visual editing remain open.
+- **Implementation checkpoint (2026-09-10, follow-up):** Added visual condition chips with bounded
+  message-number and message-value range controls, guided realtime choices, removal actions, and
+  plain-language empty/preserved-condition states. The route payload remains daemon-shaped and
+  lossless; masked SysEx and unknown predicates remain preserved but are not editable until a
+  qualified builder exists.
 
 #### [>] W173 — Replace scene and setlist code entry with visual action cards
 

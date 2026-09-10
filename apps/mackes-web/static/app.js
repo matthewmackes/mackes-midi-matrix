@@ -532,13 +532,51 @@ function renderRoutingBoard(routes) {
     const checkbox = document.createElement('input'); checkbox.type = 'checkbox'; checkbox.checked = route.enabled !== false; checkbox.dataset.routeKey = 'enabled'; enabled.append(checkbox, document.createTextNode(' Connection enabled')); card.append(enabled);
     const cycle = document.createElement('label'); cycle.className = 'route-enabled';
     const cycleInput = document.createElement('input'); cycleInput.type = 'checkbox'; cycleInput.checked = route.allow_cycle === true; cycleInput.dataset.routeKey = 'allow_cycle'; cycle.append(cycleInput, document.createTextNode(' Allow cycles')); card.append(cycle);
-    const predicates = document.createElement('div'); predicates.className = 'route-advanced route-condition-summary';
-    const predicateCount = Array.isArray(route.predicates) ? route.predicates.length : 0;
-    predicates.dataset.routeKey = 'predicates'; predicates.dataset.predicates = JSON.stringify(route.predicates || []);
-    predicates.textContent = predicateCount ? `${predicateCount} guided condition${predicateCount === 1 ? '' : 's'} saved` : 'No extra conditions';
+    const predicates = document.createElement('fieldset'); predicates.className = 'route-advanced route-condition-builder'; predicates.dataset.routeKey = 'predicates'; predicates.dataset.predicates = JSON.stringify(route.predicates || []);
+    const legend = document.createElement('legend'); legend.textContent = 'Conditions'; predicates.append(legend);
+    renderPredicateBuilder(predicates, route.predicates || []);
     card.append(predicates);
     routingCards.append(card);
   });
+}
+function predicateDescription(predicate) {
+  if (predicate?.NumberRange) return `Message number ${predicate.NumberRange.minimum}–${predicate.NumberRange.maximum}`;
+  if (predicate?.ValueRange) return `Message value ${predicate.ValueRange.minimum}–${predicate.ValueRange.maximum}`;
+  if (predicate?.Realtime) return `Realtime ${predicate.Realtime}`;
+  if (predicate?.SysExMask) return 'Qualified SysEx mask (preserved)';
+  return 'Unsupported condition (preserved)';
+}
+function renderPredicateBuilder(container, predicates) {
+  const list = document.createElement('div'); list.className = 'predicate-chips';
+  predicates.forEach((predicate, index) => {
+    const chip = document.createElement('div'); chip.className = 'predicate-chip';
+    const text = document.createElement('span'); text.textContent = predicateDescription(predicate); chip.append(text);
+    if (predicate?.NumberRange || predicate?.ValueRange) {
+      const kind = predicate.NumberRange ? 'NumberRange' : 'ValueRange';
+      const range = predicate[kind];
+      [['minimum', 'From'], ['maximum', 'To']].forEach(([key, label]) => {
+        const input = document.createElement('input'); input.type = 'number'; input.min = '0'; input.max = kind === 'NumberRange' ? '127' : '16383'; input.value = range[key]; input.dataset.predicateIndex = index; input.dataset.predicateKey = `${kind}.${key}`; input.setAttribute('aria-label', `${label} ${kind === 'NumberRange' ? 'message number' : 'message value'}`); chip.append(input);
+      });
+    }
+    const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'predicate-remove'; remove.dataset.removePredicate = index; remove.textContent = 'Remove'; remove.setAttribute('aria-label', `Remove condition ${index + 1}`); chip.append(remove);
+    list.append(chip);
+  });
+  const actions = document.createElement('div'); actions.className = 'predicate-actions';
+  [['NumberRange', 'message number range'], ['ValueRange', 'message value range'], ['Realtime', 'realtime message']].forEach(([kind, label]) => {
+    const add = document.createElement('button'); add.type = 'button'; add.dataset.addPredicate = kind; add.textContent = `Add ${label}`; actions.append(add);
+  });
+  if (!predicates.length) { const empty = document.createElement('p'); empty.className = 'predicate-empty'; empty.textContent = 'No conditions: this connection accepts its selected message types.'; list.append(empty); }
+  container.append(list, actions);
+}
+function refreshPredicateData(card) {
+  const container = card.querySelector('[data-route-key="predicates"]');
+  if (!container) return;
+  const predicates = JSON.parse(container.dataset.predicates || '[]');
+  container.querySelectorAll('[data-predicate-key]').forEach(input => {
+    const [kind, key] = input.dataset.predicateKey.split('.');
+    if (predicates[input.dataset.predicateIndex]?.[kind]) predicates[input.dataset.predicateIndex][kind][key] = Number(input.value);
+  });
+  container.dataset.predicates = JSON.stringify(predicates);
 }
 function routesFromBoard() {
   return [...routingCards.querySelectorAll('.route-card')].map(card => {
@@ -557,9 +595,26 @@ function routesFromBoard() {
   });
 }
 function syncRoutesJson() { routeDraft = routesFromBoard(); dirtyForm = true; routeDraftDirty = true; publishUiState(); }
-routingCards.addEventListener('input', syncRoutesJson);
+routingCards.addEventListener('input', event => { const card = event.target.closest('.route-card'); if (card) refreshPredicateData(card); syncRoutesJson(); });
 routingCards.addEventListener('change', syncRoutesJson);
 routingCards.addEventListener('click', event => {
+  const card = event.target.closest('.route-card');
+  const predicateAdd = event.target.closest('[data-add-predicate]');
+  const predicateRemove = event.target.closest('[data-remove-predicate]');
+  if (card && (predicateAdd || predicateRemove)) {
+    refreshPredicateData(card);
+    const container = card.querySelector('[data-route-key="predicates"]');
+    const predicates = JSON.parse(container.dataset.predicates || '[]');
+    if (predicateRemove) predicates.splice(Number(predicateRemove.dataset.removePredicate), 1);
+    if (predicateAdd?.dataset.addPredicate === 'NumberRange') predicates.push({ NumberRange: { minimum: 0, maximum: 127 } });
+    if (predicateAdd?.dataset.addPredicate === 'ValueRange') predicates.push({ ValueRange: { minimum: 0, maximum: 16383 } });
+    if (predicateAdd?.dataset.addPredicate === 'Realtime') predicates.push({ Realtime: 'Clock' });
+    container.dataset.predicates = JSON.stringify(predicates);
+    container.replaceChildren(Object.assign(document.createElement('legend'), { textContent: 'Conditions' }));
+    renderPredicateBuilder(container, predicates);
+    syncRoutesJson();
+    return;
+  }
   const remove = event.target.closest('[data-remove-route]');
   if (!remove) {
     const card = event.target.closest('.route-card');
