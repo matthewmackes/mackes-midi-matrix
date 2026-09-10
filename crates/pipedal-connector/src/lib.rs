@@ -55,6 +55,8 @@ pub const MAX_WIFI_REGULATORY_DOMAINS: usize = 256;
 pub const MAX_KNOWN_WIFI_NETWORKS: usize = 256;
 /// Maximum Wi-Fi channel selectors accepted in one response.
 pub const MAX_WIFI_CHANNELS: usize = 256;
+/// Maximum ALSA devices accepted in one PiPedal response.
+pub const MAX_ALSA_DEVICES: usize = 256;
 /// Maximum system MIDI bindings accepted in one PiPedal update.
 pub const MAX_SYSTEM_MIDI_BINDINGS: usize = 128;
 /// Maximum requests waiting for the PiPedal transport worker.
@@ -1050,6 +1052,42 @@ pub fn decode_wifi_channels(body: Option<serde_json::Value>) -> Result<Vec<WifiC
         return Err("PiPedal Wi-Fi channels are invalid or excessive".into());
     }
     Ok(channels)
+}
+
+/// One source-backed ALSA audio-device description.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[allow(clippy::struct_excessive_bools)]
+pub struct AlsaDeviceInfo {
+    pub card_id: i32,
+    pub id: String,
+    pub name: String,
+    pub long_name: String,
+    pub sample_rates: Vec<u32>,
+    pub min_buffer_size: u32,
+    pub max_buffer_size: u32,
+    pub supports_capture: bool,
+    pub supports_playback: bool,
+    pub capture_busy: bool,
+    pub playback_busy: bool,
+}
+
+/// Decode PiPedal's bounded ALSA audio-device array.
+pub fn decode_alsa_devices(body: Option<serde_json::Value>) -> Result<Vec<AlsaDeviceInfo>, String> {
+    let devices: Vec<AlsaDeviceInfo> = decode_body(body)?;
+    if devices.len() > MAX_ALSA_DEVICES
+        || devices.iter().any(|device| {
+            device.id.is_empty()
+                || device.id.len() > MAX_VERSION_TEXT
+                || device.name.len() > MAX_VERSION_TEXT
+                || device.long_name.len() > MAX_VERSION_TEXT
+                || device.sample_rates.len() > 64
+                || device.min_buffer_size > device.max_buffer_size
+        })
+    {
+        return Err("PiPedal ALSA device inventory is invalid or excessive".into());
+    }
+    Ok(devices)
 }
 
 /// Validate a URI-to-favorite map before sending PiPedal's `setFavorites`.
