@@ -1732,6 +1732,32 @@ impl Worker {
         .map_err(|error| error.to_string())
     }
 
+    /// Prepares a confirmed, generation-checked onboarding-state change.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when confirmation, generation, or encoding fails.
+    pub fn prepare_set_onboarding(
+        &self,
+        generation: u64,
+        value: bool,
+        reply_to: Option<u64>,
+        confirmed: bool,
+    ) -> Result<Vec<u8>, String> {
+        if !confirmed {
+            return Err("PiPedal onboarding changes require explicit confirmation".into());
+        }
+        if generation != self.session.generation() {
+            return Err("PiPedal onboarding change belongs to an old session generation".into());
+        }
+        mackes_pipedal_connector::encode_request(&mackes_pipedal_connector::Request {
+            message: "setOnboarding".into(),
+            reply_to,
+            body: Some(value),
+        })
+        .map_err(|error| error.to_string())
+    }
+
     /// Prepares a confirmed, generation-checked preset rename.
     ///
     /// # Errors
