@@ -1204,6 +1204,42 @@ pub fn decode_jack_server_settings(
     Ok(settings)
 }
 
+/// Source-backed JACK channel-selection readback.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct JackChannelSelection {
+    pub input_audio_ports: Vec<String>,
+    pub output_audio_ports: Vec<String>,
+    pub input_midi_devices: Vec<JackMidiDeviceInfo>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct JackMidiDeviceInfo {
+    pub name: String,
+    pub description: String,
+}
+
+/// Decode and bound PiPedal's JACK channel-selection response.
+pub fn decode_jack_settings(
+    body: Option<serde_json::Value>,
+) -> Result<JackChannelSelection, String> {
+    let selection: JackChannelSelection = decode_body(body)?;
+    let valid_text = |value: &String| !value.is_empty() && value.len() <= MAX_JACK_DEVICE_TEXT;
+    if selection.input_audio_ports.len() > 256
+        || selection.output_audio_ports.len() > 256
+        || selection.input_midi_devices.len() > 256
+        || selection.input_audio_ports.iter().any(|value| !valid_text(value))
+        || selection.output_audio_ports.iter().any(|value| !valid_text(value))
+        || selection
+            .input_midi_devices
+            .iter()
+            .any(|device| !valid_text(&device.name) || !valid_text(&device.description))
+    {
+        return Err("PiPedal JACK channel settings are invalid or excessive".into());
+    }
+    Ok(selection)
+}
+
 /// Validate a URI-to-favorite map before sending PiPedal's `setFavorites`.
 pub fn validate_favorites(
     favorites: &std::collections::BTreeMap<String, bool>,
@@ -2703,5 +2739,20 @@ mod tests {
             "numberOfBuffers": 3
         });
         assert!(decode_jack_server_settings(Some(invalid)).is_err());
+    }
+
+    #[test]
+    fn jack_settings_decode_bounds_source_channel_selection() {
+        let selection = decode_jack_settings(Some(serde_json::json!({
+            "inputAudioPorts": ["system:capture_1"],
+            "outputAudioPorts": ["system:playback_1"],
+            "inputMidiDevices": [{"name": "midi:0", "description": "Controller"}]
+        })))
+        .expect("channel selection response");
+        assert_eq!(selection.output_audio_ports[0], "system:playback_1");
+        assert!(decode_jack_settings(Some(serde_json::json!({
+            "inputAudioPorts": [""], "outputAudioPorts": [], "inputMidiDevices": []
+        })))
+        .is_err());
     }
 }

@@ -12237,3 +12237,6 @@ Evidence (2026-09-08): Devices browser gate initially observed a transient daemo
 - **PiPedal governor-settings backend increment (2026-09-08):** Added source-registered scalar-body
   `setGovernorSettings` as the 26th connector operation, with bounded input, explicit confirmation,
   generation-checked adapter preparation, focused contract coverage, and release checks.
+- **JACK-channel-settings readback slice (2026-09-10):** Added bounded decoding and generation-checked
+  adapter query/retention for source-registered `getJackSettings` channel selections. Daemon,
+  browser, and installed qualification remain pending W150.

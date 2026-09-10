@@ -252,6 +252,7 @@ pub struct Worker {
     alsa_devices: Vec<mackes_pipedal_connector::AlsaDeviceInfo>,
     jack_status: Option<mackes_pipedal_connector::JackHostStatus>,
     jack_server_settings: Option<mackes_pipedal_connector::JackServerSettings>,
+    jack_settings: Option<mackes_pipedal_connector::JackChannelSelection>,
     plugin_presets: std::collections::BTreeMap<String, mackes_pipedal_connector::PluginUiPresets>,
     wifi_regulatory_domains: std::collections::BTreeMap<String, String>,
     system_midi_bindings: Vec<mackes_pipedal_connector::MidiBinding>,
@@ -292,6 +293,7 @@ impl Worker {
             alsa_devices: Vec::new(),
             jack_status: None,
             jack_server_settings: None,
+            jack_settings: None,
             plugin_presets: std::collections::BTreeMap::new(),
             wifi_regulatory_domains: std::collections::BTreeMap::new(),
             system_midi_bindings: Vec::new(),
@@ -356,6 +358,7 @@ impl Worker {
                     self.alsa_devices.clear();
                     self.jack_status = None;
                     self.jack_server_settings = None;
+                    self.jack_settings = None;
                     self.plugin_presets.clear();
                     self.wifi_regulatory_domains.clear();
                     self.system_midi_bindings.clear();
@@ -564,6 +567,13 @@ impl Worker {
                 );
                 Ok(())
             }
+            "getJackSettings" => {
+                self.jack_settings = Some(
+                    mackes_pipedal_connector::decode_jack_settings(body)
+                        .map_err(|_| TransportError::Protocol)?,
+                );
+                Ok(())
+            }
             "getPluginPresets" => {
                 let catalog = mackes_pipedal_connector::decode_plugin_presets(body)
                     .map_err(|_| TransportError::Protocol)?;
@@ -734,6 +744,12 @@ impl Worker {
         &self,
     ) -> Option<&mackes_pipedal_connector::JackServerSettings> {
         self.jack_server_settings.as_ref()
+    }
+
+    /// Last validated JACK channel selection.
+    #[must_use]
+    pub const fn jack_settings(&self) -> Option<&mackes_pipedal_connector::JackChannelSelection> {
+        self.jack_settings.as_ref()
     }
 
     /// Last validated plugin-preset catalogs keyed by plugin URI.
@@ -1925,6 +1941,45 @@ impl Worker {
             return Err("PiPedal session is not ready for JACK-settings queries".into());
         }
         let frame = self.prepare_get_jack_server_settings(generation, reply_to)?;
+        self.session.enqueue(generation, frame)
+    }
+
+    /// Prepares a generation-checked, read-only JACK channel-selection query.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the generation is stale or encoding fails.
+    pub fn prepare_get_jack_settings(
+        &self,
+        generation: u64,
+        reply_to: Option<u64>,
+    ) -> Result<Vec<u8>, String> {
+        if generation != self.session.generation() {
+            return Err("PiPedal JACK-settings query belongs to an old session generation".into());
+        }
+        mackes_pipedal_connector::encode_request(&mackes_pipedal_connector::Request::<()> {
+            message: "getJackSettings".into(),
+            reply_to,
+            body: None,
+        })
+        .map_err(|error| error.to_string())
+    }
+
+    /// Queues a read-only JACK channel-selection query for a ready session.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the session is not ready, the generation is stale, or queue
+    /// admission fails.
+    pub fn query_jack_settings(
+        &mut self,
+        generation: u64,
+        reply_to: Option<u64>,
+    ) -> Result<(), String> {
+        if !self.session.is_ready() {
+            return Err("PiPedal session is not ready for JACK-settings queries".into());
+        }
+        let frame = self.prepare_get_jack_settings(generation, reply_to)?;
         self.session.enqueue(generation, frame)
     }
 
