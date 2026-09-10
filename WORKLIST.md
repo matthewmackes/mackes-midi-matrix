@@ -12300,3 +12300,6 @@ Evidence (2026-09-08): Devices browser gate initially observed a transient daemo
 - **Onboarding-state write slice (2026-09-10):** Added the source-registered `setOnboarding` boolean
   command with confirmed, generation-checked adapter encoding. Daemon/browser and installed
   qualification remain pending W150.
+- **ALSA-sequencer readback slice (2026-09-10):** Added bounded decoding and adapter retention for
+  source-registered `getAlsaSequencerConfiguration`, including MIDI-channel and selected-port
+  validation. Daemon/browser and installed qualification remain pending W150.

@@ -247,6 +247,7 @@ pub struct Worker {
     show_status_monitor: Option<bool>,
     has_wifi: Option<bool>,
     wifi_config_settings: Option<mackes_pipedal_connector::WifiConfigSettings>,
+    alsa_sequencer_configuration: Option<mackes_pipedal_connector::AlsaSequencerConfiguration>,
     update_status: Option<mackes_pipedal_connector::UpdateStatus>,
     known_wifi_networks: Vec<String>,
     wifi_channels: Vec<mackes_pipedal_connector::WifiChannel>,
@@ -290,6 +291,7 @@ impl Worker {
             show_status_monitor: None,
             has_wifi: None,
             wifi_config_settings: None,
+            alsa_sequencer_configuration: None,
             update_status: None,
             known_wifi_networks: Vec::new(),
             wifi_channels: Vec::new(),
@@ -357,6 +359,7 @@ impl Worker {
                     self.show_status_monitor = None;
                     self.has_wifi = None;
                     self.wifi_config_settings = None;
+                    self.alsa_sequencer_configuration = None;
                     self.update_status = None;
                     self.known_wifi_networks.clear();
                     self.wifi_channels.clear();
@@ -540,6 +543,13 @@ impl Worker {
             "getWifiConfigSettings" => {
                 self.wifi_config_settings = Some(
                     mackes_pipedal_connector::decode_wifi_config_settings(body)
+                        .map_err(|_| TransportError::Protocol)?,
+                );
+                Ok(())
+            }
+            "getAlsaSequencerConfiguration" => {
+                self.alsa_sequencer_configuration = Some(
+                    mackes_pipedal_connector::decode_alsa_sequencer_configuration(body)
                         .map_err(|_| TransportError::Protocol)?,
                 );
                 Ok(())
@@ -765,6 +775,14 @@ impl Worker {
         &self,
     ) -> Option<&mackes_pipedal_connector::WifiConfigSettings> {
         self.wifi_config_settings.as_ref()
+    }
+
+    /// Last validated ALSA sequencer configuration.
+    #[must_use]
+    pub const fn alsa_sequencer_configuration(
+        &self,
+    ) -> Option<&mackes_pipedal_connector::AlsaSequencerConfiguration> {
+        self.alsa_sequencer_configuration.as_ref()
     }
 
     /// Last validated JACK server configuration.
@@ -1536,6 +1554,27 @@ impl Worker {
         }
         let frame = self.prepare_get_presets(generation, reply_to)?;
         self.session.enqueue(generation, frame)
+    }
+
+    /// Prepares a generation-checked ALSA sequencer configuration query.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the generation is stale or encoding fails.
+    pub fn prepare_get_alsa_sequencer_configuration(
+        &self,
+        generation: u64,
+        reply_to: Option<u64>,
+    ) -> Result<Vec<u8>, String> {
+        if generation != self.session.generation() {
+            return Err("PiPedal ALSA sequencer query belongs to an old session generation".into());
+        }
+        mackes_pipedal_connector::encode_request(&mackes_pipedal_connector::Request::<()> {
+            message: "getAlsaSequencerConfiguration".into(),
+            reply_to,
+            body: None,
+        })
+        .map_err(|error| error.to_string())
     }
 
     /// Prepares a confirmed, generation-checked preset-index update.

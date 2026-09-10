@@ -398,6 +398,8 @@ pub enum Operation {
     DeletePresetItems,
     /// Set PiPedal onboarding state.
     SetOnboarding,
+    /// Query ALSA sequencer configuration.
+    GetAlsaSequencerConfiguration,
     /// Save the current preset.
     SaveCurrentPreset,
     /// Save the current pedalboard as a new preset.
@@ -494,6 +496,7 @@ impl Operation {
             Self::DeleteBankItem,
             Self::DeletePresetItems,
             Self::SetOnboarding,
+            Self::GetAlsaSequencerConfiguration,
             Self::SaveCurrentPreset,
             Self::SaveCurrentPresetAs,
             Self::SavePluginPresetAs,
@@ -563,6 +566,7 @@ impl Operation {
             Self::DeleteBankItem => "deleteBankItem",
             Self::DeletePresetItems => "deletePresetItems",
             Self::SetOnboarding => "setOnboarding",
+            Self::GetAlsaSequencerConfiguration => "getAlsaSequencerConfiguration",
             Self::SaveCurrentPreset => "saveCurrentPreset",
             Self::SaveCurrentPresetAs => "saveCurrentPresetAs",
             Self::SavePluginPresetAs => "savePluginPresetAs",
@@ -660,6 +664,7 @@ impl Operation {
                 | Self::GetShowStatusMonitor
                 | Self::GetWifiRegulatoryDomains
                 | Self::GetWifiConfigSettings
+                | Self::GetAlsaSequencerConfiguration
                 | Self::GetSystemMidiBindings
         )
     }
@@ -718,6 +723,7 @@ impl Operation {
             Self::DeleteBankItem => "presets",
             Self::DeletePresetItems => "presets",
             Self::SetOnboarding => "diagnostics",
+            Self::GetAlsaSequencerConfiguration => "diagnostics",
             Self::GetJackServerSettings | Self::GetGovernorSettings => "diagnostics",
             Self::GetShowStatusMonitor => "monitoring",
             Self::GetWifiRegulatoryDomains => "diagnostics",
@@ -948,6 +954,38 @@ impl DeletePresetItems {
         }
         Ok(())
     }
+}
+
+/// A selected ALSA sequencer connection.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AlsaSequencerConnection {
+    pub id: String,
+    pub name: String,
+    pub sort_order: i32,
+}
+
+/// Source-backed ALSA sequencer configuration.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AlsaSequencerConfiguration {
+    pub midi_channel: i32,
+    pub connections: Vec<AlsaSequencerConnection>,
+}
+
+/// Decode and bound ALSA sequencer configuration.
+pub fn decode_alsa_sequencer_configuration(
+    body: Option<serde_json::Value>,
+) -> Result<AlsaSequencerConfiguration, String> {
+    let config: AlsaSequencerConfiguration = decode_body(body)?;
+    if !(-1..=15).contains(&config.midi_channel)
+        || config.connections.len() > 256
+        || config.connections.iter().any(|connection| {
+            connection.id.is_empty() || connection.id.len() > 256 || connection.name.len() > 256
+        })
+    {
+        return Err("PiPedal ALSA sequencer configuration is invalid or excessive".into());
+    }
+    Ok(config)
 }
 
 impl CopyPluginPreset {
@@ -2852,7 +2890,7 @@ mod tests {
                 assert!(!operation.is_read_only());
             }
         }
-        assert_eq!(Operation::all().len(), 62);
+        assert_eq!(Operation::all().len(), 63);
         assert!(Operation::all().iter().all(|operation| !operation.wire_name().is_empty()));
         assert_eq!(serde_json::to_string(&Operation::SetControl).expect("json"), "\"setControl\"");
     }
