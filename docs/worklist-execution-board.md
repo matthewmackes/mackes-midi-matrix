@@ -4,7 +4,7 @@ Updated 2026-09-10. This board is subordinate to `WORKLIST.md`; it records the n
 step for the active Web Interface drain packets and must be updated with command output, not intent.
 
 Latest automated checkpoint (2026-09-10): `cargo test -p mackes-web` passed 56/56; graphical
-interface guard, web asset budget (38,240 compressed bytes), worklist validation, JavaScript syntax,
+interface guard, web asset budget (38,260 compressed bytes), worklist validation, JavaScript syntax,
 and `git diff --check` all pass. Installed browser smoke passed against
 `http://172.20.222.222:8081` after release rebuild/reinstall, including deep links, 320/768 responsive
 captures, light theme, GUI surface checks, and installed asset hashes. current worklist state: 147 complete, 14 in progress, 0 not started (161 total; measured 2026-09-10).
@@ -13,9 +13,9 @@ cards, 7 researched feature cards, all nine governed renderer keys, no visible c
 pass. The PiPedal catalog fixture now passes after the bounded 265-entry decoder fix, reporting 3,076
 controls and 265 targets from PiPedal v2.0.110.
 The PiPedal generation boundary was corrected and reinstalled; snapshot and connector generations now
-match, and the approved typed `loadPreset(16)` request was accepted/queued. The aggregate gate is now
-advancing to generation and lifecycle fixtures; final release qualification remains open until the
-entire command completes.
+match, and the approved typed `loadPreset(16)` request was accepted/queued. The generation fixture now
+asserts the Devices workspace's applied-generation marker, avoiding interference from an independent
+PiPedal subrefresh; the installed fixture passes and the aggregate gate is ready for a full rerun.
 The visual review pass also confirms the installed signal-flow canvas keeps 32 devices distinct in a
 scrollable layout and the normal Devices/Routing text avoids internal URIs and runtime identities.
 The formal `scripts/release-gate.sh` also passes end to end, including workspace tests, emulator,

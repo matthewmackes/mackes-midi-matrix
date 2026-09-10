@@ -11254,6 +11254,10 @@ Execution board: `docs/worklist-execution-board.md`.
   exceeding the connector’s prior 256-entry bound. Raised the bounded limit to 512, added a 265-entry
   regression test, rebuilt/reinstalled, and verified the authoritative projection at 3,076 controls
   and 265 targets. The PiPedal catalog fixture now passes; aggregate lifecycle qualification continues.
+- **Generation fixture checkpoint (2026-09-10):** The installed out-of-order response fixture now
+  asserts the Devices workspace's applied-generation marker rather than the shared status panel,
+  which can legitimately be refreshed by an independent PiPedal subrequest. The stale-response
+  behavior remains covered and the installed generation fixture passes after the release reinstall.
 
 #### [>] W177 — Install and close the graphical studio release
 

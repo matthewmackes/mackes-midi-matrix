@@ -761,6 +761,7 @@ async function load(view) {
     }
     if (Number.isInteger(body.generation)) {
       currentGeneration = body.generation;
+      if (view === 'devices' && deviceBoard) deviceBoard.dataset.generation = String(body.generation);
       if (view === 'mappings') mappingGeneration = body.generation;
       if (view === 'assignment') assignmentGeneration = body.generation;
       publishUiState();

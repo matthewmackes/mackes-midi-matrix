@@ -36,8 +36,8 @@ try:
     """)
     driver.execute_script("load('devices'); load('devices');")
     WebDriverWait(driver, 15).until(lambda d: d.execute_script("return window.__generationFetchCount") >= 2)
-    WebDriverWait(driver, 15).until(lambda d: "Generation: 2" in d.find_element("id", "state").text)
-    assert "Generation: 1" not in driver.find_element("id", "state").text
+    WebDriverWait(driver, 45).until(lambda d: d.find_element("id", "device-board").get_attribute("data-generation") == "2")
+    assert driver.find_element("id", "device-board").get_attribute("data-generation") != "1"
     print(f"browser-generation-smoke: PASS origin={origin}")
 finally:
     driver.quit()
