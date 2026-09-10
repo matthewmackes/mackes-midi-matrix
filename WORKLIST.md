@@ -12249,3 +12249,6 @@ Evidence (2026-09-08): Devices browser gate initially observed a transient daemo
 - **Update-now write slice (2026-09-10):** Added the source-registered `updateNow` operation with
   a bounded release URL and confirmed, generation-checked adapter payload path. Daemon/browser and
   installed qualification remain pending W150.
+- **Status-monitor write slice (2026-09-10):** Added the source-registered
+  `setShowStatusMonitor` boolean operation with a confirmed, generation-checked adapter path.
+  Daemon/browser and installed qualification remain pending W150.

@@ -409,6 +409,8 @@ pub enum Operation {
     GetGovernorSettings,
     /// Query whether PiPedal's status monitor is shown.
     GetShowStatusMonitor,
+    /// Set whether PiPedal's status monitor is shown.
+    SetShowStatusMonitor,
     /// Query Wi-Fi regulatory-domain labels.
     GetWifiRegulatoryDomains,
     /// Restart the PiPedal engine.
@@ -463,6 +465,7 @@ impl Operation {
             Self::SetGovernorSettings,
             Self::GetGovernorSettings,
             Self::GetShowStatusMonitor,
+            Self::SetShowStatusMonitor,
             Self::GetWifiRegulatoryDomains,
             Self::Restart,
             Self::Shutdown,
@@ -514,6 +517,7 @@ impl Operation {
             Self::SetGovernorSettings => "setGovernorSettings",
             Self::GetGovernorSettings => "getGovernorSettings",
             Self::GetShowStatusMonitor => "getShowStatusMonitor",
+            Self::SetShowStatusMonitor => "setShowStatusMonitor",
             Self::GetWifiRegulatoryDomains => "getWifiRegulatoryDomains",
             Self::Restart => "restart",
             Self::Shutdown => "shutdown",
@@ -545,6 +549,7 @@ impl Operation {
                 | Self::SetGovernorSettings
                 | Self::SetJackServerSettings
                 | Self::UpdateNow
+                | Self::SetShowStatusMonitor
                 | Self::Restart
                 | Self::Shutdown
         )
@@ -618,6 +623,7 @@ impl Operation {
             Self::SetGovernorSettings => "host",
             Self::SetJackServerSettings => "host",
             Self::UpdateNow => "host",
+            Self::SetShowStatusMonitor => "monitoring",
             Self::Restart | Self::Shutdown => "host",
         }
     }
@@ -2567,7 +2573,7 @@ mod tests {
                 assert!(!operation.is_read_only());
             }
         }
-        assert_eq!(Operation::all().len(), 44);
+        assert_eq!(Operation::all().len(), 45);
         assert!(Operation::all().iter().all(|operation| !operation.wire_name().is_empty()));
         assert_eq!(serde_json::to_string(&Operation::SetControl).expect("json"), "\"setControl\"");
     }

@@ -2097,6 +2097,32 @@ impl Worker {
         .map_err(|error| error.to_string())
     }
 
+    /// Prepares a confirmed, generation-checked status-monitor visibility change.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when confirmation, generation, or encoding fails.
+    pub fn prepare_set_show_status_monitor(
+        &self,
+        generation: u64,
+        show: bool,
+        reply_to: Option<u64>,
+        confirmed: bool,
+    ) -> Result<Vec<u8>, String> {
+        if !confirmed {
+            return Err("PiPedal status-monitor changes require explicit confirmation".into());
+        }
+        if generation != self.session.generation() {
+            return Err("PiPedal status-monitor change belongs to an old session generation".into());
+        }
+        mackes_pipedal_connector::encode_request(&mackes_pipedal_connector::Request {
+            message: "setShowStatusMonitor".into(),
+            reply_to,
+            body: Some(show),
+        })
+        .map_err(|error| error.to_string())
+    }
+
     /// Prepares a confirmed CPU-governor settings request with a bounded scalar body.
     ///
     /// # Errors
