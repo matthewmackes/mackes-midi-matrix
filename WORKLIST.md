@@ -12291,3 +12291,6 @@ Evidence (2026-09-08): Devices browser gate initially observed a transient daemo
 - **Plugin-preset-copy write slice (2026-09-10):** Added the source-registered `copyPluginPreset`
   payload with confirmed, generation-checked, bounded plugin URI and instance identity validation.
   Daemon/browser and installed qualification remain pending W150.
+- **Bank-item delete write slice (2026-09-10):** Added the source-registered `deleteBankItem` scalar
+  command with confirmed, generation-checked nonnegative identity validation. Daemon/browser and
+  installed qualification remain pending W150.

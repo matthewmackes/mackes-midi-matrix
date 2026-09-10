@@ -392,6 +392,8 @@ pub enum Operation {
     CopyPreset,
     /// Copy a plugin preset.
     CopyPluginPreset,
+    /// Delete a preset bank item.
+    DeleteBankItem,
     /// Save the current preset.
     SaveCurrentPreset,
     /// Save the current pedalboard as a new preset.
@@ -485,6 +487,7 @@ impl Operation {
             Self::RenamePresetItem,
             Self::CopyPreset,
             Self::CopyPluginPreset,
+            Self::DeleteBankItem,
             Self::SaveCurrentPreset,
             Self::SaveCurrentPresetAs,
             Self::SavePluginPresetAs,
@@ -551,6 +554,7 @@ impl Operation {
             Self::RenamePresetItem => "renamePresetItem",
             Self::CopyPreset => "copyPreset",
             Self::CopyPluginPreset => "copyPluginPreset",
+            Self::DeleteBankItem => "deleteBankItem",
             Self::SaveCurrentPreset => "saveCurrentPreset",
             Self::SaveCurrentPresetAs => "saveCurrentPresetAs",
             Self::SavePluginPresetAs => "savePluginPresetAs",
@@ -610,6 +614,7 @@ impl Operation {
                 | Self::RenamePresetItem
                 | Self::CopyPreset
                 | Self::CopyPluginPreset
+                | Self::DeleteBankItem
                 | Self::SaveCurrentPreset
                 | Self::SaveCurrentPresetAs
                 | Self::SavePluginPresetAs
@@ -700,6 +705,7 @@ impl Operation {
             Self::RenamePresetItem => "presets",
             Self::CopyPreset => "presets",
             Self::CopyPluginPreset => "presets",
+            Self::DeleteBankItem => "presets",
             Self::GetJackServerSettings | Self::GetGovernorSettings => "diagnostics",
             Self::GetShowStatusMonitor => "monitoring",
             Self::GetWifiRegulatoryDomains => "diagnostics",
@@ -2814,7 +2820,7 @@ mod tests {
                 assert!(!operation.is_read_only());
             }
         }
-        assert_eq!(Operation::all().len(), 59);
+        assert_eq!(Operation::all().len(), 60);
         assert!(Operation::all().iter().all(|operation| !operation.wire_name().is_empty()));
         assert_eq!(serde_json::to_string(&Operation::SetControl).expect("json"), "\"setControl\"");
     }

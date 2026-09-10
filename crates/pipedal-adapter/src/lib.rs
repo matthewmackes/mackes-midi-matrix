@@ -1676,6 +1676,35 @@ impl Worker {
         .map_err(|error| error.to_string())
     }
 
+    /// Prepares a confirmed, generation-checked bank-item deletion.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when confirmation, generation, identity validation, or encoding fails.
+    pub fn prepare_delete_bank_item(
+        &self,
+        generation: u64,
+        instance_id: i64,
+        reply_to: Option<u64>,
+        confirmed: bool,
+    ) -> Result<Vec<u8>, String> {
+        if !confirmed {
+            return Err("PiPedal bank-item deletion requires explicit confirmation".into());
+        }
+        if generation != self.session.generation() {
+            return Err("PiPedal bank-item deletion belongs to an old session generation".into());
+        }
+        if instance_id < 0 {
+            return Err("PiPedal bank-item identity is invalid".into());
+        }
+        mackes_pipedal_connector::encode_request(&mackes_pipedal_connector::Request {
+            message: "deleteBankItem".into(),
+            reply_to,
+            body: Some(instance_id),
+        })
+        .map_err(|error| error.to_string())
+    }
+
     /// Prepares a confirmed, generation-checked preset rename.
     ///
     /// # Errors
