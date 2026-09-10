@@ -15,7 +15,8 @@ controls and 265 targets from PiPedal v2.0.110.
 The PiPedal generation boundary was corrected and reinstalled; snapshot and connector generations now
 match, and the approved typed `loadPreset(16)` request was accepted/queued. The generation fixture now
 asserts the Devices workspace's applied-generation marker, avoiding interference from an independent
-PiPedal subrefresh; the installed fixture passes and the aggregate gate is ready for a full rerun.
+PiPedal subrefresh. The final installed aggregate passed all 16 fixtures, including lossless-route and
+task-ownership checks.
 The visual review pass also confirms the installed signal-flow canvas keeps 32 devices distinct in a
 scrollable layout and the normal Devices/Routing text avoids internal URIs and runtime identities.
 The formal `scripts/release-gate.sh` also passes end to end, including workspace tests, emulator,

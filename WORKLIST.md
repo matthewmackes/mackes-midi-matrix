@@ -11258,6 +11258,10 @@ Execution board: `docs/worklist-execution-board.md`.
   asserts the Devices workspace's applied-generation marker rather than the shared status panel,
   which can legitimately be refreshed by an independent PiPedal subrequest. The stale-response
   behavior remains covered and the installed generation fixture passes after the release reinstall.
+- **Safety-language checkpoint (2026-09-10):** The installed route guard fixture now matches the
+  graphical “view-only” explanation and confirms Apply is blocked when endpoint identifiers exceed
+  the browser's lossless numeric contract. The assignment inspector fixture likewise confirms friendly
+  labels and authoritative source/destination/behavior details without exposing mapping IDs.
 
 #### [>] W177 — Install and close the graphical studio release
 
@@ -11270,7 +11274,7 @@ Execution board: `docs/worklist-execution-board.md`.
 - **Release-gate checkpoint (2026-09-10):** `scripts/release-gate.sh` passed end to end after the
   catalog-bound fix: formatting/policy, workspace tests, emulator qualification, clippy, routing
   benchmark, 16 passing hermetic scenarios (1 explicitly post-release ignored), installer smoke, and
-  packaged release checksum/contents validation. Installed web qualification also passed all 15
+  packaged release checksum/contents validation. The final installed web qualification passed all 16
   fixtures, including graphical inventory, renderer registry, PiPedal catalog (3,076 controls / 265
   targets), lifecycle, responsive, accessibility, and lossless-route checks. W176 novice/human sign-off
   and final release artifacts/sign-off remain open before this packet can close.
