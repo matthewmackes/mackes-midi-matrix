@@ -11042,6 +11042,108 @@ Execution board: `docs/worklist-execution-board.md`.
   bounded 20 ms backoff preserves responsive command/MIDI servicing. `mackesd` tests and strict
   Clippy pass.
 
+#### [>] W167 — Deliver the graphical studio interface epic for nontechnical musicians
+
+- **Status:** `IN_PROGRESS`
+- **Owner:** Codex
+- **Depends on:** W159, W160, W161, W162, W163, W164, W165, W166
+- **Objective:** Replace code-oriented web GUI surfaces with a graphical studio signal-flow interface in which every known, generic, virtual, and future endpoint has a meaningful device representation and every editable capability is handled by a visual control or guided builder.
+- **Specification:** `docs/graphical-studio-interface-epic.md`
+- **User contract:** A musician who understands instruments and studio equipment but not MIDI internals must be able to discover devices, connect signal flow, edit mappings, build scenes, understand state, recover from conflicts, and apply changes without seeing or entering JSON, JSON5, SysEx bytes, internal IDs, code, or state dumps.
+- **Design decisions:** Faithful responsive local SVG schematics; studio signal-flow canvas as the primary home; visual builders for advanced capabilities; readable labels/help/status/accessibility text remain allowed; downloadable raw captures are not browser editors.
+- **Acceptance:** W168–W177 close with renderer coverage for the governed inventory, responsive pointer/keyboard workflows, lossless visual editing, draft/conflict/reconnect handling, accessible novice walkthroughs, release-gate evidence, and no visible code/protocol editor in the normal GUI.
+- **Execution:** Run W168–W177 in dependency order, keeping the daemon as the sole writer and generation authority. Unknown endpoint kinds must use the generic graphical fallback rather than a text-only card. Do not remove advanced capability; represent it through visual builders.
+
+#### [ ] W168 — Audit code surfaces and renderer coverage
+
+- **Status:** `NOT_STARTED`
+- **Owner:** Codex
+- **Depends on:** W167
+- **Objective:** Inventory every rendered and editable code/protocol surface, map each governed endpoint kind to a renderer, and create a failing static guard for regressions.
+- **Acceptance:** No normal route, scene, device, settings, diagnostics, or recovery screen renders a code textbox, raw protocol editor, internal identifier field, or state dump. The renderer ledger covers Novation Launch Control XL, Eventide MicroPitch, Lexicon Reflex, PiPedal, MIDISPORT 4x4, RTP-MIDI, generic MIDI, MACKES virtual/monitor, and unknown fallback endpoints.
+- **Evidence:** Static source/DOM guard, renderer coverage matrix, accessibility-equivalent inventory, and documented exceptions for downloadable raw artifacts.
+
+#### [ ] W169 — Build the responsive studio signal-flow shell
+
+- **Status:** `NOT_STARTED`
+- **Owner:** Codex
+- **Depends on:** W168
+- **Objective:** Make the home view a clear left-to-right studio signal-flow canvas with device nodes, visible ports, connection lines, status badges, readable names, and an obvious add-device path.
+- **Acceptance:** Desktop palette/canvas/inspector, tablet layout, and phone staged flow work at 320, 768, and 1440 CSS pixels. Users can add, select, connect, reorder, zoom, pan, undo, cancel, and apply with pointer and keyboard. Essential actions never depend on hover or horizontal scrolling.
+- **Evidence:** Browser fixtures and screenshots at required widths, keyboard traversal checks, empty/loading/unavailable states, and clean-console evidence.
+
+#### [ ] W170 — Deliver faithful physical-device schematics
+
+- **Status:** `NOT_STARTED`
+- **Owner:** Codex
+- **Depends on:** W169
+- **Objective:** Create responsive code-native SVG faceplates for Novation Launch Control XL Mk1/Mk2, Eventide MicroPitch, and Lexicon Reflex, using governed geometry and port/control placement.
+- **Acceptance:** Each faceplate exposes real controls and ports as selectable graphical targets with labels, tooltips/help, state indication, supported/unsupported semantics, and accessible names. Novation controls support pointer/keyboard selection and emulator fixtures without claiming native observation.
+- **Evidence:** Model-specific renderer fixtures, geometry/source references, interaction tests, reduced-motion/theme checks, and unknown/disconnected state tests.
+
+#### [ ] W171 — Deliver processor, interface, and virtual endpoint graphics
+
+- **Status:** `NOT_STARTED`
+- **Owner:** Codex
+- **Depends on:** W169
+- **Objective:** Provide graphical representations for PiPedal, M-Audio MIDISPORT 4x4, RTP-MIDI, generic MIDI, MACKES virtual/monitor endpoints, and unknown future endpoint kinds.
+- **Acceptance:** Every endpoint has a graphical chassis or topology representation, visible port roles, connection state, and accessible list equivalent. Generic and unknown devices remain useful without invented controls or unsupported capabilities.
+- **Evidence:** Connected/disconnected/observed/unknown renderer matrix, endpoint fixtures, fallback tests, and inventory governance links.
+
+#### [ ] W172 — Replace mapping and routing editors with visual builders
+
+- **Status:** `NOT_STARTED`
+- **Owner:** Codex
+- **Depends on:** W169, W170, W171
+- **Objective:** Turn route creation and advanced predicates into guided source/target cards, signal lines, condition chips, ranges, curves, filters, and plain-language validation.
+- **Acceptance:** A novice can create a route without protocol knowledge. Every supported advanced field remains editable and lossless through visual controls; unsupported values are shown as preserved/locked with an explanation. Draft, conflict, stale, reconnect, undo, and authoritative apply behavior remain explicit.
+- **Evidence:** Lossless round-trip fixtures, schema/contract tests, keyboard builder flow, conflict/reconnect scenarios, and no-JSON DOM guard.
+
+#### [ ] W173 — Replace scene and setlist code entry with visual action cards
+
+- **Status:** `NOT_STARTED`
+- **Owner:** Codex
+- **Depends on:** W172
+- **Objective:** Represent scenes, modifiers, ordered actions, timing, assignments, and setlists as cards, chips, timelines, and previews rather than serialized action text.
+- **Acceptance:** Users can add, reorder, duplicate, edit, preview, apply, rename, and recover scenes using guided controls. Multiple destinations and modifier-layer rules from W165 remain visible and understandable; action failures identify the affected device and safe next step.
+- **Evidence:** Ordered-action fixtures, layer/scene reset tests, apply/reconnect recovery flows, and accessible action-card semantics.
+
+#### [ ] W174 — Make settings, diagnostics, and recovery graphical
+
+- **Status:** `NOT_STARTED`
+- **Owner:** Codex
+- **Depends on:** W168, W169, W172
+- **Objective:** Replace raw settings, diagnostic payloads, and recovery instructions with status tiles, meters, timelines, device health diagrams, guided forms, and one-action recovery choices.
+- **Acceptance:** Health, persistence, connector state, generation, last-known/unknown outcomes, and service recovery are understandable without raw dumps. Export/download may produce a support artifact, but the browser does not provide a code editor or dump viewer as the normal path.
+- **Evidence:** State matrix, failure/recovery fixtures, no-code rendered DOM audit, download boundary test, and screen-reader descriptions.
+
+#### [ ] W175 — Version graphical capability, draft, and renderer contracts
+
+- **Status:** `NOT_STARTED`
+- **Owner:** Codex
+- **Depends on:** W168, W172, W173
+- **Objective:** Define daemon-owned versioned contracts for renderer keys, device kind/model, geometry, port layout, controls, units/enums, readback semantics, qualification status, drafts, conflicts, and generic fallback.
+- **Acceptance:** The daemon remains the sole writer/generation authority; reconnect, stale apply, unknown write outcome, migration, and lossless preservation are tested. No UI-only capability invents hardware behavior or claims readback from an acknowledged write.
+- **Evidence:** Schemas/ADRs, golden payloads, migrations, generation checks, contract tests, and browser fixtures driven by authoritative projections.
+
+#### [ ] W176 — Qualify novice usability and accessibility
+
+- **Status:** `NOT_STARTED`
+- **Owner:** Codex
+- **Depends on:** W170, W171, W172, W173, W174, W175
+- **Objective:** Validate that the visual interface makes sense to nontechnical musicians across supported devices, states, themes, input methods, and viewport sizes.
+- **Acceptance:** A novice completes connect, map, edit, scene, apply, disconnect, and recover walkthroughs without entering code/protocol data. Focus order, names, status announcements, contrast, reduced motion, zoom, and non-color state cues pass.
+- **Evidence:** Moderated-style walkthrough scripts, accessibility-tree assertions, keyboard-only fixtures, responsive screenshots, and issue disposition.
+
+#### [ ] W177 — Install and close the graphical studio release
+
+- **Status:** `NOT_STARTED`
+- **Owner:** Codex
+- **Depends on:** W176
+- **Objective:** Install the completed graphical interface, verify the packaged assets and service behavior, and close the epic with reproducible release evidence.
+- **Acceptance:** Browser, contract, service, emulator, hermetic integration, installer, asset, and full release gates pass. Installed UI has no code/protocol editor in normal flows, every endpoint renders graphically, console is clean, restart/reconnect behavior is qualified, and the worklist/spec/evidence are synchronized.
+- **Evidence:** Build/install logs, screenshots, hashes, service status, browser report, release-gate output, and final sign-off.
+
 ## 4. Dependency and parallelization map
 
 ```text

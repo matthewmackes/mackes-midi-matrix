@@ -1,12 +1,12 @@
 # Worklist execution board
 
-Updated 2026-09-08. This board is subordinate to `WORKLIST.md`; it records the next executable
+Updated 2026-09-10. This board is subordinate to `WORKLIST.md`; it records the next executable
 step for the active Web Interface drain packets and must be updated with command output, not intent.
 
 Latest automated checkpoint (2026-09-08): `cargo test -p mackes-web` passed 54/54; strict Clippy,
 web asset budget (25,699 compressed bytes), web coverage (40 capabilities), worklist validation
-current worklist state: 146 complete, 4 in progress, 0 not started (150 total; measured 2026-09-08)
-(150 items), and `git diff --check` all pass. Focused installed browser fixtures for inventory,
+current worklist state: 146 complete, 5 in progress, 10 not started (161 total; measured 2026-09-10)
+(161 items), and `git diff --check` all pass. Focused installed browser fixtures for inventory,
 PiPedal, assignment, lossless routing, and task ownership pass; a post-fixture 1,000-cycle health
 soak passes with p95 8.964ms and max 13.213ms. These checks verify contracts and packaging, not
 human visual sign-off or native hardware observation.
