@@ -10,12 +10,12 @@ and `git diff --check` all pass. Installed browser smoke passed against
 captures, light theme, GUI surface checks, and installed asset hashes. current worklist state: 147 complete, 13 in progress, 1 not started (161 total; measured 2026-09-10).
 The installed graphical-inventory, renderer-registry, and novice-surface fixtures pass (32 live device
 cards, 7 researched feature cards, all nine governed renderer keys, no visible code editor); generation ordering and visual draft-preservation fixtures also
-pass. The aggregate gate currently stops at PiPedal catalog because the authoritative live catalog reports
-zero controls and zero targets; this is recorded as an environment/device-state dependency and is not
-being masked by the release checks.
+pass. The PiPedal catalog fixture now passes after the bounded 265-entry decoder fix, reporting 3,076
+controls and 265 targets from PiPedal v2.0.110.
 The PiPedal generation boundary was corrected and reinstalled; snapshot and connector generations now
-match, and the approved typed `loadPreset(16)` request was accepted/queued. The catalog remains empty
-after that authoritative attempt, so the PiPedal fixture continues to fail closed.
+match, and the approved typed `loadPreset(16)` request was accepted/queued. The aggregate gate is now
+advancing to generation and lifecycle fixtures; final release qualification remains open until the
+entire command completes.
 The existing focused
 fixtures and post-fixture health soak remain valid; these checks do not constitute human visual
 sign-off or native hardware observation.

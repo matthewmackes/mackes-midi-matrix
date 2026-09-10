@@ -11231,17 +11231,20 @@ Execution board: `docs/worklist-execution-board.md`.
   `scripts/browser-novice-surface-smoke.py` to installed qualification. It passed against the local
   host, finding no textarea/pre/code-editor surface and confirming guided selectors for device,
   control, channel, destination, and PiPedal repair choices alongside graphical studio content.
-- **Qualification boundary (2026-09-10):** The aggregate installed gate reaches the PiPedal catalog
-  fixture but stops because the authoritative live PiPedal projection currently reports zero controls
-  and zero targets (`pipedald.service` is active; PiPedal v2.0.110). The fixture remains fail-closed;
-  no hand-built pedalboard or guessed preset was injected. Generation ordering and visual draft
-  preservation were updated for the graphical UI and pass independently.
+- **Qualification boundary (2026-09-10):** The initial aggregate installed gate stopped because the
+  authoritative live PiPedal projection reported zero controls and zero targets. The fixture remained
+  fail-closed; no hand-built pedalboard or guessed preset was injected. Generation ordering and visual
+  draft preservation were updated for the graphical UI and pass independently.
 - **Generation-boundary fix (2026-09-10):** The PiPedal snapshot had been publishing the unrelated
   daemon-wide generation, causing every confirmed preset restore to be rejected as stale. Snapshot,
   repair conflict, and repair acknowledgement responses now publish the PiPedal connector session
   generation. Release rebuild/reinstall passed; the host reports matching generation `0`, and the
-  typed `loadPreset(16)` request was accepted and queued. The live catalog remains empty after the
-  authoritative restore attempt, so catalog qualification is still open.
+  typed `loadPreset(16)` request was accepted and queued. A subsequent authoritative refresh populated
+  the catalog after the decoder bound was corrected.
+- **Catalog-bound fix (2026-09-10):** The installed PiPedal server advertises 265 plugin entries,
+  exceeding the connector’s prior 256-entry bound. Raised the bounded limit to 512, added a 265-entry
+  regression test, rebuilt/reinstalled, and verified the authoritative projection at 3,076 controls
+  and 265 targets. The PiPedal catalog fixture now passes; aggregate lifecycle qualification continues.
 
 #### [ ] W177 — Install and close the graphical studio release
 

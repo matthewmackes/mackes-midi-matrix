@@ -40,7 +40,10 @@ pub const MAX_BANK_ENTRIES: usize = 128;
 /// Maximum current-pedalboard items accepted from one PiPedal state response.
 pub const MAX_PEDALBOARD_ITEMS: usize = 256;
 /// Maximum plugin entries accepted from one PiPedal `plugins` response.
-pub const MAX_PLUGIN_ENTRIES: usize = 256;
+///
+/// PiPedal v2.0.110 advertises 265 installed plugins on the qualification host; retain headroom
+/// while keeping the response bounded before any catalog projection is attempted.
+pub const MAX_PLUGIN_ENTRIES: usize = 512;
 /// Maximum child classes retained in one plugin-class node.
 pub const MAX_PLUGIN_CLASS_CHILDREN: usize = 256;
 /// Maximum favorite identities accepted from one PiPedal response.
@@ -3241,6 +3244,13 @@ mod tests {
             {"uri": "urn:eq", "name": "EQ"}, {"uri": "urn:eq", "name": "EQ 2"}
         ]);
         assert!(decode_plugin_catalog(Some(duplicate)).is_err());
+        let installed_scale = serde_json::json!((0..265)
+            .map(|id| serde_json::json!({"uri": format!("urn:plugin:{id}"), "name": format!("Plugin {id}"), "controls": []}))
+            .collect::<Vec<_>>());
+        assert_eq!(
+            decode_plugin_catalog(Some(installed_scale)).expect("installed-scale catalog").len(),
+            265
+        );
     }
 
     #[test]
