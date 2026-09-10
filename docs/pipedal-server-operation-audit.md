@@ -100,7 +100,7 @@ user-facing workflow without needing an independent button; require a documented
 |---|---|---|---|
 | setControl | catalogued | Pedalboard and parameter inspector | pending W150 |
 | makeTone3000Pkce | catalogued | Device assets/library | bounded redirect query and PKCE-object readback projection implemented; daemon/browser/installed qualification pending W150 |
-| writeTone3000Readme | missing | Device assets/library | pending W150 |
+| writeTone3000Readme | catalogued | Device assets/library | confirmed bounded adapter write implemented; daemon/browser/installed qualification pending W150 |
 | sha256Base64url | catalogued | Device assets/library | bounded adapter query and digest readback projection implemented; daemon/browser/installed qualification pending W150 |
 | previewControl | catalogued | Pedalboard and parameter inspector | pending W150 |
 | setInputVolume | catalogued | Pedalboard and parameter inspector | pending W150 |

@@ -885,6 +885,36 @@ impl Worker {
         .map_err(|error| error.to_string())
     }
 
+    /// Prepares a generation-checked, confirmed Tone3000 README write.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the generation, path, URL, or Tone payload is invalid.
+    pub fn prepare_write_tone3000_readme(
+        &self,
+        generation: u64,
+        request: mackes_pipedal_connector::WriteTone3000ReadmeRequest,
+        reply_to: Option<u64>,
+    ) -> Result<Vec<u8>, String> {
+        if generation != self.session.generation() {
+            return Err("Tone3000 README write belongs to an old session generation".into());
+        }
+        if request.file_path.is_empty()
+            || request.file_path.len() > 1024
+            || request.file_path.contains("..")
+            || request.thumbnail_url.len() > 2048
+            || serde_json::to_vec(&request.tone).map_or(true, |bytes| bytes.len() > 16 * 1024)
+        {
+            return Err("Tone3000 README request is invalid or excessive".into());
+        }
+        mackes_pipedal_connector::encode_request(&mackes_pipedal_connector::Request {
+            message: "writeTone3000Readme".into(),
+            reply_to,
+            body: Some(request),
+        })
+        .map_err(|error| error.to_string())
+    }
+
     /// Prepares a generation-checked Tone3000 PKCE query.
     ///
     /// # Errors

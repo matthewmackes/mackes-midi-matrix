@@ -492,6 +492,8 @@ pub enum Operation {
     CopyFilePropertyFile,
     /// Query the file-property directory tree.
     GetFilePropertyDirectoryTree,
+    /// Write a Tone3000 README file.
+    WriteTone3000Readme,
     /// Create Tone3000 PKCE parameters.
     MakeTone3000Pkce,
     /// Cancel an active Tone3000 download.
@@ -605,6 +607,7 @@ impl Operation {
             Self::MoveAudioFile,
             Self::CopyFilePropertyFile,
             Self::GetFilePropertyDirectoryTree,
+            Self::WriteTone3000Readme,
             Self::MakeTone3000Pkce,
             Self::CancelTone3000Download,
             Self::LoadPluginPreset,
@@ -703,6 +706,7 @@ impl Operation {
             Self::MoveAudioFile => "moveAudioFile",
             Self::CopyFilePropertyFile => "copyFilePropertyFile",
             Self::GetFilePropertyDirectoryTree => "getFilePropertyDirectoryTree",
+            Self::WriteTone3000Readme => "writeTone3000Readme",
             Self::MakeTone3000Pkce => "makeTone3000Pkce",
             Self::CancelTone3000Download => "cancelTone3000Download",
             Self::LoadPluginPreset => "loadPluginPreset",
@@ -757,6 +761,7 @@ impl Operation {
                 | Self::MoveAudioFile
                 | Self::CopyFilePropertyFile
                 | Self::GetFilePropertyDirectoryTree
+                | Self::WriteTone3000Readme
                 | Self::CancelTone3000Download
                 | Self::DeletePresetItems
                 | Self::SetOnboarding
@@ -861,6 +866,7 @@ impl Operation {
             Self::MoveAudioFile => "assets",
             Self::CopyFilePropertyFile => "assets",
             Self::GetFilePropertyDirectoryTree => "assets",
+            Self::WriteTone3000Readme => "assets",
             Self::MakeTone3000Pkce => "assets",
             Self::CancelTone3000Download => "assets",
             Self::RequestFileList2 => "assets",
@@ -1674,6 +1680,15 @@ pub struct CopyFilePropertyRequest {
 pub struct FilePropertyDirectoryTreeRequest {
     pub file_property: serde_json::Value,
     pub selected_path: String,
+}
+
+/// Source-shaped Tone3000 README write request.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WriteTone3000ReadmeRequest {
+    pub file_path: String,
+    pub tone: serde_json::Value,
+    pub thumbnail_url: String,
 }
 
 /// Decode a bounded file-property directory tree.
@@ -3336,7 +3351,7 @@ mod tests {
                 assert!(!operation.is_read_only());
             }
         }
-        assert_eq!(Operation::all().len(), 91);
+        assert_eq!(Operation::all().len(), 92);
         assert!(Operation::all().iter().all(|operation| !operation.wire_name().is_empty()));
         assert_eq!(serde_json::to_string(&Operation::SetControl).expect("json"), "\"setControl\"");
     }

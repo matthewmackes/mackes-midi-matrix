@@ -12385,3 +12385,6 @@ Evidence (2026-09-08): Devices browser gate initially observed a transient daemo
 - **Directory-tree slice (2026-09-10):** Added bounded source-shaped query and response projection
   for `getFilePropertyDirectoryTree`, with reconnect-safe adapter retention. Daemon/browser and
   installed qualification remain pending W150.
+- **Tone3000 README slice (2026-09-10):** Added bounded, generation-checked confirmed encoding for
+  `writeTone3000Readme`, including source-shaped Tone and thumbnail fields. Daemon/browser and
+  installed qualification remain pending W150.
