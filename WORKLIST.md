@@ -11087,6 +11087,10 @@ Execution board: `docs/worklist-execution-board.md`.
   activation, accessible names/descriptions, an add-device entry point, and responsive canvas styling.
   This is the shell baseline; palette operations, real route edges, pan/zoom, and full device
   renderers remain open in W170–W172.
+- **Installed verification (2026-09-10):** Rebuilt and reinstalled the release binaries and ran
+  `scripts/browser-smoke.sh http://172.20.222.222:8081`; the installed smoke passed for all workspace
+  views, deep links, responsive captures at 320/768, light theme, GUI surface checks, and local asset
+  hashes. The service and web service both report `active`.
 
 #### [>] W170 — Deliver faithful physical-device schematics
 
