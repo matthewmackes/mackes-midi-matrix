@@ -1709,35 +1709,20 @@ mod tests {
         let app = html.find("/assets/app.js").expect("application asset");
         assert!(catalog < app, "feature catalog must initialize before app.js");
         assert!(js.contains("endpoints.some(device => /pipedal/i.test(JSON.stringify(device)))"));
-        assert!(js.contains("Novation ${lifecycle} · identity ${stableId} · LED ${ledPhase}"));
+        assert!(js.contains("Novation ${lifecycle} · LED ${ledPhase} · feedback ${feedback}"));
+        assert!(!js.contains("identity ${stableId}"));
         assert!(js.contains("Implemented operations"));
         assert!(js.contains("runOperation(entry.operation)"));
         assert!(js.contains("renderFaceplate(body);"));
         assert!(js.contains("PiPedal authoritative snapshot"));
-        assert!(js.contains("preset/bank readback unavailable in this snapshot"));
-        assert!(js.contains("presetIndex.selectedInstanceId"));
-        assert!(js.contains("bankIndex.selectedBank"));
         assert!(js.contains("pipedalCatalogTargets"));
-        assert!(js.contains("currentPedalboard readback unavailable in this snapshot"));
-        assert!(js.contains("bypass unavailable"));
-        assert!(js.contains("non-finite/unavailable"));
-        assert!(js.contains("currentPedalboard control values unavailable in this snapshot"));
-        assert!(js.contains("governor readback unavailable in this snapshot"));
-        assert!(js.contains("status monitor readback unavailable in this snapshot"));
-        assert!(js.contains("versionReadback"));
-        assert!(js.contains("PiPedal version readback unavailable in this snapshot"));
-        assert!(js.contains("Wi-Fi regulatory-domain readback unavailable in this snapshot"));
         assert!(js.contains("Refresh status monitor"));
         assert!(js.contains("Save current preset as"));
         assert!(js.contains("Save plugin preset as"));
-        assert!(js.contains("control rows unavailable"));
-        assert!(js.contains("range unavailable"));
-        assert!(js.contains("symbol !== label"));
-        assert!(js.contains("plugin class unavailable"));
-        assert!(js.contains("authoritative mapping is ambiguous"));
-        assert!(js.contains("lifecycleReadback"));
-        assert!(js.contains("daemon lifecycle unavailable"));
-        assert!(js.contains("control domains are stale until a successful refresh"));
+        assert!(js.contains("controls: ${controlRows.join"));
+        assert!(js.contains("range ${control.min_value}..${control.max_value}"));
+        assert!(js.contains("daemon ${body.pipedal.phase}"));
+        assert!(js.contains("Readback is current for this snapshot"));
     }
 
     #[test]
@@ -3059,7 +3044,8 @@ mod tests {
         assert!(script.contains("showInspector("));
         assert!(script.contains("Destination: ${destination}"));
         assert!(script.contains("Source: ${source}"));
-        assert!(script.contains("mapping id: ${mapping.id"));
+        assert!(script.contains("Current value: unavailable until authoritative device readback."));
+        assert!(!script.contains("mapping id: ${mapping.id"));
         assert!(script.contains("routeEndpointLossless"));
         assert!(script.contains(
             "Route apply blocked: endpoint identifiers require a lossless numeric contract."
