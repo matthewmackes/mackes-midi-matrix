@@ -163,3 +163,22 @@ and `Operation::GetJackServerSettings`, `Operation::GetGovernorSettings`, `Opera
 `Operation::GetWifiRegulatoryDomains`,
 and `Operation::SetGovernorSettings`,
 `Operation::Restart`, and `Operation::Shutdown`.
+
+The catalog also includes the recently qualified asset, monitoring, preset, and system operations:
+`Operation::AddVuSubscription`, `Operation::CancelTone3000Download`, `Operation::CopyFilePropertyFile`,
+`Operation::CopyPluginPreset`, `Operation::CopyPreset`, `Operation::CopyPresetsToBank`,
+`Operation::CreateNewSampleDirectory`, `Operation::DeleteBankItem`, `Operation::DeletePresetItems`,
+`Operation::DeleteUserFile`, `Operation::ForceUpdateCheck`, `Operation::GetAlsaSequencerConfiguration`,
+`Operation::GetAlsaSequencerPorts`, `Operation::GetChannelRouterSettings`,
+`Operation::GetFilePropertyDirectoryTree`, `Operation::GetImageList`, `Operation::GetPatchProperty`,
+`Operation::GetWifiConfigSettings`, `Operation::ImportPresetsFromBank`, `Operation::MakeTone3000Pkce`,
+`Operation::MonitorPort`, `Operation::MoveAudioFile`, `Operation::MoveBank`, `Operation::NewPreset`,
+`Operation::NextBank`, `Operation::NextPreset`, `Operation::OpenBank`, `Operation::PingTone3000Server`,
+`Operation::PreviousBank`, `Operation::PreviousPreset`, `Operation::RemoveVuSubscription`,
+`Operation::RenameBank`, `Operation::RenameFilePropertyFile`, `Operation::RenamePresetItem`,
+`Operation::RequestBankPresets`, `Operation::RequestFileList2`, `Operation::SaveBankAs`,
+`Operation::SetAlsaSequencerConfiguration`, `Operation::SetChannelRouterSettings`,
+`Operation::SetJackServerSettings`, `Operation::SetOnboarding`, `Operation::SetPatchProperty`,
+`Operation::SetShowStatusMonitor`, `Operation::SetUpdatePolicy`, `Operation::Sha256Base64url`,
+`Operation::UnmonitorPort`, `Operation::UpdateNow`, `Operation::UpdatePluginPresets`,
+`Operation::UpdatePresets`, and `Operation::WriteTone3000Readme`.

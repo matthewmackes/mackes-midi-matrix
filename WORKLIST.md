@@ -12388,3 +12388,6 @@ Evidence (2026-09-08): Devices browser gate initially observed a transient daemo
 - **Tone3000 README slice (2026-09-10):** Added bounded, generation-checked confirmed encoding for
   `writeTone3000Readme`, including source-shaped Tone and thumbnail fields. Daemon/browser and
   installed qualification remain pending W150.
+- **Web-ledger synchronization slice (2026-09-10):** Synchronized the web feature ledger with all
+  currently catalogued PiPedal connector operation variants so the full release gate can verify
+  operation coverage.
