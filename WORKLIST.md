@@ -12258,3 +12258,6 @@ Evidence (2026-09-08): Devices browser gate initially observed a transient daemo
 - **Plugin-preset catalog write slice (2026-09-10):** Added the source-registered
   `updatePluginPresets` operation with confirmed, generation-checked, bounded catalog validation.
   Daemon/browser and installed qualification remain pending W150.
+- **Preset-index write slice (2026-09-10):** Added the source-registered `updatePresets` operation
+  with confirmed, generation-checked, bounded preset-index validation. Daemon/browser and installed
+  qualification remain pending W150.

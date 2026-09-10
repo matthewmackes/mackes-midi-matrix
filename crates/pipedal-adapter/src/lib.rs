@@ -1538,6 +1538,34 @@ impl Worker {
         self.session.enqueue(generation, frame)
     }
 
+    /// Prepares a confirmed, generation-checked preset-index update.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when confirmation, generation, index validation, or encoding fails.
+    pub fn prepare_update_presets(
+        &self,
+        generation: u64,
+        index: mackes_pipedal_connector::PresetIndex,
+        reply_to: Option<u64>,
+        confirmed: bool,
+    ) -> Result<Vec<u8>, String> {
+        if !confirmed {
+            return Err("PiPedal preset updates require explicit confirmation".into());
+        }
+        if generation != self.session.generation() {
+            return Err("PiPedal preset update belongs to an old session generation".into());
+        }
+        let value = serde_json::to_value(&index).map_err(|error| error.to_string())?;
+        mackes_pipedal_connector::decode_preset_index(Some(value))?;
+        mackes_pipedal_connector::encode_request(&mackes_pipedal_connector::Request {
+            message: "updatePresets".into(),
+            reply_to,
+            body: Some(index),
+        })
+        .map_err(|error| error.to_string())
+    }
+
     /// Prepares a confirmed, generation-checked current-preset load request.
     ///
     /// # Errors

@@ -368,6 +368,8 @@ pub enum Operation {
     GetSystemMidiBindings,
     /// Load a saved preset.
     LoadPreset,
+    /// Replace the current preset index.
+    UpdatePresets,
     /// Save the current preset.
     SaveCurrentPreset,
     /// Save the current pedalboard as a new preset.
@@ -449,6 +451,7 @@ impl Operation {
             Self::CancelMonitorPatchProperty,
             Self::GetSystemMidiBindings,
             Self::LoadPreset,
+            Self::UpdatePresets,
             Self::SaveCurrentPreset,
             Self::SaveCurrentPresetAs,
             Self::SavePluginPresetAs,
@@ -503,6 +506,7 @@ impl Operation {
             Self::CancelMonitorPatchProperty => "cancelMonitorPatchProperty",
             Self::GetSystemMidiBindings => "getSystemMidiBindings",
             Self::LoadPreset => "loadPreset",
+            Self::UpdatePresets => "updatePresets",
             Self::SaveCurrentPreset => "saveCurrentPreset",
             Self::SaveCurrentPresetAs => "saveCurrentPresetAs",
             Self::SavePluginPresetAs => "savePluginPresetAs",
@@ -550,6 +554,7 @@ impl Operation {
                 | Self::CancelMonitorPatchProperty
                 | Self::GetSystemMidiBindings
                 | Self::LoadPreset
+                | Self::UpdatePresets
                 | Self::SaveCurrentPreset
                 | Self::SaveCurrentPresetAs
                 | Self::SavePluginPresetAs
@@ -628,6 +633,7 @@ impl Operation {
             Self::GetPresets | Self::GetBankIndex => "presets",
             Self::GetKnownWifiNetworks => "diagnostics",
             Self::LoadPluginPreset => "presets",
+            Self::UpdatePresets => "presets",
             Self::GetJackServerSettings | Self::GetGovernorSettings => "diagnostics",
             Self::GetShowStatusMonitor => "monitoring",
             Self::GetWifiRegulatoryDomains => "diagnostics",
@@ -2628,7 +2634,7 @@ mod tests {
                 assert!(!operation.is_read_only());
             }
         }
-        assert_eq!(Operation::all().len(), 47);
+        assert_eq!(Operation::all().len(), 48);
         assert!(Operation::all().iter().all(|operation| !operation.wire_name().is_empty()));
         assert_eq!(serde_json::to_string(&Operation::SetControl).expect("json"), "\"setControl\"");
     }

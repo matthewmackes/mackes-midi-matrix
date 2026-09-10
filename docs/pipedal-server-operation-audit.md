@@ -149,7 +149,7 @@ user-facing workflow without needing an independent button; require a documented
 | getShowStatusMonitor | catalogued | Monitoring and MIDI | bounded startup readback and adapter projection implemented; daemon/browser/installed qualification pending W150 |
 | version | catalogued | Device session/preferences | bounded session-scoped readback and adapter projection implemented; full installed qualification pending W150 |
 | loadPreset | catalogued | Presets and snapshots | pending W150 |
-| updatePresets | missing | Presets and snapshots | pending W150 |
+| updatePresets | catalogued | Presets and snapshots | confirmed bounded adapter write implemented; daemon/browser/installed qualification pending W150 |
 | updatePluginPresets | catalogued | Presets and snapshots | confirmed bounded adapter write implemented; daemon/browser/installed qualification pending W150 |
 | moveBank | missing | Presets and snapshots | pending W150 |
 | shutdown | catalogued | Device system settings | pending W150 |
