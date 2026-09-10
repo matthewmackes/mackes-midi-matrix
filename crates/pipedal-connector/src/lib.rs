@@ -1040,6 +1040,37 @@ pub struct WifiChannel {
     pub channel_name: String,
 }
 
+/// One source-backed plugin UI preset.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PluginUiPreset {
+    pub instance_id: i64,
+    pub label: String,
+}
+
+/// Source-backed plugin UI preset catalog.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PluginUiPresets {
+    pub plugin_uri: String,
+    pub presets: Vec<PluginUiPreset>,
+}
+
+/// Decode and bound a plugin-specific preset catalog.
+pub fn decode_plugin_presets(body: Option<serde_json::Value>) -> Result<PluginUiPresets, String> {
+    let catalog: PluginUiPresets = decode_body(body)?;
+    if catalog.plugin_uri.is_empty()
+        || catalog.plugin_uri.len() > 512
+        || catalog.presets.len() > MAX_PRESET_ENTRIES
+        || catalog.presets.iter().any(|preset| {
+            preset.instance_id < 0 || preset.label.is_empty() || preset.label.len() > 256
+        })
+    {
+        return Err("PiPedal plugin preset catalog is invalid or excessive".into());
+    }
+    Ok(catalog)
+}
+
 /// Decode PiPedal's bounded Wi-Fi channel selector array.
 pub fn decode_wifi_channels(body: Option<serde_json::Value>) -> Result<Vec<WifiChannel>, String> {
     let channels: Vec<WifiChannel> = decode_body(body)?;

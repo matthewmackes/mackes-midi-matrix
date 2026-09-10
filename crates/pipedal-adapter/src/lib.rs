@@ -251,6 +251,7 @@ pub struct Worker {
     wifi_channels: Vec<mackes_pipedal_connector::WifiChannel>,
     alsa_devices: Vec<mackes_pipedal_connector::AlsaDeviceInfo>,
     jack_status: Option<mackes_pipedal_connector::JackHostStatus>,
+    plugin_presets: std::collections::BTreeMap<String, mackes_pipedal_connector::PluginUiPresets>,
     wifi_regulatory_domains: std::collections::BTreeMap<String, String>,
     system_midi_bindings: Vec<mackes_pipedal_connector::MidiBinding>,
     version: Option<mackes_pipedal_connector::PiPedalVersion>,
@@ -289,6 +290,7 @@ impl Worker {
             wifi_channels: Vec::new(),
             alsa_devices: Vec::new(),
             jack_status: None,
+            plugin_presets: std::collections::BTreeMap::new(),
             wifi_regulatory_domains: std::collections::BTreeMap::new(),
             system_midi_bindings: Vec::new(),
             version: None,
@@ -351,6 +353,7 @@ impl Worker {
                     self.wifi_channels.clear();
                     self.alsa_devices.clear();
                     self.jack_status = None;
+                    self.plugin_presets.clear();
                     self.wifi_regulatory_domains.clear();
                     self.system_midi_bindings.clear();
                     self.version = None;
@@ -551,6 +554,12 @@ impl Worker {
                 );
                 Ok(())
             }
+            "getPluginPresets" => {
+                let catalog = mackes_pipedal_connector::decode_plugin_presets(body)
+                    .map_err(|_| TransportError::Protocol)?;
+                self.plugin_presets.insert(catalog.plugin_uri.clone(), catalog);
+                Ok(())
+            }
             "getWifiRegulatoryDomains" => {
                 self.wifi_regulatory_domains =
                     mackes_pipedal_connector::decode_wifi_regulatory_domains(body)
@@ -707,6 +716,14 @@ impl Worker {
     #[must_use]
     pub const fn jack_status(&self) -> Option<&mackes_pipedal_connector::JackHostStatus> {
         self.jack_status.as_ref()
+    }
+
+    /// Last validated plugin-preset catalogs keyed by plugin URI.
+    #[must_use]
+    pub const fn plugin_presets(
+        &self,
+    ) -> &std::collections::BTreeMap<String, mackes_pipedal_connector::PluginUiPresets> {
+        &self.plugin_presets
     }
 
     /// Last validated Wi-Fi regulatory-domain labels.

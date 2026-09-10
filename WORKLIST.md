@@ -5324,6 +5324,10 @@ tests, strict Clippy, architecture/worklist policy, and the complete release gat
   and bounded validation for CPU usage, frequencies, and diagnostic text, plus adapter session
   retention and reconnect clearing for on-demand `getJackStatus` reads. Daemon/browser and
   installed qualification remain pending W150.
+- **Plugin-preset readback slice (2026-09-10):** Added the source-backed plugin URI/preset
+  catalog schema with bounded identities and labels, adapter retention keyed by plugin URI, and
+  reconnect clearing for on-demand `getPluginPresets` queries. Daemon/browser and installed
+  qualification remain pending W150.
 - **Connector-design synchronization (2026-09-09):** The PiPedal connector handoff now records
   that validated version metadata is session-scoped diagnostic readback, cleared on reconnect and
   never sufficient to authorize version-dependent writes. Documentation, worklist, and diff checks
