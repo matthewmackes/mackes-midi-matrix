@@ -12159,6 +12159,11 @@ superseded packets; their code and evidence may be reused only when it satisfies
 - **Scene request evidence (2026-09-12):** `python3 scripts/browser-studio-scenes-actions-smoke.py`
   verifies a named setup is saved through `/api/v1/scenes`, then a selected scene is recalled only
   after confirmation; both requests are captured in the fixture and no scene state is guessed.
+- **Scene navigation slice (2026-09-12):** Added explicit Previous scene and Next scene controls
+  to the Studio Scenes workspace. Both use the existing daemon-validated, bounded
+  `{direction:"previous"|"next"}` operation and refresh authoritative state after a confirmed
+  response; failures retain the current setup and state that the change was not confirmed. Web
+  tests (61) and JavaScript syntax checks pass.
 
 #### [>] W200 — Implement degradation, fault, and recovery behavior
 
