@@ -6072,6 +6072,9 @@ tests, strict Clippy, architecture/worklist policy, and the complete release gat
   created a timestamped configuration backup and kept the daemon enabled/active. The installed
   CLI then returned `ok=true`, PiPedal `phase=ready`, generation `69`, and five persisted EQ
   controls (`knob-r3-c4` through `knob-r3-c8`) as `resolved` / `target is available and writable`.
+- **Fresh operator workflow regression (2026-09-12):** Installed browser fixtures pass typed
+  assignment preview/cancel without mutation and confirmation-gated save followed by typed undo;
+  these checks preserve the explicit apply boundary and authoritative rollback behavior.
 - **Daemon repair mutation evidence (2026-09-08):** added the typed `PiPedalOperation::Repair`
   path. It requires explicit confirmation and a matching connector generation, validates bounded
   physical/plugin identity fields, replaces exactly one persisted mapping through the daemon’s
