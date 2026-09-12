@@ -253,7 +253,8 @@
       const feature = payload?.symbol || payload?.control || payload?.parameter;
       const value = payload?.observed_value ?? payload?.value;
       if (feature && value !== undefined && value !== null) {
-        state.reconcile({ connection: 'ready', observations: { [`pipedal:${feature}`]: { value, source: 'external', freshness: 'observed' } } });
+        const staleInstance = payload?.stale_instance === true || payload?.freshness === 'stale' || payload?.truth === 'stale';
+        state.reconcile({ connection: 'ready', observations: { [`pipedal:${feature}`]: { value, source: 'external', freshness: staleInstance ? 'stale' : 'observed' } } });
         announcement.textContent = `PiPedal reported an observed value for ${friendly(feature)}.`;
       }
     }

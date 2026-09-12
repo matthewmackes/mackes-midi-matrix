@@ -22,6 +22,10 @@ try:
     observed = driver.execute_script("return window.MackesStudioState.read().observations['pipedal:gain'];")
     if not observed or observed.get("value") != 0.75 or observed.get("source") != "external":
         raise RuntimeError(f"PiPedal observation was not reconciled: {observed!r}")
+    driver.execute_script("window.MackesStudioHandleEvent({kind:'pipedal.control', payload:{symbol:'gain', value:0.5, device:'PiPedal', stale_instance:true}});")
+    stale = driver.execute_script("return window.MackesStudioState.read().observations['pipedal:gain'];")
+    if not stale or stale.get("value") != 0.5 or stale.get("freshness") != "stale":
+        raise RuntimeError(f"stale PiPedal instance was not marked stale: {stale!r}")
     driver.execute_script("window.MackesStudioHandleEvent({kind:'pipedal.meter', payload:{control:'output-level', observed_value:0.42, device:'PiPedal'}});")
     meter = driver.execute_script("return window.MackesStudioState.read().observations['pipedal:output-level'];")
     if not meter or meter.get("value") != 0.42 or meter.get("source") != "external":

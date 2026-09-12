@@ -11993,6 +11993,10 @@ superseded packets; their code and evidence may be reused only when it satisfies
 - **Capability-card fixture evidence (2026-09-12):** `python3 scripts/browser-studio-capability-view-smoke.py`
   verifies Ready state, adjustable/readback counts, send-only wording, and protocol-identity hiding
   in the Devices workspace using a typed capability fixture.
+- **Stale-instance feedback repair (2026-09-12):** PiPedal browser events carrying
+  `stale_instance`, `freshness: stale`, or `truth: stale` now reconcile as stale external
+  observations instead of current feedback. The rebuilt installed PiPedal event fixture passes
+  with external gain/meter observations and no assignment mutation.
 
 #### [>] W195 — Build truthful Eventide MicroPitch visualization
 
