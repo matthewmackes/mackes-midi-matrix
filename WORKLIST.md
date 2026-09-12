@@ -13785,3 +13785,7 @@ Evidence (2026-09-08): Devices browser gate initially observed a transient daemo
   all passed. The latency trace measured p95 visible response 3.40 ms and feedback convergence
   10.00 ms, while resilience preserved all 56 controls and the selected control through injected
   refresh failure and out-of-order events.
+- **Full release-gate rerun (2026-09-12):** `bash scripts/release-gate.sh` completed with
+  `release-gate: PASS`; workspace tests, strict Clippy, emulator, 10,000-message throughput,
+  hermetic integration (16 passed, 1 explicitly ignored), installer smoke, and release artifact
+  checksum all remained green.
