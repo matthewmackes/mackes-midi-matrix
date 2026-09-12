@@ -12207,6 +12207,11 @@ superseded packets; their code and evidence may be reused only when it satisfies
 - **Scene reload continuity fixture (2026-09-12):** The action smoke now seeds the persisted selected
   scene and verifies the Studio refresh restores that selection; it passes as
   `save_then_confirmed_recall_reload` against the installed release.
+- **Restart-safe navigation repair (2026-09-12):** Scene next/previous navigation now persists the
+  selected scene through the revision-checked config save before reporting success. A persistence
+  failure leaves the authoritative selection unchanged and returns an error to the API caller.
+  `scene_navigation_persists_before_restart_boundary` proves the selected scene is restored from
+  configuration after a daemon restart boundary; focused daemon tests and strict Clippy pass.
 
 #### [>] W200 — Implement degradation, fault, and recovery behavior
 

@@ -1723,8 +1723,16 @@ impl Daemon {
     }
     /// Selects the next or previous scene in the daemon-owned catalog.
     pub fn navigate_scene(&mut self, next: bool) -> Option<String> {
+        self.try_navigate_scene(next).ok().flatten().or_else(|| self.active_scene.clone())
+    }
+    /// Selects the next or previous scene and persists it before reporting success.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the selected scene cannot be persisted.
+    pub fn try_navigate_scene(&mut self, next: bool) -> Result<Option<String>, &'static str> {
         if self.scene_ids.is_empty() {
-            return self.active_scene.clone();
+            return Ok(self.active_scene.clone());
         }
         let current = self
             .active_scene
@@ -1737,8 +1745,7 @@ impl Daemon {
             current.checked_sub(1).unwrap_or(self.scene_ids.len() - 1)
         };
         let scene = self.scene_ids[index].clone();
-        self.set_active_scene(Some(scene.clone()));
-        Some(scene)
+        self.select_scene_only(&scene).map(Some)
     }
     /// Selects an exact scene from the daemon-owned catalog and persists it.
     ///
@@ -1793,10 +1800,10 @@ impl Daemon {
             return Err("scene is not present in the active catalog");
         }
         let selected = scene.to_owned();
-        self.set_active_scene(Some(selected.clone()));
         if let Some(path) = self.config_path.as_deref() {
             persist_active_scene(path, Some(scene)).map_err(|_| "scene persistence failed")?;
         }
+        self.set_active_scene(Some(selected.clone()));
         Ok(selected)
     }
     /// Registers one explicitly opened input adapter with the daemon.
@@ -3651,7 +3658,11 @@ impl Daemon {
                 } else {
                     let next = value.get("direction").and_then(serde_json::Value::as_str)
                         != Some("previous");
-                    self.navigate_scene(next);
+                    if let Err(error) = self.try_navigate_scene(next) {
+                        return stream.write_all(
+                            format!("{{\"ok\":false,\"error\":\"{error}\"}}\n").as_bytes(),
+                        );
+                    }
                 }
             }
             if command == Some(Command::UnsafeMode) {

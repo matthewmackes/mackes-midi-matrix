@@ -1654,6 +1654,27 @@ fn scenes_query_projects_daemon_scene_catalog() {
 }
 
 #[test]
+fn scene_navigation_persists_before_restart_boundary() {
+    let suffix = std::process::id();
+    let socket = std::env::temp_dir().join(format!("mackes-scenes-persist-{suffix}.sock"));
+    let config = std::env::temp_dir().join(format!("mackes-scenes-persist-{suffix}.json5"));
+    fs::copy("../../fixtures/config-valid.json5", &config).expect("fixture copy");
+    let mut daemon = Daemon::bind(&socket).expect("daemon");
+    daemon.set_config_path(&config);
+    daemon.set_scene_ids(vec!["intro".into()]);
+
+    assert_eq!(daemon.try_navigate_scene(true).expect("navigate").as_deref(), Some("intro"));
+    assert_eq!(daemon.active_scene(), Some("intro"));
+    let restored = startup_restore(&config).expect("restart restore");
+    assert_eq!(restored.active_scene.as_deref(), Some("intro"));
+
+    drop(daemon);
+    let _ = fs::remove_file(socket);
+    let _ = fs::remove_file(&config);
+    let _ = fs::remove_file(config.with_extension("operations.json"));
+}
+
+#[test]
 fn scene_selection_only_does_not_execute_actions() {
     let path =
         std::env::temp_dir().join(format!("mackes-scenes-select-only-{}.sock", std::process::id()));
