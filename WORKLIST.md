@@ -13724,3 +13724,8 @@ Evidence (2026-09-08): Devices browser gate initially observed a transient daemo
   controls against the installed Studio build and confirmed that all tested controls produced the
   expected web-interface activity. This supplements the instrumented knob 1,1 value, highlight,
   angle, badge, and open-stream evidence with direct multi-control human hardware validation.
+- **Installed Studio fixture rerun (2026-09-12):** Re-ran assignment input, compatibility, conflict,
+  draft cancel, Undo, scene actions, resilience, and latency fixtures against the installed host;
+  all passed. The latency trace measured p95 visible response 3.40 ms and feedback convergence
+  10.00 ms, while resilience preserved all 56 controls and the selected control through injected
+  refresh failure and out-of-order events.
