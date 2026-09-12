@@ -11997,6 +11997,10 @@ superseded packets; their code and evidence may be reused only when it satisfies
   `stale_instance`, `freshness: stale`, or `truth: stale` now reconcile as stale external
   observations instead of current feedback. The rebuilt installed PiPedal event fixture passes
   with external gain/meter observations and no assignment mutation.
+- **Scene reload continuity slice (2026-09-12):** The Scenes workspace now remembers the selected
+  scene ID in bounded local UI state and restores it after rerender/reload when it remains in the
+  authoritative catalog. Recall still requires explicit confirmation and daemon acceptance; no
+  scene contents or device state are fabricated. Web tests (61) and JavaScript syntax checks pass.
 
 #### [>] W195 — Build truthful Eventide MicroPitch visualization
 
