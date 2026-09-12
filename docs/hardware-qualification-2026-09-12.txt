@@ -53,3 +53,10 @@ bytes were sent by this probe.
 four MidiSport ports; dedicated daemon output clients are connected back to each physical port and
 to PiPedal/Device Monitor. This is routing observation only and does not prove device readback or
 successful physical LED delivery.
+
+[fresh-observation-rerun]
+`bash scripts/qualify-hardware.sh` rerun on 2026-09-12. USB identity remains Eventide `1b12:003a`,
+Launch Control XL `1235:0061`, and MidiSport 4x4 `0763:1021`; ALSA cards remain present and the
+application endpoint inventory reports four MidiSport ports plus the PiPedal and Studio virtual
+endpoints. Observation-only policy was preserved; no vendor writes, LED claims, or readback claims
+were made.
