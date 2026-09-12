@@ -67,8 +67,11 @@
           const recall = document.createElement('button'); recall.type = 'button'; recall.className = 'quiet-button'; recall.textContent = 'Recall selected scene'; recall.disabled = true;
           const select = document.createElement('select'); select.setAttribute('aria-label', 'Scene to recall');
           scenes.forEach(item => { const id = typeof item === 'string' ? item : item.id || item.name; if (!id) return; const option = document.createElement('option'); option.value = id; option.textContent = typeof item === 'string' ? item : item.name || id; select.append(option); });
+          const rememberedScene = window.localStorage?.getItem('mackes-studio-selected-scene');
+          if (rememberedScene && Array.from(select.options).some(option => option.value === rememberedScene)) select.value = rememberedScene;
           recall.disabled = !select.options.length;
-          select.addEventListener('change', () => { recall.disabled = !select.value; });
+          select.addEventListener('change', () => { recall.disabled = !select.value; if (select.value) window.localStorage?.setItem('mackes-studio-selected-scene', select.value); });
+          if (select.value) window.localStorage?.setItem('mackes-studio-selected-scene', select.value);
           recall.addEventListener('click', async () => { if (!select.value || !window.confirm(`Recall “${select.value}”?`)) return; recall.disabled = true; status.textContent = 'Recalling scene…'; try { const response = await fetch('/api/v1/scenes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ execute_scene: select.value }) }); if (!response.ok) throw new Error(`recall ${response.status}`); status.textContent = `“${select.value}” recalled.`; } catch (_) { status.textContent = 'Scene recall was not confirmed; review the current setup.'; recall.disabled = false; } });
           actions.append(previous, next, select, recall);
         }
