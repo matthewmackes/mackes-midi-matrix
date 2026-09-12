@@ -12180,6 +12180,9 @@ superseded packets; their code and evidence may be reused only when it satisfies
   http://172.20.222.222:8081` and `python3 scripts/browser-studio-scenes-actions-smoke.py
   http://172.20.222.222:8081` pass against the installed release, covering the honest empty state,
   named save, and confirmation-gated recall request capture.
+- **Scene reload continuity fixture (2026-09-12):** The action smoke now seeds the persisted selected
+  scene and verifies the Studio refresh restores that selection; it passes as
+  `save_then_confirmed_recall_reload` against the installed release.
 
 #### [>] W200 — Implement degradation, fault, and recovery behavior
 
