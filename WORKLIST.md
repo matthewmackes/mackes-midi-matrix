@@ -12206,7 +12206,7 @@ superseded packets; their code and evidence may be reused only when it satisfies
 
 #### [>] W201 — Qualify novice usability, accessibility, and live performance
 
-- **Status:** `IN_PROGRESS`
+- **Status:** `IN_REVIEW`
 - **Executor:** Luna
 - **Depends on:** W200
 - **Objective:** Prove that the interface behaves as one understandable instrument under real input,
@@ -12249,7 +12249,7 @@ superseded packets; their code and evidence may be reused only when it satisfies
 
 #### [>] W202 — Cut over, install, and qualify the replacement release
 
-- **Status:** `IN_PROGRESS`
+- **Status:** `IN_REVIEW`
 - **Executor:** Luna
 - **Depends on:** W201
 - **Objective:** Make the new GUI canonical and retire the superseded frontend after all evidence is
