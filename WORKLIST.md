@@ -12001,6 +12001,9 @@ superseded packets; their code and evidence may be reused only when it satisfies
   scene ID in bounded local UI state and restores it after rerender/reload when it remains in the
   authoritative catalog. Recall still requires explicit confirmation and daemon acceptance; no
   scene contents or device state are fabricated. Web tests (61) and JavaScript syntax checks pass.
+- **Fresh installed PiPedal regression (2026-09-12):** The event and catalog fixtures were rerun
+  together against the installed host: external gain and meter observations remain namespaced and
+  non-mutating, while the live catalog reports 3,076 controls, 265 targets, and 92 operation families.
 
 #### [>] W195 — Build truthful Eventide MicroPitch visualization
 
