@@ -13729,6 +13729,10 @@ Evidence (2026-09-08): Devices browser gate initially observed a transient daemo
   repository/worklist/Carbon/asset/schema guards, workspace tests, Novation emulator, strict Clippy,
   routing throughput, hermetic integration (16 pass/1 explicitly ignored), installer smoke, and
   release artifact verification all passed.
+- **Endpoint/rendering qualification rerun (2026-09-12):** `node scripts/test-device-renderer.js`
+  passed all nine renderer keys including the unknown fallback. Installed capability-view and
+  root/Studio console fixtures passed, confirming ready-state counts, protocol-identity hiding,
+  56-control loading, and no `SEVERE` browser-console entries.
 - **Installed Studio fixture rerun (2026-09-12):** Re-ran assignment input, compatibility, conflict,
   draft cancel, Undo, scene actions, resilience, and latency fixtures against the installed host;
   all passed. The latency trace measured p95 visible response 3.40 ms and feedback convergence
