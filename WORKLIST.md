@@ -13733,6 +13733,10 @@ Evidence (2026-09-08): Devices browser gate initially observed a transient daemo
   passed all nine renderer keys including the unknown fallback. Installed capability-view and
   root/Studio console fixtures passed, confirming ready-state counts, protocol-identity hiding,
   56-control loading, and no `SEVERE` browser-console entries.
+- **Accessibility-state repair (2026-09-12):** Aggregate installed qualification exposed that
+  assigned controls announced only destination names. Studio ARIA labels now explicitly include
+  `assigned:` while preserving `unassigned` and `disabled` cues; the rebuilt/reinstalled visual
+  accessibility fixture passes 56 controls at 200% zoom with reduced motion and light theme.
 - **Installed Studio fixture rerun (2026-09-12):** Re-ran assignment input, compatibility, conflict,
   draft cancel, Undo, scene actions, resilience, and latency fixtures against the installed host;
   all passed. The latency trace measured p95 visible response 3.40 ms and feedback convergence
