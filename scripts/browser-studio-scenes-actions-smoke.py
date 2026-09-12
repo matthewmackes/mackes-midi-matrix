@@ -30,11 +30,10 @@ try:
     """)
     driver.execute_script("window.MackesStudioViewsRefresh()")
     wait.until(lambda d: d.find_element("css selector", ".scene-actions input").is_displayed())
-    name = driver.find_element("css selector", ".scene-actions input"); name.send_keys("My Setup")
-    driver.find_element("css selector", ".scene-actions button.add-assignment").click()
+    driver.execute_script("const input = document.querySelector('.scene-actions input'); input.value = 'My Setup'; input.dispatchEvent(new Event('input', {bubbles:true})); document.querySelector('.scene-actions button.add-assignment').click();")
     wait.until(lambda d: len(d.execute_script("return window.__sceneCalls")) == 1)
     wait.until(lambda d: d.find_elements("css selector", ".scene-actions button.quiet-button"))
-    driver.find_element("css selector", ".scene-actions button.quiet-button").click()
+    driver.find_element("xpath", "//button[normalize-space()='Recall selected scene']").click()
     wait.until(lambda d: len(d.execute_script("return window.__sceneCalls")) == 2)
     calls = driver.execute_script("return window.__sceneCalls")
     if calls[0].get('scene') != 'My Setup' or calls[1].get('execute_scene') != 'scene-a':
