@@ -15,6 +15,7 @@ printf 'release-gate: formatting\n'
 cargo fmt --check
 printf 'release-gate: repository policy and worklist\n'
 python3 scripts/check-midi-ownership.py
+python3 scripts/check-active-carbon.py
 scripts/verify-repository.sh
 node scripts/feature-renderer-smoke.js
 node scripts/state-store-smoke.js

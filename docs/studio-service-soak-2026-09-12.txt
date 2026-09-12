@@ -1,0 +1,14 @@
+Installed Studio service soak — 2026-09-12
+
+Command: bash scripts/capture-qualification-soak.sh <temporary-directory> 12 3
+Host: NAM-MIDI
+Service: mackes-midi-matrix.service and mackes-midi-matrix-tui.service active
+Samples: 3
+Health failures: 0
+Dropped events: 0
+Restarts: 0 (first and last sample)
+Daemon CPU: 15.9–16.0 percent
+Daemon RSS: 134860 KiB (stable across samples)
+
+This is an observation-only stability sample. It does not claim physical input activity, LED
+delivery, device readback, or human usability sign-off.

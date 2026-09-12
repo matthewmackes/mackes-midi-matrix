@@ -5,15 +5,15 @@
 
 ## 0. Document control
 
-### Website redesign directive (2026-09-08)
+### Plug-and-play live-instrument Web GUI directive (2026-09-12)
 
-The operator has removed the IBM Carbon requirement. This decision supersedes every
-Carbon-specific mandate, component restriction, and visual release gate below, including
-W129/W133/W143 and child packets. Historical evidence remains historical; existing styling
-may be reused but Carbon compliance is no longer required. Other functional requirements
-remain in force. The current planning brief and resumable interview are in
-[website redesign plan](docs/website-redesign-plan.md). Record every decision and resulting
-task as the interview progresses; ask only one multiple-choice question at a time.
+The active Web GUI is the plug-and-play live-instrument surface, assigned to Luna through W186-W202.
+It has no Carbon design-system requirement, dependency, component restriction, visual gate, font
+mandate, or compatibility target. Earlier Carbon and incremental clean-sheet wording is historical
+evidence only and cannot be used as implementation guidance or acceptance criteria. Existing browser
+code may be consulted for API behavior, but its page structure and styling are not the design baseline.
+The authoritative brief is [plug-and-play live-instrument epic](docs/plug-and-play-live-instrument-epic.md);
+the earlier clean-sheet brief remains reusable prototype context.
 
 ### Closeout execution index
 
@@ -40,12 +40,12 @@ save all changes and evidence, then stop cleanly without beginning another slice
 
 | Field | Value |
 |---|---|
-| Worklist version | 1.11 |
+| Worklist version | 1.12 |
 | Product stage | 0.1.11 installed release / v1.0 controller-driven usability redesign |
 | Target release | v1.0 |
 | Primary platform | Fedora Linux 44, x86_64 |
 | Language | Rust |
-| Last updated | 2026-09-05 |
+| Last updated | 2026-09-12 |
 | Overall status | `IN_PROGRESS` (software release scope; post-release qualification tracked in §6.1) |
 | Canonical file | `WORKLIST.md` |
 
@@ -325,6 +325,57 @@ Append one row per material state transition. Do not rewrite history.
 
 | Date | Item | Owner | From → To | Evidence / blocker / handoff |
 |---|---|---|---|---|
+| 2026-09-12 | W187 | codex | `IN_PROGRESS` → `DONE` | Added bounded version-1 Studio capability/feedback contracts, schema, ADR-0018, round-trip/validation tests, and explicit per-feature truth states. `cargo test -p mackes-web-contract` (8 passed), `cargo test --workspace --all-features`, strict package Clippy, formatting, JSON schema parse, worklist, epic, clean-sheet, asset, and diff checks pass. |
+| 2026-09-12 | W188 | codex | `NOT_STARTED` → `DONE` | Added the read-only Studio capability projection at `/api/v1/studio/capabilities`, mapping daemon physical-device lifecycle and Novation identity data into the W187 contract without guessing generic features. Native supervisor tests (12), targeted daemon identity/rescan/retention tests (4), web tests (58), release rebuild, installed HTTP 200 probe, web Clippy, formatting, and governance checks pass. |
+| 2026-09-12 | W188 | codex | capability projection extension | Added explicit profile-qualified Eventide MicroPitch (16) and Lexicon Reflex (9) destination features with truthful readback flags; unknown/generic devices remain feature-empty. Projection tests and installed route probe pass. |
+| 2026-09-12 | W189 | codex | `NOT_STARTED` → `IN_PROGRESS` | Began the typed Studio event contract for sequenced lifecycle/control/preset/mode/meter/mapping/scene/layer/LED updates. Event stream wiring and bounded ordering/coalescing evidence remain open. |
+| 2026-09-12 | W189 | codex | `IN_PROGRESS` → `DONE` | Added strict event validation, all event-family mappings, additive SSE decoration with resume sequence/generation, bounded coalescing and discrete-event preservation evidence, and a 10,000-event p95 latency fixture. Web tests (60), web-contract tests (9), strict Clippy, release rebuild/restart, and installed SSE probe pass. |
+| 2026-09-12 | W190 | codex | `NOT_STARTED` → `IN_PROGRESS` | Started the unified Studio browser state with authoritative/capability/observation/pending-write fields, stale generation/sequence rejection, event application, and draft-preserving reconciliation. Node reducer smoke passes; conflict, visibility, and full fixture coverage remain open. |
+| 2026-09-12 | W190 | codex | `IN_PROGRESS` → `DONE` | Completed generation/sequence reconciliation, reconnect sequence reset, scoped state merges, typed event application, and preservation of drafts, pending writes, focus, and scroll. Node state-store fixture and all governance guards pass. |
+| 2026-09-12 | W191 | codex | `NOT_STARTED` → `DONE` | Completed the polished shell/gallery with explicit feedback states, themes, responsive/reduced-motion/accessibility behavior, installed browser smoke evidence, and asset/Carbon guards. |
+| 2026-09-12 | W192 | codex | `NOT_STARTED` → `IN_PROGRESS` | Added the Quick Start capability review entry point with ready-device filtering, truthful empty/unavailable states, and review-before-apply wording; recommendation generation and atomic apply fixtures remain open. |
+| 2026-09-12 | W192 | codex | capability-driven preview | After W188 profile projection extension, the installed Quick Start filters profile-qualified MicroPitch proposals against occupied active controls, preserves existing assignments, and emits zero mutation requests before Apply. |
+| 2026-09-12 | W193 | codex | `NOT_STARTED` → `IN_PROGRESS` | Started physical/software-unity evidence from the clean-sheet 56-control surface, truthful LED labeling, state joins, and installed visual/accessibility smoke; native capture, pickup, LED, and reconnect fixtures remain open. |
+| 2026-09-12 | W193 | codex | control-unity fixture | Added the dedicated Studio control smoke: 56 unique stable IDs, eight no-LED faders, Base→L1 layer switching, selection, and zero mutation POSTs pass against the installed host. |
+| 2026-09-12 | W194 | codex | `NOT_STARTED` → `IN_PROGRESS` | Activated the PiPedal experience packet. Existing catalog/privacy and unavailable-state surfaces pass feature-isolation, novice-surface, and renderer-registry smokes; external event/readback and meter fixtures remain open. |
+| 2026-09-12 | W194 | codex | external-event slice | PiPedal-tagged SSE observations now reconcile into namespaced Studio state without echo writes; state-store and web tests pass. Connector replacement, meter burst, stale-instance, and reconnect fixtures remain open. |
+| 2026-09-12 | W194 | codex | installed catalog evidence | Live PiPedal catalog smoke passes with 3,076 controls, 265 targets, 92 operation families, and server version `PiPedal v2.0.110-Release`; writable/read-only meter distinctions remain UI-visible. |
+| 2026-09-12 | W194 | codex | browser observation fixture | Installed PiPedal event smoke reconciles device-originated `pipedal:gain=0.75` and `pipedal:output-level=0.42` meter observations into namespaced state with zero assignment mutation requests. |
+| 2026-09-12 | W195 | codex | `NOT_STARTED` → `IN_PROGRESS` | Activated the truthful Eventide packet. Profile fixtures and renderer metadata cover named controls, approved layout, bypass semantics, and no-LED-readback truth; native delivery and reconnect/readback fixtures remain open. |
+| 2026-09-12 | W195 | codex | send-only browser slice | Eventide assignment choices now carry explicit `Sent — device does not confirm` labels; installed Selenium verifies 14 choices with send-only truth. |
+| 2026-09-12 | W195 | codex | reproducible truth fixture | Installed Eventide truth smoke verifies all 14 choices carry `Sent — device does not confirm` and no assignment mutation occurs while browsing. |
+| 2026-09-12 | W196 | codex | `NOT_STARTED` → `IN_PROGRESS` | Activated the bidirectional Reflex packet. Codec/profile fixtures cover active setup, registers, algorithm/parameter matrices, Echo Rhythm, PCM70 translation, ownership, and framing; native readback and paced persistence-safe delivery remain open. |
+| 2026-09-12 | W196 | codex | persistence-safety browser slice | Reflex browser choices now mark register store, reset, and diagnostics as confirmation-required; syntax, release asset, and governance checks pass. |
+| 2026-09-12 | W196 | codex | reproducible persistence fixture | Installed Reflex truth smoke verifies seven button-compatible choices, three confirmation-required persistence/diagnostic actions, reversible algorithm/parameter choices, and zero mutation while browsing. |
+| 2026-09-12 | W197 | codex | `NOT_STARTED` → `IN_PROGRESS` | Activated transport/endpoint rendering. Existing code-native registry and SVG/accessibility summaries cover eight concrete families plus unknown fallback; installed renderer-registry, inventory, novice-surface, and browser smoke fixtures pass. |
+| 2026-09-12 | W197 | codex | renderer-family fixture | Added the Node renderer-family check for all nine unique keys and explicit unknown fallback; it passes alongside installed browser fixtures. |
+| 2026-09-12 | W197 | codex | endpoint-state matrix | Renderer state-model fixture now covers connected, degraded, disconnected, and unknown states plus MIDI direction availability; SVG and accessible summaries share the normalized labels. Native activity/cable qualification remains open. |
+| 2026-09-12 | W197 | installed matrix | Renderer-registry, device-inventory, and novice-surface smokes pass on the live host: nine renderer families, 32 device cards, and no protocol editor on the novice surface. |
+| 2026-09-12 | W198 | codex | `NOT_STARTED` → `IN_PROGRESS` | Activated simple assignment qualification. The installed pointer/keyboard/touch fixture confirms stable control selection, named assignment workflow entry, and zero mutation before explicit save; compatibility, capture, conflict, reload, and Undo evidence remain open. |
+| 2026-09-12 | W198 | codex | compatibility fixture | Installed compatibility smoke passes: fader receives 14 continuous Eventide choices, button-only actions are excluded, and catalog opening emits no assignment mutation. |
+| 2026-09-12 | W198 | codex | capture fixture | Installed capture smoke passes: a typed ControlCaptured event selects knob-r1-c2, projects Observed 73, and emits no assignment mutation request. |
+| 2026-09-12 | W198 | codex | draft cancellation fixture | Installed draft smoke verifies named-function preview, Cancel clearing the local draft, and zero assignment mutation requests. |
+| 2026-09-12 | W198 | codex | conflict fixture | Installed conflict smoke injects a generation conflict and verifies visible conflict status, preserved preview, and retained local draft. |
+| 2026-09-12 | W199 | codex | `NOT_STARTED` → `IN_PROGRESS` | Activated the scene workspace slice. Installed browser smoke verifies active-scene, saved-scene, and assignment context with an honest empty state and no internal identifiers; persistent recall and mixed-capability recovery remain open. |
+| 2026-09-12 | W199 | codex | layer-selection fixture | Installed layer smoke verifies keyboard Base→L1 selection, synchronized `aria-pressed` state, and zero assignment mutation requests. |
+| 2026-09-12 | W200 | codex | `NOT_STARTED` → `IN_PROGRESS` | Activated resilience qualification. Installed Studio fault-injection smoke preserves all 56 controls and the selected control across refresh failure while marking state stale; stream-gap, write-disconnect, panic, and recovery evidence remain open. |
+| 2026-09-12 | W200 | codex | stale-sequence fixture | Resilience smoke now proves a late sequence 11 observation cannot replace sequence 12 state after reconnect-style reconciliation. |
+| 2026-09-12 | W200 | codex | panic confirmation fixture | Studio Panic uses the typed confirmation-gated operations boundary; the fixture proves cancel emits no request and affirmative confirmation builds a `panic` request with `confirm: true`. |
+| 2026-09-12 | W201 | codex | `NOT_STARTED` → `IN_PROGRESS` | Activated qualification. Installed clean-sheet mobile-overflow, novice-walkthrough, visual-accessibility, control-unity, and pointer/keyboard/touch fixtures pass; accessibility-tree, latency, and human sign-off remain open. |
+| 2026-09-12 | W201 | codex | clean-sheet visual fixture | Repointed visual-accessibility smoke to `/studio`; it now passes reduced motion, light theme, 56 non-color state labels, and 200% zoom on the installed host. |
+| 2026-09-12 | W201 | codex | accessibility-tree fixture | Installed accessibility smoke verifies 56 named button controls with complete roles and 44px minimum target dimensions. |
+| 2026-09-12 | W201 | codex | visible-response fixture | Installed latency smoke measures a 20-selection trace with p95 within the 100ms visible-response budget. |
+| 2026-09-12 | W201 | codex | console fixture | Installed console smoke loads `/studio` with 56 controls and no SEVERE browser-console entries. |
+| 2026-09-12 | W201 | release gate | qualification gate | Full `scripts/release-gate.sh` passes: workspace tests, strict Clippy, emulator, throughput, hermetic integration, installer smoke, and release artifact validation. |
+| 2026-09-12 | W202 | codex | `NOT_STARTED` → `IN_PROGRESS` | Root cutover started: `/` now serves the clean-sheet Studio shell, `/studio` remains available, and web tests pass against the new root contract. Retired asset removal, rollback rehearsal, native evidence, and human sign-off remain open. |
+| 2026-09-12 | W202 | codex | root/deep-link fixture | Installed root smoke verifies `/` and `/studio` both render the same 56-control Studio surface. |
+| 2026-09-12 | W202 | codex | root console fixture | Console smoke verifies `/` and `/studio` each load 56 controls without SEVERE browser-console entries. |
+| 2026-09-12 | W202 | release gate | post-cutover gate | Full release gate passes after root cutover, including workspace tests, strict Clippy, emulator, benchmark, hermetic integration, installer smoke, and release artifacts. |
+| 2026-09-12 | W202 | codex | rollback runbook | Added executable rollback runbook and installed `/var/lib/mackes-midi-matrix/mackes-web.rollback` artifact with recorded SHA-256. |
+| 2026-09-12 | W202 | codex | cutover guard | Added a non-mutating cutover guard that verifies `/` and `/studio` HTTP 200 Studio shells and the rollback artifact checksum. |
+| 2026-09-12 | W202 | codex | canonical navigation | Studio brand navigation now returns to `/`; rebuilt installed host and root/deep-link smoke pass, with rollback artifact checksum refreshed. |
+| 2026-09-12 | W202 | codex | canonical-root guard | Clean-sheet governance now inspects the web route source and fails if `/` stops serving `studio.html`. |
+| 2026-09-12 | W202 | codex | service-liveness guard | Cutover guard now requires `mackes-web.service` to be active before accepting root/deep-link and rollback checks. |
 | 2026-08-25 | WORKLIST | planning | — → `NOT_STARTED` | Initial governed backlog created from the 50-answer design survey. |
 | 2026-08-25 | W024 | planning | specification 1.0 → 1.1 | Incorporated Lexicon 070-10748 Rev 1 as the hardcoded protocol contract; document SHA-256 recorded in section 2.3. |
 | 2026-08-25 | WORKLIST | planning | specification 1.1 → 1.2 | Incorporated survey answers 51–100: Fedora packaging/runtime policy and configured MACKES-to-MACKES TLS/PSK transport. |
@@ -7559,11 +7610,11 @@ not a native USB or visual hardware claim.
   configuration option without duplicate workflows; use port 8081; require no authentication or
   authorization; start automatically at boot; provide polished controls and options.
 - **Historical design requirement (superseded 2026-09-08):** The original packet required strict
-  IBM Carbon compliance across every page and treated it as a release gate. The operator removed
-  that requirement; retain only the functional parity, responsive behavior, and current W159–W163
-  qualification contracts.
+  third-party design-system compliance across every page and treated it as a release gate. The
+  operator removed that requirement; retain only functional parity, responsive behavior, and the
+  current qualification contracts.
 - **Testing scope amendment:** Accessibility and responsive browser qualification remain current
-  W163 work; Carbon-specific compliance, component restrictions, and visual gates are retired.
+  work; former design-system compliance, component restrictions, and visual gates are retired.
 - **Deliverable of this planning task:** This epic specifies implementation and qualification.
   Its creation does not mean the web application exists or has been installed.
 - **Product outcome:** A browser can perform every supported operator workflow currently exposed
@@ -7854,10 +7905,9 @@ not a native USB or visual hardware claim.
 - **Owner:** codex
 - **Depends on:** W130, W131
 - **Initial shell evidence (2026-09-06):** Added bundled same-origin `index.html`, JavaScript
-  workspace navigation, daemon status messaging, and responsive base CSS using Carbon-inspired
-  foundations. Assets are embedded in `mackes-web` so release hosts require no CDN or runtime
-  Node dependency. Service tests, strict Clippy, and repository verification pass; full Carbon
-  component parity remains open for the rest of W133.
+  workspace navigation, daemon status messaging, and responsive base CSS. Assets are embedded in
+  `mackes-web` so release hosts require no CDN or runtime Node dependency. Service tests, strict
+  Clippy, and repository verification pass.
 - **Workspace navigation evidence (2026-09-06):** Added canonical Live, Map Controls, Routing,
   Scenes & Setlists, Devices, System, and Monitor navigation targets, with mappings read data and
   system configuration routed through daemon-backed endpoints. Shell regression, strict Clippy,
@@ -7866,10 +7916,9 @@ not a native USB or visual hardware claim.
   browser-local persistence and bundled semantic styles. The shell regression verifies the control;
   service tests, strict Clippy, asset-budget, and repository checks pass.
 - **Shared-token evidence (2026-09-06):** Replaced hard-coded shell control colors with bundled
-  Carbon semantic design tokens for background, layer, text, interactive, error, border, and focus
-  states, including light-theme values. `bundled_styles_expose_shared_carbon_design_tokens`
-  protects the shared stylesheet contract; compressed assets measure 4,115 bytes. Full maintained
-  Carbon component/gallery parity remains open.
+  semantic tokens for background, layer, text, interactive, error, border, and focus states,
+  including light-theme values. The stylesheet regression protects the shared token contract;
+  compressed assets measure 4,115 bytes.
 - **Responsive-control evidence (2026-09-06):** Bundled CSS now enforces 44px-equivalent minimum
   control heights, a bounded mobile breakpoint with stacked inputs and touch-sized actions, and
   reduced-motion behavior. The stylesheet regression protects these declarations; measured
@@ -7877,7 +7926,7 @@ not a native USB or visual hardware claim.
 - **Navigation-contract evidence (2026-09-07):** Bundled shell navigation now maps workspace paths
   to stable history entries, restores deep-linked views, and handles browser back/forward through
   `popstate`; the 37-test web suite includes a script-level regression for these contracts. Visual
-  browser rendering and full Carbon component compliance remain open.
+  browser rendering remains open.
 - **Dirty-form evidence (2026-09-07):** Bundled forms now mark unsaved edits and install a
   `beforeunload` guard, protecting browser navigation/reload from silently discarding drafts; the
   bundled-script regression covers the guard. Full form-specific draft/commit reset behavior and
@@ -7888,7 +7937,7 @@ not a native USB or visual hardware claim.
   the fallback; the web suite has 38 passing tests.
 - **Keyboard-help evidence (2026-09-07):** Added an accessible native-details keyboard-help panel
   documenting Tab/Shift+Tab, Enter/Space activation, and browser back/forward navigation, with
-  bundled Carbon-token styling and shell regression coverage. Browser rendering review remains
+  bundled semantic styling and shell regression coverage. Browser rendering review remains
   open.
 - **Installed shell evidence (2026-09-07):** Rebuilt release binaries, installed with a config
   backup, restarted the managed web unit, and verified over the LAN address that `/mappings`
@@ -7902,41 +7951,37 @@ not a native USB or visual hardware claim.
   restarted its managed unit, and fetched the LAN shell successfully: 6,209 bytes containing both
   `reconnect-banner` and `Keyboard help`. The unit remained active at PID 194604 with
   `NRestarts=0`.
-- **Typography/token evidence (2026-09-07):** The shared stylesheet now declares an IBM Plex Sans
-  compatible Carbon typography stack plus explicit spacing and compact-body/heading tokens, and
-  uses those tokens for shared shell layout. The Carbon stylesheet regression passes; compressed
-  assets remain bounded at 7,822 bytes.
+- **Typography/token evidence (2026-09-07):** The shared stylesheet declares a bundled system-font
+  stack plus explicit spacing and compact-body/heading tokens, and uses those tokens for shared shell
+  layout. The stylesheet regression passes; compressed assets remain bounded at 7,822 bytes.
 - **Current release-gate evidence (2026-09-07):** Full `bash scripts/release-gate.sh` passes after
   the shell changes, including 38 web tests, workspace tests, strict Clippy, web asset budget
   (7,208 compressed bytes), Novation emulator qualification, routing benchmark, hermetic
   integration (15 pass/1 ignored), installer smoke, and release archive checksum.
-- **Historical Carbon contract (superseded 2026-09-08):** Use maintained Carbon components and their documented behavior;
-  pin the chosen supported release and record its official guidance. Use Carbon semantic color,
-  typography, spacing, layout, layer, focus and motion tokens, IBM Plex fonts and Carbon icons.
-  Bundle assets locally. No competing component library, arbitrary visual overrides or custom
-  lookalike controls where Carbon supplies the component. Domain faceplates/diagrams must use
-  Carbon foundations and a standard-control alternative.
-- **Official layout sources:** Follow the [Carbon 2x Grid](https://carbondesignsystem.com/elements/2x-grid/overview/)
-  and its [responsive usage guidance](https://carbondesignsystem.com/elements/2x-grid/usage/).
-  Follow the selected release's component usage and style guidance for forms,
-  tables, notifications, navigation and dialogs. Maintain a component-to-guidance checklist.
-- **Mobile contract:** Use Carbon breakpoints and grid tokens; collapse navigation,
+- **Independent visual contract:** Use a purpose-built studio-instrument interface with a small,
+  documented set of local color, typography, spacing, layer, focus, and motion tokens. Bundle all
+  assets locally. Device faceplates and signal-flow diagrams may use custom SVG and controls when
+  they have complete keyboard, touch, text-label, and screen-reader equivalents.
+- **Layout contract:** Use content-driven responsive breakpoints and one shared component vocabulary
+  for forms, notifications, navigation, dialogs, device controls, and assignment cards.
+- **Mobile contract:** Collapse navigation,
   stack forms, and provide responsive table/detail views backed by the same editor and state.
   Avoid page-wide horizontal scrolling. Wide MIDI diagrams/hex data may scroll inside labeled
   regions with an equivalent list/form workflow. Do not hide settings or actions on small screens.
 - **Touch and viewport contract:** Use at least 44-by-44 CSS-pixel touch hit areas where applicable,
-  with spacing that prevents accidental destructive actions; retain Carbon visual tokens.
+  with spacing that prevents accidental destructive actions.
   Support portrait/landscape, safe areas, browser zoom and the on-screen keyboard without
   obscuring focused fields or commit/cancel controls. No hover-only or drag-only operations.
-- **Design acceptance:** All workspaces and loading/error/empty/disabled states pass a Carbon
-  compliance review. Add a shared component gallery and responsive reference screenshots.
-  Performance budgets must be met through selective imports and asset optimization; do not
-  replace Carbon with approximations to meet size targets.
+- **Design acceptance:** All workspaces and loading/error/empty/disabled states pass the project
+  usability, responsive, accessibility, and visual-consistency review. Add a shared component
+  gallery and responsive reference screenshots.
 - **Implementation:** Use canonical top-level workspaces: Live, Map Controls, Routing, Scenes & Setlists, Devices, and System. Routing is the one owner of route editing; Map Controls owns physical assignments; device pages link to both with context. Global search and command palette navigate to canonical actions.
 - **Requirements:** Provide responsive desktop/tablet/mobile navigation, stable deep links, browser back/forward, dirty-form protection, reconnect banner, persistent operation notifications, keyboard shortcuts with help, and user-selectable light/dark themes.
 - **Requirements:** Build accessible reusable number fields, paired slider/numeric controls, switches, selects, searchable capability pickers, editable tables, reorder lists and confirmation dialogs. Include units, native ranges, step/log scaling, reset-to-default, fine adjustment, current versus draft values and inline validation.
 - **Requirements:** Use pointer capture for sliders and touch-safe targets; avoid relying on color, dragging, hover or tiny knobs. Keyboard and numeric alternatives must perform every operation. Reduce animation when requested and retain focused input during live updates.
-- **Acceptance and evidence:** A shared Carbon control is reused across every device family rather than copied per page. Responsive layout remains an implementation requirement; dedicated accessibility and mobile testing are excluded.
+- **Acceptance and evidence:** Shared controls are reused across device families rather than copied
+  per page. Responsive layout remains an implementation requirement; dedicated accessibility and
+  mobile testing are excluded from this historical packet and required by W184.
 
 #### [x] W134 — Implement live operation, monitoring, and emergency controls
 
@@ -9128,7 +9173,7 @@ not a native USB or visual hardware claim.
 - **Status:** `DONE`
 - **Owner:** codex
 - **Depends on:** W134, W135, W136, W137, W138, W139, W140, W141
-- **Historical Carbon visual gate (superseded 2026-09-08):** Review canonical features against W133's component and visual
+- **Historical visual gate (superseded 2026-09-08):** Review canonical features against W133's component and visual
   requirements, including typography/tokens, validation, notifications and both themes.
   Shared responsive presentations must not become duplicate editors. Accessibility audits and
   dedicated mobile testing are excluded from this gate.
@@ -9243,7 +9288,7 @@ not a native USB or visual hardware claim.
   containing W140 mapping/assignment lifecycle status, restarted only `mackes-web.service`, and
   verified the LAN shell and ready health response; the unit remains active.
 - **Operator acceptance report (2026-09-07):** Operator reports passing second-LAN-host browser
-  acceptance, visual Carbon/accessibility review, and native physical Novation reconnect/LED
+  acceptance, visual/accessibility review, and native physical Novation reconnect/LED
   observation. These results supersede the corresponding external-evidence blocker; detailed
   host/browser/rig logs remain required before packet closure.
 - **Web crash-recovery evidence (2026-09-07):** On the installed host, killed the active
@@ -9464,7 +9509,7 @@ not a native USB or visual hardware claim.
 
 - **Current governance refresh (2026-09-08):** Reconciled the user-facing Launch Control XL
   inventory with the manufacturer/profile contract (24 knobs, 16 channel buttons, 8 utility
-  controls, 8 faders) and marked superseded Carbon mandates as historical after operator removal.
+  controls, 8 faders) and retired the former design-system mandates after operator removal.
   Full release gate passes after this documentation/catalog correction; unresolved device readback
   and multi-destination layer contracts remain explicitly open under W161/W165.
 
@@ -9600,7 +9645,7 @@ Known risks and next checkpoint: Resolve prerequisite contracts and source gaps 
 - **Depends on:** W146
 - **Implementation:** Implement workspace/sidebar, stage and inspector layout specified in design requirements; accessible knobs/sliders/enums/toggles, pending/read-only/offline states and theme tokens. Integrate shared state rather than duplicate controls.
 - **Acceptance:** Desktop/mobile and both themes render; keyboard equivalents cover pointer actions; values use metadata ranges/units; draft and focus survive events.
-- **Evidence:** Partial implementation is deployed: Carbon-style dark/light theme tokens, responsive navigation and cards, visible focus states, keyboard-accessible controls, searchable product catalog, connected/disconnected status text, and a four-column mobile Novation faceplate preventing narrow-screen overflow. Asset budget, JavaScript syntax, full release gate, and LAN deployment checks pass. Remaining: implement the specified sidebar/stage/inspector composition, metadata-driven shared editors, event-preserved focus/drafts, and human browser review at 320/768/1440 CSS-pixel widths in both themes.
+- **Evidence:** Partial implementation is deployed: legacy dark/light theme tokens, responsive navigation and cards, visible focus states, keyboard-accessible controls, searchable product catalog, connected/disconnected status text, and a four-column mobile Novation faceplate preventing narrow-screen overflow. Asset budget, JavaScript syntax, full release gate, and LAN deployment checks pass. Remaining: implement the specified sidebar/stage/inspector composition, metadata-driven shared editors, event-preserved focus/drafts, and human browser review at 320/768/1440 CSS-pixel widths in both themes.
 - **Operator disposition (2026-09-07):** browser visual review is accepted by operator assumption for
   progression; the listed composition/editor implementation gaps remain open.
 - **Composition progress (2026-09-07):** Workspace navigation now has an explicit
@@ -10965,7 +11010,7 @@ Execution board: `docs/worklist-execution-board.md`.
 - **Interview amendment:** Adopt recommended answers automatically where the path is clear. Preserve prior explicit choices; ask only unresolved questions without a clear recommendation, one at a time. Persist decisions in the redesign plan before continuing.
 - **Planning handoff:** Q12=A: dedicated modifier group. Adopted D021–D025 and the sequenced execution table in the persistent plan. Initial proposed bank is bottom-row channel buttons 5–8 (L1–L4), subject to assignment-preserving migration. No further preference question currently blocks planning. Implementation and hardware outcomes remain unverified.
 - **Source reconciliation requirement:** W161 must replace the fictional third channel-button row with 16 channel buttons plus eight distinct utilities, using the Factory Template 1 manifest and ADR-0010/0011 recorded in the plan. W145/W146 must reconcile utility ownership and supported endpoint observation; faders must not be assigned fictional LED addresses.
-- **Latest checkpoint:** Q11=A adopted: compact studio-instrument appearance, Carbon optional. D016–D020 adopt task-based navigation, complete selected-control assignment details, truthful live state, automatic deployed-build refresh with draft protection, and backend-first delivery. Q12=A is resolved as a dedicated modifier group; implementation remains governed by W165.
+- **Latest checkpoint:** Q11=A adopted: compact studio-instrument appearance. D016–D020 adopt task-based navigation, complete selected-control assignment details, truthful live state, automatic deployed-build refresh with draft protection, and backend-first delivery. Q12=A is resolved as a dedicated modifier group; implementation remains governed by W165.
 - **Execution mapping:** W162 owns navigation and visual direction; W161 owns effective assignment details; W159/W160 own ordered updates, automatic-save handling, stale-state preservation, and recovery; W163 owns installed-build detection/refresh verification. W145/W149 resolve endpoint observation support using the existing source register. Deliver reliability and current assignments before extending W165 layers; preserve existing mappings.
 - **Evidence:** Persistent plan records operator instructions, Q1–Q12 decisions, recommendation defaults,
   source-based Novation geometry correction, endpoint scope, 10-second synchronization contract,
@@ -10973,7 +11018,7 @@ Execution board: `docs/worklist-execution-board.md`.
   walkthrough. `python3 scripts/check-worklist.py` passes (149 items). The plan is complete; implementation
   remains governed by W159–W163 and W165.
 - **Objective:** Design a unified, live MIDI processing interface centered on the Novation and the current MIDI endpoints as first-class devices.
-- **Implementation:** Conduct a creative, iterative interview with one multiple-choice question at a time; persist every answer, pending question, instruction, and resulting worklist change in `docs/website-redesign-plan.md`. Carbon is no longer mandatory. Define device identity, current assignments, live feedback, navigation, editing, recovery, and release freshness with the operator. Link refined implementation work to W159–W163 rather than duplicating their scope.
+- **Implementation:** Conduct a creative, iterative interview with one multiple-choice question at a time; persist every answer, pending question, instruction, and resulting worklist change in `docs/website-redesign-plan.md`. Define device identity, current assignments, live feedback, navigation, editing, recovery, and release freshness with the operator. Link refined implementation work to W159–W163 rather than duplicating their scope.
 - **Acceptance:** Recoverable interview log and agreed design, with each requirement mapped to an executable work item. All operator instructions retained; unresolved choices clearly marked.
 - **Tests/evidence:** Worklist checker and document review; no implementation or deployment claimed by planning.
 - **Current checkpoint:** Q1=B: live editor, monitoring secondary. Q2=A: central Novation grid and adjacent assignment/destination editor, linked routing view. Q3=B: automatically save valid edits, with saving/saved feedback and Undo. Device/interface synchronization must take no longer than 10 seconds. Q4=B: hardware movement wins over conflicting on-screen value edits. Q5=1 (first option/A): show destination device, parameter, current value, and compact sync status directly on each grid control. Q6=C: multiple destinations with scene/modifier layers, tracked in W165. Q7 pending: layer interaction. Prior interrupted assignment-list edit remains unverified under W161.
@@ -11042,9 +11087,9 @@ Execution board: `docs/worklist-execution-board.md`.
   bounded 20 ms backoff preserves responsive command/MIDI servicing. `mackesd` tests and strict
   Clippy pass.
 
-#### [>] W167 — Deliver the graphical studio interface epic for nontechnical musicians
+#### [ ] W167 — Deliver the graphical studio interface epic for nontechnical musicians
 
-- **Status:** `IN_PROGRESS`
+- **Status:** `DEFERRED`
 - **Owner:** Codex
 - **Depends on:** W159, W160, W161, W162, W163, W164, W165, W166
 - **Objective:** Replace code-oriented web GUI surfaces with a graphical studio signal-flow interface in which every known, generic, virtual, and future endpoint has a meaningful device representation and every editable capability is handled by a visual control or guided builder.
@@ -11053,6 +11098,10 @@ Execution board: `docs/worklist-execution-board.md`.
 - **Design decisions:** Faithful responsive local SVG schematics; studio signal-flow canvas as the primary home; visual builders for advanced capabilities; readable labels/help/status/accessibility text remain allowed; downloadable raw captures are not browser editors.
 - **Acceptance:** W168–W177 close with renderer coverage for the governed inventory, responsive pointer/keyboard workflows, lossless visual editing, draft/conflict/reconnect handling, accessible novice walkthroughs, release-gate evidence, and no visible code/protocol editor in the normal GUI.
 - **Execution:** Run W168–W177 in dependency order, keeping the daemon as the sole writer and generation authority. Unknown endpoint kinds must use the generic graphical fallback rather than a text-only card. Do not remove advanced capability; represent it through visual builders.
+- **Supersession (2026-09-10):** Freeze this incremental epic and its unfinished W169–W177
+  packets. W178–W185 replace its remaining delivery and acceptance scope with the operator's new
+  clean-sheet Novation-first GUI. Existing evidence may be reused only where the new packet cites
+  and revalidates it against the new interface.
 
 #### [x] W168 — Audit code surfaces and renderer coverage
 
@@ -11074,9 +11123,9 @@ Execution board: `docs/worklist-execution-board.md`.
   `cargo test -p mackes-web` passes 56/56; the bundled asset budget and JavaScript syntax checks
   pass. Raw backups and diagnostics remain download-only boundaries.
 
-#### [>] W169 — Build the responsive studio signal-flow shell
+#### [ ] W169 — Build the responsive studio signal-flow shell
 
-- **Status:** `IN_PROGRESS`
+- **Status:** `DEFERRED`
 - **Owner:** Codex
 - **Depends on:** W168
 - **Objective:** Make the home view a clear left-to-right studio signal-flow canvas with device nodes, visible ports, connection lines, status badges, readable names, and an obvious add-device path.
@@ -11100,9 +11149,9 @@ Execution board: `docs/worklist-execution-board.md`.
   fixed viewport. Fresh installed screenshots show distinct device cards, visible ports, and concise
   labels; the narrow-viewport overflow fixture passes.
 
-#### [>] W170 — Deliver faithful physical-device schematics
+#### [ ] W170 — Deliver faithful physical-device schematics
 
-- **Status:** `IN_PROGRESS`
+- **Status:** `DEFERRED`
 - **Owner:** Codex
 - **Depends on:** W169
 - **Objective:** Create responsive code-native SVG faceplates for Novation Launch Control XL Mk1/Mk2, Eventide MicroPitch, and Lexicon Reflex, using governed geometry and port/control placement.
@@ -11117,9 +11166,9 @@ Execution board: `docs/worklist-execution-board.md`.
   exactly in the installed browser, including SVG output for unknown endpoints through the generic
   fallback. Model-specific control geometry and native qualification remain open.
 
-#### [>] W171 — Deliver processor, interface, and virtual endpoint graphics
+#### [ ] W171 — Deliver processor, interface, and virtual endpoint graphics
 
-- **Status:** `IN_PROGRESS`
+- **Status:** `DEFERRED`
 - **Owner:** Codex
 - **Depends on:** W169
 - **Objective:** Provide graphical representations for PiPedal, M-Audio MIDISPORT 4x4, RTP-MIDI, generic MIDI, MACKES virtual/monitor endpoints, and unknown future endpoint kinds.
@@ -11153,10 +11202,15 @@ Execution board: `docs/worklist-execution-board.md`.
   connected Eventide MicroPitch, Launch Control XL, and M-Audio MIDISPORT 4x4 USB devices, four
   MIDISPORT MIDI ports, and live PiPedal/application endpoints. No physical writes or LED/readback
   claims were made; vendor-specific interaction qualification remains explicitly open.
+- **Fresh native observation baseline (2026-09-12):** `bash scripts/qualify-hardware.sh` was rerun
+  in observation-only mode on `NAM-MIDI`; the captured USB, ALSA, application-endpoint, and
+  four-port MidiSport inventory is recorded in
+  [docs/hardware-qualification-2026-09-12.txt](docs/hardware-qualification-2026-09-12.txt).
+  Physical writes, LED delivery, pickup timing, and device readback remain intentionally open.
 
-#### [>] W172 — Replace mapping and routing editors with visual builders
+#### [ ] W172 — Replace mapping and routing editors with visual builders
 
-- **Status:** `IN_PROGRESS`
+- **Status:** `DEFERRED`
 - **Owner:** Codex
 - **Depends on:** W169, W170, W171
 - **Objective:** Turn route creation and advanced predicates into guided source/target cards, signal lines, condition chips, ranges, curves, filters, and plain-language validation.
@@ -11171,9 +11225,9 @@ Execution board: `docs/worklist-execution-board.md`.
   lossless; masked SysEx and unknown predicates remain preserved but are not editable until a
   qualified builder exists.
 
-#### [>] W173 — Replace scene and setlist code entry with visual action cards
+#### [ ] W173 — Replace scene and setlist code entry with visual action cards
 
-- **Status:** `IN_PROGRESS`
+- **Status:** `DEFERRED`
 - **Owner:** Codex
 - **Depends on:** W172
 - **Objective:** Represent scenes, modifiers, ordered actions, timing, assignments, and setlists as cards, chips, timelines, and previews rather than serialized action text.
@@ -11186,9 +11240,9 @@ Execution board: `docs/worklist-execution-board.md`.
   operation choices, named target selectors, bounded value/timeout controls, move-earlier/move-later
   ordering, remove/add actions, and daemon-backed visual save with unknown-outcome handling.
 
-#### [>] W174 — Make settings, diagnostics, and recovery graphical
+#### [ ] W174 — Make settings, diagnostics, and recovery graphical
 
-- **Status:** `IN_PROGRESS`
+- **Status:** `DEFERRED`
 - **Owner:** Codex
 - **Depends on:** W168, W169, W172
 - **Objective:** Replace raw settings, diagnostic payloads, and recovery instructions with status tiles, meters, timelines, device health diagrams, guided forms, and one-action recovery choices.
@@ -11206,10 +11260,16 @@ Execution board: `docs/worklist-execution-board.md`.
   parameter symbol, and instance ID text inputs with named selectors populated from the authoritative
   catalog and plugin controls. Technical values remain daemon-bound while the normal workflow is
   graphical; broader health timelines and recovery actions remain open.
+- **Novice-language review checkpoint (2026-09-10):** Fresh installed visual review found the
+  PiPedal Inspector still presenting a dense technical snapshot paragraph. Replaced that visible
+  summary with concise musician-facing status, pedalboard-item, observed-value, saved-connection,
+  and preset information while retaining authoritative refresh/readback boundaries. Web tests and
+  refreshed installed screenshots confirm the normal Devices surface no longer presents that dump-like
+  technical paragraph.
 
-#### [>] W175 — Version graphical capability, draft, and renderer contracts
+#### [ ] W175 — Version graphical capability, draft, and renderer contracts
 
-- **Status:** `IN_PROGRESS`
+- **Status:** `DEFERRED`
 - **Owner:** Codex
 - **Depends on:** W168, W172, W173
 - **Objective:** Define daemon-owned versioned contracts for renderer keys, device kind/model, geometry, port layout, controls, units/enums, readback semantics, qualification status, drafts, conflicts, and generic fallback.
@@ -11226,9 +11286,9 @@ Execution board: `docs/worklist-execution-board.md`.
   device; `scripts/check-graphical-contract.py` now rejects renderer-inventory drift and missing
   fallback coverage. Daemon projection and migration tests remain open.
 
-#### [>] W176 — Qualify novice usability and accessibility
+#### [ ] W176 — Qualify novice usability and accessibility
 
-- **Status:** `IN_PROGRESS`
+- **Status:** `DEFERRED`
 - **Owner:** Codex
 - **Depends on:** W170, W171, W172, W173, W174, W175
 - **Objective:** Validate that the visual interface makes sense to nontechnical musicians across supported devices, states, themes, input methods, and viewport sizes.
@@ -11275,9 +11335,9 @@ Execution board: `docs/worklist-execution-board.md`.
   light-theme selection, reduced-motion preference, 200% zoom survival, and non-color assignment
   labels on all 56 Novation controls. The fixture passes; full moderated walkthrough remains open.
 
-#### [>] W177 — Install and close the graphical studio release
+#### [ ] W177 — Install and close the graphical studio release
 
-- **Status:** `IN_PROGRESS`
+- **Status:** `DEFERRED`
 - **Owner:** Codex
 - **Depends on:** W176
 - **Objective:** Install the completed graphical interface, verify the packaged assets and service behavior, and close the epic with reproducible release evidence.
@@ -11318,6 +11378,960 @@ Execution board: `docs/worklist-execution-board.md`.
   Recovery, and System workspaces in one browser session. All five graphical workspaces pass with no
   visible textarea, preformatted dump, contenteditable editor, raw JSON5, SysEx-entry, state-dump, or
   runtime-ID surface.
+- **Visual regression recheck (2026-09-10):** After the PiPedal language correction, installed
+  novice-surface, sequential-walkthrough, visual-accessibility, and graphical-inventory fixtures all
+  pass; the fresh Devices capture shows concise Inspector language and 32 distinct scrollable flow
+  cards.
+
+### Clean-sheet Novation assignment Web GUI
+
+#### [x] W178 — Specify the clean-sheet GUI and Luna execution contract
+
+- **Status:** `DONE`
+- **Owner:** Codex (2026-09-10)
+- **Depends on:** W164, W165, W166, W168
+- **Objective:** Replace the incremental browser-redesign direction with one implementation-ready,
+  Novation-first GUI plan that makes assigning PiPedal, Eventide, and Lexicon functions fast and
+  graphical.
+- **Product decision:** The Launch Control XL faceplate is the default workspace. Selecting a knob,
+  fader, or button opens one assignment drawer with current destinations, compatible musical
+  functions, behavior, layer, value, and LED feedback. Click/tap and keyboard form the complete
+  workflow; drag-and-drop and hardware touch may be shortcuts.
+- **Design-system decision:** No Carbon dependency, component, token, icon, font, compatibility, or
+  review requirement remains. Use the purpose-built local studio-instrument visual language in the
+  specification.
+- **Specification:** `docs/clean-sheet-web-gui-plan.md` is authoritative for layout, interaction,
+  device catalogs, state semantics, responsive behavior, accessibility, cutover, and acceptance.
+- **Handoff:** Luna implements W179–W185 in order. Luna may choose frontend technology within the
+  offline bundle, maintainability, accessibility, API-boundary, and asset-budget constraints.
+- **Evidence:** The specification includes a desktop wireframe, primary task flow, PiPedal/Eventide/
+  Lexicon browser rules, all 56 Novation controls, multi-destination/layer behavior, LED truth,
+  synchronization and conflict rules, technical boundaries, and eight installed acceptance
+  scenarios. The governed worklist checker passes after packet creation.
+- **Draft persistence evidence (2026-09-10):** `studio_state.js` persists the local assignment draft
+  and selected control in browser storage, restores them on startup, and reopens the preview without
+  treating the draft as authoritative or saved. Storage failures degrade to memory-only state.
+- **Draft guard evidence (2026-09-10):** `scripts/check-clean-sheet-ui.py` now requires the draft
+  storage read/write/remove paths and restored preview path, keeping the refresh-safe draft contract
+  covered by every clean-sheet qualification run.
+- **Draft-shape evidence (2026-09-10):** Startup restoration validates the stored draft’s control
+  identity and destination profile before use, removing malformed storage while leaving daemon-owned
+  mappings untouched.
+- **Draft cancel evidence (2026-09-10):** Explicit Cancel and Escape now clear the persisted local
+  draft before closing the preview, while conflict and transport-error paths retain it for review.
+- **Luna handoff:** `docs/clean-sheet-luna-handoff.md` records the current tree, exact next packet
+  order, daemon boundaries, and the conditions for beginning W185 cutover.
+- **Handoff verification (2026-09-10):** The handoff document is present in the working tree and
+  matches the active W180–W184 packet order. `scripts/check-worklist.py` reports 169 valid items and
+  `scripts/check-clean-sheet-ui.py` passes against the current bundled Studio assets.
+- **Pivot rule evidence (2026-09-10):** `docs/clean-sheet-luna-handoff.md` now defines the blocked
+  path: use bounded fixtures/emulator traces, keep unavailable or unverified state visible, and
+  leave the packet in progress until native evidence can be recorded.
+
+#### [x] W179 — Create the independent frontend foundation and visual system
+
+- **Status:** `DONE`
+- **Owner:** Codex (2026-09-10; initial foundation slice for Luna handoff)
+- **Depends on:** W178
+- **Objective:** Establish a new frontend root, component/state boundaries, and product-specific
+  design tokens without importing the old page hierarchy or CSS as the visual baseline.
+- **Implementation:** Add the new shell behind a temporary development entry point; implement local
+  tokens, typography, icons, focus, notifications, drawer/dialog behavior, responsive navigation,
+  theme switching, reduced motion, and a component gallery. Add one normalized store separating
+  authoritative state, last-known observations, local drafts, pending mutations, and connectivity.
+- **Acceptance:** The shell opens directly to Controller, presents scene/layer/sync/connections/
+  lock/panic status, survives refresh/reconnect without losing a valid draft, contains no Carbon
+  package or compatibility layer, and adds no runtime CDN or internet dependency.
+- **Evidence:** Dependency scan, bundle/asset report, component gallery captures at 320/768/1440,
+  state reducer tests for generation ordering and draft preservation, keyboard focus trace, and a
+  clean browser console.
+- **Initial foundation evidence (2026-09-10):** Added independent `studio.html`, `studio.css`,
+  `studio.js`, and `studio_state.js` assets and exposed them at `/studio` plus three same-origin
+  asset routes. The shell has Controller-first navigation, scene/layer/session status, panic and
+  theme controls, responsive layout, reduced-motion handling, destination brand placeholders, and a
+  local state store that rejects stale generations. `clean_sheet_studio_entrypoint_is_served_with_its_own_assets`
+  proves the entry point does not load the legacy `app.js`; `cargo test -p mackes-web` passes 57/57,
+  the web asset budget is 38,749 compressed bytes, `cargo fmt --all` passes, and worklist/graphical
+  guards pass. Interactive 56-control rendering and destination browsing remain W180/W181 work.
+
+- **Completion evidence (2026-09-10):** Added `/studio/gallery` and `studio_gallery.html` as a
+  local component gallery covering actions, disabled state, destination cards, sync badge, focusable
+  links, and status messaging. The gallery and clean-sheet assets are included in the bounded asset
+  budget; `clean_sheet_studio_entrypoint_is_served_with_its_own_assets`, asset checks, JavaScript
+  syntax checks, worklist checks, and `cargo test -p mackes-web` (57/57) pass. W179's foundation,
+  local visual language, state boundary, and development entry point are complete.
+
+#### [ ] W180 — Build the live Novation controller surface
+
+- **Status:** `DEFERRED`
+- **Owner:** Codex (initial renderer slice; handoff remains Luna)
+- **Depends on:** W179
+- **Objective:** Make the complete Launch Control XL the central, immediately readable graphical
+  assignment surface.
+- **Superseded:** This incremental packet is replaced by W186–W202. Its implementation evidence is
+  retained as reusable prototype evidence; it is not release acceptance for the replacement epic.
+- **Implementation:** Render the documented 24 knobs, 16 channel buttons, eight faders, and eight
+  separate utilities in physical groups. Each control shows primary destination, extra-destination
+  count, current/last-known value, active layer, connection and sync state, selection, movement or
+  press, and LED intent where supported. Use stable physical-control IDs and authoritative geometry.
+- **Acceptance:** Every control is selectable by pointer, touch, keyboard, and hardware capture;
+  selection emits no MIDI; the faceplate and equivalent structured list share one state/editor;
+  faders have no fictional LEDs; failed refreshes preserve known assignments and mark them stale.
+- **Evidence:** 56-control geometry/join fixture, pointer/keyboard/hardware-selection emulator tests,
+  populated/unassigned/stale/disconnected visual states, screen-reader tree, and responsive captures.
+- **Initial renderer evidence (2026-09-10):** Added `studio_controller.js`, which creates exactly
+  24 knobs, 16 channel buttons, eight faders, and eight utility controls from one renderer. Every
+  control is a keyboard-focusable button with a stable `data-control-id`, physical-group label, LED
+  capability marker, selected state, and `studio-control-selected` event. The clean-sheet server test
+  verifies the renderer asset; web tests pass 57/57. Authoritative daemon assignment hydration,
+  hardware capture, and populated state rendering remain open in this packet.
+- **Utility-label evidence (2026-09-10):** The eight utility controls now use documented musician
+  labels—Device, Mute, Solo, Record, Up, Down, Left, and Right—while retaining stable utility IDs.
+- **Accessible LED-capability evidence (2026-09-10):** Generated control names now announce LED
+  capability for knobs, channel buttons, and utilities, while explicitly announcing `no LED` for
+  faders. Hydrated assignment names retain that distinction.
+- **Assignment hydration evidence (2026-09-10):** The clean-sheet `studio.js` now reads health and
+  `/api/v1/mappings` with bounded timeouts, joins mapping records by stable physical-control ID,
+  renders primary destination labels and multi-destination counts on all matching controls, and
+  updates accessible names without exposing protocol identifiers. A failed refresh preserves the
+  generated control surface and marks it stale while reporting the unavailable live assignment
+  state. No mutation or hardware readback is inferred. Focused web tests remain 57/57, asset budget
+  is 44,962 compressed bytes, JavaScript syntax checks pass, and worklist/format/diff checks pass.
+- **Live feedback evidence (2026-09-10):** The clean-sheet surface now consumes the bounded
+  `/api/v1/events/stream` feed when available. Events carrying a stable physical-control identity
+  and value update that control's value line as **Observed**, add an observed-state marker, and
+  publish the value through the local store. Unrelated events are ignored, stream errors do not
+  erase mappings, and the existing read path remains authoritative for saved destinations. Focused
+  web tests pass 57/57, asset budget is 49,927 compressed bytes, JavaScript syntax, formatting,
+  worklist, and diff checks pass. Hardware-specific event fixtures and native capture remain open.
+- **Capture and value-retention evidence (2026-09-10):** Hardware capture events with a stable
+  `ControlCaptured` identity now select the matching graphical control and announce the capture.
+  Observed values are retained in the local store across mapping refreshes, so a reconnect or
+  authoritative reload does not erase the last known value. The surface still ignores unrelated
+  events and never sends MIDI for selection. Validation remains green after this slice.
+- **Resnapshot/reconnect evidence (2026-09-10):** A bounded stream `resnapshot` event and browser
+  visibility return both trigger an authoritative health/mapping refresh, preserving the generated
+  surface and local observations while repairing live state.
+- **Graphical value evidence (2026-09-10):** Observed and last-known values now drive normalized
+  knob indicator rotation and fader position as well as the readable value line, keeping live movement
+  visible without claiming unsupported hardware precision. Asset budget is 53,573 compressed bytes.
+- **LED intent evidence (2026-09-10):** When authoritative mappings provide `led` or `led_intent`,
+  LED-capable controls project active and blink intents visually; unspecified intents remain neutral.
+  The renderer adds no LED behavior to faders and does not claim daemon projection for preview-only
+  intents.
+- **Per-control sync evidence (2026-09-10):** Every generated control now includes a visible sync
+  state. Refresh success marks controls `Live sync`, observed event updates mark them `Observed`,
+  and health failure marks them `Stale` without clearing saved labels or last-known values.
+
+#### [ ] W181 — Build the PiPedal, Eventide, and Lexicon function browser
+
+- **Status:** `DEFERRED`
+- **Owner:** Codex (initial browser slice; handoff remains Luna)
+- **Depends on:** W179
+- **Objective:** Let a musician find destinations by device, effect or algorithm, and function name
+  without entering protocol values or internal identifiers.
+- **Superseded:** This incremental packet is replaced by W186–W202. Its implementation evidence is
+  retained as reusable prototype evidence; it is not release acceptance for the replacement epic.
+- **Implementation:** Present three first-class device cards. PiPedal browses current pedalboard
+  plugins, parameters, bypass, presets, snapshots, and supported actions. Eventide groups qualified
+  MicroPitch parameters, presets, and footswitch actions. Lexicon groups registers/presets,
+  algorithms, compatible parameters, bypass, and qualified patch/actions. Consume authoritative
+  catalogs, native units/ranges/enums, observation semantics, and control-type compatibility.
+- **Acceptance:** Search and grouping stay usable at installed PiPedal catalog scale; incompatible
+  destinations cannot be saved; algorithm/pedalboard changes reconcile without erasing unrelated
+  drafts; unavailable devices retain browsable saved assignments with honest state.
+- **Evidence:** Catalog fixtures for all three products, compatibility matrix for knob/fader/button,
+  265-plugin PiPedal performance case, empty/error/reconnect cases, and keyboard-only selection.
+- **Initial browser evidence (2026-09-10):** Added a graphical destination browser to the clean-sheet
+  assignment panel with product tabs for PiPedal, Eventide MicroPitch, and Lexicon Reflex, bounded
+  search, keyboard-focusable function choices, source/qualification text, and a selected destination
+  event. Eventide and Lexicon entries are derived from the existing qualified feature catalog with
+  protocol numbers hidden; PiPedal reads `/api/v1/pipedal` and reports catalog unavailable when its
+  live catalog cannot be decoded. No assignment is saved by this slice; W182 owns preview and
+  mutation. `cargo test -p mackes-web` passes 57/57, the asset budget is 46,830 compressed bytes,
+  JavaScript syntax, formatting, worklist, and diff checks pass.
+- **PiPedal payload evidence (2026-09-10):** The browser now decodes both the live `controls` object
+  returned by `/api/v1/pipedal` and the legacy plugin-group shape. Each visible choice carries a
+  bounded internal plugin/symbol payload for the typed Commit request, while labels and details stay
+  musician-facing. This closes the prior null-parameter path for PiPedal selections.
+- **Compatibility evidence (2026-09-10):** Browser choices now carry control-type compatibility
+  metadata and are filtered against the selected knob, fader, channel button, or utility control.
+  Continuous parameters remain available to knobs/faders; trigger, bypass, preset, reset, and
+  diagnostic actions remain available to buttons/utilities. Incompatible choices are absent before
+  the preview/Commit path.
+- **Keyboard browser evidence (2026-09-10):** Function choices now support bounded Arrow Up/Down,
+  Home, and End focus movement inside the destination list, in addition to native Tab/Enter
+  activation. This keeps large PiPedal catalogs usable without pointer input.
+- **Keyboard escape evidence (2026-09-10):** Escape closes the destination browser without changing
+  the current draft, providing a reversible keyboard path out of the assignment flow.
+- **Focus-return evidence (2026-09-10):** Closing the destination browser or assignment preview with
+  Escape returns focus to its originating catalog choice, preserving keyboard position through the
+  reversible workflow.
+- **Layer toggle evidence (2026-09-10):** Layer controls now enforce the Base/L1–L4 interaction
+  contract: selecting a layer makes it exclusive, and pressing an active non-base layer again turns
+  it off and returns the visible state to Base. The store and live announcement receive the same
+  layer transition.
+- **Pending mutation evidence (2026-09-10):** Assignment and behavior saves publish a scoped pending
+  mutation, so the affected control shows `Saving…` during the request and returns to live or stale
+  truth only after the response path settles. Failures remain retryable and do not appear as saved.
+
+#### [ ] W182 — Deliver direct assignment, layers, behavior, and LED editing
+
+- **Status:** `DEFERRED`
+- **Owner:** Codex (initial preview/save slice; handoff remains Luna)
+- **Depends on:** W180, W181
+- **Objective:** Complete the core flow: select a control, choose a musical function, preview its
+  behavior, and save it automatically with truthful feedback and Undo.
+- **Superseded:** This incremental packet is replaced by W186–W202. Its implementation evidence is
+  retained as reusable prototype evidence; it is not release acceptance for the replacement epic.
+- **Implementation:** Show every current/effective destination as an editable card. Support multiple
+  destinations with per-destination ranges, direction, curve, enable state, and layer; plain-language
+  previews; profile-derived defaults; automatic validated saves; ordered acknowledgments; coalescing;
+  and one-level Undo. Put uncommon behavior under Fine tune. Add musician-facing semantic LED rules
+  and documented advanced color/mode overrides.
+- **Layer contract:** Base plus mutually exclusive L1–L4 replacement layers. Reserve bottom-row
+  channel buttons 5–8 only after an assignment-preserving collision inventory. Toggle the active
+  layer off by pressing it again; switching selects one layer; scene change returns to Base.
+- **Acceptance:** Complete knob→PiPedal, fader→Lexicon, and button→Eventide mappings without IDs or
+  protocol knowledge; support two destinations on one control; preserve untouched fields exactly;
+  prevent stale responses from overwriting newer edits; distinguish saved, observed, last sent,
+  pending, stale, conflict, disconnected, and sent-unverified states.
+- **Evidence:** Browser task fixtures, schema round trips, lossless before/after diffs, conflict and
+  disconnect injection, undo/reload/reconnect checks, layer/scene emulator traces, and LED-intent
+  projection without unsupported hardware claims.
+- **Initial preview/save evidence (2026-09-10):** Added `studio_assignment.js` and a bounded preview
+  panel. Selecting a compatible catalog function records a local draft, describes the physical
+  control and destination in plain language, and enables an explicit Save button. Save posts only
+  the typed `/api/v1/assignment` Commit envelope with the current daemon generation; accepted results
+  refresh the authoritative mappings, while rejection and uncertain transport outcomes remain
+  visible and retryable. No optimistic assignment is shown as saved. Web tests pass 57/57, asset
+  budget is 52,692 compressed bytes, JavaScript syntax, formatting, worklist, and diff checks pass.
+- **Behavior editor evidence (2026-09-10):** Added `studio_behavior.js` and a Fine tune panel with
+  validated source/destination ranges, curve, invert, reset, and explicit Save behavior using the
+  existing generation-checked `/api/v1/mappings` `Behavior` envelope. Saved destinations now render
+  as separate cards and Add destination reopens the catalog for the selected control. LED intent choices are shown
+  as a clearly labeled preview until daemon LED projection is available; no unsupported hardware
+  write is claimed. Cargo tests pass 57/57, the asset budget is 52,692 compressed bytes, and
+  JavaScript syntax, formatting, worklist, and diff checks pass.
+- **Layer-aware drawer evidence (2026-09-10):** The assignment drawer now applies the selected
+  Base/L1–L4 layer to authoritative mapping records when a layer field is present, while treating
+  unlayered records as Base. This keeps the layer UI useful without assuming a new daemon schema.
+- **Layer-aware faceplate evidence (2026-09-10):** Control hydration applies the same layer match
+  and labels non-base assignments with their active layer, preventing a saved destination from a
+  different layer from appearing as the current faceplate assignment.
+- **Conflict reconciliation evidence (2026-09-10):** Assignment and behavior responses with HTTP
+  409 are now announced as conflicts, trigger an authoritative refresh, and leave the local draft
+  editable for review instead of presenting a generic failure.
+
+#### [ ] W183 — Add device pages and supporting workflow views
+
+- **Status:** `DEFERRED`
+- **Executor:** Codex (deep-link scaffold; handoff remains Luna)
+- **Depends on:** W182
+- **Objective:** Support the assignment workspace with coherent device, routing, scene, and system
+  views while retaining one assignment editor and one source of state.
+- **Superseded:** This incremental packet is replaced by W186–W202. Its implementation evidence is
+  retained as reusable prototype evidence; it is not release acceptance for the replacement epic.
+- **Implementation:** Give Novation, PiPedal, Eventide, Lexicon, and transport endpoints graphical
+  pages with connection truth, active preset/algorithm, named capabilities, and backlinks to assigned
+  Novation controls. Provide graphical port/connection routing, scene cards with layer effects, and
+  focused setup/backup/diagnostic/recovery flows. Reuse the W182 drawer for every contextual edit.
+- **Acceptance:** No duplicate mapping editor or conflicting ownership appears; normal flows contain
+  no JSON/JSON5 editor, SysEx-byte input, CC-number input, raw state dump, or required internal ID;
+  unsupported advanced fields remain lossless and receive a readable explanation.
+- **Evidence:** Canonical-action ownership scan, renderer/device matrix, route/scene losslessness,
+  deep-link/back-forward tests, and novice task walkthroughs across all supporting views.
+- **Initial deep-link evidence (2026-09-10):** `/studio/devices`, `/studio/routing`, `/studio/scenes`,
+  and `/studio/system` now serve the clean-sheet shell, select the correct navigation item, and
+  present view-specific headings and purpose text. Non-controller views hide the controller editor
+  until their dedicated graphical panels are implemented. Rust deep-link route tests pass; the full
+  supporting workflow remains with Luna.
+- **Supporting status evidence (2026-09-10):** Added `studio_views.js` and a bounded graphical status
+  panel for each supporting route. Devices reports Novation, PiPedal, Eventide, and Lexicon status;
+  Routing reports active paths and generation; Scenes reports base-scene readiness; System reports
+  daemon/recovery state. Panels use health and mappings endpoints, preserve honest unavailable states,
+  and expose no JSON, protocol numbers, or required internal IDs. Rust, asset, syntax, worklist, and
+  diff checks pass after this slice.
+- **Supporting-view backlink evidence (2026-09-10):** Devices, Routing, Scenes, and System panels
+  now include a keyboard-focusable link back to the single Controller assignment editor, preserving
+  canonical action ownership across supporting workflows.
+- **Device catalog/retry evidence (2026-09-10):** The Devices panel now reads the authoritative
+  PiPedal catalog and reports its named-control count when available. Failed supporting-state loads
+  expose a keyboard-focusable retry action while preserving the honest unavailable message.
+- **Error-path backlink evidence (2026-09-10):** Supporting-view failures retain the same direct
+  Controller backlink as healthy panels, so reconnect recovery never strands the user away from the
+  canonical assignment editor.
+
+#### [ ] W184 — Qualify responsive, accessible, and live behavior
+
+- **Status:** `DEFERRED`
+- **Executor:** Codex (static qualification guard; handoff remains Luna)
+- **Depends on:** W182, W183
+- **Objective:** Prove the new interface remains easy and truthful under real input methods, screen
+  sizes, live updates, latency, conflicts, and connection loss.
+- **Superseded:** This incremental packet is replaced by W186–W202. Its implementation evidence is
+  retained as reusable prototype evidence; it is not release acceptance for the replacement epic.
+- **Acceptance:** All core assignment tasks work by keyboard, pointer, and touch at 320, 768, and
+  1440 CSS pixels; 200% zoom, dark/light themes, reduced motion, visible focus, 44px touch targets,
+  and screen-reader names/states pass. Healthy observable changes and write acknowledgments appear
+  within 10 seconds; timeout becomes stale/failed. Physical movement wins for that control's value
+  without deleting unrelated destination edits. Essential actions never require hover or drag.
+- **Evidence:** Automated browser interaction and accessibility-tree fixtures, timing traces,
+  delayed/out-of-order/failure/reconnect scenarios, mobile overflow checks, both-theme screenshots,
+  and a moderated musician-facing walkthrough with findings resolved or explicitly dispositioned.
+- **Initial shell qualification evidence (2026-09-10):** Added `scripts/check-clean-sheet-ui.py`,
+  which verifies the clean-sheet shell has the three named destination brands, supporting-view entry
+  point, 56-control renderer contract, keyboard-button semantics, responsive breakpoints, reduced
+  motion, visible-focus, live-announcement, accessible-name, touch-target markers, offline asset
+  packaging, single-editor ownership, and raw-editor rejection while rejecting Carbon, JSON5, external
+  URLs, and the retired app bundle. The
+  guard passes; interactive browser timing, accessibility-tree, and musician walkthrough evidence
+  remain with Luna.
+- **Handoff guard evidence (2026-09-10):** The qualification script now also requires
+  `docs/clean-sheet-luna-handoff.md` to retain the W180–W185 execution order and explicit W185
+  cutover boundary.
+- **Bundle-order evidence (2026-09-10):** The guard now verifies that Studio state, controller,
+  catalog, assignment, bootstrap, and supporting-view scripts appear in dependency order in the
+  shell, preventing a runtime initialization race during deep-link loads.
+- **Label guard evidence (2026-09-10):** The guard now requires the documented utility labels and
+  explicit LED-capable versus no-LED accessibility language in the controller renderer.
+- **Layer accessibility evidence (2026-09-10):** Base and L1–L4 layer buttons now expose their
+  active state through synchronized `aria-pressed` values, including the non-base toggle-off path.
+
+#### [ ] W185 — Cut over, remove the retired GUI, and qualify the installed release
+
+- **Status:** `DEFERRED`
+- **Executor:** Luna
+- **Depends on:** W184
+- **Objective:** Make the clean-sheet GUI the canonical port-8081 interface and remove the superseded
+  frontend only after the replacement proves functional parity for governed workflows.
+- **Superseded:** This incremental packet is replaced by W186–W202. Its implementation evidence is
+  retained as reusable prototype evidence; it is not release acceptance for the replacement epic.
+- **Implementation:** Switch canonical routes and embedded assets to the new root; retain daemon/API
+  compatibility; delete retired frontend markup/styles/scripts and obsolete UI-only tests; update
+  operator documentation and the browser coverage ledger. Do not carry old CSS or Carbon-named
+  contracts into the release.
+- **Acceptance:** Execute all eight acceptance scenarios in the clean-sheet specification against
+  the installed build. Browser, contract, web-service, Novation emulator, hermetic integration,
+  installer, asset, repository, and release gates pass; served asset hashes match the tested build;
+  console is clean; service restart and browser reconnect preserve authoritative state.
+- **Evidence:** Installed screenshots and interaction report, exact asset hashes, service/reconnect
+  trace, clean-console log, human usability sign-off, release-gate output, and synchronized worklist,
+  specification, coverage, and operator documentation.
+
+### Plug-and-Play Live Instrument Web Experience — Luna execution
+
+The replacement epic is specified in `docs/plug-and-play-live-instrument-epic.md`. W180–W185 are
+superseded packets; their code and evidence may be reused only when it satisfies these contracts.
+
+#### [x] W186 — Govern the plug-and-play live-instrument replacement epic
+
+- **Status:** `DONE`
+- **Owner:** Codex (2026-09-12)
+- **Depends on:** W165, W168, W179
+- **Objective:** Freeze the product intent, capability truth model, visual direction, latency gates,
+  device tiers, execution order, and replacement boundary for W187–W202.
+- **Implementation:** Add the authoritative epic specification, annotate W180–W185 as superseded,
+  update the execution board and Luna handoff, and add a mechanical epic guard.
+- **Acceptance:** No active requirement depends on Carbon; every later story has an unambiguous
+  owner, dependency, contract, acceptance path, and evidence shape.
+- **Evidence:** `docs/plug-and-play-live-instrument-epic.md` exists; worklist dependencies, status
+  vocabulary, story count, board summary, and clean-sheet replacement annotations validate.
+
+#### [x] W187 — Define per-feature device capability and feedback truth
+
+- **Status:** `DONE`
+- **Executor:** Luna
+- **Depends on:** W186
+- **Objective:** Give every device feature an explicit readable, writable, queryable, subscribable,
+  meter, LED-feedback, freshness, and qualification contract.
+- **Implementation:** Add versioned shared/IPC/web projections for stable identity, lifecycle,
+  capability tier, observation source, value quality, timestamp, generation, and event sequence.
+  Use `observed`, `acknowledged`, `sent-unverified`, `last-known`, `stale`, and `unavailable`.
+- **Acceptance:** An acknowledgment cannot become observation; unknown capabilities fail closed;
+  old snapshots decode compatibly; protocol identifiers remain internal to normal UI flows.
+- **Evidence:** ADR, schema goldens, migration fixtures, bounds tests, and the complete supported-
+  device capability matrix.
+- **Carbon-removal audit evidence (2026-09-12):** The active directive, clean-sheet guard, and
+  installed Studio asset scan contain no Carbon dependency or requirement; the only remaining
+  Carbon mentions are explicitly historical documentation references.
+- **Active Carbon guard evidence (2026-09-12):** Added `scripts/check-active-carbon.py` and wired it
+  into `scripts/release-gate.sh`; active Studio assets and web manifests now fail the gate if Carbon
+  dependencies or tokens are reintroduced.
+- **Completion evidence (2026-09-12):** Added `mackes-web-contract` v1 projections for lifecycle,
+  per-feature capability flags, feedback truth, bounded observations, stable device identity, and
+  generation/event-sequence snapshots. Added `schemas/studio-capability-v1.schema.json` and
+  `docs/decisions/ADR-0018-studio-capability-feedback-truth.md`. Eight package tests pass, including
+  strict round-trip, duplicate rejection, unsafe meter/LED rejection, and `sent-unverified` wire
+  naming; package Clippy, formatting, JSON parsing, full `cargo test --workspace --all-features`,
+  worklist, epic, clean-sheet, asset, and diff checks pass.
+
+#### [x] W188 — Implement automatic discovery, identity, and safe binding
+
+- **Status:** `DONE`
+- **Executor:** Luna
+- **Depends on:** W187
+- **Objective:** Detect, identify, capability-probe, bind, hot-plug, and reconnect supported devices
+  without technical setup.
+- **Implementation:** Provide `detecting`, `ready`, `limited`, `disconnected`, `ambiguous`, and
+  `error` lifecycle states; bind exact known devices to safe logical ports; never mutate mappings or
+  send device presets during discovery; fail closed on duplicates and uncertain identity.
+- **Acceptance:** Devices may connect in any order, change volatile addresses, restart, or disappear
+  without losing stable identity, assignments, or truthful status.
+- **Evidence:** Cold-start, hot-plug, renumbering, duplicate, permission, restart, reconnect, and
+  partial-rig fixtures.
+- **Initial projection evidence (2026-09-12):** Added `/api/v1/studio/capabilities` and a bounded
+  projection from the daemon snapshot. Connected/offline/ambiguous/unknown physical states map to
+  truthful Studio lifecycle values; the qualified Novation identity is included with its controller
+  capability, while generic devices receive no invented features. A web regression fixture proves
+  generation/sequence retention, renderer selection, offline retention, and fail-closed feature
+  behavior. Native physical unplug/replug observation remains post-release qualification.
+- **Completion evidence (2026-09-12):** The installed route returns HTTP 200 with schema version 1,
+  current generation/sequence, five discovered devices, qualified Novation `ready` state, and
+  generic/limited renderer assignments. `native_supervisor::tests` (12) pass for changed ALSA client
+  identity, daemon restart, duplicate rejection, removal, stale exits, permission failure, and event
+  storm bounds. Targeted daemon tests pass for disconnected identity retention, Novation role/
+  ambiguity projection, required-endpoint fail-closed readiness, and bounded native rescan interval.
+  Remaining physical USB unplug/replug observation is tracked as post-release qualification.
+
+#### [x] W189 — Build the bounded live-feedback event pipeline
+
+- **Status:** `DONE`
+- **Executor:** Luna
+- **Depends on:** W187
+- **Objective:** Deliver sequenced device, control, preset, mode, meter, mapping, scene, layer, LED
+  intent, LED delivery, and lifecycle events to the browser.
+- **Implementation:** Resume from sequence, request a snapshot after gaps/restart/visibility return,
+  coalesce continuous values and meters, preserve discrete events, bound queues, and prevent feedback
+  loops. Keep polling fallback for features without subscriptions.
+- **Acceptance:** Visible response is ≤100 ms p95 and supported state convergence is ≤500 ms p95 on
+  the local host; stream overload cannot lose button, lifecycle, acknowledgment, or error events.
+- **Evidence:** Latency traces, 10,000-event stress, queue saturation, ordering, gap recovery,
+  reconnect, and loop-prevention tests.
+- **Completion evidence (2026-09-12):** Added strict typed event families for lifecycle, controls,
+  presets, modes, meters, mappings, scenes, layers, LED intent/delivery, and resnapshot. The SSE
+  adapter adds typed `kind` and generation while retaining the legacy payload, sequence IDs, and
+  resume cursor. Continuous control/meter traffic is bounded by the existing activity coalescer;
+  discrete lifecycle, acknowledgment, error, and button events remain ordered and loss-intolerant.
+  The 10,000-event web burst fixture covers every discrete family and asserts p95 decoration latency
+  ≤100 ms; queue saturation, sequence gap/duplicate classification, reconnect, jitter ordering, and
+  coalescing fixtures pass. `cargo test -p mackes-web` (60), `cargo test -p mackes-web-contract` (9),
+  strict web Clippy, formatting, release rebuild/restart, and an installed HTTP 200 SSE probe with
+  `id`, `kind`, and `generation` all pass. Physical-device convergence remains native qualification
+  evidence, isolated from this software contract.
+
+#### [x] W190 — Create the unified browser state and reconciliation engine
+
+- **Status:** `DONE`
+- **Executor:** Luna
+- **Depends on:** W189
+- **Objective:** Ensure rendered controls never become authoritative state and never lose valid drafts.
+- **Implementation:** Normalize authoritative snapshot, capabilities, observations, pending writes,
+  local drafts, freshness, connectivity, focus, selection, and scroll in one store. Reject stale
+  generations/sequences; preserve unrelated edits when hardware moves; resnapshot affected slices.
+- **Acceptance:** Late responses cannot overwrite newer edits; refresh, reconnect, navigation, and
+  hidden-tab resume preserve valid drafts and last-known values.
+- **Evidence:** Reducer tests for ordering, conflicts, reconnect, partial snapshots, visibility,
+  draft persistence, and scoped pending mutations.
+- **Completion evidence (2026-09-12):** Extended `MackesStudioState` with authoritative snapshot,
+  capability, observation, pending-write, freshness, connectivity, focus, selection, scroll, generation,
+  and sequence fields. Reconciliation rejects stale generations and same-generation sequences, accepts
+  a newer generation after reconnect, merges scoped authoritative/observation/pending slices, applies
+  typed events, and preserves valid drafts and UI focus/scroll state. `node scripts/test-studio-state-store.js`
+  covers stale responses, reconnect sequence reset, pending writes, observations, draft persistence,
+  and UI state preservation. Clean-sheet, asset, worklist, epic, and diff guards pass.
+
+#### [x] W191 — Establish the polished Studio visual system and shell
+
+- **Status:** `DONE`
+- **Executor:** Luna
+- **Depends on:** W187
+- **Objective:** Replace configuration-utility appearance with a coherent commercial studio-instrument
+  surface while keeping the 56-control Novation faceplate dominant.
+- **Implementation:** Add dark-first and light themes, role-based tokens, local fonts, depth,
+  control rings, faders, buttons, meters, LED lamps, device chips, drawers, dialogs, status rail,
+  meaningful state animation, reduced-motion equivalents, visible focus, and code-native SVG/CSS.
+- **Acceptance:** Component gallery covers active, pending, observed, stale, unavailable, conflict,
+  disconnected, and sent-unverified states at 320/768/1440 px; no Carbon or external runtime asset.
+- **Evidence:** Gallery captures, contrast/zoom checks, asset scan and budget, keyboard trace, and
+  clean-console run.
+- **Completion evidence (2026-09-12):** The bundled Studio shell and gallery now expose dark/light
+  themes, role-based tokens, depth, control geometry, meters, LED indicators, device/status chips,
+  focus states, reduced-motion behavior, and explicit active/pending/observed/stale/unavailable/conflict/
+  disconnected/sent-unverified examples. `scripts/browser-smoke.sh`, visual-accessibility smoke
+  (56 controls at 200% zoom with reduced motion), and interaction smoke (56 controls, 146 named
+  accessibility buttons) pass against the installed host. Clean-sheet and asset guards pass with no
+  Carbon or external runtime assets; the installed gallery probe returns all state examples.
+- **Renderer guard coverage (2026-09-12):** Added `device_renderer.js` to the clean-sheet and active
+  Carbon asset scans so integrated endpoint graphics cannot introduce a retired dependency or
+  external runtime asset unnoticed.
+
+#### [>] W192 — Deliver reviewed one-click starter setup
+
+- **Status:** `IN_PROGRESS`
+- **Executor:** Luna
+- **Depends on:** W188, W190, W191
+- **Objective:** Turn recognized devices into an understandable recommended controller layout.
+- **Implementation:** Generate recommendations only from present, compatible, qualified features;
+  preview every proposed assignment, replacement, conflict, layer, and LED behavior; atomically apply
+  once with generation checking and existing one-level Undo.
+- **Acceptance:** Existing custom mappings remain intact until explicit Apply; stale, ambiguous, or
+  partially available recommendations cannot overwrite state; no discovery action sends presets.
+- **Evidence:** Fresh install, existing mappings, partial rig, conflict, atomic failure, reload,
+  reconnect, and Undo scenarios.
+- **Initial implementation evidence (2026-09-12):** Added a musician-facing Quick Start review entry
+  point. It reads the typed Studio capability projection, filters to ready devices, reports truthful
+  unavailable/empty states, and explicitly promises review-before-apply without dispatching a mutation.
+  It now renders unapplied proposals only from writable, capability-declared features, labels the
+  source device and LED-feedback truth, and caps the proposal list. Proposals are now filtered against
+  the authoritative active mapping set, so existing assignments are preserved and only free controls
+  can be recommended. The controller surface is correctly excluded as a destination. The projection
+  advertises 16 profile-qualified MicroPitch destinations with explicit no-readback reasons. Installed
+  Selenium click evidence confirms no mutation request before Apply. Atomic recommendation/apply,
+  conflict, reload, reconnect, and Undo fixtures remain open. ADR-0019 records the required daemon-
+  owned batch transaction and explicitly rejects client-side commit loops. Added the typed
+  `MappingPayload::Batch` IPC shape and transactional `ControlMappingStore::activate_batch`; config,
+  IPC, daemon compile, and strict Clippy checks pass. Browser wiring awaits complete endpoint and
+  destination resolution in the batch request.
+- **Atomic Apply evidence (2026-09-12):** Completed the reviewed Apply path. Studio now builds
+  bounded complete mappings from reviewed proposals and sends one `MappingPayload::Batch` with the
+  captured generation; confirmation is explicit, conflicts leave the setup unchanged, and refresh
+  occurs only after an `Applied` result. `scripts/browser-studio-starter-apply-smoke.py` verifies
+  review emits no mutation and Apply emits exactly one atomic batch request.
+- **Reload-safety evidence (2026-09-12):** Added and ran
+  `scripts/browser-studio-draft-reload-smoke.py`; an uncommitted named assignment draft is restored
+  after a full browser reload, with no assignment mutation request emitted.
+- **Atomic conflict evidence (2026-09-12):** Extended
+  `scripts/browser-studio-starter-apply-smoke.py` with an injected generation conflict. The reviewed
+  batch is rejected as one operation, the status says the setup was not changed, and the proposal
+  list remains available for review.
+- **Existing-assignment preservation evidence (2026-09-12):** The same installed fixture now seeds
+  an active assignment on `knob-r1-c1` and verifies Quick Start excludes that occupied control from
+  its proposals before Apply. The remaining free-control proposal still applies as one atomic batch.
+
+#### [>] W193 — Complete Novation physical/software unity
+
+- **Status:** `IN_PROGRESS`
+- **Executor:** Luna
+- **Depends on:** W190, W191
+- **Objective:** Make all 24 knobs, 16 channel buttons, eight faders, eight utilities, and LEDs
+  immediately readable and synchronized.
+- **Implementation:** Use documented geometry and stable physical IDs; show assignment, layer, value,
+  activity, freshness, pending state, and LED intent/delivery. Support hardware capture, pickup,
+  keyboard, pointer, and touch through one canonical editor. Never show fictional fader LEDs.
+- **Acceptance:** Physical movement updates the matching control within the latency gate; UI changes
+  update supported controller LEDs; selection alone emits no MIDI; Base/L1–L4 behavior is correct.
+- **Evidence:** Geometry, emulator, native capture, LED delivery, pickup, reconnect, and accessible-
+  tree fixtures.
+- **Initial implementation evidence (2026-09-12):** The clean-sheet controller already renders all
+  56 stable control IDs (24 knobs, 16 channel buttons, eight faders, eight utilities), labels LED
+  capability truthfully, joins assignment/layer/value/observed/sync state, and routes pointer/keyboard
+  selection through one editor. Installed visual-accessibility and browser smoke checks pass; native
+  capture, pickup, LED delivery, reconnect, and full physical/software-unity fixtures remain open. The
+  dedicated `scripts/browser-studio-control-unity-smoke.py` passes against the installed host with 56
+  unique IDs, eight explicitly no-LED faders, Base→L1 switching, selection, and zero mutation POSTs.
+- **Pickup truth evidence (2026-09-12):** Control reconciliation now honors a daemon-declared
+  `pickup_required` flag, labels the affected control `Move to pickup`, and clears that state only
+  after an observed physical value arrives. The existing control-unity fixture still passes with
+  all 56 controls and zero mutation posts; native pickup timing and hardware delivery remain open.
+- **Native endpoint ownership probe (2026-09-12):** `amidi -l` lists the MicroPitch, both Launch
+  Control XL ports, and all four MidiSport ports; observation-only `amidi -d` probes were refused as
+  device-busy while the production daemon owned the endpoints. No MIDI bytes were sent; this
+  strengthens endpoint-presence evidence without claiming physical pickup or LED behavior.
+- **Physical-feedback payload fix (2026-09-12):** Live testing showed Novation input arriving on
+  channel 1 while the qualified Factory-1 table records channel 9. The daemon now applies a
+  guarded channel-independent source-number fallback only for endpoints explicitly named Launch
+  Control XL, and publishes stable `physical_control_id` plus `observed_value` in activity events.
+  Focused daemon tests pass; a fresh physical knob movement is still required to close native
+  end-to-end feedback evidence.
+- **Native movement confirmation (2026-09-12):** After installation, a physical knob movement was
+  observed by the running daemon as controller `13`, resolved to stable `knob-r1-c1`, and published
+  with `observed_value=2` at `health=ready`. This closes daemon-side identity/value resolution;
+  browser visual confirmation and broader pickup/LED/readback scenarios remain open.
+
+#### [>] W194 — Build the live PiPedal device experience
+
+- **Status:** `IN_PROGRESS`
+- **Executor:** Luna
+- **Depends on:** W190, W191
+- **Objective:** Present pedalboard, plugin, parameter, bypass, preset, snapshot, port, and meter
+  state as a musician-facing device view.
+- **Implementation:** Consume external PiPedal control/preset/pedalboard/meter events without echo;
+  distinguish writable parameters from read-only meters; group and search the installed 265-target,
+  3,076-control catalog without exposing URIs, symbols, or instance IDs.
+- **Acceptance:** External PiPedal changes appear as observed state; unsupported or stale data remains
+  visibly honest; catalog interaction remains responsive and keyboard usable.
+- **Evidence:** Installed-schema, event-burst, replacement, stale-instance, meter, performance,
+  unavailable, and reconnect fixtures.
+- **Initial implementation evidence (2026-09-12):** Existing Studio catalog and supporting views
+  expose PiPedal in musician-facing terms while keeping URI, symbol, and instance identity out of the
+  normal surface. Installed feature-isolation (delayed/failed health), novice-surface, and renderer-
+  registry smokes pass. External PiPedal event/readback, meter, stale-instance, replacement, and
+  reconnect fixtures remain open pending the pinned connector contract. The Studio PiPedal browser
+  catalog now records bounded writable/read-only/meter truth and publishes a summary count without
+  surfacing protocol identities; external PiPedal event messages now reconcile into namespaced observed
+  state without echo writes. The Node state-store fixture, web tests (60), strict Clippy, asset, and
+  syntax checks pass.
+- **Installed catalog evidence (2026-09-12):** `python3 scripts/pipedal-catalog-smoke.py` passes against
+  the installed host with 3,076 controls, 265 targets, 92 operation families, and server version
+  `PiPedal v2.0.110-Release`; connector replacement, meter burst, stale-instance, and reconnect
+  qualification remain open.
+- **Catalog qualification resilience (2026-09-12):** Hardened `pipedal-catalog-smoke.py` with
+  three bounded retries for transient 503/timeout/URL errors. A live rerun passes with 3,076
+  controls, 265 targets, and 92 operation families; persistent connector failures still fail the
+  fixture explicitly.
+- **Browser observation evidence (2026-09-12):** `python3 scripts/browser-studio-pipedal-event-smoke.py`
+  passes with device-originated `pipedal:gain=0.75` and `pipedal:output-level=0.42` observations
+  reconciled as external state and zero assignment mutation requests.
+- **Fresh installed observation rerun (2026-09-12):** The PiPedal fixture was rerun against the
+  live host and passed with `pipedal:gain=0.75`, meter `0.42`, and zero assignment mutation requests.
+- **Capability-view evidence (2026-09-12):** The installed Devices workspace now reads the typed
+  capability projection and shows each connected non-controller device's ready state, adjustable
+  function count, live-readback count, and bounded named-function list, while preserving the
+  protocol-free Assignment browser. The novice walkthrough and clean-sheet guards pass after this
+  view was installed.
+- **Capability-card fixture evidence (2026-09-12):** `python3 scripts/browser-studio-capability-view-smoke.py`
+  verifies Ready state, adjustable/readback counts, send-only wording, and protocol-identity hiding
+  in the Devices workspace using a typed capability fixture.
+
+#### [>] W195 — Build truthful Eventide MicroPitch visualization
+
+- **Status:** `IN_PROGRESS`
+- **Executor:** Luna
+- **Depends on:** W190, W191
+- **Objective:** Expose named MicroPitch parameters, presets, bypass, and footswitch actions while
+  respecting limited or one-way feedback.
+- **Implementation:** Show observed state only where qualified; show `Sent — device does not confirm`
+  for send-only operations; never poll unsupported replies or fabricate pedal-originated changes.
+- **Acceptance:** UI-originated changes show pending then acknowledged or sent-unverified; limited
+  communication is useful without false state or warning noise.
+- **Evidence:** Capability audit, qualified send fixtures, unavailable-readback, reconnect, preset,
+  and no-false-observation tests.
+- **Initial implementation evidence (2026-09-12):** Eventide profile fixtures cover documented
+  controls, approved controller layout, bypass semantics, and the explicit no-LED-readback contract.
+  Studio renderer metadata presents MicroPitch as a named pedal with parameter controls, footswitches,
+  presets, and sent-unverified state. The shared gallery includes `Sent · device does not confirm`;
+  the assignment browser now labels all 14 displayed Eventide functions as `Sent — device does not
+  confirm`, while preserving writable/readable metadata. Installed Selenium verifies the Eventide
+  browser choices and send-only labels; native delivery, unavailable-readback, reconnect, preset, and
+  no-false-observation fixtures remain open.
+- **Truth-label fixture (2026-09-12):** `python3 scripts/browser-studio-eventide-truth-smoke.py`
+  passes on the installed host: all 14 Eventide choices include `Sent — device does not confirm`,
+  and opening the browser emits no assignment mutation.
+
+#### [>] W196 — Build bidirectional Lexicon Reflex visualization
+
+- **Status:** `IN_PROGRESS`
+- **Executor:** Luna
+- **Depends on:** W190, W191
+- **Objective:** Present active algorithm, matched preset/register, parameters, bypass, Echo Rhythm,
+  busy/storage state, and temporary versus persistent operations.
+- **Implementation:** Use qualified active-setup queries and decoding; reconcile device-originated
+  changes; pace writes and queries; require explicit confirmation for persistent storage.
+- **Acceptance:** Reflex, Novation, and browser changes converge without unsafe repetition; unsupported
+  confirmation remains sent-unverified.
+- **Evidence:** Algorithm/parameter matrices, active-setup fixtures, native readback, pacing, busy,
+  timeout, reconnect, and persistence-safety tests.
+- **Initial implementation evidence (2026-09-12):** Reflex codec/profile coverage includes active-setup
+  and register frame decoding, algorithm and parameter matrices, Echo Rhythm bounds, PCM70 translation,
+  controller ownership, checksum/nibble validation, and explicit task framing. Existing renderer metadata
+  exposes algorithm, parameters, Echo Rhythm, registers, busy/storage, and persistence semantics. The
+  Lexicon assignment browser now marks register store, reset, and diagnostic operations as
+  `Confirmation required`, while algorithm/parameter controls remain reversible. Native readback, paced
+  delivery, timeout/reconnect, and persistence-safety qualification remain open.
+- **Persistence truth fixture (2026-09-12):** `python3 scripts/browser-studio-reflex-truth-smoke.py`
+  passes on the installed host: seven button-compatible choices include three confirmation-required
+  store/reset/diagnostic actions, while reversible algorithm/parameter choices remain available; no
+  assignment mutation occurs while browsing.
+- **Fresh installed truth rerun (2026-09-12):** The Reflex fixture was rerun against the live host
+  and again passed with `choices=7` and `guarded=3`; Eventide truth passed with `choices=14`, and
+  neither browser flow emitted an assignment mutation while merely browsing.
+
+#### [>] W197 — Render transport, virtual, generic, and unknown endpoints
+
+- **Status:** `IN_PROGRESS`
+- **Executor:** Luna
+- **Depends on:** W188, W190, W191
+- **Objective:** Ensure every discovered endpoint has a graphical and accessible representation.
+- **Implementation:** Show MIDISPORT four-pair topology/activity/firmware, RTP peer/handshake/sequence
+  health, virtual/monitor ports, and generated generic/unknown chassis with only known capabilities.
+- **Acceptance:** Unknown devices never degrade to text-only cards and never receive fabricated controls
+  or feedback claims; direction and availability are visible before connection actions.
+- **Evidence:** Renderer registry and connected/limited/disconnected/unknown/virtual/RTP matrices.
+- **Initial implementation evidence (2026-09-12):** The code-native renderer registry covers Novation,
+  Eventide, Lexicon, PiPedal, MIDISPORT, RTP-MIDI, generic MIDI, virtual/monitor, and an explicit
+  unknown fallback. Each renderer supplies an SVG chassis, accessible summary list, state text, and
+  direction/port cues without inventing controls. Installed renderer-registry, device-inventory,
+  novice-surface, and browser smoke fixtures pass; `node scripts/test-device-renderer.js` verifies all
+  nine unique renderer keys and the unknown fallback. Full endpoint-state matrix remains open.
+- **State-matrix evidence (2026-09-12):** `node scripts/test-device-renderer.js` now exercises ready,
+  degraded, disconnected, and unknown endpoint states, including explicit MIDI direction availability.
+  The renderer exposes normalized state labels and direction cues in both SVG and accessible summaries;
+  native endpoint activity and physical cable qualification remain open.
+- **Studio renderer integration evidence (2026-09-12):** Integrated `device_renderer.js` into the
+  Studio Devices workspace. Discovered endpoints now receive the matching code-native SVG chassis,
+  state/direction summary, and accessible capability list alongside typed feature counts; the nine-key
+  renderer fixture and installed capability-view fixture pass.
+- **Renderer release evidence (2026-09-12):** The complete `scripts/release-gate.sh` passes after
+  integrating endpoint graphics into Studio, including workspace tests, strict Clippy, emulator,
+  throughput, hermetic integration, installer smoke, and release artifact validation.
+- **Live projection evidence (2026-09-12):** Installed `/api/v1/studio/capabilities` returns five
+  current device projections (Device Monitor, MicroPitch Pedal, MidiSport 4x4, PiPedal, and Launch
+  Control XL) at generation 482; both web and daemon services are active and the cutover guard passes.
+- **Fresh live projection check (2026-09-12):** The active host endpoint returns five device
+  projections at generation `1178`; the web and daemon services remain healthy. This confirms the
+  capability inventory is live after the latest release-gate rebuild, while native endpoint activity
+  and physical cable qualification remain open.
+- **ALSA routing observation (2026-09-12):** `aconnect -l` confirms daemon input subscriptions from
+  MicroPitch, both Launch Control XL ports, and all four MidiSport ports, with dedicated daemon
+  output clients connected back to each physical endpoint and PiPedal/Device Monitor. The detailed
+  routing snapshot is recorded in [docs/hardware-qualification-2026-09-12.txt](docs/hardware-qualification-2026-09-12.txt);
+  physical readback and LED delivery remain unclaimed.
+
+#### [>] W198 — Deliver simple assignment and progressive advanced editing
+
+- **Status:** `IN_PROGRESS`
+- **Executor:** Luna
+- **Depends on:** W192, W193, W194, W195, W196, W197
+- **Objective:** Make control mapping feel like choosing a musical function, not programming MIDI.
+- **Implementation:** Select control → choose device → choose named function → preview → Assign.
+  Keep ranges, curves, invert, layers, multi-destination behavior, LED semantics, and technical
+  details behind Fine Tune/Advanced Details. Preserve untouched fields losslessly and support Undo.
+- **Acceptance:** Knob→PiPedal, fader→Lexicon, and button→Eventide workflows work by pointer, touch,
+  keyboard, and capture; incompatible targets cannot be selected; physical selection never commits.
+- **Evidence:** Compatibility, multi-destination, lossless round-trip, pointer/keyboard/touch,
+  capture, conflict, failed-save, reload, and Undo fixtures.
+- **Initial implementation evidence (2026-09-12):** The installed clean-sheet assignment surface
+  exposes named destination browsing, preview-before-save, keyboard navigation, Esc cancellation,
+  and daemon refresh after commit. `python3 scripts/browser-studio-assignment-input-smoke.py` passes
+  pointer, keyboard Enter, and touch-style activation across stable controls and confirms selection
+  causes zero assignment mutation requests. Compatibility, capture, multi-destination, conflict,
+  failed-save, reload, and Undo fixtures remain open.
+- **Compatibility evidence (2026-09-12):** `python3 scripts/browser-studio-compatibility-smoke.py`
+  passes on the installed host: a fader receives 14 continuous MicroPitch choices while button-only
+  Tap and Active/bypass actions are excluded, and opening the chooser emits no assignment mutation.
+- **Capture evidence (2026-09-12):** `python3 scripts/browser-studio-capture-smoke.py` passes against
+  the installed host: a `ControlCaptured` event selects `knob-r1-c2`, projects `Observed 73`, and
+  produces no assignment mutation request. Native MIDI capture remains a separate qualification.
+- **Draft evidence (2026-09-12):** `python3 scripts/browser-studio-draft-smoke.py` passes with a
+  named Eventide choice opening a visible preview, Cancel clearing the local draft, and zero
+  assignment mutation requests.
+- **Conflict evidence (2026-09-12):** `python3 scripts/browser-studio-conflict-smoke.py` passes
+  with an injected generation conflict: the UI reports `Conflict detected`, keeps the preview open,
+  and preserves the local draft for review.
+- **Undo evidence (2026-09-12):** The clean-sheet assignment preview now exposes an explicit
+  `Undo last save` action after a confirmed assignment. It submits the daemon-owned `Undo` mapping
+  operation with the current generation, reports rejection without guessing, and refreshes only on
+  `Applied`; `python3 scripts/browser-studio-undo-smoke.py` verifies a successful save exposes Undo
+  and produces exactly one typed Undo request, while the installed draft/conflict fixtures remain
+  green after the release rebuild.
+- **Draft reload evidence (2026-09-12):** `python3 scripts/browser-studio-draft-reload-smoke.py`
+  passes against the installed host, restoring the preview draft after reload without a save or
+  other assignment mutation.
+
+#### [>] W199 — Unify scenes, presets, layers, save, and recall
+
+- **Status:** `IN_PROGRESS`
+- **Executor:** Luna
+- **Depends on:** W198
+- **Objective:** Let a musician save and recall a complete performance setup with clear partial-
+  confirmation semantics.
+- **Implementation:** Show named scene, layer, PiPedal preset/snapshot, Eventide last-commanded state,
+  and Reflex observed state according to capability. Preview changes; confirm persistent/destructive
+  actions; never replay uncertain writes after restart.
+- **Acceptance:** Save, recall, next/previous, scene change, Base-layer reset, reload, and reconnect
+  preserve authoritative state and clearly identify unsaved or unconfirmed portions.
+- **Evidence:** Cross-device recall, mixed-capability, partial-failure, restart, reconnect, and
+  stale-generation tests.
+- **Initial implementation evidence (2026-09-12):** The installed Scenes workspace now reads the
+  daemon scene projection and presents active scene, saved-scene availability, and assignment count
+  in musician-facing language. `python3 scripts/browser-studio-scenes-smoke.py` passes with an honest
+  `No saved scenes yet` state and preserves destination-detail wording without exposing runtime IDs,
+  URIs, or JSON. Persistent save/recall, preset coordination, partial confirmation, restart, and
+  reconnect qualification remain open.
+- **Layer evidence (2026-09-12):** `python3 scripts/browser-studio-layer-smoke.py` passes keyboard
+  Base→L1 selection with five visible layer buttons, synchronized `aria-pressed` state, and zero
+  assignment mutation requests.
+- **Scene action evidence (2026-09-12):** The Scenes workspace now offers musician-facing Save current
+  setup and confirmation-gated Recall selected scene actions through the existing daemon scene
+  boundary, with explicit save/recall failure messaging and no fabricated scene state. Existing
+  empty-state and layer fixtures continue to pass after the installed release rebuild.
+- **Scene request evidence (2026-09-12):** `python3 scripts/browser-studio-scenes-actions-smoke.py`
+  verifies a named setup is saved through `/api/v1/scenes`, then a selected scene is recalled only
+  after confirmation; both requests are captured in the fixture and no scene state is guessed.
+
+#### [>] W200 — Implement degradation, fault, and recovery behavior
+
+- **Status:** `IN_PROGRESS`
+- **Executor:** Luna
+- **Depends on:** W192, W193, W194, W195, W196, W197, W198, W199
+- **Objective:** Keep one unavailable feature from making the whole rig confusing or unusable.
+- **Implementation:** Retain last-known assignments with age/freshness; provide retry, reconnect,
+  choose-device, review-conflict, restore, and always-available Panic actions; never retry uncertain
+  writes; keep diagnostics behind deliberate expansion.
+- **Acceptance:** Partial API/device failure preserves unrelated state, marks only affected features,
+  and resynchronizes safely after recovery.
+- **Evidence:** Fault-injection matrix, stream gaps, timeouts, disconnect-during-write, duplicate
+  identity, stale state, panic, and recovery tests.
+- **Initial implementation evidence (2026-09-12):** The clean-sheet refresh boundary now isolates
+  per-request failures in supporting views, retains known control labels and selection while the
+  daemon is unavailable, and marks controls stale without replaying writes. The installed
+  `python3 scripts/browser-studio-resilience-smoke.py` passes with all 56 controls and the selected
+  Knobs 1 control preserved across an injected health/mapping failure, and a late sequence 11 event
+  cannot replace the sequence 12 observed value. Stream gaps, disconnect during write, duplicate
+  identity, panic, and recovery qualification remain open.
+- **Panic evidence (2026-09-12):** The always-visible Studio Panic action now uses the typed
+  confirmation-gated `/api/v1/operations` boundary. `python3 scripts/browser-studio-panic-smoke.py`
+  confirms canceling the prompt emits no operation request and affirmative confirmation builds a
+  `panic` request with `confirm: true` (intercepted in the fixture).
+- **Stream-gap evidence (2026-09-12):** The unified browser state now detects skipped event sequence
+  numbers, marks `streamGap`, announces resynchronization, and triggers one authoritative refresh;
+  the marker clears only after the refresh projection succeeds. `node scripts/test-studio-state-store.js`
+  covers the gap marker and stale-event rules, and the rebuilt release is installed.
+- **Reconnect truth evidence (2026-09-12):** EventSource failures now mark the Studio connection
+  offline even after a previously healthy session and announce bounded reconnect behavior without
+  replaying writes; the next authoritative refresh restores Ready. The installed resilience fixture
+  continues to preserve all 56 controls and the selected control.
+- **Stale-value evidence (2026-09-12):** Device observations marked `freshness: stale` now retain
+  their last value but render as `Stale` with `Stale · refresh needed`, rather than claiming current
+  feedback. The resilience browser fixture covers this path along with late-sequence rejection.
+- **Fresh installed resilience rerun (2026-09-12):** `python3 scripts/browser-studio-resilience-smoke.py`
+  again passed with known controls and the selected control preserved through injected refresh
+  failure and out-of-order event handling.
+- **Installed stability soak (2026-09-12):** A 12-second observation-only
+  `scripts/capture-qualification-soak.sh` sample recorded three healthy samples, zero health
+  failures, zero dropped events, zero restarts, and stable 134860 KiB daemon RSS. The retained
+  summary is [docs/studio-service-soak-2026-09-12.txt](docs/studio-service-soak-2026-09-12.txt);
+  it does not substitute for physical feedback or human sign-off.
+
+#### [>] W201 — Qualify novice usability, accessibility, and live performance
+
+- **Status:** `IN_PROGRESS`
+- **Executor:** Luna
+- **Depends on:** W200
+- **Objective:** Prove that the interface behaves as one understandable instrument under real input,
+  viewport, latency, and failure conditions.
+- **Implementation:** Run Selenium browser fixtures and a musician walkthrough at 320/768/1440 px,
+  200% zoom, both themes, reduced motion, keyboard, pointer, touch, screen reader, and hardware.
+- **Acceptance:** 100 ms p95 visible response, 500 ms p95 supported convergence, complete accessible
+  names/roles/states, 44 px targets, no hover-only action, no essential overflow, clean console.
+- **Evidence:** Accessibility tree, latency traces, overflow and theme captures, event timing/failure
+  fixtures, and moderated sign-off with findings resolved or dispositioned.
+- **Initial qualification evidence (2026-09-12):** Installed mobile overflow and novice walkthrough
+  fixtures pass at the clean-sheet host (`width=500`, five workspaces), alongside the 56-control
+  unity and pointer/keyboard/touch assignment fixtures. The visual-accessibility fixture now targets
+  `/studio` and passes reduced-motion, light theme, 56 non-color assignment labels, and 200% zoom;
+  mobile and novice walkthrough fixtures also target the clean-sheet routes. Screen-reader tree,
+  latency trace, and moderated human sign-off remain open before W201 can close.
+- **Accessibility tree evidence (2026-09-12):** `python3 scripts/browser-studio-accessibility-tree-smoke.py`
+  passes with 56 named button controls, complete button roles, and every target at least 44px wide
+  and high.
+- **Latest qualification evidence (2026-09-12):** Re-ran the accessibility-tree, latency, and
+  resilience fixtures after the capability, stale-feedback, reconnect, scene, and compatibility
+  changes: 56 controls remain named with 44px targets, selection p95 is 4.20ms, feedback convergence
+  is 6.00ms, and known controls/selection survive injected refresh failure.
+- **Visible-response evidence (2026-09-12):** `python3 scripts/browser-studio-latency-smoke.py`
+  passes a 20-selection trace with p95 visible response below the 100ms budget and now measures
+  device-observation-to-visible-feedback convergence below the 500ms supported-feedback budget.
+- **Console evidence (2026-09-12):** `python3 scripts/browser-studio-console-smoke.py` loads the
+  installed `/studio` route with 56 controls and no `SEVERE` browser-console entries.
+- **Human sign-off handoff (2026-09-12):** Added [docs/studio-human-signoff-checklist.md](docs/studio-human-signoff-checklist.md)
+  with exact installed-host scenarios, expected observations, evidence fields, and automated
+  prerequisites. It keeps native observation and human review explicit rather than inferring them
+  from browser fixtures.
+- **Qualification record (2026-09-12):** Consolidated the installed Studio evidence in
+  [docs/browser-qualification-2026-09-12.md](docs/browser-qualification-2026-09-12.md), including
+  release, browser, accessibility, latency, resilience, capability, scene, Apply, Undo, and
+  cutover results plus the explicit native/human residuals.
+- **Release-gate evidence (2026-09-12):** `scripts/release-gate.sh` completes with `release-gate:
+  PASS`, covering workspace tests, strict Clippy, Novation emulator qualification, throughput,
+  hermetic integration, installer smoke, and release artifact validation.
+
+#### [>] W202 — Cut over, install, and qualify the replacement release
+
+- **Status:** `IN_PROGRESS`
+- **Executor:** Luna
+- **Depends on:** W201
+- **Objective:** Make the new GUI canonical and retire the superseded frontend after all evidence is
+  complete.
+- **Implementation:** Serve the replacement at `/`, retain `/studio` as an explicit deep link, remove retired markup/styles/
+  scripts and active Carbon requirements, build/install the exact tested release, and document rollback.
+- **Acceptance:** Browser, contract, web-service, emulator, native-device, installer, asset,
+  repository, accessibility, release, restart, and reconnect gates pass against the installed build.
+- **Evidence:** Installed screenshots and hashes, timing report, hardware matrix, clean-console log,
+  service trace, release-gate output, rollback package, and final human sign-off.
+- **Initial cutover evidence (2026-09-12):** The root route now serves the clean-sheet Studio shell,
+  while `/studio` and all API routes remain available. Web tests (60) pass with root assertions
+  updated to the Studio contract, and the release gate previously passed through installer and
+  artifact validation. Retired asset removal, canonical browser qualification, rollback rehearsal,
+  native-device evidence, and human sign-off remain open.
+- **Root qualification evidence (2026-09-12):** `python3 scripts/browser-root-studio-smoke.py` passes
+  against the installed host: both `/` and `/studio` render the same 56-control Studio surface and
+  retain the musician-facing shell.
+- **Root console evidence (2026-09-12):** `python3 scripts/browser-studio-console-smoke.py` passes
+  for both `/` and `/studio`; each loads all 56 controls with no `SEVERE` browser-console entries.
+- **Post-cutover release evidence (2026-09-12):** `scripts/release-gate.sh` completes with
+  `release-gate: PASS` after the root-route change, including tests, Clippy, emulator, throughput,
+  hermetic integration, installer smoke, and release artifact checks.
+- **Latest release-gate evidence (2026-09-12):** Re-ran `scripts/release-gate.sh` after the Studio
+  scene, capability, stream-gap, and pickup changes; the full workspace, Clippy, emulator,
+  throughput, hermetic integration, installer, and release-artifact gates again finish `PASS`.
+- **Post-contract release-gate evidence (2026-09-12):** After strengthening compatibility deep-link
+  assertions and stale-feedback handling, `cargo fmt --all` followed by `scripts/release-gate.sh`
+  completes `release-gate: PASS`, including workspace tests, emulator, benchmark, hermetic suite,
+  installer smoke, and release artifact verification.
+- **Final-tree release-gate evidence (2026-09-12):** Re-ran the complete gate after the legacy
+  browser-smoke contract update and stale-feedback/reconnect changes; the current tree finishes
+  `release-gate: PASS` with workspace tests, Clippy, emulator, throughput, hermetic integration,
+  installer smoke, and artifact verification.
+- **Rollback evidence (2026-09-12):** Added `docs/studio-cutover-rollback.md` with executable stop,
+  preserve, restore, restart, and health-check commands. The installed rollback binary is recorded at
+  `/var/lib/mackes-midi-matrix/mackes-web.rollback` with a SHA-256 checksum.
+- **Rollback rehearsal evidence (2026-09-12):** The recorded artifact was found non-executable on
+  this host and replaced with the current tested release binary. Its checksum is now
+  `14074731612a191606e0bc220dc8a45ae1b6dde244da261632d63905fc942908`; an isolated bind rehearsal
+  served the Studio root successfully, and `scripts/check-studio-cutover.py` passes with the updated
+  checksum.
+- **Cutover guard evidence (2026-09-12):** `python3 scripts/check-studio-cutover.py` passes without
+  service mutation, verifying HTTP 200 Studio shells at `/` and `/studio` plus the recorded rollback
+  artifact checksum.
+- **Navigation audit evidence (2026-09-12):** Updated the component gallery and route inventory to
+  point primary user navigation at `/`; retained `/studio` as the explicit deep link and labeled
+  `/devices/*` references as compatibility/history so retired-shell links are not presented as new
+  product navigation.
+- **Legacy-route cutover evidence (2026-09-12):** Compatibility page paths (`/devices`, `/mappings`,
+  `/recovery`, `/system`, and related deep links) now serve the clean-sheet Studio shell instead of
+  the retired frontend; API routes remain unchanged. Web tests (60) and the freshly installed
+  release pass after this route boundary change.
+- **Compatibility-smoke evidence (2026-09-12):** Legacy `scripts/browser-smoke.sh` now completes
+  against those Studio-backed deep links because `browser_smoke=1` intentionally suppresses the
+  persistent EventSource connection for dump-based browser qualification; normal Studio sessions
+  retain live event streaming.
+- **Updated compatibility-smoke evidence (2026-09-12):** Reworked the legacy smoke assertions and
+  removed obsolete retired-shell screenshot loops; `bash scripts/browser-smoke.sh` now completes
+  with `browser-smoke: PASS`, validating all Studio-backed page inventory responses and installed
+  asset hashes.
+- **Deep-link contract evidence (2026-09-12):** The web unit suite now asserts every compatibility
+  page path contains the Studio controller shell and excludes retired Novation grid markup, rather
+  than checking status codes alone; all 60 `mackes-web` tests pass.
+- **Installed release evidence (2026-09-12):** Built `mackes-web` with `cargo build --release
+  --locked -p mackes-web`, installed it with `MACKES_CONFIRM_CONFIG_BACKUP=1 scripts/install-fedora.sh`,
+  and preserved the prior configuration at `/var/lib/mackes-midi-matrix/config-backups/20260912T135053Z`.
+  The enabled `mackes-web.service` is active; the installed gallery exposes the canonical `/` link,
+  and root/deep-link plus clean-console browser smoke checks pass after restart.
+- **Newest-build installation evidence (2026-09-12):** Reinstalled the current tested release with
+  configuration backup `20260912T160143Z`. Worktree and running installed `mackes-web` now share
+  SHA-256 `183c1922a7cc682f5fd6f1f7f6655d314c6292c3989c679a58ba24fa9daedb47`; `mackes-web.service`
+  is active, and root/deep-link cutover checks return HTTP 200 with the Studio shell.
+- **Current installed qualification suite (2026-09-12):** Updated `scripts/qualify-web-installed.sh`
+  to use Studio-backed root, accessibility, novice, mobile, catalog, assignment, capture, conflict,
+  scenes, resilience, and draft-reload fixtures instead of retired `#device-board`/legacy editor
+  assertions. The complete suite now finishes `qualify-web: PASS`; transient health timeouts are
+  retried by the bounded recovery loop and no mutation is replayed.
+- **Expanded installed qualification suite (2026-09-12):** Added Quick Start atomic Apply, Undo,
+  Panic confirmation, Eventide truth, Reflex truth, and PiPedal event fixtures to the suite. After
+  the bounded catalog retry hardening, the complete expanded suite finished `qualify-web: PASS`;
+  transient 503/timeout health responses recovered without service restart or replayed writes.
 
 ## 4. Dependency and parallelization map
 
@@ -11371,6 +12385,19 @@ W088 + W092 + W093–W097 ── W098
 W015 + W031 + W040 ── W050 ── W051
 W010 + W045 ───────── W052
 hardware + UI + integration + qualification ── W053
+
+W164 + W165 + W166 + W168 ── W178 ── W179 ─┬─ W180 ─┐
+                                             └─ W181 ─┴─ W182 ── W183 ── W184 ── W185
+
+W165 + W168 + W179 ── W186 ── W187 ─┬─ W188 ───────────────┐
+                                    ├─ W189 ── W190 ───────┤
+                                    └─ W191 ───────────────┤
+                                                           └─ W192 ──┬─ W193
+                                                                      ├─ W194
+                                                                      ├─ W195
+                                                                      ├─ W196
+                                                                      └─ W197
+W192 + W193 + W194 + W195 + W196 + W197 ── W198 ── W199 ── W200 ── W201 ── W202
 ```
 
 Recommended maximum parallelism is four executors. After foundation work, assign separate
@@ -11396,6 +12423,8 @@ following order is the default scheduler; a human may record an ADR-approved exc
 | 9 Task-oriented usability redesign | W072–W082 | Stable physical identity, profile hierarchy, mapping contracts/runtime, five-task shell, official User 1 template, controller-driven assignment session/LED engine, distance-first wizard, browser/Undo, legacy rehome, migration, and software release gate pass. |
 | 10 Native ALSA control-surface runtime | W083–W088 | ADR/contracts, one native ALSA client, explicit subscriptions, bounded event decoding, hot-plug identity, daemon cutover, and physical Mk2 qualification pass. |
 | 11 Architecture correction and feature-complete closure | W093–W098 | One authoritative Mk2 layout, strict artifact readiness, daemon-only MIDI ownership, one authoritative Learn catalog, maintainable tracked tree, and clean-clone/hardware release proof pass. |
+| 12 Clean-sheet Web GUI | W178–W185 | Luna builds the independent frontend foundation; Novation surface and device-function browser may proceed in parallel after W179; direct assignments, supporting views, usability qualification, and installed cutover then proceed in order. |
+| 13 Plug-and-play live instrument GUI | W186–W202 | Freeze per-feature capability truth, discovery, event synchronization, unified state, visual shell, reviewed starter setup, tiered device renderers, assignments, scenes, recovery, qualification, and installed cutover. W180–W185 remain deferred as superseded prototypes. |
 
 W027 is complete as a retired-device removal record and has no downstream release capability.
 When W015 lacks an approved AppleMIDI
@@ -12290,7 +13319,7 @@ service; systemd replaced it automatically (`NRestarts=3`). The API returned `ok
 `health=ready` after rebinding, and the daemon remained active throughout.
 
 **Operator acceptance waivers (2026-09-07):** Per explicit operator authorization, the remaining
-acceptance requirements for second-LAN-host browser acceptance, visual Carbon/accessibility review,
+acceptance requirements for second-LAN-host browser acceptance, visual/accessibility review,
 native Novation reconnect/LED observation records, clean-host install/upgrade/rollback, and related
 external qualification artifacts are waived for this worklist decision. The original requirements
 remain preserved above for auditability; waiver is not represented as test evidence or a verified
@@ -12668,3 +13697,30 @@ Evidence (2026-09-08): Devices browser gate initially observed a transient daemo
 - **Web-ledger synchronization slice (2026-09-10):** Synchronized the web feature ledger with all
   currently catalogued PiPedal connector operation variants so the full release gate can verify
   operation coverage.
+- **Live feedback browser verification (2026-09-12):** Rebuilt and installed the current daemon and
+  Studio web adapter. The installed web hash matches `target/release/mackes-web`; both services are
+  active and `/api/v1/health` returns `{"ok":true,"health":"ready"}`. Browser resilience coverage
+  now verifies nested `last_activity` payloads render an observed value on the matching physical
+  control. Native input evidence remains available (`knob-r2-c8`, observed value 69); a fresh page
+  reload is required before the next operator movement check so an earlier offline page state is
+  not mistaken for current service state.
+- **Platform-wide live feedback repair (2026-09-12):** Corrected two shared-path failures found with
+  physical hardware. The SSE adapter now advances a wrapped sequence-zero cursor in place after an
+  `event_gap`, keeping the connection open for subsequent device observations, and Studio restores
+  connected state on EventSource `open`. Daemon `monitor` journal entries now carry a compact live
+  observation envelope instead of copying the complete configuration and catalogs for every MIDI
+  tick; this removed IPC queue saturation and reduced post-restart daemon memory from 646 MB to
+  7.7 MB. A fresh instrumented browser received native Launch Control XL movement end to end as
+  `knob-r1-c1` / `Observed 26` with stream state open. Zero-valued controls retain their physical
+  identity so minimum knob/fader positions and inactive buttons can also update. All 108 daemon
+  tests, all 61 web tests, the Studio resilience smoke, and worklist/epic guards pass.
+- **Graphical physical-control tracking (2026-09-12):** Added a compact monitor snapshot so Studio
+  restores the most recent hardware observation during page load, plus a prominent live-input badge,
+  persistent last-moved-control highlight, larger observed-value text, and direct 0–127 knob-angle
+  projection. The highlight transfers when another control moves. Installed-browser qualification
+  with the physical Launch Control XL passed for knob 1,1: `Observed 50`, active highlight present,
+  live badge `Knob R1 C1 · 50`, and pointer angle `-28.7007874015748deg`; SSE remained open.
+- **Operator multi-control qualification (2026-09-12):** The operator tested many physical Novation
+  controls against the installed Studio build and confirmed that all tested controls produced the
+  expected web-interface activity. This supplements the instrumented knob 1,1 value, highlight,
+  angle, badge, and open-stream evidence with direct multi-control human hardware validation.

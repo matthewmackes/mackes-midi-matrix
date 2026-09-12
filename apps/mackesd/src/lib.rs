@@ -1417,6 +1417,26 @@ impl Daemon {
     fn output_endpoint_for_profile(&self, profile_id: &str) -> Option<mackes_domain::EndpointId> {
         profile_bindings::output_endpoint(&self.outputs, &self.profile_bindings, profile_id)
     }
+    fn launch_control_any_channel_id(&self, event: &mackes_domain::MidiEvent) -> Option<String> {
+        let name = self.inputs.name_for_endpoint(event.endpoint)?;
+        if !name.to_ascii_lowercase().contains("launch control xl") {
+            return None;
+        }
+        let (kind, number) = match event.message {
+            mackes_domain::MidiMessage::ControlChange { controller, .. } => {
+                (mackes_profiles::LaunchControlSourceKind::ControlChange, controller.as_u8())
+            }
+            mackes_domain::MidiMessage::NoteOn { note, .. } => {
+                (mackes_profiles::LaunchControlSourceKind::Note, note.as_u8())
+            }
+            _ => return None,
+        };
+        let mut matches = mackes_profiles::launch_control_mk2_factory1_layout()
+            .into_iter()
+            .filter(|control| control.source_kind == kind && control.source_number == number);
+        let control = matches.next()?;
+        matches.next().is_none().then_some(control.physical_control_id)
+    }
     /// Resolves a persisted source alias to the currently registered runtime input.
     fn source_alias_matches_runtime(&self, alias: &str, runtime_id: Option<&str>) -> bool {
         let Some(runtime_id) = runtime_id else { return false };
@@ -1658,7 +1678,22 @@ impl Daemon {
         self.sent_events = self.sent_events.saturating_add(sent as u64);
         self.dropped_events = self.dropped_events.saturating_add(unmatched as u64);
         let first_activity = self.last_activity.is_none();
-        self.last_activity = Some(midi_activity_json(event, &routed, stable_endpoint.as_deref()));
+        let mut activity = midi_activity_json(event, &routed, stable_endpoint.as_deref());
+        // Preserve the controller's stable physical identity in the activity projection. The
+        // browser cannot safely infer a knob/button from raw MIDI channel/number details, and
+        // normal Studio feedback must remain protocol-free. This is observation metadata only;
+        // it does not create or mutate a mapping.
+        let physical_control_id = Self::launch_control_factory1_control_id(event)
+            .or_else(|| self.launch_control_any_channel_id(event));
+        if let Some(control_id) = physical_control_id {
+            if let Some(object) = activity.as_object_mut() {
+                object.insert("physical_control_id".into(), serde_json::Value::String(control_id));
+                if let Some(value) = object.get("value").cloned() {
+                    object.insert("observed_value".into(), value);
+                }
+            }
+        }
+        self.last_activity = Some(activity);
         // Publish the post-dispatch counters so subscribed dashboards receive live activity
         // without needing a second command to trigger a journal append.
         if first_activity || self.last_activity_publish.elapsed() >= Duration::from_millis(33) {
@@ -2652,6 +2687,34 @@ impl Daemon {
     }
     fn record_state_event(&mut self, command: Command) {
         self.state_sequence = self.state_sequence.saturating_add(1);
+        // Control movement is the hottest event path. Keep these journal entries compact: copying
+        // the full configuration, catalogs, capabilities, and device inventory for every MIDI tick
+        // makes the bounded replay journal consume hundreds of megabytes and can saturate the local
+        // IPC accept queue. Clients obtain that authoritative state from the snapshot endpoints.
+        if command == Command::Monitor {
+            let payload = serde_json::to_vec(&serde_json::json!({
+                "command": command.tag(),
+                "generation": self.generation,
+                "received": self.received_events,
+                "sent": self.sent_events,
+                "dropped": self.dropped_events,
+                "last_activity": self.last_activity,
+                "last_mapping_activity": self.last_mapping_activity,
+                "health": match self.health {
+                    Health::Starting => "starting",
+                    Health::Ready => "ready",
+                    Health::Degraded => "degraded",
+                    Health::Stopping => "stopping",
+                },
+            }))
+            .unwrap_or_default();
+            if self.state_events.len() == 256 {
+                self.state_events.pop_front();
+            }
+            self.state_events
+                .push_back(mackes_ipc::StateEvent { sequence: self.state_sequence, payload });
+            return;
+        }
         let payload = serde_json::to_vec(&serde_json::json!({
             "command": command.tag(),
             "generation": self.generation,
@@ -2826,6 +2889,25 @@ impl Daemon {
                 Health::Degraded => "degraded",
                 Health::Stopping => "stopping",
             },
+        })
+        .to_string()
+            + "\n"
+    }
+    fn monitor_response(&self) -> String {
+        serde_json::json!({
+            "ok": true,
+            "generation": self.generation,
+            "health": match self.health {
+                Health::Starting => "starting",
+                Health::Ready => "ready",
+                Health::Degraded => "degraded",
+                Health::Stopping => "stopping",
+            },
+            "received": self.received_events,
+            "sent": self.sent_events,
+            "dropped": self.dropped_events,
+            "last_activity": self.last_activity,
+            "last_mapping_activity": self.last_mapping_activity,
         })
         .to_string()
             + "\n"
@@ -4226,6 +4308,12 @@ impl Daemon {
                                     .activate(mapping.generation, record)
                                     .map_err(str::to_owned),
                                 (
+                                    mackes_ipc::MappingOperation::Activate,
+                                    Some(mackes_ipc::MappingPayload::Batch { mappings }),
+                                ) => candidate
+                                    .activate_batch(mapping.generation, mappings)
+                                    .map_err(str::to_owned),
+                                (
                                     mackes_ipc::MappingOperation::Replace,
                                     Some(mackes_ipc::MappingPayload::Mapping { mapping: record }),
                                 ) => candidate.replace_with_runtime(
@@ -4340,6 +4428,9 @@ impl Daemon {
                     )
                 }
                 Some(command) => {
+                    if command == Command::Monitor {
+                        return stream.write_all(self.monitor_response().as_bytes());
+                    }
                     if command == Command::Configuration {
                         let persisted_revision = self
                             .config_path

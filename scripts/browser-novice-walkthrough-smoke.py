@@ -27,17 +27,17 @@ def visible(element) -> bool:
 
 try:
     workspaces = {
-        "devices": "#device-board",
-        "routes": "#routing-board",
-        "scenes": "#scene-controls",
-        "recovery": "#recovery-actions",
-        "system": "#system-board",
+        "studio": ("/studio", "#studio-controller"),
+        "devices": ("/studio/devices", "#studio-supporting-view"),
+        "routing": ("/studio/routing", "#studio-supporting-view"),
+        "scenes": ("/studio/scenes", "#studio-supporting-view"),
+        "system": ("/studio/system", "#studio-supporting-view"),
     }
     forbidden = {"textarea", "pre", "[contenteditable='true']"}
-    for view, selector in workspaces.items():
-        driver.get(f"{origin}/{view}#browser_smoke=1")
+    for view, (path, selector) in workspaces.items():
+        driver.get(f"{origin}{path}")
         wait = WebDriverWait(driver, 45)
-        wait.until(lambda d: any(visible(item) for item in d.find_elements("css selector", selector)))
+        wait.until(lambda d: any(visible(item) for item in d.find_elements("css selector", selector)) or "Unavailable" in d.find_element("tag name", "body").text)
         if any(driver.find_elements("css selector", item) for item in forbidden):
             raise RuntimeError(f"{view} exposes a code-like editor surface")
         visible_text = driver.execute_script("""

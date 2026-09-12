@@ -672,6 +672,11 @@ pub enum MappingPayload {
         /// Complete mapping record.
         mapping: ControlMapping,
     },
+    /// Bounded set of complete mappings activated as one transaction.
+    Batch {
+        /// Complete proposal set; the daemon validates all entries before mutation.
+        mappings: Vec<ControlMapping>,
+    },
     /// Inactive resumable wizard draft.
     Draft {
         /// Inactive draft record.

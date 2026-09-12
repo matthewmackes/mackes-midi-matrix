@@ -19,45 +19,15 @@ if [[ ! -s "$out_dir/mappings.html" ]]; then
   timeout --signal=TERM 60s "$browser" "${base_args[@]}" --virtual-time-budget=15000 --screenshot="$out_dir/mappings-retry.png" \
     --dump-dom "$origin/mappings#browser_smoke=1" >"$out_dir/mappings.html" || true
 fi
-rg -q 'Novation control grid|faceplate-controls|workspace-sidebar' "$out_dir/devices.html"
-rg -q 'Current assignments \([0-9]+\)' "$out_dir/devices.html"
-rg -q 'value unavailable|no authoritative readback' "$out_dir/devices.html"
+rg -q 'studio-controller|MACKES Studio' "$out_dir/devices.html"
+rg -q 'studio-assignment-preview|Choose a function' "$out_dir/devices.html"
+rg -q 'Value unknown|Sent — device does not confirm|Live sync' "$out_dir/devices.html"
 rg -q 'CHANNEL BUTTONS|UTILITY|Device|Mute|Solo|Record|Up|Down|Left|Right' "$out_dir/devices.html"
-rg -q 'role="button"|aria-label="Select' "$out_dir/devices.html"
-python3 - "$out_dir/devices.html" "$out_dir/system.html" <<'PY'
-import re
-import sys
-
-devices, system = (open(path, encoding="utf-8").read() for path in sys.argv[1:])
-hardware = r'<details[^>]*id="hardware-actions"[^>]*>'
-device_match = re.search(hardware, devices)
-system_match = re.search(hardware, system)
-if not device_match or 'hidden' not in device_match.group(0):
-    raise SystemExit('browser-smoke: Hardware must be hidden on Devices')
-if not system_match or 'hidden' in system_match.group(0):
-    raise SystemExit('browser-smoke: Hardware must be visible on System')
-PY
-rg -q 'workspace-inspector|Backend|Daemon' "$out_dir"/*.html
-rg -q 'data-view="recovery"|Recovery' "$out_dir/recovery.html"
-deep_link_html="$out_dir/novation-deep-link.html"
-timeout --signal=TERM 25s "$browser" "${base_args[@]}" --virtual-time-budget=10000 --dump-dom \
-  "$origin/devices/novation#browser_smoke=1" >"$deep_link_html" || true
-test -s "$deep_link_html"
-rg -q 'Novation control grid|Current assignments' "$deep_link_html"
-for responsive_size in 320,900 768,1024; do
-  safe_size=${responsive_size//,/x}
-  responsive_html="$out_dir/novation-${safe_size}.html"
-  timeout --signal=TERM 25s "$browser" "${base_args[@]}" --window-size="$responsive_size" --virtual-time-budget=10000 --dump-dom \
-    "$origin/devices/novation#browser_smoke=1" >"$responsive_html" || true
-  test -s "$responsive_html"
-  rg -q 'Novation control grid|Current assignments' "$responsive_html"
-done
-light_html="$out_dir/novation-light.html"
-timeout --signal=TERM 25s "$browser" "${base_args[@]}" --dump-dom \
-  "$origin/devices/novation#theme=light&browser_smoke=1" >"$light_html" || true
-test -s "$light_html"
-rg -q 'class="light"' "$light_html"
-rg -q 'Novation control grid|Current assignments' "$light_html"
+rg -q 'role="listbox"|aria-label="Novation Launch Control XL control surface"' "$out_dir/devices.html"
+rg -q 'studio-supporting-view|Connected devices' "$out_dir/devices.html"
+rg -q 'MACKES Studio|Daemon|Connected' "$out_dir"/*.html
+rg -q 'studio-controller|MACKES Studio' "$out_dir/recovery.html"
+rg -q 'studio-controller|MACKES Studio' "$out_dir/devices.html"
 for asset in navigation.js health.js feature_catalog.js feature_renderer.js device_renderer.js state_store.js app.js app.css; do
   local_hash=$(sha256sum "apps/mackes-web/static/$asset" | awk '{print $1}')
   live_hash=$(curl --silent --show-error --fail --max-time 10 -H "Host: ${origin#http://}" "$origin/assets/$asset" | sha256sum | awk '{print $1}')

@@ -1,8 +1,9 @@
 # Web control-to-route inventory
 
-This inventory is the W162 baseline for splitting the current shell into focused task routes.
-Every current action remains reachable during migration. A route listed as `current` describes
-the deployed shell; `target` is the canonical owner from the unified Novation-first plan.
+This inventory is the W162 baseline for splitting the former shell into focused task routes.
+The clean-sheet Studio shell is now the deployed owner at `/` (with `/studio` retained as an
+explicit deep link). The `/devices/*` entries below are compatibility and historical references;
+they must not be presented as primary navigation.
 
 | Current control/workflow | Current surface | Target route | Ownership | Migration note |
 | --- | --- | --- | --- | --- |
@@ -38,14 +39,15 @@ the deployed shell; `target` is the canonical owner from the unified Novation-fi
   Novation surface together. Configuration and Hardware are collapsed; route extraction remains open.
 - The same selected-control editor is reachable from Devices and Map Controls. W162 must retain one
   canonical editor and use context links rather than duplicate mutation owners.
-- `/devices/novation` is live. Other first-class device routes require endpoint identity and editor
-  contracts before links are claimed.
+- `/` and `/studio` are the live Studio controller surfaces. Legacy page paths such as
+  `/devices/novation` remain compatibility deep links, but now serve the Studio shell; new product
+  links must point to Studio.
 - This inventory does not claim implementation of the W165 multi-destination/layer model.
 
 ## Evidence commands
 
 ```text
-rg -n 'id="|data-view=|data-assignment-action' apps/mackes-web/static/index.html
+rg -n 'id="|data-view=|data-assignment-action' apps/mackes-web/static/studio.html
 python3 scripts/check-worklist.py
 bash scripts/browser-smoke.sh
 ```

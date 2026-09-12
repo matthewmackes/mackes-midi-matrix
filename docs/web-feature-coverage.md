@@ -53,9 +53,10 @@ not claims that the browser feature already exists.
 - The port-8081 HTTP process, shared API schema, diagnostics bundle, event poll, and initial
   mapping/rescan/panic web operations are implemented; remaining operation families and full
   acceptance are tracked by W135–W143.
-- The bundled frontend shell and responsive navigation are implemented. Legacy Carbon-compatible
-  tokens may remain in CSS, but Carbon compliance is not a current requirement; feature-workspace
-  parity remains tracked under W133–W139 and the current redesign packets.
+- The bundled frontend shell and responsive navigation are implemented. Any Carbon wording in this
+  historical coverage ledger is descriptive only; the active Studio shell contains no Carbon tokens,
+  assets, packages, or compliance requirement. Feature-workspace parity remains tracked under
+  W133–W139 and the current redesign packets.
 - Rows marked `partial` require the owning work item to complete the missing browser contract;
   they must not be treated as browser-ready capabilities.
 

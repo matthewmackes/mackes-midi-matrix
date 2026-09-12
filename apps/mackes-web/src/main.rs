@@ -1,7 +1,10 @@
 //! Small same-origin HTTP adapter forwarding authoritative reads to the daemon.
 
 use mackes_ipc::{Command, Envelope, LocalClient, ProtocolVersion, RequestId};
-use mackes_web_contract::{HttpRequest, HttpResponse, OperationRequest};
+use mackes_web_contract::{
+    DeviceFeatureCapability, DeviceFeedbackObservation, DeviceLifecycle, HttpRequest, HttpResponse,
+    OperationRequest, StudioCapabilitySnapshot, StudioDeviceCapability,
+};
 use std::{
     collections::VecDeque,
     io::{Read, Write},
@@ -246,17 +249,31 @@ fn stream_events(mut stream: TcpStream, request: &HttpRequest, socket: &PathBuf,
             .as_bytes(),
         ) else { return };
         let response = route(&poll_request, socket, origin);
+        let Ok(body) = serde_json::from_slice::<serde_json::Value>(&response.body) else { return };
+        // A new Studio tab intentionally starts at sequence zero. Once the daemon journal has
+        // wrapped, that cursor produces a 409 event_gap response. Recover inside this same SSE
+        // session so EventSource does not reconnect forever with the stale URL cursor.
+        if body.get("snapshot_required").and_then(serde_json::Value::as_bool) == Some(true) {
+            let Some(last_sequence) = body.get("last_sequence").and_then(serde_json::Value::as_u64)
+            else {
+                return;
+            };
+            cursor = cursor.max(last_sequence);
+            if stream
+                .write_all(
+                    format!("event: resnapshot\nid: {cursor}\ndata: {}\n\n", response_body(&body))
+                        .as_bytes(),
+                )
+                .is_err()
+            {
+                return;
+            }
+            continue;
+        }
         if response.status != 200 {
             let _ = stream.write_all(
                 format!("event: error\ndata: {}\n\n", String::from_utf8_lossy(&response.body))
                     .as_bytes(),
-            );
-            return;
-        }
-        let Ok(body) = serde_json::from_slice::<serde_json::Value>(&response.body) else { return };
-        if body.get("snapshot_required").and_then(serde_json::Value::as_bool) == Some(true) {
-            let _ = stream.write_all(
-                format!("event: resnapshot\ndata: {}\n\n", response_body(&body)).as_bytes(),
             );
             return;
         }
@@ -265,9 +282,10 @@ fn stream_events(mut stream: TcpStream, request: &HttpRequest, socket: &PathBuf,
                 let sequence =
                     event.get("sequence").and_then(serde_json::Value::as_u64).unwrap_or(cursor);
                 cursor = cursor.max(sequence);
+                let event = decorate_studio_event(event);
                 if stream
                     .write_all(
-                        format!("id: {sequence}\ndata: {}\n\n", response_body(event)).as_bytes(),
+                        format!("id: {sequence}\ndata: {}\n\n", response_body(&event)).as_bytes(),
                     )
                     .is_err()
                 {
@@ -286,6 +304,37 @@ fn response_body(value: &serde_json::Value) -> String {
     value.to_string()
 }
 
+fn studio_event_kind(command: Option<&str>) -> &'static str {
+    match command {
+        Some("monitor") => "control_observation",
+        Some("assignment" | "mappings") => "mapping_changed",
+        Some("scenes") => "scene_changed",
+        Some("preset" | "presets") => "preset_changed",
+        Some("mode" | "modes") => "mode_changed",
+        Some("meter" | "meters") => "meter",
+        Some("layer" | "layers") => "layer_changed",
+        Some("led_intent") => "led_intent",
+        Some("led_delivery") => "led_delivery",
+        Some("snapshot_required") => "snapshot_required",
+        _ => "device_lifecycle",
+    }
+}
+
+/// Adds the typed Studio event family while retaining the legacy event payload for old clients.
+fn decorate_studio_event(event: &serde_json::Value) -> serde_json::Value {
+    let Some(mut object) = event.as_object().cloned() else { return event.clone() };
+    let payload = event.get("payload").and_then(serde_json::Value::as_object);
+    let command =
+        payload.and_then(|value| value.get("command")).and_then(serde_json::Value::as_str);
+    let generation = payload
+        .and_then(|value| value.get("generation"))
+        .cloned()
+        .unwrap_or_else(|| serde_json::Value::from(0));
+    object.insert("generation".into(), generation);
+    object.insert("kind".into(), serde_json::Value::String(studio_event_kind(command).into()));
+    serde_json::Value::Object(object)
+}
+
 #[allow(clippy::too_many_lines)]
 fn route(request: &HttpRequest, socket: &PathBuf, origin: &str) -> HttpResponse {
     if request.method == "OPTIONS" {
@@ -302,10 +351,29 @@ fn route(request: &HttpRequest, socket: &PathBuf, origin: &str) -> HttpResponse 
         ("GET", "/") => {
             return HttpResponse::asset(
                 200,
-                include_bytes!("../static/index.html").to_vec(),
+                include_bytes!("../static/studio.html").to_vec(),
                 "text/html; charset=utf-8",
             )
             .expect("bounded index response");
+        }
+        (
+            "GET",
+            "/studio" | "/studio/devices" | "/studio/routing" | "/studio/scenes" | "/studio/system",
+        ) => {
+            return HttpResponse::asset(
+                200,
+                include_bytes!("../static/studio.html").to_vec(),
+                "text/html; charset=utf-8",
+            )
+            .expect("bounded studio response");
+        }
+        ("GET", "/studio/gallery") => {
+            return HttpResponse::asset(
+                200,
+                include_bytes!("../static/studio_gallery.html").to_vec(),
+                "text/html; charset=utf-8",
+            )
+            .expect("bounded studio gallery response");
         }
         (
             "GET",
@@ -325,10 +393,10 @@ fn route(request: &HttpRequest, socket: &PathBuf, origin: &str) -> HttpResponse 
         ) => {
             return HttpResponse::asset(
                 200,
-                include_bytes!("../static/index.html").to_vec(),
+                include_bytes!("../static/studio.html").to_vec(),
                 "text/html; charset=utf-8",
             )
-            .expect("bounded deep-link response");
+            .expect("bounded Studio compatibility deep-link response");
         }
         ("GET", "/api/v1/capabilities") => {
             return HttpResponse::new(
@@ -472,6 +540,70 @@ fn route(request: &HttpRequest, socket: &PathBuf, origin: &str) -> HttpResponse 
             )
             .expect("bounded stylesheet response");
         }
+        ("GET", "/assets/studio.css") => {
+            return HttpResponse::asset(
+                200,
+                include_bytes!("../static/studio.css").to_vec(),
+                "text/css; charset=utf-8",
+            )
+            .expect("bounded studio stylesheet response");
+        }
+        ("GET", "/assets/studio.js") => {
+            return HttpResponse::asset(
+                200,
+                include_bytes!("../static/studio.js").to_vec(),
+                "text/javascript; charset=utf-8",
+            )
+            .expect("bounded studio script response");
+        }
+        ("GET", "/assets/studio_views.js") => {
+            return HttpResponse::asset(
+                200,
+                include_bytes!("../static/studio_views.js").to_vec(),
+                "text/javascript; charset=utf-8",
+            )
+            .expect("bounded studio views response");
+        }
+        ("GET", "/assets/studio_state.js") => {
+            return HttpResponse::asset(
+                200,
+                include_bytes!("../static/studio_state.js").to_vec(),
+                "text/javascript; charset=utf-8",
+            )
+            .expect("bounded studio state response");
+        }
+        ("GET", "/assets/studio_controller.js") => {
+            return HttpResponse::asset(
+                200,
+                include_bytes!("../static/studio_controller.js").to_vec(),
+                "text/javascript; charset=utf-8",
+            )
+            .expect("bounded studio controller response");
+        }
+        ("GET", "/assets/studio_catalog.js") => {
+            return HttpResponse::asset(
+                200,
+                include_bytes!("../static/studio_catalog.js").to_vec(),
+                "text/javascript; charset=utf-8",
+            )
+            .expect("bounded studio catalog response");
+        }
+        ("GET", "/assets/studio_assignment.js") => {
+            return HttpResponse::asset(
+                200,
+                include_bytes!("../static/studio_assignment.js").to_vec(),
+                "text/javascript; charset=utf-8",
+            )
+            .expect("bounded studio assignment response");
+        }
+        ("GET", "/assets/studio_behavior.js") => {
+            return HttpResponse::asset(
+                200,
+                include_bytes!("../static/studio_behavior.js").to_vec(),
+                "text/javascript; charset=utf-8",
+            )
+            .expect("bounded studio behavior response");
+        }
         ("GET", "/api/v1/state") => Command::Snapshot,
         ("GET", "/api/v1/health") => Command::Health,
         ("GET", "/api/v1/endpoints") => Command::Endpoints,
@@ -480,6 +612,7 @@ fn route(request: &HttpRequest, socket: &PathBuf, origin: &str) -> HttpResponse 
         ("GET", "/api/v1/scenes") => Command::Scenes,
         ("POST", "/api/v1/scenes") => return scenes_operation(request, socket),
         ("GET", "/api/v1/devices") => Command::DeviceQuery,
+        ("GET", "/api/v1/studio/capabilities") => return studio_capabilities(socket),
         ("GET", "/api/v1/assignment") => Command::Assignment,
         ("POST", "/api/v1/assignment") => return assignment_operation(request, socket),
         ("GET", "/api/v1/monitor") => Command::Monitor,
@@ -999,6 +1132,203 @@ fn novation_snapshot(socket: &PathBuf) -> HttpResponse {
             });
             HttpResponse::new(200, response.to_string().into_bytes(), true)
                 .expect("bounded response")
+        }
+        Err(error) => HttpResponse::new(
+            503,
+            serde_json::json!({"code":"daemon_unavailable","message":error})
+                .to_string()
+                .into_bytes(),
+            true,
+        )
+        .expect("bounded unavailable response"),
+    }
+}
+
+fn studio_lifecycle(value: Option<&str>) -> DeviceLifecycle {
+    match value.map(str::to_ascii_lowercase) {
+        Some(state) if matches!(state.as_str(), "connected" | "ready") => DeviceLifecycle::Ready,
+        Some(state) if matches!(state.as_str(), "offline" | "disconnected") => {
+            DeviceLifecycle::Disconnected
+        }
+        Some(state) if state == "ambiguous" => DeviceLifecycle::Ambiguous,
+        Some(state) if matches!(state.as_str(), "unknown" | "limited") => DeviceLifecycle::Limited,
+        _ => DeviceLifecycle::Detecting,
+    }
+}
+
+fn studio_renderer(name: &str) -> &'static str {
+    let name = name.to_ascii_lowercase();
+    if name.contains("launch control xl") {
+        "novation.launch-control-xl"
+    } else if name.contains("micropitch") {
+        "eventide.micropitch"
+    } else if name.contains("pipedal") {
+        "pipedal"
+    } else if name.contains("lexicon") || name.contains("reflex") {
+        "lexicon.reflex"
+    } else if name.contains("midisport") {
+        "m-audio.midisport-4x4"
+    } else if name.contains("rtp") {
+        "rtp-midi.peer"
+    } else if name.contains("mackes") {
+        "mackes.virtual"
+    } else {
+        "generic.endpoint"
+    }
+}
+
+fn studio_profile_features(renderer: &str) -> Vec<DeviceFeatureCapability> {
+    let names: &[(&str, &str, bool, bool, bool)] = match renderer {
+        "eventide.micropitch" => &[
+            ("expression", "Expression", true, false, false),
+            ("tap", "Tap trigger", true, false, false),
+            ("active", "Active / bypass", true, false, true),
+            ("flex", "FLEX", true, false, false),
+            ("mix", "Mix", true, false, false),
+            ("pitch-a", "Pitch A", true, false, false),
+            ("pitch-b", "Pitch B", true, false, false),
+            ("depth", "Depth", true, false, false),
+            ("rate-sensitivity", "Rate sensitivity", true, false, false),
+            ("pitch-mix", "Pitch mix", true, false, false),
+            ("tone", "Tone", true, false, false),
+            ("delay-a", "Delay A", true, false, false),
+            ("delay-b", "Delay B", true, false, false),
+            ("modulation", "Modulation", true, false, false),
+            ("feedback", "Feedback", true, false, false),
+            ("output-level", "Output level", true, false, false),
+        ],
+        "lexicon.reflex" => &[
+            ("algorithm", "Algorithm", true, true, false),
+            ("parameter", "Algorithm parameters", true, true, false),
+            ("echo-rhythm", "Echo Rhythm", true, true, false),
+            ("midi-patch", "MIDI patch", true, true, false),
+            ("register-recall", "Register recall", true, true, false),
+            ("register-store", "Register store", true, true, false),
+            ("setup-dump", "Setup diagnostics", true, true, false),
+            ("system-reset", "System reset", true, false, false),
+            ("bypass", "Bypass", true, true, true),
+        ],
+        _ => &[],
+    };
+    names
+        .iter()
+        .map(|(key, label, writable, readable, led_feedback)| DeviceFeatureCapability {
+            key: (*key).into(),
+            label: (*label).into(),
+            readable: *readable,
+            writable: *writable,
+            queryable: *readable,
+            subscribable: *readable,
+            meter: false,
+            led_feedback: *led_feedback,
+            qualification: "profile-qualified".into(),
+            unavailable_reason: if *readable {
+                None
+            } else {
+                Some("The device does not provide qualified readback for this feature.".into())
+            },
+        })
+        .collect()
+}
+
+fn studio_capability_snapshot_from_state(
+    state: &serde_json::Value,
+) -> Option<StudioCapabilitySnapshot> {
+    let generation = state.get("generation")?.as_u64()?;
+    let event_sequence =
+        state.get("last_sequence").and_then(serde_json::Value::as_u64).unwrap_or(0);
+    let mut devices = Vec::new();
+    if let Some(physical) = state.get("physical_devices").and_then(serde_json::Value::as_array) {
+        for device in physical {
+            let name =
+                device.get("name").and_then(serde_json::Value::as_str).unwrap_or("MIDI device");
+            if name.to_ascii_lowercase().contains("launch control xl") {
+                continue;
+            }
+            let stable_id = device.get("id").and_then(serde_json::Value::as_str)?.to_owned();
+            let lifecycle =
+                studio_lifecycle(device.get("state").and_then(serde_json::Value::as_str));
+            let renderer = studio_renderer(name).to_owned();
+            devices.push(StudioDeviceCapability {
+                stable_id,
+                label: name.to_owned(),
+                renderer: renderer.clone(),
+                lifecycle,
+                generation,
+                features: studio_profile_features(&renderer),
+                observations: Vec::new(),
+            });
+        }
+    }
+    if let Some(novation) = state.get("novation_device") {
+        let stable_id = novation
+            .get("stable_id")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or("novation:unknown")
+            .to_owned();
+        let lifecycle =
+            studio_lifecycle(novation.get("lifecycle").and_then(serde_json::Value::as_str));
+        let mut features = Vec::new();
+        if state.get("novation_capabilities").is_some() {
+            features.push(DeviceFeatureCapability {
+                key: "controller.surface".into(),
+                label: "Launch Control XL controls".into(),
+                readable: true,
+                writable: true,
+                queryable: true,
+                subscribable: true,
+                meter: false,
+                led_feedback: true,
+                qualification: "qualified".into(),
+                unavailable_reason: None,
+            });
+        }
+        devices.push(StudioDeviceCapability {
+            stable_id,
+            label: "Launch Control XL".into(),
+            renderer: "novation.launch-control-xl".into(),
+            lifecycle,
+            generation,
+            features,
+            observations: Vec::<DeviceFeedbackObservation>::new(),
+        });
+    }
+    let snapshot =
+        StudioCapabilitySnapshot { schema_version: 1, generation, event_sequence, devices };
+    snapshot.validate().ok().map(|()| snapshot)
+}
+
+fn studio_capabilities(socket: &PathBuf) -> HttpResponse {
+    let request_id = NEXT_REQUEST_ID.fetch_add(1, Ordering::Relaxed).max(1);
+    let envelope = Envelope {
+        version: ProtocolVersion::current(),
+        request_id: RequestId::new(request_id).expect("nonzero request ID"),
+        command: Command::Snapshot,
+        payload: b"{}".to_vec(),
+    };
+    let policy =
+        mackes_ipc::ReconnectPolicy::new(3, Duration::from_millis(25), Duration::from_millis(250))
+            .expect("valid reconnect policy");
+    match LocalClient::request_with_policy(socket, policy, &envelope) {
+        Ok((body, _)) => {
+            let Ok(state) = serde_json::from_slice::<serde_json::Value>(&body) else {
+                return HttpResponse::new(
+                    502,
+                    br#"{"code":"malformed_daemon_response"}"#.to_vec(),
+                    true,
+                )
+                .expect("bounded response");
+            };
+            let Some(snapshot) = studio_capability_snapshot_from_state(&state) else {
+                return HttpResponse::new(
+                    502,
+                    br#"{"code":"invalid_studio_capability_snapshot"}"#.to_vec(),
+                    true,
+                )
+                .expect("bounded response");
+            };
+            HttpResponse::new(200, serde_json::to_vec(&snapshot).expect("snapshot encodes"), true)
+                .expect("bounded Studio capability response")
         }
         Err(error) => HttpResponse::new(
             503,
@@ -1714,15 +2044,15 @@ mod tests {
         assert!(js.contains("Implemented operations"));
         assert!(js.contains("runOperation(entry.operation)"));
         assert!(js.contains("renderFaceplate(body);"));
-        assert!(js.contains("PiPedal authoritative snapshot"));
+        assert!(js.contains("PiPedal is ${pedalState}"));
+        assert!(!js.contains("PiPedal authoritative snapshot"));
         assert!(js.contains("pipedalCatalogTargets"));
         assert!(js.contains("Refresh status monitor"));
         assert!(js.contains("Save current preset as"));
         assert!(js.contains("Save plugin preset as"));
-        assert!(js.contains("controls: ${controlRows.join"));
-        assert!(js.contains("range ${control.min_value}..${control.max_value}"));
-        assert!(js.contains("daemon ${body.pipedal.phase}"));
-        assert!(js.contains("Readback is current for this snapshot"));
+        assert!(js.contains("${pipedalMappings.length} saved control connections"));
+        assert!(js.contains("Choose a named control or operation to continue"));
+        assert!(js.contains("Values shown here are current for this refresh"));
     }
 
     #[test]
@@ -1744,6 +2074,106 @@ mod tests {
         assert_eq!(value["schema_version"], 1);
         assert!(value["generation"].is_u64());
         assert!(value["capabilities"].as_array().is_some_and(|items| !items.is_empty()));
+    }
+
+    #[test]
+    fn studio_capability_projection_maps_discovery_states_without_guessing_features() {
+        let state = serde_json::json!({
+            "generation": 12,
+            "last_sequence": 19,
+            "physical_devices": [
+                {"id":"micropitch", "name":"MicroPitch Pedal", "state":"connected"},
+                {"id":"reflex", "name":"Lexicon Reflex", "state":"connected"},
+                {"id":"old-device", "name":"Old MIDI", "state":"offline"}
+            ],
+            "novation_device": {"stable_id":"novation:1235:0061", "lifecycle":"Ready"},
+            "novation_capabilities": {"physical_control_count":56}
+        });
+        let snapshot = studio_capability_snapshot_from_state(&state).expect("projection");
+        snapshot.validate().expect("valid projection");
+        assert_eq!(snapshot.generation, 12);
+        assert_eq!(snapshot.event_sequence, 19);
+        assert_eq!(snapshot.devices.len(), 4);
+        assert!(snapshot.devices.iter().any(|device| device.renderer == "eventide.micropitch"));
+        assert_eq!(
+            snapshot
+                .devices
+                .iter()
+                .find(|device| device.renderer == "eventide.micropitch")
+                .expect("micropitch")
+                .features
+                .len(),
+            16
+        );
+        assert_eq!(
+            snapshot
+                .devices
+                .iter()
+                .find(|device| device.renderer == "lexicon.reflex")
+                .expect("reflex")
+                .features
+                .len(),
+            9
+        );
+        assert!(snapshot
+            .devices
+            .iter()
+            .any(|device| device.lifecycle == DeviceLifecycle::Disconnected));
+        let novation = snapshot
+            .devices
+            .iter()
+            .find(|device| device.renderer == "novation.launch-control-xl")
+            .expect("novation");
+        assert_eq!(novation.features.len(), 1);
+        assert!(snapshot.devices.iter().any(|device| device.renderer == "generic.endpoint"));
+    }
+
+    #[test]
+    fn studio_event_decoration_preserves_legacy_payload_and_adds_typed_family() {
+        let event = serde_json::json!({
+            "sequence": 4,
+            "payload": {"command":"monitor","generation":8,"observed_value":0.5}
+        });
+        let decorated = decorate_studio_event(&event);
+        assert_eq!(decorated["sequence"], 4);
+        assert_eq!(decorated["generation"], 8);
+        assert_eq!(decorated["kind"], "control_observation");
+        assert_eq!(decorated["payload"]["observed_value"], 0.5);
+    }
+
+    #[test]
+    fn studio_feedback_burst_keeps_discrete_families_and_stays_under_latency_budget() {
+        let discrete = [
+            ("assignment", "mapping_changed"),
+            ("scenes", "scene_changed"),
+            ("monitor", "control_observation"),
+            ("preset", "preset_changed"),
+            ("mode", "mode_changed"),
+            ("meter", "meter"),
+        ];
+        for (command, expected) in discrete {
+            let event = serde_json::json!({
+                "sequence": 1,
+                "payload": {"command": command, "generation": 1}
+            });
+            assert_eq!(decorate_studio_event(&event)["kind"], expected);
+        }
+
+        let mut elapsed = Vec::with_capacity(10_000);
+        for sequence in 1..=10_000_u64 {
+            let event = serde_json::json!({
+                "sequence": sequence,
+                "payload": {"command": "monitor", "generation": 1, "value": sequence % 128}
+            });
+            let started = Instant::now();
+            let decorated = decorate_studio_event(&event);
+            elapsed.push(started.elapsed());
+            assert_eq!(decorated["sequence"], sequence);
+            assert_eq!(decorated["kind"], "control_observation");
+        }
+        elapsed.sort_unstable();
+        let p95 = elapsed[(elapsed.len() * 95 / 100).saturating_sub(1)];
+        assert!(p95 <= Duration::from_millis(100), "feedback decoration p95 was {p95:?}");
     }
 
     #[test]
@@ -2549,6 +2979,14 @@ mod tests {
     }
 
     #[test]
+    fn studio_stream_has_gap_recovery_and_open_state_handlers() {
+        let source = include_str!("../static/studio.js");
+        assert!(source.contains("new EventSource('/api/v1/events/stream?after_sequence=0')"));
+        assert!(source.contains("addEventListener('resnapshot'"));
+        assert!(source.contains("addEventListener('open'"));
+    }
+
+    #[test]
     fn event_route_rejects_invalid_sequence_cursor_before_ipc() {
         let request = HttpRequest::parse(
             b"GET /api/v1/events?after_sequence=not-a-number HTTP/1.1\r\nHost: localhost:8081\r\n\r\n",
@@ -2844,62 +3282,79 @@ mod tests {
         assert_eq!(response.status, 200);
         assert!(!response.json);
         let html = String::from_utf8(response.body).expect("HTML");
-        assert!(html.contains("MACKES MIDI Matrix"));
-        assert!(html.contains("Panic all outputs"));
-        assert!(html.contains("Previous scene"));
-        assert!(html.contains("Next scene"));
-        assert!(html.contains("Monitor"));
-        assert!(html.contains("Map Controls"));
-        assert!(html.contains("Scenes &amp; Setlists"));
-        assert!(html.contains("System"));
-        assert!(html.contains("Validate configuration"));
-        assert!(html.contains("Inspect backups"));
-        assert!(html.contains("id=\"backup-choice\""));
-        assert!(html.contains("Create configuration backup"));
-        assert!(html.contains("Restore configuration backup"));
-        assert!(html.contains("Qualified device commands"));
-        assert!(html.contains("open-qualified-commands"));
+        assert!(html.contains("MACKES Studio"));
+        assert!(html.contains("id=\"studio-panic\""));
+        assert!(html.contains("Launch Control XL"));
+        assert!(html.contains("id=\"studio-starter-setup\""));
+        assert!(html.contains("Choose a knob, fader, or button"));
+        assert!(html.contains("id=\"studio-destination-browser\""));
+        assert!(html.contains("id=\"studio-assignment-preview\""));
+        assert!(html.contains("id=\"studio-behavior-editor\""));
         assert!(!html.contains("id=\"sysex-destination\""));
         assert!(!html.contains("id=\"sysex-bytes\""));
         assert!(!html.contains("id=\"sysex-confirm\""));
-        assert!(html.contains("Export configuration"));
-        assert!(html.contains("Export raw configuration"));
-        assert!(html.contains("Export portable configuration"));
-        assert!(html.contains("Import portable configuration"));
-        assert!(html.contains("id=\"portable-import-file\""));
-        assert!(html.contains("Send device control"));
-        assert!(html.contains("Refresh PiPedal catalog"));
-        assert!(html.contains("Run PiPedal operation"));
-        assert!(html.contains("id=\"pipedal-operation-choice\""));
-        assert!(html.contains("id=\"pipedal-instance-id\""));
-        assert!(html.contains("id=\"pipedal-mapping-choice\""));
-        assert!(html.contains("id=\"pipedal-instance-id\""));
-        assert!(html.contains("id=\"pipedal-value\""));
-        assert!(html.contains("id=\"pipedal-confirm\""));
-        assert!(html.contains("Start assignment"));
-        assert!(html.contains("Capture selected control"));
-        assert!(html.contains("assignment-choice"));
-        assert!(html.contains("Undo last route change"));
-        assert!(html.contains("id=\"routing-preview\""));
-        assert!(html.contains("Apply routes"));
-        assert!(html.contains("Undo last mapping"));
-        assert!(html.contains("Commit assignment"));
-        assert!(html.contains("Download capture"));
-        assert!(html.contains("Novation physical control faceplate"));
-        assert!(html.contains("viewBox=\"0 0 1000 560\""));
-        assert!(html.contains("novation-diagnostics"));
-        assert!(html.contains("Novation control grid"));
-        assert!(html.contains("class=\"action-group\"><h3>Recovery"));
-        assert!(html.contains("class=\"action-group\"><summary>Configuration"));
-        assert!(html.contains("Select scene"));
-        assert!(html.contains("id=\"preview-scene\""));
-        assert!(html.contains("id=\"scene-id\""));
-        assert!(html.contains("Refresh scenes first"));
-        assert!(html.contains("Refresh scenes and setlists"));
-        assert!(html.contains("Use light theme"));
-        assert!(html.contains("Keyboard help"));
-        assert!(html.contains("reconnect-banner"));
-        assert!(html.contains("Daemon connection lost"));
+        assert!(html.contains("id=\"studio-theme\""));
+        assert!(html.contains("id=\"studio-controller\""));
+        assert!(html.contains("id=\"studio-destination-browser\""));
+        assert!(html.contains("id=\"studio-assignment-preview\""));
+        assert!(html.contains("id=\"studio-behavior-editor\""));
+        assert!(html.contains("id=\"studio-supporting-view\""));
+    }
+
+    #[test]
+    fn clean_sheet_studio_entrypoint_is_served_with_its_own_assets() {
+        let socket = std::env::temp_dir().join(format!("mackes-web-studio-{}", std::process::id()));
+        let request = HttpRequest::parse(b"GET /studio HTTP/1.1\r\nHost: localhost:8081\r\n\r\n")
+            .expect("request");
+        let response = route(&request, &socket, "http://localhost:8081");
+        assert_eq!(response.status, 200);
+        let html = String::from_utf8(response.body).expect("HTML");
+        assert!(html.contains("MACKES Studio"));
+        assert!(html.contains("controller-surface"));
+        assert!(html.contains("PiPedal"));
+        assert!(html.contains("Eventide"));
+        assert!(html.contains("Lexicon"));
+        assert!(html.contains("/assets/studio_controller.js"));
+        assert!(!html.contains("/assets/app.js"));
+
+        for (path, marker) in [
+            ("/assets/studio.css", "--studio-bg"),
+            ("/assets/studio.js", "MackesStudioState"),
+            ("/assets/studio_views.js", "supporting-view"),
+            ("/assets/studio_state.js", "selectedControl"),
+            ("/assets/studio_controller.js", "physical-control"),
+            ("/assets/studio_catalog.js", "MackesFeatureCatalog"),
+            ("/assets/studio_assignment.js", "studio-destination-picked"),
+            ("/assets/studio_behavior.js", "operation: 'Behavior'"),
+            ("/assets/device_renderer.js", "MackesDeviceRenderer"),
+        ] {
+            let request = HttpRequest::parse(
+                format!("GET {path} HTTP/1.1\r\nHost: localhost:8081\r\n\r\n").as_bytes(),
+            )
+            .expect("asset request");
+            let response = route(&request, &socket, "http://localhost:8081");
+            assert_eq!(response.status, 200, "{path}");
+            assert!(String::from_utf8(response.body).expect("asset").contains(marker), "{path}");
+        }
+        let gallery =
+            HttpRequest::parse(b"GET /studio/gallery HTTP/1.1\r\nHost: localhost:8081\r\n\r\n")
+                .expect("gallery request");
+        let gallery_response = route(&gallery, &socket, "http://localhost:8081");
+        assert_eq!(gallery_response.status, 200);
+        for path in ["/studio/devices", "/studio/routing", "/studio/scenes", "/studio/system"] {
+            let request = HttpRequest::parse(
+                format!("GET {path} HTTP/1.1\r\nHost: localhost:8081\r\n\r\n").as_bytes(),
+            )
+            .expect("studio deep link");
+            let response = route(&request, &socket, "http://localhost:8081");
+            assert_eq!(response.status, 200, "{path}");
+            assert!(String::from_utf8(response.body)
+                .expect("studio deep link body")
+                .contains("MACKES Studio"));
+        }
+        assert!(String::from_utf8(gallery_response.body)
+            .expect("gallery HTML")
+            .contains("Studio component gallery"));
     }
 
     #[test]
@@ -3073,9 +3528,9 @@ mod tests {
             route(&shell_request, &PathBuf::from("/missing"), "http://localhost:8081").body,
         )
         .expect("HTML");
-        assert!(shell.contains("mapping-source-min"));
-        assert!(shell.contains("mapping-delete"));
-        assert!(shell.contains("workspace-inspector"));
+        assert!(shell.contains("studio-controller"));
+        assert!(shell.contains("studio-destination-browser"));
+        assert!(shell.contains("studio-assignment-preview"));
     }
 
     #[test]
@@ -3102,6 +3557,15 @@ mod tests {
             let response = route(&request, &PathBuf::from("/missing"), "http://localhost:8081");
             assert_eq!(response.status, 200, "deep link {path}");
             assert!(!response.json, "deep link {path} returned JSON");
+            let shell = String::from_utf8_lossy(&response.body);
+            assert!(
+                shell.contains("studio-controller"),
+                "deep link {path} served a non-Studio shell"
+            );
+            assert!(
+                !shell.contains("id=\"novation-grid\""),
+                "deep link {path} served retired grid markup"
+            );
         }
     }
 

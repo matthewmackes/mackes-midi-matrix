@@ -1378,7 +1378,7 @@ fn registered_dispatch_updates_activity_and_publishes_live_event() {
         endpoint: mackes_domain::EndpointId::new(1).expect("endpoint"),
         message: mackes_domain::MidiMessage::ControlChange {
             channel: mackes_domain::MidiChannel::new(9).expect("channel"),
-            controller: mackes_domain::SevenBit::new(1).expect("controller"),
+            controller: mackes_domain::SevenBit::new(13).expect("controller"),
             value: mackes_domain::SevenBit::new(2).expect("value"),
         },
     };
@@ -1391,12 +1391,21 @@ fn registered_dispatch_updates_activity_and_publishes_live_event() {
     .expect("payload");
     assert_eq!(event_payload["received"], 1);
     assert_eq!(event_payload["last_activity"]["kind"], "control_change");
-    assert_eq!(event_payload["last_activity"]["control_id"], "endpoint:1:control_change:1");
+    assert_eq!(event_payload["last_activity"]["control_id"], "endpoint:1:control_change:13");
     assert_eq!(event_payload["last_activity"]["timestamp_nanos"], 1);
-    assert_eq!(event_payload["last_activity"]["number"], 1);
+    assert_eq!(event_payload["last_activity"]["number"], 13);
     assert_eq!(event_payload["last_activity"]["value"], 2);
+    assert_eq!(event_payload["last_activity"]["physical_control_id"], "knob-r1-c1");
+    assert_eq!(event_payload["last_activity"]["observed_value"], 2);
     assert_eq!(event_payload["last_activity"]["sequence"], 1);
-    assert_eq!(event_payload["config_persistence"]["state"], "unconfigured");
+    assert_eq!(event_payload["command"], "monitor");
+    assert!(event_payload.get("catalog").is_none(), "live activity must not copy full catalogs");
+    assert!(event_payload.get("config_persistence").is_none());
+    assert!(serde_json::to_vec(&event_payload).expect("activity JSON").len() < 2_048);
+    let monitor: serde_json::Value =
+        serde_json::from_str(&daemon.monitor_response()).expect("monitor response");
+    assert_eq!(monitor["last_activity"]["physical_control_id"], "knob-r1-c1");
+    assert_eq!(monitor["last_activity"]["observed_value"], 2);
     let mut burst_event = event.clone();
     burst_event.sequence = 2;
     assert_eq!(daemon.dispatch_registered(&burst_event), (0, 0));

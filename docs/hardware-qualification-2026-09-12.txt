@@ -1,0 +1,55 @@
+hardware-qualification=observation-only
+host=NAM-MIDI
+kernel=Linux 7.1.13-300.vanilla.fc44.x86_64+rt
+
+[usb]
+Bus 001 Device 001: ID 1d6b:0002 Linux Foundation 2.0 root hub
+Bus 001 Device 002: ID 84ef:0014 HotoneAudio Jogg USB Audio
+Bus 001 Device 003: ID 0bda:5411 Realtek Semiconductor Corp. RTS5411 Hub
+Bus 001 Device 004: ID 148f:3070 Ralink Technology, Corp. RT2870/RT3070 Wireless Adapter
+Bus 001 Device 005: ID 1b12:003a Eventide MicroPitch Pedal
+Bus 001 Device 006: ID 1235:0061 Focusrite-Novation Launch Control XL
+Bus 001 Device 007: ID 0bda:5411 Realtek Semiconductor Corp. RTS5411 Hub
+Bus 001 Device 008: ID 0763:1021 M-Audio MidiSport 4x4
+Bus 002 Device 001: ID 1d6b:0003 Linux Foundation 3.0 root hub
+Bus 002 Device 002: ID 0bda:0411 Realtek Semiconductor Corp. Hub
+Bus 002 Device 003: ID 0bda:0411 Realtek Semiconductor Corp. Hub
+
+[alsa-cards]
+ 0 [Audio          ]: USB-Audio - Jogg USB Audio
+                      HotoneAudio Jogg USB Audio at usb-0000:00:14.0-3, full speed
+ 1 [Pedal          ]: USB-Audio - MicroPitch Pedal
+                      Eventide MicroPitch Pedal at usb-0000:00:14.0-4.2, high speed
+ 2 [XL             ]: USB-Audio - Launch Control XL
+                      Focusrite A.E. Ltd Launch Control XL at usb-0000:00:14.0-4.3, full speed
+ 3 [M4x4           ]: USB-Audio - MidiSport 4x4
+                      M-Audio MidiSport 4x4 at usb-0000:00:14.0-4.4.1, full speed
+
+[alsa-midi-nodes]
+midiC1D0
+midiC2D0
+midiC3D0
+
+[application-endpoints]
+{"endpoints":["Midi Through:Midi Through Port-0 14:0","MicroPitch Pedal:MicroPitch Pedal MIDI 1 20:0","Launch Control XL:Launch Control XL Launch Contro 24:0","Launch Control XL:Launch Control XL HUI 24:1","MidiSport 4x4:MidiSport 4x4 MIDI 1 28:0","MidiSport 4x4:MidiSport 4x4 MIDI 2 28:1","MidiSport 4x4:MidiSport 4x4 MIDI 3 28:2","MidiSport 4x4:MidiSport 4x4 MIDI 4 28:3","MACKES virtual output:MACKES DAW Out 131:0","MACKES input:MACKES Output 132:1","MACKES output:MACKES output 133:0","MACKES output:MACKES output 134:0","MACKES output:MACKES output 135:0","MACKES output:MACKES output 136:0","MACKES output:MACKES output 137:0","MACKES output:MACKES output 138:0","MACKES output:MACKES output 139:0","MACKES output:MACKES output 140:0","MACKES output:MACKES output 141:0","Midi Through:Midi Through Port-0 14:0","MicroPitch Pedal:MicroPitch Pedal MIDI 1 20:0","Launch Control XL:Launch Control XL Launch Contro 24:0","Launch Control XL:Launch Control XL HUI 24:1","MidiSport 4x4:MidiSport 4x4 MIDI 1 28:0","MidiSport 4x4:MidiSport 4x4 MIDI 2 28:1","MidiSport 4x4:MidiSport 4x4 MIDI 3 28:2","MidiSport 4x4:MidiSport 4x4 MIDI 4 28:3","PiPedal:PiPedal:in 128:0","MACKES virtual input:MACKES DAW In 129:0","Device Monitor:PiPedal:portMonitor 130:0","MACKES input:MACKES Input 132:0"]}
+
+[alsa-diagnostics]
+amidi=/usr/bin/amidi
+aconnect=/usr/bin/aconnect
+midisport_4x4_ports=4
+midisport_4x4_acceptance=pass
+
+[write-qualification]
+PENDING: no vendor message/LED maps or physical-write validation are assumed by this report.
+
+[native-open-probe]
+`amidi -l` reports the MicroPitch, both Launch Control XL ports, and all four MidiSport ports.
+Direct parallel `amidi -d` opens were refused as `Device or resource busy`, which is expected while
+the daemon owns the endpoints and confirms that the production service has them claimed. No MIDI
+bytes were sent by this probe.
+
+[alsa-routing-observation]
+`aconnect -l` confirms the daemon input receives MicroPitch, both Launch Control XL ports, and all
+four MidiSport ports; dedicated daemon output clients are connected back to each physical port and
+to PiPedal/Device Monitor. This is routing observation only and does not prove device readback or
+successful physical LED delivery.

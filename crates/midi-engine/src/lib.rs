@@ -919,6 +919,14 @@ impl InputRegistry {
                 .then(|| input.info().id.clone())
         })
     }
+    /// Returns the human-readable name for a numeric event endpoint.
+    #[must_use]
+    pub fn name_for_endpoint(&self, endpoint: mackes_domain::EndpointId) -> Option<String> {
+        self.inputs.iter().find_map(|input| {
+            (numeric_endpoint_id(&input.info().id) == Some(endpoint))
+                .then(|| input.info().name.clone())
+        })
+    }
     /// Polls each input once in stable registration order.
     #[must_use]
     pub fn poll_once(&mut self) -> Vec<MidiEvent> {

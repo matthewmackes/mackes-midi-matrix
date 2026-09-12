@@ -6,11 +6,25 @@ from __future__ import annotations
 import json
 import sys
 import urllib.request
+import time
+import urllib.error
 
 
 origin = sys.argv[1] if len(sys.argv) > 1 else "http://172.20.222.222:8081"
-with urllib.request.urlopen(f"{origin}/api/v1/pipedal", timeout=20) as response:
-    body = json.load(response)
+body = None
+last_error = None
+for attempt in range(3):
+    try:
+        with urllib.request.urlopen(f"{origin}/api/v1/pipedal", timeout=20) as response:
+            body = json.load(response)
+        break
+    except (urllib.error.HTTPError, TimeoutError, urllib.error.URLError) as error:
+        last_error = error
+        if attempt == 2:
+            raise RuntimeError(f"PiPedal catalog unavailable after bounded retries: {error}") from error
+        time.sleep(1)
+if body is None:
+    raise RuntimeError(f"PiPedal catalog unavailable: {last_error}")
 if body.get("ok") is not True:
     raise RuntimeError(f"PiPedal projection is not authoritative: {body.get('ok')!r}")
 catalog = body.get("catalog") or {}

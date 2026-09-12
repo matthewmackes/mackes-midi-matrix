@@ -1,5 +1,9 @@
 # Worklist closeout
 
+> Historical execution index. For Web GUI work after 2026-09-12, W186–W202 and
+> `docs/plug-and-play-live-instrument-epic.md` supersede the incremental GUI scheduling below. Luna's next
+> executable packet is W187. Non-GUI scope in this document remains historical planning context.
+
 This execution index reorganizes all 37 currently unchecked work items without
 discarding scope. It separates delivery from parent closeout. Existing item status
 records describe accumulated work; they do not imply 35 simultaneous active jobs.

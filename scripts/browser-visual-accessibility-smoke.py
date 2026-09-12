@@ -21,24 +21,24 @@ options.set_capability("pageLoadStrategy", "eager")
 driver = webdriver.Chrome(service=Service("/usr/bin/chromedriver"), options=options)
 try:
     driver.execute_cdp_cmd("Emulation.setEmulatedMedia", {"features": [{"name": "prefers-reduced-motion", "value": "reduce"}]})
-    driver.get(f"{origin}/devices#theme=light&browser_smoke=1")
+    driver.get(f"{origin}/studio")
     wait = WebDriverWait(driver, 45)
-    wait.until(lambda d: d.find_element("id", "device-board").find_elements("css selector", ".device-card"))
-    wait.until(lambda d: d.find_element("id", "faceplate-controls").get_attribute("hidden") is None)
+    wait.until(lambda d: len(d.find_elements("css selector", "#studio-controller .physical-control")) == 56)
+    driver.find_element("id", "studio-theme").click()
     theme = driver.find_element("tag name", "body").get_attribute("class")
-    if "light" not in theme.split():
+    if "light-theme" not in theme.split():
         raise RuntimeError(f"light theme not applied: {theme!r}")
     reduced_motion = driver.execute_script("return matchMedia('(prefers-reduced-motion: reduce)').matches")
     if not reduced_motion:
         raise RuntimeError("reduced-motion preference was not applied")
-    labels = driver.execute_script("return Array.from(document.querySelectorAll('#faceplate-controls [aria-label]')).map(item => item.getAttribute('aria-label'))")
-    if not labels or not all(any(marker in label for marker in ("assigned", "unassigned", "disabled")) for label in labels):
+    labels = driver.execute_script("return Array.from(document.querySelectorAll('#studio-controller .physical-control[aria-label]')).map(item => item.getAttribute('aria-label'))")
+    if len(labels) != 56 or not all(any(marker in label for marker in ("assigned", "unassigned", "disabled")) for label in labels):
         raise RuntimeError("graphical controls lack non-color assignment state labels")
     driver.execute_script("document.body.style.zoom = '200%'")
     zoom = driver.execute_script("return getComputedStyle(document.body).zoom")
-    cards_after_zoom = len(driver.find_elements("css selector", "#device-board .device-card"))
-    if zoom not in ("2", "2.0") or cards_after_zoom == 0:
-        raise RuntimeError(f"zoomed graphical layout is not usable: zoom={zoom!r} cards={cards_after_zoom}")
+    controls_after_zoom = len(driver.find_elements("css selector", "#studio-controller .physical-control"))
+    if zoom not in ("2", "2.0") or controls_after_zoom != 56:
+        raise RuntimeError(f"zoomed graphical layout is not usable: zoom={zoom!r} controls={controls_after_zoom}")
     print(f"browser-visual-accessibility: PASS origin={origin} controls={len(labels)} zoom={zoom}")
 finally:
     driver.quit()

@@ -465,6 +465,53 @@ impl ControlMappingStore {
         Ok(())
     }
 
+    /// Atomically activates a bounded set of mappings after validating the complete proposal.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for a stale generation, invalid or duplicate proposal, or any conflict
+    /// with existing mappings. The store is unchanged when validation fails.
+    pub fn activate_batch(
+        &mut self,
+        expected_generation: u64,
+        mappings: Vec<ControlMapping>,
+    ) -> Result<(), &'static str> {
+        if self.generation != expected_generation {
+            return Err("mapping generation conflict");
+        }
+        if mappings.is_empty() || mappings.len() > 128 {
+            return Err("mapping batch size is invalid");
+        }
+        let mut ids = std::collections::BTreeSet::new();
+        let mut controls = std::collections::BTreeSet::new();
+        let mut destinations = std::collections::BTreeSet::new();
+        for mapping in &mappings {
+            validate_mapping(mapping)?;
+            if !ids.insert(mapping.id.as_str())
+                || !controls.insert(mapping.physical_control_id.as_str())
+                || !destinations.insert((
+                    mapping.destination_profile.as_str(),
+                    mapping.destination_effect.as_str(),
+                    mapping.destination_parameter.as_str(),
+                ))
+            {
+                return Err("mapping batch contains a duplicate");
+            }
+            if self.active.iter().any(|existing| {
+                existing.physical_control_id == mapping.physical_control_id
+                    || (existing.destination_profile == mapping.destination_profile
+                        && existing.destination_effect == mapping.destination_effect
+                        && existing.destination_parameter == mapping.destination_parameter)
+            }) {
+                return Err("mapping source or destination is already occupied");
+            }
+        }
+        self.undo = Some((self.active.clone(), self.drafts.clone()));
+        self.active.extend(mappings);
+        self.generation = self.generation.saturating_add(1);
+        Ok(())
+    }
+
     /// Undoes the latest successful mutation at the expected generation.
     pub fn undo(&mut self, expected_generation: u64) -> Result<(), &'static str> {
         if self.generation != expected_generation {
@@ -3845,7 +3892,7 @@ mod tests {
         };
         let mut store = ControlMappingStore::default();
         assert!(store.activate(1, mapping.clone()).is_err());
-        assert!(store.activate(0, mapping).is_ok());
+        assert!(store.activate(0, mapping.clone()).is_ok());
         assert_eq!(store.generation, 1);
         assert!(store.undo_available());
         assert_eq!(store.snapshot().0.len(), 1);
@@ -3853,6 +3900,19 @@ mod tests {
         assert!(store.undo(1).is_ok());
         assert!(store.active.is_empty());
         assert!(!store.undo_available());
+
+        let mut second = mapping.clone();
+        second.id = "map-2".into();
+        second.physical_control_id = "knob-r1-c2".into();
+        second.source_number = 22;
+        second.destination_parameter = "Width".into();
+        assert!(store.activate_batch(2, vec![mapping, second.clone()]).is_ok());
+        assert_eq!(store.active.len(), 2);
+        let before = store.active.clone();
+        let mut duplicate = second;
+        duplicate.id = "map-3".into();
+        assert!(store.activate_batch(3, vec![duplicate]).is_err());
+        assert_eq!(store.active, before, "rejected batch must be atomic");
     }
 
     #[test]

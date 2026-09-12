@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mackes.invalid/schema/studio-capability-v1.schema.json",
+  "title": "MACKES Studio capability snapshot v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "generation", "event_sequence", "devices"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "generation": { "type": "integer", "minimum": 0 },
+    "event_sequence": { "type": "integer", "minimum": 0 },
+    "devices": { "type": "array", "maxItems": 128, "items": { "$ref": "#/$defs/device" } }
+  },
+  "$defs": {
+    "device": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stable_id", "label", "renderer", "lifecycle", "generation", "features", "observations"],
+      "properties": {
+        "stable_id": { "type": "string", "minLength": 1, "maxLength": 96 },
+        "label": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "renderer": { "type": "string", "minLength": 1, "maxLength": 96 },
+        "lifecycle": { "enum": ["detecting", "ready", "limited", "disconnected", "ambiguous", "error"] },
+        "generation": { "type": "integer", "minimum": 0 },
+        "features": { "type": "array", "maxItems": 512, "items": { "$ref": "#/$defs/feature" } },
+        "observations": { "type": "array", "maxItems": 512, "items": { "$ref": "#/$defs/observation" } }
+      }
+    },
+    "feature": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "label", "readable", "writable", "queryable", "subscribable", "meter", "led_feedback", "qualification", "unavailable_reason"],
+      "properties": {
+        "key": { "type": "string", "minLength": 1, "maxLength": 96 },
+        "label": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "readable": { "type": "boolean" },
+        "writable": { "type": "boolean" },
+        "queryable": { "type": "boolean" },
+        "subscribable": { "type": "boolean" },
+        "meter": { "type": "boolean" },
+        "led_feedback": { "type": "boolean" },
+        "qualification": { "type": "string", "minLength": 1, "maxLength": 96 },
+        "unavailable_reason": { "type": ["string", "null"], "maxLength": 512 }
+      }
+    },
+    "observation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["feature_key", "truth", "value", "observed_at_ms", "source"],
+      "properties": {
+        "feature_key": { "type": "string", "minLength": 1, "maxLength": 96 },
+        "truth": { "enum": ["observed", "acknowledged", "sent-unverified", "last-known", "stale", "unavailable"] },
+        "value": { "type": ["object", "string", "number", "boolean", "null"] },
+        "observed_at_ms": { "type": ["integer", "null"], "minimum": 0 },
+        "source": { "type": "string", "minLength": 1, "maxLength": 96 }
+      }
+    }
+  }
+}

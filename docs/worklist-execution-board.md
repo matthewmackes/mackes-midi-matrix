@@ -1,13 +1,26 @@
 # Worklist execution board
 
-Updated 2026-09-10. This board is subordinate to `WORKLIST.md`; it records the next executable
+Updated 2026-09-12. This board is subordinate to `WORKLIST.md`; it records the next executable
 step for the active Web Interface drain packets and must be updated with command output, not intent.
 
-Latest automated checkpoint (2026-09-10): `cargo test -p mackes-web` passed 56/56; graphical
+Latest automated checkpoint (2026-09-12): W186 records the replacement plug-and-play live-instrument
+epic and assigns W187–W202 to Luna. The current execution handoff is
+`docs/plug-and-play-live-instrument-epic.md`.
+W167 and unfinished W169–W177 are deferred so their incremental layout
+cannot compete with the new implementation. W179 is complete: the independent foundation, state
+store, and component gallery are installed. W180–W185 are now deferred as superseded prototype
+packets. Existing daemon/API behavior, validated catalogs, and current Studio assets remain reusable
+integration boundaries for W187–W202.
+
+Current qualification references: [browser qualification record](browser-qualification-2026-09-12.md)
+and [human sign-off checklist](studio-human-signoff-checklist.md). These documents are the entry
+point for the remaining native feedback/readback and operator review evidence.
+
+The previous installed checkpoint remains evidence for the retired interface: `cargo test -p mackes-web` passed 56/56; graphical
 interface guard, web asset budget (38,643 compressed bytes), worklist validation, JavaScript syntax,
-and `git diff --check` all pass. Installed browser smoke passed against
+and `git diff --check` all passed. Installed browser smoke passed against
 `http://172.20.222.222:8081` after release rebuild/reinstall, including deep links, 320/768 responsive
-captures, light theme, GUI surface checks, and installed asset hashes. current worklist state: 147 complete, 14 in progress, 0 not started (161 total; measured 2026-09-10).
+captures, light theme, GUI surface checks, and installed asset hashes. current worklist state: 155 complete, 15 in progress, 16 not started (186 total; measured 2026-09-12; the unchecked count includes READY and DEFERRED packets).
 The installed graphical-inventory, renderer-registry, and novice-surface fixtures pass (32 live device
 cards, 7 researched feature cards, all nine governed renderer keys, no visible code editor); generation ordering and visual draft-preservation fixtures also
 pass. The PiPedal catalog fixture now passes after the bounded 265-entry decoder fix, reporting 3,076
@@ -22,16 +35,20 @@ race-hardened assignment inspector.
 The visual review pass also confirms the installed signal-flow canvas keeps 32 devices distinct in a
 scrollable layout and the normal Devices/Routing text avoids internal URIs and runtime identities.
 The renderer registry now also supplies an accessible summary list for every family and fallback;
-the rebuilt installed host passed renderer, graphical-inventory, and visual-accessibility fixtures.
+the state matrix covers connected, degraded, disconnected, and unknown endpoint states with explicit
+direction cues. The rebuilt installed host passed renderer, graphical-inventory, and visual-accessibility fixtures.
 The formal `scripts/release-gate.sh` also passes end to end, including workspace tests, emulator,
 clippy, benchmark, hermetic integration, installer smoke, and release artifact checksum/contents.
 The installed baseline and bounded service soak also pass: four samples, zero status failures, zero
 dropped events, zero restarts, and four MIDISPORT ports observed on `NAM-MIDI`.
-W177 is therefore in progress with software release evidence recorded; W176 novice/human sign-off
-and final release sign-off remain open.
+Those results are reusable regression evidence but do not qualify the replacement epic. W179, W186,
+W187, W188, and W189 are complete; W190–W202 follow the new dependency chain.
 The executable moderated-review record is
 `docs/graphical-studio-human-signoff-checklist.md`; it remains intentionally uncompleted until a
 reviewer records each scenario and disposition.
+
+Packet-marker audit (2026-09-12): the governed `WORKLIST.md` contains 186 packet headers: 155 DONE,
+15 IN_PROGRESS, and 16 unchecked packets (including READY and DEFERRED), matching the current summary.
 The installed sequential novice walkthrough also passes all five primary graphical workspaces; the
 moderated checklist remains the required human disposition.
 The existing focused
@@ -40,6 +57,8 @@ sign-off or native hardware observation.
 
 | Packet | Current evidence | Next executable step | Exit evidence | External dependency |
 |---|---|---|---|---|
+| W186–W202 | W186 specification DONE; W187 capability contract DONE; W188 discovery/projection DONE; W189 event synchronization DONE; W190 unified reconciliation DONE; W191 visual shell DONE; W192 starter setup IN_PROGRESS with reviewed atomic Apply and conflict-safe generation handling; W193 physical/software unity IN_PROGRESS with software fixtures and pickup truth; W194 PiPedal experience IN_PROGRESS with capability cards, catalog/privacy, and writable/meter truth; W195 Eventide visualization IN_PROGRESS with qualified no-readback truth; W196 Reflex visualization IN_PROGRESS with codec/readback fixtures; W197 endpoint renderers IN_PROGRESS with registry/inventory fixtures; W198 simple assignment IN_PROGRESS with input-path, conflict, and Undo fixtures; W199 scene workspace IN_PROGRESS with save/recall and empty-state fixtures; W200 resilience IN_PROGRESS with refresh-failure, stream-gap, reconnect, and stale-value fixtures; W201 qualification IN_PROGRESS with mobile/novice/accessibility/latency fixtures; W202 cutover IN_PROGRESS with root Studio shell, compatibility deep-link, rollback rehearsal, and release-gate evidence; W180–W185 superseded | Add native feedback/readback evidence and final human sign-off while preserving explicit unsupported-capability limits | W192–W202 item evidence, installed latency/readback trace, release gate, and human sign-off | Native evidence is required for claimed physical feedback; fixtures and emulators keep software work moving |
+| 2026-09-12 qualification refresh | Installed `qualify-web-installed.sh` now uses Studio-backed fixtures and passes end to end; draft reload, native endpoint ownership/routing, and 12-second stability soak evidence are recorded | W192/W193/W197/W200/W201/W202 | Physical feedback/readback and moderated human sign-off remain external acceptance gates |
 | W159 | Navigation, health, feature-catalog, renderer, and state-store modules extracted; cancellation, stale-generation, abort, hidden-tab, draft, focus, scroll, inventory, assignment, route-guard, and task fixtures pass independently; aggregate remains long-run sensitive | Continue component/state boundaries and stabilize full aggregate orchestration with bounded recovery | Component tests plus bundle/source provenance and full gate | Browser harness choice must honor offline/no-CDN policy |
 | W160 | DONE: read coalescing/single-flight deployed; post-daemon 1,000/1,000 health soak and 250/250 feature-isolation soak pass; broken-pipe logging repaired; ADR-0014 records root cause | No further W160 software action; retain soak evidence | Evidence and closure record in `WORKLIST.md`/ADR-0014 | Native hardware qualification remains separate |
 | W161 | DONE: pinned profile/emulator tests, 56-control SVG/mapping join, truthful readback, accessibility, responsive/theme, pointer/keyboard, and out-of-order generation evidence pass | No further W161 software action; retain native observation separately | Evidence in W161 and browser qualification record | Native LED/readback observation remains separate |

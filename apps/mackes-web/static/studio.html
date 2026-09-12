@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#11151a">
+  <title>MACKES Studio Controller</title>
+  <link rel="stylesheet" href="/assets/studio.css">
+</head>
+<body>
+  <header class="studio-header">
+    <a class="brand" href="/" aria-label="MACKES Studio Controller home"><span class="brand-mark" aria-hidden="true">M</span><span>MACKES Studio</span></a>
+    <div class="session-status" aria-label="Session status">
+      <span class="status-dot" aria-hidden="true"></span><span id="studio-health">Connecting…</span>
+      <span class="status-divider" aria-hidden="true"></span><span id="studio-scene">Base scene</span>
+    </div>
+    <div class="header-actions"><button class="quiet-button" id="studio-theme" type="button">Light theme</button><button class="panic-button" id="studio-panic" type="button">Panic</button></div>
+  </header>
+  <div class="studio-layout">
+    <nav class="studio-nav" aria-label="Studio workspaces">
+      <a class="nav-active" href="/studio" aria-current="page"><span aria-hidden="true">▦</span> Controller</a>
+      <a href="/studio/devices"><span aria-hidden="true">◈</span> Devices</a>
+      <a href="/studio/routing"><span aria-hidden="true">⇄</span> Routing</a>
+      <a href="/studio/scenes"><span aria-hidden="true">◫</span> Scenes</a>
+      <a href="/studio/system"><span aria-hidden="true">⚙</span> System</a>
+      <div class="nav-spacer"></div>
+      <p class="nav-help">Select a control to see what it does.</p>
+    </nav>
+    <main class="studio-main">
+      <div class="page-heading"><div><p class="eyebrow">LIVE CONTROLLER</p><h1>Launch Control XL</h1><p class="lede">Choose a knob, fader, or button to assign a musical function.</p></div><div class="layer-switcher" role="group" aria-label="Assignment layer"><span>Layer</span><button class="layer-active" type="button" aria-pressed="true">Base</button><button type="button" aria-pressed="false">L1</button><button type="button" aria-pressed="false">L2</button><button type="button" aria-pressed="false">L3</button><button type="button" aria-pressed="false">L4</button></div></div>
+      <section class="controller-stage" aria-labelledby="controller-title">
+        <h2 id="controller-title" class="sr-only">Novation controls</h2>
+        <div class="surface-topline"><span>24 knobs</span><span>16 channel buttons</span><span>8 faders</span><span>8 utilities</span><strong id="studio-live-input" class="live-input-status">Live input · waiting</strong></div>
+        <div id="studio-controller" class="controller-surface" data-component="controller-surface" aria-label="Novation Launch Control XL control surface"></div>
+      </section>
+      <p id="studio-announcement" class="announcement" role="status" aria-live="polite">Ready for a control selection.</p>
+      <section id="studio-starter-setup" class="starter-setup" aria-labelledby="starter-setup-title"><div><p class="eyebrow">QUICK START</p><h2 id="starter-setup-title">Build a recommended setup</h2><p>We’ll use only connected, supported devices and show every proposed assignment before anything changes.</p></div><div class="header-actions"><button id="studio-starter-review" class="add-assignment" type="button">Review recommendations</button><button id="studio-starter-apply" class="quiet-button" type="button" hidden disabled>Apply reviewed setup</button></div><p id="studio-starter-status" class="assignment-status" role="status" aria-live="polite"></p><div id="studio-starter-proposals" class="starter-proposals" hidden aria-label="Proposed assignments"></div></section>
+      <section id="studio-supporting-view" class="supporting-view" hidden aria-live="polite"></section>
+    </main>
+    <aside class="assignment-panel" aria-labelledby="assignment-title">
+      <div class="panel-heading"><div><p class="eyebrow">ASSIGNMENT</p><h2 id="assignment-title">Nothing selected</h2></div><span class="sync-badge">Waiting</span></div>
+      <p class="panel-empty">Select any control on the surface to see its destinations and add a function.</p>
+      <div class="destination-preview" aria-label="Destination brands"><button type="button"><strong>PiPedal</strong><span>Plugins &amp; snapshots</span></button><button type="button"><strong>Eventide</strong><span>MicroPitch</span></button><button type="button"><strong>Lexicon</strong><span>Reflex</span></button></div>
+      <div id="studio-destination-cards" class="destination-cards" hidden aria-label="Saved destinations"></div>
+      <button class="add-assignment" type="button" disabled>＋ Add destination</button>
+      <section id="studio-destination-browser" class="destination-browser" hidden aria-labelledby="destination-browser-title">
+        <div class="browser-heading"><h3 id="destination-browser-title">Choose a function</h3><span id="destination-source" class="source-note">Authoritative catalog</span></div>
+        <label class="sr-only" for="destination-search">Search functions</label><input id="destination-search" type="search" placeholder="Search functions" maxlength="96">
+        <div id="destination-functions" class="destination-functions" role="listbox" aria-label="Compatible device functions"></div>
+      </section>
+      <section id="studio-assignment-preview" class="assignment-preview" hidden aria-labelledby="assignment-preview-title">
+        <h3 id="assignment-preview-title">Preview assignment</h3>
+        <p id="assignment-preview-text"></p>
+        <div class="preview-actions"><button id="studio-assignment-save" class="add-assignment" type="button">Save assignment</button><button id="studio-assignment-undo" class="quiet-button" type="button" hidden>Undo last save</button><button id="studio-assignment-cancel" class="quiet-button" type="button">Cancel</button></div>
+        <p id="studio-assignment-status" class="assignment-status" role="status" aria-live="polite"></p>
+      </section>
+      <section id="studio-behavior-editor" class="behavior-editor" hidden aria-labelledby="behavior-editor-title">
+        <div class="browser-heading"><h3 id="behavior-editor-title">Fine tune behavior</h3><span class="source-note">Saved to mapping</span></div>
+        <div class="range-grid">
+          <label>Source min <input id="studio-source-min" type="number" min="0" max="16383" step="1"></label>
+          <label>Source max <input id="studio-source-max" type="number" min="0" max="16383" step="1"></label>
+          <label>Destination min <input id="studio-destination-min" type="number" min="0" max="16383" step="1"></label>
+          <label>Destination max <input id="studio-destination-max" type="number" min="0" max="16383" step="1"></label>
+        </div>
+        <div class="behavior-options"><label>Curve <select id="studio-curve"><option value="linear">Linear</option><option value="ease-in">Ease in</option><option value="ease-out">Ease out</option><option value="s-curve">S curve</option></select></label><label class="check-label"><input id="studio-invert" type="checkbox"> Invert range</label></div>
+        <div class="led-intent"><label for="studio-led-intent">LED intent</label><select id="studio-led-intent"><option value="device-status">Use device status</option><option value="active">On when active</option><option value="selected">Show selected layer</option><option value="pending">Blink while pending</option></select><small>Preview only until the daemon exposes LED projection.</small></div>
+        <div class="preview-actions"><button id="studio-behavior-save" class="add-assignment" type="button">Save behavior</button><button id="studio-behavior-reset" class="quiet-button" type="button">Reset</button></div>
+        <p id="studio-behavior-status" class="assignment-status" role="status" aria-live="polite"></p>
+      </section>
+    </aside>
+  </div>
+  <script src="/assets/studio_state.js"></script>
+  <script src="/assets/studio_controller.js"></script>
+  <script src="/assets/feature_catalog.js"></script>
+  <script src="/assets/studio_catalog.js"></script>
+  <script src="/assets/studio_assignment.js"></script>
+  <script src="/assets/studio_behavior.js"></script>
+  <script src="/assets/device_renderer.js"></script>
+  <script src="/assets/studio.js"></script>
+  <script src="/assets/studio_views.js"></script>
+</body>
+</html>

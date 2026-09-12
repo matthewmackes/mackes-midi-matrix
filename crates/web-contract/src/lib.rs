@@ -1,7 +1,7 @@
 //! Shared bounded contracts for the port-8081 web adapter.
 
 use serde::{Deserialize, Serialize};
-use std::collections::VecDeque;
+use std::collections::{BTreeSet, VecDeque};
 
 /// Maximum operation/request identity length accepted at the web boundary.
 pub const MAX_ID_LENGTH: usize = 96;
@@ -15,6 +15,10 @@ pub const MAX_EVENT_KIND_LENGTH: usize = 64;
 pub const MAX_ERROR_LENGTH: usize = 512;
 /// Maximum number of queued state events for one web client.
 pub const MAX_EVENTS_PER_CLIENT: usize = 256;
+/// Maximum number of feature capabilities advertised by one device.
+pub const MAX_DEVICE_FEATURES: usize = 512;
+/// Maximum number of devices in one Studio capability snapshot.
+pub const MAX_STUDIO_DEVICES: usize = 128;
 /// Maximum HTTP request header bytes accepted by the web boundary.
 pub const MAX_HTTP_HEADER_BYTES: usize = 16 * 1024;
 /// Maximum HTTP request body bytes accepted by the web boundary.
@@ -395,6 +399,312 @@ impl BoundedEventQueue {
     }
 }
 
+/// Truthful lifecycle state for a discovered device.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DeviceLifecycle {
+    /// The system is identifying the device or probing its capabilities.
+    Detecting,
+    /// The device and its advertised capabilities are usable.
+    Ready,
+    /// The device is present but one or more capabilities are unavailable.
+    Limited,
+    /// The previously identified device is not currently reachable.
+    Disconnected,
+    /// More than one candidate prevents safe binding.
+    Ambiguous,
+    /// Discovery or transport failed with an actionable error.
+    Error,
+}
+
+/// Truth state for a value shown by the Studio UI.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub enum FeedbackTruth {
+    /// The value was observed from the device or authoritative service.
+    #[serde(rename = "observed")]
+    Observed,
+    /// The authoritative service accepted the requested operation.
+    #[serde(rename = "acknowledged")]
+    Acknowledged,
+    /// The value was sent, but the destination cannot confirm it.
+    #[serde(rename = "sent-unverified")]
+    SentUnverified,
+    /// A previously observed value retained after its freshness deadline.
+    #[serde(rename = "last-known")]
+    LastKnown,
+    /// The value's freshness deadline expired.
+    #[serde(rename = "stale")]
+    Stale,
+    /// The feature cannot currently provide a value.
+    #[serde(rename = "unavailable")]
+    Unavailable,
+}
+
+/// Capability flags for one named device feature.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+#[allow(clippy::struct_excessive_bools)]
+pub struct DeviceFeatureCapability {
+    /// Stable internal feature key; the normal UI uses `label`.
+    pub key: String,
+    /// Musician-facing feature name.
+    pub label: String,
+    /// Whether an authoritative current value can be observed.
+    pub readable: bool,
+    /// Whether a validated mutation can be sent.
+    pub writable: bool,
+    /// Whether the device can be queried when no subscription exists.
+    pub queryable: bool,
+    /// Whether updates can arrive through the event stream.
+    pub subscribable: bool,
+    /// Whether the feature represents a continuously updating meter.
+    pub meter: bool,
+    /// Whether hardware feedback can be projected for this feature.
+    pub led_feedback: bool,
+    /// Qualification level for the advertised behavior.
+    pub qualification: String,
+    /// Plain-language reason when a capability is limited or unavailable.
+    pub unavailable_reason: Option<String>,
+}
+
+impl DeviceFeatureCapability {
+    /// Validates bounded identity, labels, and capability relationships.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when a field is empty/oversized or the capability flags contradict one
+    /// another.
+    pub fn validate(&self) -> Result<(), &'static str> {
+        if self.key.is_empty() || self.key.len() > MAX_ID_LENGTH {
+            return Err("device feature key is empty or oversized");
+        }
+        if self.label.is_empty() || self.label.len() > 128 {
+            return Err("device feature label is empty or oversized");
+        }
+        if self.qualification.is_empty() || self.qualification.len() > MAX_ID_LENGTH {
+            return Err("device feature qualification is empty or oversized");
+        }
+        if self.unavailable_reason.as_ref().is_some_and(|reason| reason.len() > MAX_ERROR_LENGTH) {
+            return Err("device feature unavailable reason is oversized");
+        }
+        if self.writable && !self.readable && self.unavailable_reason.is_none() {
+            return Err("write-only device feature needs an explicit feedback reason");
+        }
+        if self.meter && self.led_feedback {
+            return Err("meter capability cannot claim controller LED feedback");
+        }
+        Ok(())
+    }
+}
+
+/// One value observation retained independently from saved assignment state.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[serde(deny_unknown_fields)]
+pub struct DeviceFeedbackObservation {
+    /// Feature key owning this value.
+    pub feature_key: String,
+    /// Truth classification for the displayed value.
+    pub truth: FeedbackTruth,
+    /// Device or service value, if one is available.
+    pub value: Option<serde_json::Value>,
+    /// Monotonic observation timestamp supplied by the authority.
+    pub observed_at_ms: Option<u64>,
+    /// Source label such as `device`, `daemon`, or `browser`.
+    pub source: String,
+}
+
+impl DeviceFeedbackObservation {
+    /// Validates bounded source and feature identity and object value shape.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when identity/source bounds fail or the value has an unsupported shape.
+    pub fn validate(&self) -> Result<(), &'static str> {
+        if self.feature_key.is_empty() || self.feature_key.len() > MAX_ID_LENGTH {
+            return Err("feedback feature key is empty or oversized");
+        }
+        if self.source.is_empty() || self.source.len() > MAX_ID_LENGTH {
+            return Err("feedback source is empty or oversized");
+        }
+        if self.value.as_ref().is_some_and(serde_json::Value::is_array) {
+            return Err("feedback value cannot be an array");
+        }
+        Ok(())
+    }
+}
+
+/// Versioned capability and observed-state projection for one device.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[serde(deny_unknown_fields)]
+pub struct StudioDeviceCapability {
+    /// Stable device identity used for reconnect and mapping joins.
+    pub stable_id: String,
+    /// Musician-facing device name.
+    pub label: String,
+    /// Renderer family, such as `novation.launch-control-xl` or `generic.endpoint`.
+    pub renderer: String,
+    /// Current discovery/transport lifecycle.
+    pub lifecycle: DeviceLifecycle,
+    /// Generation that produced this projection.
+    pub generation: u64,
+    /// Features available on this exact device instance.
+    pub features: Vec<DeviceFeatureCapability>,
+    /// Last-known or current feature values.
+    pub observations: Vec<DeviceFeedbackObservation>,
+}
+
+impl StudioDeviceCapability {
+    /// Validates all bounded fields and enforces unique feature/observation keys.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when device fields or child projections are invalid, oversized, or
+    /// duplicated.
+    pub fn validate(&self) -> Result<(), &'static str> {
+        if self.stable_id.is_empty() || self.stable_id.len() > MAX_ID_LENGTH {
+            return Err("device stable identity is empty or oversized");
+        }
+        if self.label.is_empty() || self.label.len() > 128 {
+            return Err("device label is empty or oversized");
+        }
+        if self.renderer.is_empty() || self.renderer.len() > MAX_ID_LENGTH {
+            return Err("device renderer is empty or oversized");
+        }
+        if self.features.len() > MAX_DEVICE_FEATURES
+            || self.observations.len() > MAX_DEVICE_FEATURES
+        {
+            return Err("device capability projection is oversized");
+        }
+        let mut feature_keys = BTreeSet::new();
+        for feature in &self.features {
+            feature.validate()?;
+            if !feature_keys.insert(&feature.key) {
+                return Err("device feature keys are duplicated");
+            }
+        }
+        let mut observation_keys = BTreeSet::new();
+        for observation in &self.observations {
+            observation.validate()?;
+            if !observation_keys.insert(&observation.feature_key) {
+                return Err("device feedback feature keys are duplicated");
+            }
+        }
+        Ok(())
+    }
+}
+
+/// Versioned bounded Studio capability snapshot.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[serde(deny_unknown_fields)]
+pub struct StudioCapabilitySnapshot {
+    /// Independent contract version.
+    pub schema_version: u16,
+    /// Authoritative daemon generation.
+    pub generation: u64,
+    /// Last event included in this snapshot.
+    pub event_sequence: u64,
+    /// Exact devices represented by this snapshot.
+    pub devices: Vec<StudioDeviceCapability>,
+}
+
+impl StudioCapabilitySnapshot {
+    /// Validates the version and every device projection.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the schema version, size bounds, device projection, or stable identity
+    /// uniqueness requirement fails.
+    pub fn validate(&self) -> Result<(), &'static str> {
+        if self.schema_version != 1 {
+            return Err("unsupported Studio capability schema version");
+        }
+        if self.devices.len() > MAX_STUDIO_DEVICES {
+            return Err("Studio capability snapshot is oversized");
+        }
+        let mut identities = BTreeSet::new();
+        for device in &self.devices {
+            device.validate()?;
+            if !identities.insert(&device.stable_id) {
+                return Err("Studio device identities are duplicated");
+            }
+        }
+        Ok(())
+    }
+}
+
+/// Typed event families consumed by the live Studio surface.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum StudioEventKind {
+    /// A device was discovered, changed, connected, or disconnected.
+    DeviceLifecycle,
+    /// A physical or software control produced an observed value.
+    ControlObservation,
+    /// A device or service changed its active preset.
+    PresetChanged,
+    /// A device changed its active algorithm or operating mode.
+    ModeChanged,
+    /// A continuously updating level or activity measurement.
+    Meter,
+    /// A saved mapping or mapping lifecycle state changed.
+    MappingChanged,
+    /// The active scene changed or was recalled.
+    SceneChanged,
+    /// The effective controller layer changed.
+    LayerChanged,
+    /// The daemon projected desired controller LED intent.
+    LedIntent,
+    /// The controller backend reported LED delivery progress.
+    LedDelivery,
+    /// The client must obtain a fresh authoritative snapshot.
+    SnapshotRequired,
+}
+
+/// Bounded, sequence-aware Studio event envelope.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[serde(deny_unknown_fields)]
+pub struct StudioEvent {
+    /// Monotonic event sequence used for reconnect and gap detection.
+    pub sequence: u64,
+    /// Daemon generation associated with the event.
+    pub generation: u64,
+    /// Typed event family.
+    pub kind: StudioEventKind,
+    /// Stable device identity, when the event belongs to one device.
+    pub device_id: Option<String>,
+    /// Stable feature/control identity, when the event belongs to one feature.
+    pub feature_key: Option<String>,
+    /// Structured event details.
+    pub payload: serde_json::Value,
+}
+
+impl StudioEvent {
+    /// Validates sequence, identities, and bounded object payload.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the sequence is zero, an identity is oversized, or the payload is not
+    /// a JSON object.
+    pub fn validate(&self) -> Result<(), &'static str> {
+        if self.sequence == 0 {
+            return Err("Studio event sequence must be nonzero");
+        }
+        for identity in [self.device_id.as_ref(), self.feature_key.as_ref()].into_iter().flatten() {
+            if identity.is_empty() || identity.len() > MAX_ID_LENGTH {
+                return Err("Studio event identity is empty or oversized");
+            }
+        }
+        if !self.payload.is_object() {
+            return Err("Studio event payload must be an object");
+        }
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -480,6 +790,105 @@ mod tests {
         assert_eq!(rejected.sequence, MAX_EVENTS_PER_CLIENT as u64);
         assert_eq!(queue.len(), MAX_EVENTS_PER_CLIENT);
         assert_eq!(queue.pop().expect("oldest event").sequence, 0);
+    }
+
+    #[test]
+    fn studio_capability_snapshot_round_trips_and_validates() {
+        let snapshot = StudioCapabilitySnapshot {
+            schema_version: 1,
+            generation: 9,
+            event_sequence: 44,
+            devices: vec![StudioDeviceCapability {
+                stable_id: "novation:1235:0061".into(),
+                label: "Launch Control XL".into(),
+                renderer: "novation.launch-control-xl".into(),
+                lifecycle: DeviceLifecycle::Ready,
+                generation: 9,
+                features: vec![DeviceFeatureCapability {
+                    key: "knob-1".into(),
+                    label: "Drive".into(),
+                    readable: true,
+                    writable: true,
+                    queryable: false,
+                    subscribable: true,
+                    meter: false,
+                    led_feedback: true,
+                    qualification: "qualified".into(),
+                    unavailable_reason: None,
+                }],
+                observations: vec![DeviceFeedbackObservation {
+                    feature_key: "knob-1".into(),
+                    truth: FeedbackTruth::Observed,
+                    value: Some(serde_json::json!(0.5)),
+                    observed_at_ms: Some(1200),
+                    source: "device".into(),
+                }],
+            }],
+        };
+        snapshot.validate().expect("valid capability snapshot");
+        let encoded = serde_json::to_string(&snapshot).expect("encode snapshot");
+        let decoded: StudioCapabilitySnapshot =
+            serde_json::from_str(&encoded).expect("decode snapshot");
+        assert_eq!(decoded, snapshot);
+        assert_eq!(
+            serde_json::to_string(&FeedbackTruth::SentUnverified).expect("encode truth"),
+            "\"sent-unverified\""
+        );
+    }
+
+    #[test]
+    fn studio_capability_validation_rejects_duplicates_and_unsafe_claims() {
+        let feature = DeviceFeatureCapability {
+            key: "meter".into(),
+            label: "Level".into(),
+            readable: true,
+            writable: true,
+            queryable: false,
+            subscribable: true,
+            meter: true,
+            led_feedback: true,
+            qualification: "qualified".into(),
+            unavailable_reason: None,
+        };
+        assert_eq!(
+            feature.validate(),
+            Err("meter capability cannot claim controller LED feedback")
+        );
+        let valid_feature = DeviceFeatureCapability { led_feedback: false, ..feature };
+        let device = StudioDeviceCapability {
+            stable_id: "device".into(),
+            label: "Device".into(),
+            renderer: "generic.endpoint".into(),
+            lifecycle: DeviceLifecycle::Limited,
+            generation: 0,
+            features: vec![valid_feature.clone(), valid_feature],
+            observations: Vec::new(),
+        };
+        assert_eq!(device.validate(), Err("device feature keys are duplicated"));
+    }
+
+    #[test]
+    fn studio_event_is_typed_sequence_aware_and_bounded() {
+        let event = StudioEvent {
+            sequence: 7,
+            generation: 3,
+            kind: StudioEventKind::ControlObservation,
+            device_id: Some("novation:1235:0061".into()),
+            feature_key: Some("knob-1".into()),
+            payload: serde_json::json!({"value": 0.75}),
+        };
+        event.validate().expect("valid Studio event");
+        let encoded = serde_json::to_string(&event).expect("encode event");
+        assert!(encoded.contains("control_observation"));
+        assert_eq!(serde_json::from_str::<StudioEvent>(&encoded).expect("decode event"), event);
+        assert_eq!(
+            (StudioEvent { sequence: 0, ..event.clone() }).validate(),
+            Err("Studio event sequence must be nonzero")
+        );
+        assert_eq!(
+            (StudioEvent { payload: serde_json::json!(true), ..event }).validate(),
+            Err("Studio event payload must be an object")
+        );
     }
 
     #[test]

@@ -6,12 +6,17 @@
 - Ask multiple-choice questions one at a time until the desired site is fully defined.
 - Save instructions, answers, decisions, and planned work continuously so disconnection does not lose progress.
 - Make the website unified and LIVE; explore creative and innovative approaches.
-- Remove the Carbon requirement. No replacement framework or visual system is selected yet.
+- Remove every Carbon requirement. The replacement is the purpose-built studio-instrument visual
+  system specified by W186–W202 and `docs/plug-and-play-live-instrument-epic.md`.
 - Aim for the best MIDI processor built around this Novation product and the existing MIDI endpoints as the first first-class devices.
 - Show current assignments; preserve this preceding request in the redesign scope.
 - Prefer project source, developer manuals, and manufacturer documentation before reverse engineering; record sources in project governance.
 - Firebox remains removed from scope.
 - Interview amendment: automatically adopt recommended answers for unanswered and future decisions with a clear path. Ask only unresolved choices without a clear recommendation, one at a time. Preserve the operator's explicit earlier answers, including those differing from recommendations.
+
+The 2026-09-12 W186 decision supersedes the earlier ten-second synchronization target: the active
+epic requires visible response within 100 ms p95 and supported state convergence within 500 ms p95.
+The older decision and its evidence remain historical context.
 
 ## Scope and evidence
 
@@ -28,7 +33,8 @@ and first-class scope during the interview; do not infer connectivity from histo
 
 ## Decisions
 
-- D001: Carbon compliance and Carbon-specific release gates are removed by operator instruction.
+- D001: Carbon compliance, dependencies, component mandates, fonts, tokens, and release gates are
+  removed by operator instruction.
 - D002: This turn is planning; retain unfinished implementation work in the worklist.
 - D003: The design centers on Novation and the current MIDI endpoints as first-class devices.
 - D004: Operator selected B for question 1: a live editor prioritizing assignment and route configuration, with monitoring secondary. The editor continuously reflects authoritative state.
@@ -42,7 +48,7 @@ and first-class scope during the interview; do not infer connectivity from histo
 - D012: Operator selected B for question 8: modifier buttons toggle their layer on/off. Provide LED confirmation on all keys or knobs involved, including the modifier and affected controls. Determine supported LEDs, colors, and feedback messages from exact-model manufacturer documentation and existing source; record references in governance. Unsupported physical feedback must be identified explicitly, with an agreed alternative, rather than claimed as delivered. The interface must display the same active-layer state.
 - D013: Operator selected A for question 9: only one modifier layer is active at a time. Activating another deactivates the previous modifier layer and updates assignments, the interface, and involved LEDs together.
 - D014: Operator selected A for question 10: changing scenes clears the active modifier layer and starts the new scene with its base assignments. Update effective assignments, interface state, and involved LEDs together.
-- D015: Q11=A adopted under the operator's recommendation delegation: studio-instrument visual direction, dark neutral panels, compact readable controls, restrained status colors. Retain light-theme support; Carbon is optional, not required.
+- D015: Q11=A adopted under the operator's recommendation delegation: studio-instrument visual direction, dark neutral panels, compact readable controls, restrained status colors. Retain light-theme support. No Carbon compatibility is required.
 - D016: Recommended navigation adopted: open on the Novation editor; use consistent per-device pages and a compact sidebar for Devices, Routing, Scenes, and System. Put diagnostics, backups, raw configuration, and SysEx in their appropriate task views, not above the grid. Keep a compact global connection/sync indicator and emergency stop accessible.
 - D017: Recommended inspector adopted: show existing effective assignments immediately on selection, list every destination with device/parameter/value, and expose range, direction, and advanced behavior progressively. Use searchable authoritative destination choices. Ordinary editing must not require the current multi-step assignment wizard.
 - D018: Recommended live-state design adopted: authoritative backend snapshots plus ordered updates, with bounded recovery and timestamps. Automatic saves distinguish pending, acknowledged, and observed state. A failed read must never erase known assignments or label a control unassigned. Preserve the latest known state with a stale indicator; do not blindly replay uncertain mutations.

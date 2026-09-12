@@ -1660,7 +1660,12 @@ document.querySelector('#pipedal-refresh').addEventListener('click', async () =>
     if (response.ok) {
       operation.textContent = `PiPedal catalog refreshed (${count} qualified operations).`;
       const presetBank = [presetReadback, bankReadback].filter(Boolean).join(' · ');
-      showInspector(`PiPedal authoritative snapshot · ${lifecycleReadback} · ${versionReadback} · ${controlCount} catalog controls · ${domainCount} value domains · ${valueReadback} · ${controlReadback} · ${pipedalMappings.length} persisted mappings · ${targetReadback} · ${favoritesReadback} · ${systemMidiReadback} · ${governorReadback} · ${statusMonitorReadback} · ${wifiDomains} · ${presetBank || 'preset/bank readback unavailable in this snapshot'}. Readback is current for this snapshot; refresh after external changes.`);
+      const pedalState = body.pipedal?.phase === 'ready' ? 'connected and ready' : 'connected, with some status still updating';
+      const observed = controlCount ? `${valueCount} of ${controlCount} controls have current values` : 'control values are not available yet';
+      const connections = `${pipedalMappings.length} saved control connections`;
+      const pedalItems = Array.isArray(pipedalCatalogTargets) ? `${pipedalCatalogTargets.length} pedalboard items available` : 'pedalboard items are not available yet';
+      const presetState = presetBank || 'preset information is not available yet';
+      showInspector(`PiPedal is ${pedalState}. ${pedalItems}; ${observed}; ${connections}. ${presetState}. Choose a named control or operation to continue. Values shown here are current for this refresh; refresh after external changes.`);
     } else {
       operation.textContent = `PiPedal unavailable (${response.status})`;
       showInspector('PiPedal snapshot unavailable; displayed catalog and control domains may be stale. Refresh after reconnecting the daemon.');

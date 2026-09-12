@@ -19,8 +19,8 @@ options.add_argument("--window-size=320,900")
 options.binary_location = "/usr/bin/chromium-browser"
 driver = webdriver.Chrome(service=Service("/usr/bin/chromedriver"), options=options)
 try:
-    driver.get(f"{origin}/devices/novation#browser_smoke=1")
-    WebDriverWait(driver, 15).until(lambda d: d.find_element("id", "novation-grid-heading").is_displayed())
+    driver.get(f"{origin}/studio")
+    WebDriverWait(driver, 30).until(lambda d: len(d.find_elements("css selector", "#studio-controller .physical-control")) == 56)
     width = driver.execute_script("return [document.documentElement.scrollWidth, window.innerWidth]")
     if width[0] > width[1]:
         raise RuntimeError(f"document overflow: scrollWidth={width[0]} innerWidth={width[1]}")

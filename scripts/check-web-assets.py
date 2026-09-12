@@ -16,6 +16,16 @@ ASSETS = (
     ROOT / "apps" / "mackes-web" / "static" / "state_store.js",
     ROOT / "apps" / "mackes-web" / "static" / "app.js",
     ROOT / "apps" / "mackes-web" / "static" / "app.css",
+    ROOT / "apps" / "mackes-web" / "static" / "studio.html",
+    ROOT / "apps" / "mackes-web" / "static" / "studio_gallery.html",
+    ROOT / "apps" / "mackes-web" / "static" / "studio_state.js",
+    ROOT / "apps" / "mackes-web" / "static" / "studio_controller.js",
+    ROOT / "apps" / "mackes-web" / "static" / "studio_catalog.js",
+    ROOT / "apps" / "mackes-web" / "static" / "studio_assignment.js",
+    ROOT / "apps" / "mackes-web" / "static" / "studio_behavior.js",
+    ROOT / "apps" / "mackes-web" / "static" / "studio.js",
+    ROOT / "apps" / "mackes-web" / "static" / "studio_views.js",
+    ROOT / "apps" / "mackes-web" / "static" / "studio.css",
 )
 MAX_COMPRESSED_BYTES = 500 * 1024
 external_url = re.compile(rb"(?:https?:)?//")
