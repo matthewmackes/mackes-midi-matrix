@@ -12164,6 +12164,10 @@ superseded packets; their code and evidence may be reused only when it satisfies
   `{direction:"previous"|"next"}` operation and refresh authoritative state after a confirmed
   response; failures retain the current setup and state that the change was not confirmed. Web
   tests (61) and JavaScript syntax checks pass.
+- **Post-navigation release gate (2026-09-12):** Full `scripts/release-gate.sh` rerun after the
+  W199 scene-navigation slice completed with `release-gate: PASS`, including workspace tests,
+  strict Clippy, emulator, throughput, hermetic integration, installer smoke, and release artifact
+  verification.
 
 #### [>] W200 — Implement degradation, fault, and recovery behavior
 
