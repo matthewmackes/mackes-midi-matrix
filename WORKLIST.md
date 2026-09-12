@@ -13789,3 +13789,6 @@ Evidence (2026-09-08): Devices browser gate initially observed a transient daemo
   `release-gate: PASS`; workspace tests, strict Clippy, emulator, 10,000-message throughput,
   hermetic integration (16 passed, 1 explicitly ignored), installer smoke, and release artifact
   checksum all remained green.
+- **Fresh aggregate installed qualification (2026-09-12):** `bash scripts/qualify-web-installed.sh
+  http://172.20.222.222:8081` completed with `qualify-web: PASS`; all route, accessibility,
+  workflow, PiPedal, scene-reload, and resilience fixtures passed against the installed host.
