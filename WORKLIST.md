@@ -13747,6 +13747,9 @@ Evidence (2026-09-08): Devices browser gate initially observed a transient daemo
   three samples with zero status failures, zero dropped events, zero restarts, CPU 14.5–14.7%,
   and RSS 107104–127088 KiB. Results are recorded in `docs/studio-service-soak-2026-09-12.txt`;
   no hardware writes were performed.
+- **Extended service observation soak (2026-09-12):** A 60-second observation-only soak captured
+  six samples with zero status failures, dropped events, or restarts; CPU stayed at 15.4–16.2%
+  and RSS remained 124176 KiB. The extended result is retained in the service-soak record.
 - **Installed Studio fixture rerun (2026-09-12):** Re-ran assignment input, compatibility, conflict,
   draft cancel, Undo, scene actions, resilience, and latency fixtures against the installed host;
   all passed. The latency trace measured p95 visible response 3.40 ms and feedback convergence

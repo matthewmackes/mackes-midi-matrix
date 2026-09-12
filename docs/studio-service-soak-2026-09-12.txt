@@ -18,3 +18,10 @@ min_cpu_percent=14.5 max_cpu_percent=14.7
 min_rss_kib=107104 max_rss_kib=127088
 max_dropped=0 status_failures=0 restart_count_first=0 restart_count_last=0
 No writes or hardware mutations were performed.
+
+Extended observation-only rerun on 2026-09-12
+duration=60s interval=10s samples=6
+min_cpu_percent=15.4 max_cpu_percent=16.2
+min_rss_kib=124176 max_rss_kib=124176
+max_dropped=0 status_failures=0 restart_count_first=0 restart_count_last=0
+No writes or hardware mutations were performed.
