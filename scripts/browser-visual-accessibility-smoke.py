@@ -32,7 +32,8 @@ try:
     if not reduced_motion:
         raise RuntimeError("reduced-motion preference was not applied")
     labels = driver.execute_script("return Array.from(document.querySelectorAll('#studio-controller .physical-control[aria-label]')).map(item => item.getAttribute('aria-label'))")
-    if len(labels) != 56 or not all(any(marker in label for marker in ("assigned", "unassigned", "disabled")) for label in labels):
+    normalized_labels = [label.lower() for label in labels]
+    if len(labels) != 56 or not all(any(marker in label for marker in ("assigned", "unassigned", "disabled")) for label in normalized_labels):
         raise RuntimeError("graphical controls lack non-color assignment state labels")
     driver.execute_script("document.body.style.zoom = '200%'")
     zoom = driver.execute_script("return getComputedStyle(document.body).zoom")
