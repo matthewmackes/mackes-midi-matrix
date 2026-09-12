@@ -11911,7 +11911,7 @@ superseded packets; their code and evidence may be reused only when it satisfies
 
 #### [>] W193 — Complete Novation physical/software unity
 
-- **Status:** `IN_PROGRESS`
+- **Status:** `IN_REVIEW`
 - **Executor:** Luna
 - **Depends on:** W190, W191
 - **Objective:** Make all 24 knobs, 16 channel buttons, eight faders, eight utilities, and LEDs
@@ -11996,7 +11996,7 @@ superseded packets; their code and evidence may be reused only when it satisfies
 
 #### [>] W195 — Build truthful Eventide MicroPitch visualization
 
-- **Status:** `IN_PROGRESS`
+- **Status:** `IN_REVIEW`
 - **Executor:** Luna
 - **Depends on:** W190, W191
 - **Objective:** Expose named MicroPitch parameters, presets, bypass, and footswitch actions while
@@ -12021,7 +12021,7 @@ superseded packets; their code and evidence may be reused only when it satisfies
 
 #### [>] W196 — Build bidirectional Lexicon Reflex visualization
 
-- **Status:** `IN_PROGRESS`
+- **Status:** `IN_REVIEW`
 - **Executor:** Luna
 - **Depends on:** W190, W191
 - **Objective:** Present active algorithm, matched preset/register, parameters, bypass, Echo Rhythm,
@@ -12049,7 +12049,7 @@ superseded packets; their code and evidence may be reused only when it satisfies
 
 #### [>] W197 — Render transport, virtual, generic, and unknown endpoints
 
-- **Status:** `IN_PROGRESS`
+- **Status:** `IN_REVIEW`
 - **Executor:** Luna
 - **Depends on:** W188, W190, W191
 - **Objective:** Ensure every discovered endpoint has a graphical and accessible representation.
