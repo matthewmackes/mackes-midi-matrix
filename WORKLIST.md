@@ -12176,6 +12176,10 @@ superseded packets; their code and evidence may be reused only when it satisfies
   W199 scene-navigation slice completed with `release-gate: PASS`, including workspace tests,
   strict Clippy, emulator, throughput, hermetic integration, installer smoke, and release artifact
   verification.
+- **Installed scene regression rerun (2026-09-12):** Both `python3 scripts/browser-studio-scenes-smoke.py
+  http://172.20.222.222:8081` and `python3 scripts/browser-studio-scenes-actions-smoke.py
+  http://172.20.222.222:8081` pass against the installed release, covering the honest empty state,
+  named save, and confirmation-gated recall request capture.
 
 #### [>] W200 — Implement degradation, fault, and recovery behavior
 
