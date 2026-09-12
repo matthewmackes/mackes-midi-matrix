@@ -11868,7 +11868,7 @@ superseded packets; their code and evidence may be reused only when it satisfies
 
 #### [>] W192 — Deliver reviewed one-click starter setup
 
-- **Status:** `IN_PROGRESS`
+- **Status:** `IN_REVIEW`
 - **Executor:** Luna
 - **Depends on:** W188, W190, W191
 - **Objective:** Turn recognized devices into an understandable recommended controller layout.
@@ -12090,7 +12090,7 @@ superseded packets; their code and evidence may be reused only when it satisfies
 
 #### [>] W198 — Deliver simple assignment and progressive advanced editing
 
-- **Status:** `IN_PROGRESS`
+- **Status:** `IN_REVIEW`
 - **Executor:** Luna
 - **Depends on:** W192, W193, W194, W195, W196, W197
 - **Objective:** Make control mapping feel like choosing a musical function, not programming MIDI.
@@ -12162,7 +12162,7 @@ superseded packets; their code and evidence may be reused only when it satisfies
 
 #### [>] W200 — Implement degradation, fault, and recovery behavior
 
-- **Status:** `IN_PROGRESS`
+- **Status:** `IN_REVIEW`
 - **Executor:** Luna
 - **Depends on:** W192, W193, W194, W195, W196, W197, W198, W199
 - **Objective:** Keep one unavailable feature from making the whole rig confusing or unusable.
