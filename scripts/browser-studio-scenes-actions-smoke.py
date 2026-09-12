@@ -38,6 +38,9 @@ try:
     calls = driver.execute_script("return window.__sceneCalls")
     if calls[0].get('scene') != 'My Setup' or calls[1].get('execute_scene') != 'scene-a':
         raise RuntimeError(f"unexpected scene requests: {calls!r}")
-    print("browser-studio-scenes-actions: PASS save_then_confirmed_recall")
+    driver.execute_script("localStorage.setItem('mackes-studio-selected-scene', 'scene-a')")
+    driver.execute_script("window.MackesStudioViewsRefresh()")
+    wait.until(lambda d: d.find_element("css selector", ".scene-actions select").get_attribute("value") == "scene-a")
+    print("browser-studio-scenes-actions: PASS save_then_confirmed_recall_reload")
 finally:
     driver.quit()
