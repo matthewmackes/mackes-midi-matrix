@@ -53,13 +53,24 @@
         });
         actions.append(name, save);
         if (scenes.length) {
+          const navigate = async (direction) => {
+            status.textContent = `${direction === 'next' ? 'Moving to next' : 'Returning to previous'} scene…`;
+            try {
+              const response = await fetch('/api/v1/scenes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ direction }) });
+              if (!response.ok) throw new Error(`navigate ${response.status}`);
+              status.textContent = 'Scene changed.';
+              await render();
+            } catch (_) { status.textContent = 'Scene change was not confirmed; review the current setup.'; }
+          };
+          const previous = document.createElement('button'); previous.type = 'button'; previous.className = 'quiet-button'; previous.textContent = 'Previous scene'; previous.addEventListener('click', () => navigate('previous'));
+          const next = document.createElement('button'); next.type = 'button'; next.className = 'quiet-button'; next.textContent = 'Next scene'; next.addEventListener('click', () => navigate('next'));
           const recall = document.createElement('button'); recall.type = 'button'; recall.className = 'quiet-button'; recall.textContent = 'Recall selected scene'; recall.disabled = true;
           const select = document.createElement('select'); select.setAttribute('aria-label', 'Scene to recall');
           scenes.forEach(item => { const id = typeof item === 'string' ? item : item.id || item.name; if (!id) return; const option = document.createElement('option'); option.value = id; option.textContent = typeof item === 'string' ? item : item.name || id; select.append(option); });
           recall.disabled = !select.options.length;
           select.addEventListener('change', () => { recall.disabled = !select.value; });
           recall.addEventListener('click', async () => { if (!select.value || !window.confirm(`Recall “${select.value}”?`)) return; recall.disabled = true; status.textContent = 'Recalling scene…'; try { const response = await fetch('/api/v1/scenes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ execute_scene: select.value }) }); if (!response.ok) throw new Error(`recall ${response.status}`); status.textContent = `“${select.value}” recalled.`; } catch (_) { status.textContent = 'Scene recall was not confirmed; review the current setup.'; recall.disabled = false; } });
-          actions.append(select, recall);
+          actions.append(previous, next, select, recall);
         }
         actions.append(status); panel.append(actions);
       } else {
