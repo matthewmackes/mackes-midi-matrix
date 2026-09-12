@@ -11,11 +11,19 @@ use std::{
     sync::mpsc::{self, Receiver, Sender},
     time::{Duration, Instant},
 };
+#[cfg(target_os = "linux")]
+mod activity_projection;
 mod configuration_response;
 mod mapping_layers_runtime;
 mod mapping_runtime;
 mod pipedal_dispatch;
 mod scene_runtime;
+#[cfg(target_os = "linux")]
+use activity_projection::midi_activity_json;
+#[cfg(target_os = "linux")]
+mod route_projection;
+#[cfg(target_os = "linux")]
+use route_projection::{persist_routes, routes_path, routes_undo_path};
 /// Daemon health state.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Health {
@@ -329,79 +337,6 @@ fn physical_devices_value(endpoints: &[mackes_midi_engine::EndpointInfo]) -> ser
 const MAX_PHYSICAL_DEVICE_RECORDS: usize = 32;
 /// Maximum interval between bounded native endpoint discovery passes.
 pub(crate) const NATIVE_RESCAN_INTERVAL_MS: u64 = 250;
-#[cfg(target_os = "linux")]
-fn routes_path(config_path: &std::path::Path) -> std::path::PathBuf {
-    config_path.with_extension("routes.json")
-}
-#[cfg(target_os = "linux")]
-fn routes_undo_path(config_path: &std::path::Path) -> std::path::PathBuf {
-    config_path.with_extension("routes.undo.json")
-}
-#[cfg(target_os = "linux")]
-fn persist_routes(config_path: &std::path::Path, routes: &serde_json::Value) -> io::Result<()> {
-    persistence_projection::persist_json_atomic(&routes_path(config_path), routes, "routes.json")
-}
-#[cfg(target_os = "linux")]
-fn midi_activity_json(
-    event: &mackes_domain::MidiEvent,
-    routed: &[mackes_midi_engine::RoutedEvent],
-    stable_endpoint: Option<&str>,
-) -> serde_json::Value {
-    let (kind, number, value) = match &event.message {
-        mackes_domain::MidiMessage::ControlChange { controller, value, .. } => {
-            ("control_change", Some(controller.as_u8()), Some(u16::from(value.as_u8())))
-        }
-        mackes_domain::MidiMessage::NoteOn { note, velocity, .. } => {
-            ("note_on", Some(note.as_u8()), Some(u16::from(velocity.as_u8())))
-        }
-        mackes_domain::MidiMessage::NoteOff { note, velocity, .. } => {
-            ("note_off", Some(note.as_u8()), Some(u16::from(velocity.as_u8())))
-        }
-        mackes_domain::MidiMessage::ProgramChange { program, .. } => {
-            ("program_change", Some(program.as_u8()), None)
-        }
-        mackes_domain::MidiMessage::PitchBend { value, .. } => {
-            ("pitch_bend", None, Some(value.get()))
-        }
-        mackes_domain::MidiMessage::PolyPressure { note, pressure, .. } => {
-            ("poly_pressure", Some(note.as_u8()), Some(u16::from(pressure.as_u8())))
-        }
-        mackes_domain::MidiMessage::ChannelPressure { pressure, .. } => {
-            ("channel_pressure", None, Some(u16::from(pressure.as_u8())))
-        }
-        mackes_domain::MidiMessage::SysEx(_) => ("sysex", None, None),
-        mackes_domain::MidiMessage::SystemCommon(_) => ("system_common", None, None),
-        mackes_domain::MidiMessage::Realtime(_) => ("realtime", None, None),
-    };
-    let channel = match &event.message {
-        mackes_domain::MidiMessage::ControlChange { channel, .. }
-        | mackes_domain::MidiMessage::NoteOn { channel, .. }
-        | mackes_domain::MidiMessage::NoteOff { channel, .. }
-        | mackes_domain::MidiMessage::ProgramChange { channel, .. }
-        | mackes_domain::MidiMessage::PitchBend { channel, .. }
-        | mackes_domain::MidiMessage::PolyPressure { channel, .. }
-        | mackes_domain::MidiMessage::ChannelPressure { channel, .. } => Some(channel.wire()),
-        _ => None,
-    };
-    let endpoint_key =
-        stable_endpoint.map_or_else(|| event.endpoint.get().to_string(), str::to_owned);
-    let control_id = number.map_or_else(
-        || format!("endpoint:{endpoint_key}:{kind}"),
-        |number| format!("endpoint:{endpoint_key}:{kind}:{number}"),
-    );
-    serde_json::json!({
-        "source_endpoint": event.endpoint.get(),
-        "source_endpoint_id": stable_endpoint,
-        "control_id": control_id,
-        "timestamp_nanos": event.timestamp.get(),
-        "kind": kind,
-        "channel": channel,
-        "number": number,
-        "value": value,
-        "destination_endpoints": routed.iter().map(|item| item.event.endpoint.get()).collect::<Vec<_>>(),
-        "sequence": event.sequence,
-    })
-}
 /// Produces a stable acknowledgment for a recognized command.
 #[cfg(target_os = "linux")]
 #[allow(clippy::too_many_lines)]

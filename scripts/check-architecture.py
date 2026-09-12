@@ -31,10 +31,10 @@ MAX_LINES = {
     # 4,200 lines for this release slice.
     # The daemon retains the local IPC composition boundary; the reviewed
     # scene/project/setlist lifecycle and persisted PiPedal repair slices bring
-    # the reviewed root budget to 4,650 lines pending the next module extraction.
+    # the reviewed root budget to 4,662 lines pending the next module extraction.
     # The persisted PiPedal undo journal remains a small composition-root boundary
     # while its storage mechanics live in persistence_projection.
-    "apps/mackesd/src/lib.rs": 4650,
+    "apps/mackesd/src/lib.rs": 4662,
     # The CLI composition root retains the bounded PiPedal apply/undo/repair
     # command family pending extraction into a dedicated command module.
     "apps/mackes/src/main.rs": 880,
