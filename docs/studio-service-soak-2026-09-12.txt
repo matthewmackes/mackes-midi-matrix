@@ -12,3 +12,9 @@ Daemon RSS: 134860 KiB (stable across samples)
 
 This is an observation-only stability sample. It does not claim physical input activity, LED
 delivery, device readback, or human usability sign-off.
+Fresh observation-only rerun on 2026-09-12
+duration=15s interval=5s samples=3
+min_cpu_percent=14.5 max_cpu_percent=14.7
+min_rss_kib=107104 max_rss_kib=127088
+max_dropped=0 status_failures=0 restart_count_first=0 restart_count_last=0
+No writes or hardware mutations were performed.

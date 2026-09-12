@@ -13743,6 +13743,10 @@ Evidence (2026-09-08): Devices browser gate initially observed a transient daemo
   PiPedal catalog/events, draft reload, assignment input/compatibility/capture/conflict, atomic
   Quick Start Apply, Undo, Panic, Eventide truth, Reflex truth, scenes, and resilience fixtures all
   passed against the installed host.
+- **Fresh service observation soak (2026-09-12):** A 15-second observation-only soak captured
+  three samples with zero status failures, zero dropped events, zero restarts, CPU 14.5–14.7%,
+  and RSS 107104–127088 KiB. Results are recorded in `docs/studio-service-soak-2026-09-12.txt`;
+  no hardware writes were performed.
 - **Installed Studio fixture rerun (2026-09-12):** Re-ran assignment input, compatibility, conflict,
   draft cancel, Undo, scene actions, resilience, and latency fixtures against the installed host;
   all passed. The latency trace measured p95 visible response 3.40 ms and feedback convergence
