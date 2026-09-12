@@ -1,7 +1,7 @@
 use mackes_domain::{MidiEvent, MidiMessage};
 use mackes_midi_engine::RoutedEvent;
 
-pub(crate) fn midi_activity_json(
+pub fn midi_activity_json(
     event: &MidiEvent,
     routed: &[RoutedEvent],
     stable_endpoint: Option<&str>,
