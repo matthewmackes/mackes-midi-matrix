@@ -13737,6 +13737,12 @@ Evidence (2026-09-08): Devices browser gate initially observed a transient daemo
   assigned controls announced only destination names. Studio ARIA labels now explicitly include
   `assigned:` while preserving `unassigned` and `disabled` cues; the rebuilt/reinstalled visual
   accessibility fixture passes 56 controls at 200% zoom with reduced motion and light theme.
+- **Aggregate installed qualification complete (2026-09-12):** After rebuilding and reinstalling
+  the ARIA-state repair, `scripts/qualify-web-installed.sh http://172.20.222.222:8081` completed
+  with `qualify-web: PASS`. Route/deep-link, console, accessibility, visual, novice, mobile,
+  PiPedal catalog/events, draft reload, assignment input/compatibility/capture/conflict, atomic
+  Quick Start Apply, Undo, Panic, Eventide truth, Reflex truth, scenes, and resilience fixtures all
+  passed against the installed host.
 - **Installed Studio fixture rerun (2026-09-12):** Re-ran assignment input, compatibility, conflict,
   draft cancel, Undo, scene actions, resilience, and latency fixtures against the installed host;
   all passed. The latency trace measured p95 visible response 3.40 ms and feedback convergence
