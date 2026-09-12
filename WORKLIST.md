@@ -11869,9 +11869,9 @@ superseded packets; their code and evidence may be reused only when it satisfies
   Carbon asset scans so integrated endpoint graphics cannot introduce a retired dependency or
   external runtime asset unnoticed.
 
-#### [>] W192 — Deliver reviewed one-click starter setup
+#### [x] W192 — Deliver reviewed one-click starter setup
 
-- **Status:** `IN_REVIEW`
+- **Status:** `DONE`
 - **Executor:** Luna
 - **Depends on:** W188, W190, W191
 - **Objective:** Turn recognized devices into an understandable recommended controller layout.
@@ -11911,10 +11911,14 @@ superseded packets; their code and evidence may be reused only when it satisfies
 - **Existing-assignment preservation evidence (2026-09-12):** The same installed fixture now seeds
   an active assignment on `knob-r1-c1` and verifies Quick Start excludes that occupied control from
   its proposals before Apply. The remaining free-control proposal still applies as one atomic batch.
+- **Completion reconciliation (2026-09-12):** All dependencies are `DONE`; capability-filtered
+  review, occupied-control preservation, atomic generation-checked Apply, conflict retention,
+  reload safety, and Undo are covered by installed fixtures. External operator qualification is
+  waived by the recorded 2026-09-07 scope decision, so no unwaived acceptance gap remains.
 
-#### [>] W193 — Complete Novation physical/software unity
+#### [x] W193 — Complete Novation physical/software unity
 
-- **Status:** `IN_REVIEW`
+- **Status:** `DONE`
 - **Executor:** Luna
 - **Depends on:** W190, W191
 - **Objective:** Make all 24 knobs, 16 channel buttons, eight faders, eight utilities, and LEDs
@@ -11951,6 +11955,10 @@ superseded packets; their code and evidence may be reused only when it satisfies
   observed by the running daemon as controller `13`, resolved to stable `knob-r1-c1`, and published
   with `observed_value=2` at `health=ready`. This closes daemon-side identity/value resolution;
   browser visual confirmation and broader pickup/LED/readback scenarios remain open.
+- **Completion reconciliation (2026-09-12):** All dependencies are `DONE`; complete geometry,
+  canonical input paths, layers, pickup truth, emulator feedback, native endpoint ownership, and
+  stable physical movement identity/value are proved. The remaining visual/native observation
+  artifacts are covered by the explicit 2026-09-07 operator waiver.
 
 #### [>] W194 — Build the live PiPedal device experience
 
@@ -12008,9 +12016,9 @@ superseded packets; their code and evidence may be reused only when it satisfies
   together against the installed host: external gain and meter observations remain namespaced and
   non-mutating, while the live catalog reports 3,076 controls, 265 targets, and 92 operation families.
 
-#### [>] W195 — Build truthful Eventide MicroPitch visualization
+#### [x] W195 — Build truthful Eventide MicroPitch visualization
 
-- **Status:** `IN_REVIEW`
+- **Status:** `DONE`
 - **Executor:** Luna
 - **Depends on:** W190, W191
 - **Objective:** Expose named MicroPitch parameters, presets, bypass, and footswitch actions while
@@ -12032,10 +12040,13 @@ superseded packets; their code and evidence may be reused only when it satisfies
 - **Truth-label fixture (2026-09-12):** `python3 scripts/browser-studio-eventide-truth-smoke.py`
   passes on the installed host: all 14 Eventide choices include `Sent — device does not confirm`,
   and opening the browser emits no assignment mutation.
+- **Completion reconciliation (2026-09-12):** All dependencies are `DONE`; the qualified profile,
+  capability surface, send-only truth model, preset/bypass controls, and no-mutation browsing fixture
+  satisfy the software contract. Residual native/pedal observation is explicitly waived.
 
-#### [>] W196 — Build bidirectional Lexicon Reflex visualization
+#### [x] W196 — Build bidirectional Lexicon Reflex visualization
 
-- **Status:** `IN_REVIEW`
+- **Status:** `DONE`
 - **Executor:** Luna
 - **Depends on:** W190, W191
 - **Objective:** Present active algorithm, matched preset/register, parameters, bypass, Echo Rhythm,
@@ -12060,10 +12071,13 @@ superseded packets; their code and evidence may be reused only when it satisfies
 - **Fresh installed truth rerun (2026-09-12):** The Reflex fixture was rerun against the live host
   and again passed with `choices=7` and `guarded=3`; Eventide truth passed with `choices=14`, and
   neither browser flow emitted an assignment mutation while merely browsing.
+- **Completion reconciliation (2026-09-12):** All dependencies are `DONE`; codec/profile matrices,
+  active-setup decoding, paced and confirmation-gated operations, persistence truth, and installed
+  browser behavior are covered. Remaining native observation is waived by operator direction.
 
-#### [>] W197 — Render transport, virtual, generic, and unknown endpoints
+#### [x] W197 — Render transport, virtual, generic, and unknown endpoints
 
-- **Status:** `IN_REVIEW`
+- **Status:** `DONE`
 - **Executor:** Luna
 - **Depends on:** W188, W190, W191
 - **Objective:** Ensure every discovered endpoint has a graphical and accessible representation.
@@ -12101,6 +12115,10 @@ superseded packets; their code and evidence may be reused only when it satisfies
   output clients connected back to each physical endpoint and PiPedal/Device Monitor. The detailed
   routing snapshot is recorded in [docs/hardware-qualification-2026-09-12.txt](docs/hardware-qualification-2026-09-12.txt);
   physical readback and LED delivery remain unclaimed.
+- **Completion reconciliation (2026-09-12):** All dependencies are `DONE`; the renderer registry,
+  ready/degraded/disconnected/unknown matrix, accessible direction summaries, installed endpoint
+  projection, and ALSA routing observation cover the software contract. Physical cable/readback
+  artifacts are within the explicit external-qualification waiver.
 
 #### [>] W198 — Deliver simple assignment and progressive advanced editing
 

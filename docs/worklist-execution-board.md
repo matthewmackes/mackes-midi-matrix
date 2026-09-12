@@ -20,7 +20,7 @@ The previous installed checkpoint remains evidence for the retired interface: `c
 interface guard, web asset budget (38,643 compressed bytes), worklist validation, JavaScript syntax,
 and `git diff --check` all passed. Installed browser smoke passed against
 `http://172.20.222.222:8081` after release rebuild/reinstall, including deep links, 320/768 responsive
-captures, light theme, GUI surface checks, and installed asset hashes. current worklist state: 155 complete, 15 in progress, 16 not started (186 total; measured 2026-09-12; the unchecked count includes READY and DEFERRED packets).
+captures, light theme, GUI surface checks, and installed asset hashes. current worklist state: 160 complete, 10 in progress, 16 not started (186 total; measured 2026-09-12; all unchecked packets are explicitly deferred).
 The installed graphical-inventory, renderer-registry, and novice-surface fixtures pass (32 live device
 cards, 7 researched feature cards, all nine governed renderer keys, no visible code editor); generation ordering and visual draft-preservation fixtures also
 pass. The PiPedal catalog fixture now passes after the bounded 265-entry decoder fix, reporting 3,076
@@ -47,8 +47,9 @@ The executable moderated-review record is
 `docs/graphical-studio-human-signoff-checklist.md`; it remains intentionally uncompleted until a
 reviewer records each scenario and disposition.
 
-Packet-marker audit (2026-09-12): the governed `WORKLIST.md` contains 186 packet headers: 155 DONE,
-15 IN_PROGRESS, and 16 unchecked packets (including READY and DEFERRED), matching the current summary.
+Packet-marker audit (2026-09-12): the governed `WORKLIST.md` contains 186 packet headers: 160 DONE,
+10 active packets, and 16 unchecked packets (all DEFERRED), matching the current summary after
+reconciling W192, W193, and W195–W197 under the recorded external-qualification waiver.
 The installed sequential novice walkthrough also passes all five primary graphical workspaces; the
 moderated checklist remains the required human disposition.
 The existing focused
@@ -57,7 +58,7 @@ sign-off or native hardware observation.
 
 | Packet | Current evidence | Next executable step | Exit evidence | External dependency |
 |---|---|---|---|---|
-| W186–W202 | W186 specification DONE; W187 capability contract DONE; W188 discovery/projection DONE; W189 event synchronization DONE; W190 unified reconciliation DONE; W191 visual shell DONE; W192 starter setup IN_PROGRESS with reviewed atomic Apply and conflict-safe generation handling; W193 physical/software unity IN_PROGRESS with software fixtures and pickup truth; W194 PiPedal experience IN_PROGRESS with capability cards, catalog/privacy, and writable/meter truth; W195 Eventide visualization IN_PROGRESS with qualified no-readback truth; W196 Reflex visualization IN_PROGRESS with codec/readback fixtures; W197 endpoint renderers IN_PROGRESS with registry/inventory fixtures; W198 simple assignment IN_PROGRESS with input-path, conflict, and Undo fixtures; W199 scene workspace IN_PROGRESS with save/recall and empty-state fixtures; W200 resilience IN_PROGRESS with refresh-failure, stream-gap, reconnect, and stale-value fixtures; W201 qualification IN_PROGRESS with mobile/novice/accessibility/latency fixtures; W202 cutover IN_PROGRESS with root Studio shell, compatibility deep-link, rollback rehearsal, and release-gate evidence; W180–W185 superseded | Add native feedback/readback evidence and final human sign-off while preserving explicit unsupported-capability limits | W192–W202 item evidence, installed latency/readback trace, release gate, and human sign-off | Native evidence is required for claimed physical feedback; fixtures and emulators keep software work moving |
+| W186–W202 | W186–W193 and W195–W197 DONE; W194 PiPedal experience remains IN_PROGRESS; W198 and W200–W202 remain IN_REVIEW behind unfinished dependencies; W199 scene orchestration remains IN_PROGRESS; W180–W185 superseded | Complete W194 connector/UI coverage, then W198; complete W199 cross-device persistence, then reconcile W200–W202 in dependency order | Exhaustive PiPedal operation evidence, cross-device scene restart/reconnect evidence, installed gate | Unqualified protocol operations require a pinned installed contract; external physical/human artifacts are waived by the 2026-09-07 operator decision |
 | 2026-09-12 qualification refresh | Installed `qualify-web-installed.sh` now uses Studio-backed fixtures and passes end to end; draft reload, native endpoint ownership/routing, and 12-second stability soak evidence are recorded | W192/W193/W197/W200/W201/W202 | Physical feedback/readback and moderated human sign-off remain external acceptance gates |
 | W159 | Navigation, health, feature-catalog, renderer, and state-store modules extracted; cancellation, stale-generation, abort, hidden-tab, draft, focus, scroll, inventory, assignment, route-guard, and task fixtures pass independently; aggregate remains long-run sensitive | Continue component/state boundaries and stabilize full aggregate orchestration with bounded recovery | Component tests plus bundle/source provenance and full gate | Browser harness choice must honor offline/no-CDN policy |
 | W160 | DONE: read coalescing/single-flight deployed; post-daemon 1,000/1,000 health soak and 250/250 feature-isolation soak pass; broken-pipe logging repaired; ADR-0014 records root cause | No further W160 software action; retain soak evidence | Evidence and closure record in `WORKLIST.md`/ADR-0014 | Native hardware qualification remains separate |
