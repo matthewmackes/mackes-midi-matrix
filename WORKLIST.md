@@ -13724,6 +13724,11 @@ Evidence (2026-09-08): Devices browser gate initially observed a transient daemo
   controls against the installed Studio build and confirmed that all tested controls produced the
   expected web-interface activity. This supplements the instrumented knob 1,1 value, highlight,
   angle, badge, and open-stream evidence with direct multi-control human hardware validation.
+- **Fresh full release gate (2026-09-12):** `scripts/release-gate.sh` completed with `release-gate:
+  PASS` after the daemon projection extraction and strict-Clippy visibility repair. Formatting,
+  repository/worklist/Carbon/asset/schema guards, workspace tests, Novation emulator, strict Clippy,
+  routing throughput, hermetic integration (16 pass/1 explicitly ignored), installer smoke, and
+  release artifact verification all passed.
 - **Installed Studio fixture rerun (2026-09-12):** Re-ran assignment input, compatibility, conflict,
   draft cancel, Undo, scene actions, resilience, and latency fixtures against the installed host;
   all passed. The latency trace measured p95 visible response 3.40 ms and feedback convergence
