@@ -2,7 +2,7 @@
   const root = document.querySelector('#studio-controller');
   if (!root) return;
   const groups = [
-    { key: 'knob', label: 'KNOBS', count: 24, columns: 8, led: true },
+    { key: 'knob', label: 'KNOBS', count: 24, columns: 8, led: false, ledDescription: 'no individual LED; column button proxy blinks green on movement' },
     { key: 'channel-button', label: 'CHANNEL BUTTONS', count: 16, columns: 8, led: true },
     { key: 'fader', label: 'FADERS', count: 8, columns: 8, led: false },
     { key: 'utility', label: 'UTILITY CONTROLS', count: 8, columns: 8, led: true },
@@ -31,7 +31,7 @@
       button.className = `physical-control physical-control-${group.key}`;
       button.dataset.controlId = id;
       button.dataset.controlType = group.key;
-      button.setAttribute('aria-label', `${group.label.toLowerCase()} ${index + 1}; ${group.led ? 'LED capable' : 'no LED'}; unassigned`);
+      button.setAttribute('aria-label', `${group.label.toLowerCase()} ${index + 1}; ${group.led ? 'LED capable' : group.ledDescription || 'no LED'}; unassigned`);
       const visual = document.createElement('span');
       visual.className = `control-visual ${group.led ? 'has-led' : 'no-led'}`;
       visual.setAttribute('aria-hidden', 'true');
@@ -64,7 +64,7 @@
   });
   const note = document.createElement('p');
   note.className = 'surface-note';
-  note.textContent = 'Select a control to inspect its assignment.';
+  note.textContent = 'DEFAULT LED CONTRACT: MAPPED KNOBS KEEP THEIR OWNER COLOR; THEIR COLUMN BUTTON BLINKS GREEN ON VALID MOVEMENT. SELECT A CONTROL TO INSPECT ITS ASSIGNMENT.';
   root.append(note);
   const restored = window.MackesStudioState?.read().selectedControl;
   if (restored?.id) controls.find(item => item.dataset.controlId === restored.id)?.click();

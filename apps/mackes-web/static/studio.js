@@ -224,7 +224,10 @@
       control.classList.toggle('is-disabled', entries.length > 0 && active.length === 0);
       control.dataset.ledIntent = ledIntent;
       control.classList.toggle('has-led-intent', ledIntent !== 'unspecified');
-      control.setAttribute('aria-label', `${control.dataset.controlId}; ${control.classList.contains('physical-control-fader') ? 'no LED' : 'LED capable'}; ${active.length ? `assigned: ${name}${active.length > 1 ? `; ${active.length} destinations` : ''}` : 'unassigned'}`);
+      const ledDescription = control.classList.contains('physical-control-knob')
+        ? 'no individual LED; column button proxy blinks green on movement'
+        : control.classList.contains('physical-control-fader') ? 'no LED' : 'LED capable';
+      control.setAttribute('aria-label', `${control.dataset.controlId}; ${ledDescription}; ${active.length ? `assigned: ${name}${active.length > 1 ? `; ${active.length} destinations` : ''}` : 'unassigned'}`);
     });
     state.publish({ generation: Number.isInteger(body?.generation) ? body.generation : state.read().generation, assignments: mappings, connection: 'ready', streamGap: false });
     document.querySelector('#studio-controller')?.classList.remove('is-stale');
