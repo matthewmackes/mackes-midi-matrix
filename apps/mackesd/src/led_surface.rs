@@ -20,8 +20,6 @@ const FACTORY1_LED_TEMPLATE: u8 = mackes_profiles::LAUNCH_CONTROL_MK2_FACTORY1_S
 const LED_SEND_ATTEMPTS: u8 = 3;
 const LED_FLUSH_LIMIT: usize = 8;
 const LED_MIN_INTERVAL_MS: u64 = 20;
-const IDLE_SLEEP_AFTER_MS: u64 = 5 * 60 * 1_000;
-const IDLE_SWEEP_STEP_MS: u64 = 600;
 const RECONNECT_SHOW_MS: u64 = 12_000;
 const ARROW_MIN_VISIBLE_MS: u64 = 120;
 const CONFIRMATION_MIN_VISIBLE_MS: u64 = 1_200;
@@ -102,8 +100,6 @@ pub struct LedSurface {
     pub scheduler: LedFeedbackScheduler,
     coalescer: LedCoalescer,
     result_started_ms: u64,
-    last_touch_ms: u64,
-    sleep_active: bool,
     reconnect_show_started_ms: Option<u64>,
     template_reselect_pending: bool,
     last_emit_ms: Option<u64>,
@@ -126,8 +122,6 @@ impl Default for LedSurface {
             scheduler: LedFeedbackScheduler::new(LedState::new(LedColor::Off, 0, false)),
             coalescer: LedCoalescer::default(),
             result_started_ms: 0,
-            last_touch_ms: 0,
-            sleep_active: false,
             reconnect_show_started_ms: None,
             template_reselect_pending: false,
             last_emit_ms: None,
@@ -181,15 +175,6 @@ impl LedSurface {
     /// Forces a complete replay of desired state on the next flush.
     pub fn request_full_resync(&mut self) {
         self.coalescer.request_full_resync();
-    }
-
-    /// Records controller activity and immediately wakes the normal LED surface.
-    pub fn record_touch(&mut self, now_ms: u64) {
-        self.last_touch_ms = now_ms;
-        if self.sleep_active {
-            self.sleep_active = false;
-            self.request_full_resync();
-        }
     }
 
     /// Mirrors the four navigation buttons in green for exactly as long as held.
@@ -279,6 +264,7 @@ impl LedSurface {
     }
 
     /// Starts the bounded reconnect celebration; normal mapping state resumes afterward.
+    #[cfg(test)]
     pub fn start_reconnect_show(&mut self, now_ms: u64) {
         self.reconnect_show_started_ms = Some(now_ms);
         self.template_reselect_pending = true;
@@ -385,23 +371,6 @@ impl LedSurface {
             }
         }
         self.apply_backend_state(&mut desired, now_ms);
-        let should_sleep = session.phase == AssignmentPhase::Idle
-            && now_ms.saturating_sub(self.last_touch_ms) >= IDLE_SLEEP_AFTER_MS;
-        if should_sleep {
-            if !self.sleep_active {
-                self.sleep_active = true;
-                self.request_full_resync();
-            }
-            for state in desired.values_mut() {
-                *state = off();
-            }
-            let elapsed = now_ms.saturating_sub(self.last_touch_ms + IDLE_SLEEP_AFTER_MS);
-            let index = u8::try_from((elapsed / IDLE_SWEEP_STEP_MS) % 48).unwrap_or(0);
-            desired.insert(index, LedState::new(LedColor::Red, 127, false));
-        } else if self.sleep_active {
-            self.sleep_active = false;
-            self.request_full_resync();
-        }
         for (index, state) in &desired {
             self.coalescer.set_desired(*index, *state);
         }
@@ -1294,7 +1263,7 @@ mod tests {
     }
 
     #[test]
-    fn five_minute_idle_sweep_wakes_and_restores_mapping_colors() {
+    fn idle_surface_remains_on_the_authoritative_mapping_state() {
         let mut outputs = OutputRegistry::new(4);
         let (adapter, _) = recording("xl-midi", "Launch Control XL MIDI 1");
         outputs.insert(Box::new(adapter)).expect("output");
@@ -1303,31 +1272,10 @@ mod tests {
         store.active.push(mapping("knob-r1-c1", "lexicon.reflex"));
         let session = AssignmentSession::new("live");
 
-        surface.flush(IDLE_SLEEP_AFTER_MS - 1, &store, &session, None, &mut outputs, false);
+        surface.flush(1, &store, &session, None, &mut outputs, false);
         assert_eq!(surface.coalescer.desired(0).map(|state| state.color), Some(LedColor::Amber));
 
-        surface.flush(
-            IDLE_SLEEP_AFTER_MS + IDLE_SWEEP_STEP_MS,
-            &store,
-            &session,
-            None,
-            &mut outputs,
-            false,
-        );
-        assert!(surface.sleep_active);
-        assert_eq!(surface.coalescer.desired(0).map(|state| state.color), Some(LedColor::Off));
-        assert_eq!(surface.coalescer.desired(1).map(|state| state.color), Some(LedColor::Red));
-
-        surface.record_touch(IDLE_SLEEP_AFTER_MS + IDLE_SWEEP_STEP_MS + 1);
-        surface.flush(
-            IDLE_SLEEP_AFTER_MS + IDLE_SWEEP_STEP_MS + 1,
-            &store,
-            &session,
-            None,
-            &mut outputs,
-            false,
-        );
-        assert!(!surface.sleep_active);
+        surface.flush(60 * 60 * 1_000, &store, &session, None, &mut outputs, false);
         assert_eq!(surface.coalescer.desired(0).map(|state| state.color), Some(LedColor::Amber));
         assert_eq!(surface.coalescer.desired(1).map(|state| state.color), Some(LedColor::Off));
     }

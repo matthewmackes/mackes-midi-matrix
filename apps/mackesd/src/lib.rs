@@ -804,8 +804,6 @@ impl Daemon {
     }
     /// Rebuilds controller LEDs from persisted mappings onto the unique Mk2 MIDI output.
     pub fn replay_controller_leds(&mut self) {
-        let now_ms = u64::try_from(self.safety_clock.elapsed().as_millis()).unwrap_or(u64::MAX);
-        self.led.start_reconnect_show(now_ms);
         self.led.request_full_resync();
         self.flush_controller_leds();
     }
@@ -1947,11 +1945,6 @@ impl Daemon {
                 {
                     self.confirm_lexicon_algorithm(frame[6] | ((frame[5] & 1) << 7));
                 }
-            }
-            if Self::launch_control_factory1_layout_id(&event).is_some() {
-                let now_ms =
-                    u64::try_from(self.safety_clock.elapsed().as_millis()).unwrap_or(u64::MAX);
-                self.led.record_touch(now_ms);
             }
             if let Some(control_id) = Self::launch_control_factory1_layout_id(&event) {
                 let now_ms =
