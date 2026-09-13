@@ -716,7 +716,9 @@ fn owner_led_color(profile: &str) -> LedColor {
     } else if lowered.contains("lexicon") {
         LedColor::Amber
     } else if lowered == "pipedal" || lowered.starts_with("pipedal.") {
-        LedColor::Yellow
+        // PiPedal is an ordinary active owner in the global palette. Yellow
+        // is reserved for learn/assignment feedback.
+        LedColor::Green
     } else {
         LedColor::Green
     }
@@ -976,7 +978,7 @@ mod tests {
     #[test]
     fn owner_color_does_not_treat_arbitrary_eq_profile_as_pipedal() {
         assert_eq!(owner_led_color("custom.eq.plugin"), LedColor::Green);
-        assert_eq!(owner_led_color("pipedal.eq"), LedColor::Yellow);
+        assert_eq!(owner_led_color("pipedal.eq"), LedColor::Green);
     }
 
     #[test]
