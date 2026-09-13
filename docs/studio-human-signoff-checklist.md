@@ -3,6 +3,11 @@
 Use this checklist on the installed host at `http://172.20.222.222:8081/` after the automated
 release gate passes. Record observations in the table before closing W201/W202.
 
+Current review target (2026-09-13): installed `mackes-web` SHA-256
+`e441e3a3d3e3b06f660434a45ea1e5f67fb52e51ae676b0a42e833b7139fcbc0`.
+Automated browser qualification is complete; this checklist is reserved for direct hardware and
+human visual observations.
+
 | Scenario | Expected observation | Result / evidence |
 | --- | --- | --- |
 | Connect Launch Control XL | Controller appears with 24 knobs, 16 buttons, 8 faders, and 8 utility controls; no invented fader LEDs | |

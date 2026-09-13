@@ -36,6 +36,16 @@ try:
         raise RuntimeError("one input path did not select a control")
     if driver.execute_script("return performance.getEntriesByType('resource').filter(e => e.name.includes('/api/v1/assignment')).length"):
         raise RuntimeError("selection input issued an assignment mutation")
+    driver.find_element("css selector", ".destination-preview button").click()
+    choices = wait.until(lambda d: d.find_elements("css selector", ".function-choice"))
+    choices[0].click()
+    inspector = wait.until(lambda d: d.find_element("css selector", ".destination-inspector"))
+    if "Selected function" not in inspector.text or not inspector.find_elements("css selector", "details summary"):
+        raise RuntimeError("truthful destination inspector or Advanced Details disclosure missing")
+    if not choices[0].find_elements("css selector", ".mod-art-plugin-face"):
+        raise RuntimeError("plugin face artwork missing from destination choice")
+    if driver.execute_script("return performance.getEntriesByType('resource').filter(e => e.name.includes('/api/v1/assignment')).length"):
+        raise RuntimeError("destination preview issued an assignment mutation")
     print(f"browser-studio-assignment-input: PASS pointer={pointer_title!r} keyboard={keyboard_title!r} touch={touch_title!r}")
 finally:
     driver.quit()

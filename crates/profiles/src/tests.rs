@@ -254,9 +254,14 @@ fn led_feedback_layers_prioritize_result_then_assignment_then_base() {
     assert!(result_overlay_lit(800));
     assert!(result_overlay_lit(1_199));
     assert!(!result_overlay_lit(1_200));
-    assert!(!result_overlay_lit(1_600));
+    assert!(result_overlay_lit(1_600));
+    assert!(!result_overlay_lit(2_000));
     assert_eq!(result_overlay_color(0, true), LedColor::Green);
     assert_eq!(result_overlay_color(0, false), LedColor::Red);
+    assert_eq!(result_overlay_color(999, true), LedColor::Green);
+    assert_eq!(result_overlay_color(1_000, true), LedColor::Off);
+    assert_eq!(result_overlay_color(1_999, false), LedColor::Red);
+    assert_eq!(result_overlay_color(2_000, false), LedColor::Off);
     assert_eq!(result_overlay_color(400, true), LedColor::Off);
     let base = LedState::new(LedColor::Amber, 32, false);
     let assignment = LedState::new(LedColor::Green, 64, false);

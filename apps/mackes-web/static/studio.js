@@ -171,6 +171,15 @@
     }
     announcement.textContent = `${detail.label.replace(/\b\w/g, character => character.toUpperCase())} selected. Choose PiPedal, Eventide, or Lexicon to add a destination.`;
   };
+  const pendingPipedalMeters = new Map();
+  let pipedalMeterFlushQueued = false;
+  const flushPipedalMeters = () => {
+    pipedalMeterFlushQueued = false;
+    if (!pendingPipedalMeters.size) return;
+    const observations = Object.fromEntries(pendingPipedalMeters);
+    pendingPipedalMeters.clear();
+    state.reconcile({ connection: 'ready', observations });
+  };
   state.subscribe(next => {
     if (health && next.connection) health.textContent = next.connection === 'ready' ? 'Connected' : next.connection === 'offline' ? 'Daemon offline' : 'Connecting…';
     document.querySelectorAll('.physical-control').forEach(control => { const pending = next.pendingMutation?.controlId === control.dataset.controlId; const item = control.querySelector('.control-sync'); if (item) { item.textContent = pending ? 'Saving…' : next.connection === 'ready' ? 'Live sync' : next.connection === 'offline' ? 'Stale' : 'Sync pending'; item.classList.toggle('is-stale', next.connection === 'offline'); } });
@@ -254,8 +263,17 @@
       const value = payload?.observed_value ?? payload?.value;
       if (feature && value !== undefined && value !== null) {
         const staleInstance = payload?.stale_instance === true || payload?.freshness === 'stale' || payload?.truth === 'stale';
-        state.reconcile({ connection: 'ready', observations: { [`pipedal:${feature}`]: { value, source: 'external', freshness: staleInstance ? 'stale' : 'observed' } } });
-        announcement.textContent = `PiPedal reported an observed value for ${friendly(feature)}.`;
+        const observation = { value, source: 'external', freshness: staleInstance ? 'stale' : 'observed' };
+        if (message?.kind === 'pipedal.meter') {
+          pendingPipedalMeters.set(`pipedal:${feature}`, observation);
+          if (!pipedalMeterFlushQueued) {
+            pipedalMeterFlushQueued = true;
+            queueMicrotask(flushPipedalMeters);
+          }
+        } else {
+          state.reconcile({ connection: 'ready', observations: { [`pipedal:${feature}`]: observation } });
+          announcement.textContent = `PiPedal reported an observed value for ${friendly(feature)}.`;
+        }
       }
     }
     const id = activity?.physical_control_id || activity?.physical_control;

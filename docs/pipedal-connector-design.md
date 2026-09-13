@@ -1,8 +1,10 @@
 # PiPedal first-class connector — implementation handoff
 
-Status: design for another AI to implement. Parent: W111; execution: W112–W116.
+Status: implementation delivered; live/native qualification remains open. Parent: W111; execution: W112–W116.
 The operator requires every task to be recorded in WORKLIST.md before execution.
-This document authorizes no claim that implementation or live EQ assignments exist.
+The typed connector, adapter, daemon boundary, browser surface, and source-backed contract
+fixtures are implemented. This document authorizes no claim that connected-device replies,
+physical controls, or live EQ assignments have been qualified.
 
 ## Outcome and scope
 
@@ -156,7 +158,8 @@ Deliver source, configuration migration, protocol evidence/fixtures, operator do
 reusable connector export, test results and deployment/rollback record. Record all deviations
 in W111 before execution. The unanswered ten-question survey is not a blanket blocker:
 this design supplies technical defaults; unresolved EQ identity/parameter choices remain
-specific questions. This design task itself changes documentation only.
+specific questions. The remaining acceptance work is evidence collection against a connected
+PiPedal device, not another design pass.
 
 ## Expanded scope: all controllable PiPedal features
 

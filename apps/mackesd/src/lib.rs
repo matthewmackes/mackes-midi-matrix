@@ -4457,6 +4457,7 @@ impl Daemon {
                 self.pipedal_transport = Some(transport);
                 let _ = self.pipedal_worker.enqueue(mackes_pipedal_adapter::Command::Start);
             } else {
+                eprintln!("mackes-midi-matrixd: PiPedal WebSocket connect failed");
                 self.pipedal_retry_at = now + Duration::from_secs(10);
                 return;
             }
@@ -4469,14 +4470,17 @@ impl Daemon {
         };
         if let Ok(frames) = result {
             for frame in frames {
-                if self.pipedal_worker.accept_frame(&frame).is_err() {
+                if let Err(error) = self.pipedal_worker.accept_frame(&frame) {
+                    let preview = String::from_utf8_lossy(&frame);
+                    eprintln!("mackes-midi-matrixd: PiPedal frame rejected: {error:?} payload={preview}");
                     self.pipedal_transport = None;
                     self.pipedal_retry_at = Instant::now() + Duration::from_secs(10);
                     break;
                 }
                 self.pipedal_worker.reconcile_pickup_targets(&self.pipedal_mappings);
             }
-        } else {
+        } else if let Err(error) = result {
+            eprintln!("mackes-midi-matrixd: PiPedal transport error: {error:?}");
             self.pipedal_transport = None;
             self.pipedal_retry_at = Instant::now() + Duration::from_secs(10);
         }
@@ -4648,8 +4652,8 @@ impl Daemon {
             "generation": self.generation,
             "scenes": self.scene_ids,
             "active_scene": self.active_scene,
-            "catalog": self.catalog,
-            "physical_devices": self.physical_devices,
+            "activation_result": self.activation_result.as_deref(), "activation_outcomes": self.activation_outcomes.as_deref().unwrap_or(&[]),
+            "catalog": self.catalog, "physical_devices": self.physical_devices,
         })
         .to_string()
             + "\n"

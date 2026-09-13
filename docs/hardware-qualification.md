@@ -35,6 +35,12 @@ Physical qualification must use a verified map record and explicit
 
 ## Latest observation
 
+2026-09-13 — `scripts/qualify-hardware.sh` passed observation-only inventory on `NAM-MIDI`.
+Eventide MicroPitch (`1b12:003a`), Launch Control XL (`1235:0061`), runtime MIDISPORT 4x4
+(`0763:1021`) with four ports, and the daemon/PiPedal ALSA endpoint graph were present. This
+confirms current qualification-host readiness only; no physical-write, LED, or audio-state
+result is inferred.
+
 2026-09-04 — after host access was restored, the active `mackes-midi-matrix.service` was
 verified healthy with native ALSA ownership and the Launch Control stable output
 `midir-out-f7060e7462e070c`. With the verified qualification record and explicit operator

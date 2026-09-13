@@ -469,6 +469,11 @@ pub struct LedFeedbackScheduler {
     pub result: Option<(bool, u64)>,
 }
 
+/// Approved LED-contract duration for a successful action.
+pub const LED_SUCCESS_DURATION_MS: u64 = 1_000;
+/// Approved LED-contract duration for a failed action.
+pub const LED_FAILURE_DURATION_MS: u64 = 2_000;
+
 impl LedFeedbackScheduler {
     /// Creates a scheduler with only the normal base layer.
     #[must_use]
@@ -480,7 +485,7 @@ impl LedFeedbackScheduler {
     #[must_use]
     pub const fn state_at(self, elapsed_ms: u64) -> LedState {
         if let Some((success, started_ms)) = self.result {
-            if elapsed_ms.saturating_sub(started_ms) >= 1_600 {
+            if elapsed_ms.saturating_sub(started_ms) >= result_overlay_duration(success) {
                 return self.base;
             }
             return LedState::new(
@@ -525,7 +530,7 @@ pub const fn select_led_feedback_layer(
 /// The overlay consists of exactly two 400 ms pulses separated by 400 ms gaps.
 #[must_use]
 pub const fn result_overlay_lit(elapsed_ms: u64) -> bool {
-    if elapsed_ms >= 1_600 {
+    if elapsed_ms >= LED_FAILURE_DURATION_MS {
         return false;
     }
     let phase = elapsed_ms % 800;
@@ -535,7 +540,9 @@ pub const fn result_overlay_lit(elapsed_ms: u64) -> bool {
 /// Selects the terminal overlay color while its deterministic pulse is active.
 #[must_use]
 pub const fn result_overlay_color(elapsed_ms: u64, success: bool) -> LedColor {
-    if result_overlay_lit(elapsed_ms) {
+    if elapsed_ms >= result_overlay_duration(success) {
+        LedColor::Off
+    } else if result_overlay_lit(elapsed_ms) {
         if success {
             LedColor::Green
         } else {
@@ -544,6 +551,10 @@ pub const fn result_overlay_color(elapsed_ms: u64, success: bool) -> LedColor {
     } else {
         LedColor::Off
     }
+}
+
+const fn result_overlay_duration(success: bool) -> u64 {
+    if success { LED_SUCCESS_DURATION_MS } else { LED_FAILURE_DURATION_MS }
 }
 
 /// Returns the programmer-reference label for a Mk1 LED/control index.

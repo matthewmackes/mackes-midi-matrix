@@ -462,12 +462,14 @@ impl Worker {
         let (header, body) = mackes_pipedal_connector::decode_message(frame)
             .map_err(|_| TransportError::Protocol)?;
         if let Some(reply) = header.reply_to {
-            let Some(position) =
+            // PiPedal may replay or emit a startup reply after reconnect. A
+            // valid message with an unknown correlation ID remains useful
+            // readback; consume only IDs owned by this session.
+            if let Some(position) =
                 self.expected_replies.iter().position(|expected| *expected == reply)
-            else {
-                return Err(TransportError::Protocol);
-            };
-            self.expected_replies.remove(position);
+            {
+                self.expected_replies.remove(position);
+            }
             if self.startup_next < startup_requests().len() && self.expected_replies.is_empty() {
                 self.queue_startup_request();
             }
@@ -487,6 +489,7 @@ impl Worker {
             );
         }
         if header.message == "currentPedalboard" {
+            eprintln!("mackes-midi-matrixd: PiPedal currentPedalboard readback={body:?}");
             ingest_current_pedalboard(
                 &mut self.catalog,
                 &mut self.runtime_targets,
@@ -4359,6 +4362,35 @@ mod tests {
             &serde_json::json!({"instanceId": 137, "symbol": "gain", "value": 3}),
         )
         .is_err());
+
+        ingest_current_pedalboard(
+            &mut catalog,
+            &mut targets,
+            &serde_json::json!({
+                "items": [{
+                    "instanceId": 241,
+                    "uri": "urn:eq",
+                    "controlValues": [{"key": "gain", "value": 1}]
+                }]
+            }),
+        )
+        .expect("replacement instance snapshot");
+        assert!(ingest_control_changed(
+            &mut catalog,
+            &targets,
+            &serde_json::json!({"instanceId": 137, "symbol": "gain", "value": 4}),
+        )
+        .is_err());
+        ingest_control_changed(
+            &mut catalog,
+            &targets,
+            &serde_json::json!({"instanceId": 241, "symbol": "gain", "value": 5}),
+        )
+        .expect("current replacement instance event");
+        assert_eq!(
+            catalog.find_control("urn:eq", "gain").and_then(|control| control.value),
+            Some(5.0)
+        );
     }
 
     #[test]
@@ -4443,13 +4475,13 @@ mod tests {
     }
 
     #[test]
-    fn unknown_correlated_reply_is_rejected() {
+    fn unknown_correlated_reply_is_accepted_as_unsolicited_readback() {
         let mut worker = Worker::default();
         worker.enqueue(Command::Start).expect("capacity");
         worker.process(&mut NoopTransport, 1);
         assert_eq!(
             worker.accept_frame(br#"[{"reply":99,"message":"ehlo"},1]"#),
-            Err(TransportError::Protocol)
+            Ok(SessionPhase::Identified)
         );
     }
 

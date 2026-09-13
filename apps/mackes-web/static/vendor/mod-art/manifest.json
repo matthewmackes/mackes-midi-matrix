@@ -1,0 +1,47 @@
+{
+  "schema": 1,
+  "permissionBasis": "operator-confirmed-remote-repository-approval-2026-09-13",
+  "upstream": {
+    "project": "mod-audio/mod-ui",
+    "url": "https://github.com/mod-audio/mod-ui",
+    "commit": "c3004836e3466fa3a0d34de3ca855530e75304d1",
+    "license": "AGPL-3.0",
+    "licenseNotice": "UPSTREAM-LICENSE.txt"
+  },
+  "runtimePolicy": {
+    "sameOriginOnly": true,
+    "remoteFetch": false,
+    "upstreamRuntimeImported": false,
+    "brandingClassesExcluded": true
+  },
+  "assets": [
+    {"id":"mod-audio-input","file":"ports/audio-input.png","source":"html/img/audio-input.png","sha256":"47455729e2790d070cc9c43a7aabb43103478568b0f42e32dd7a536bf51e3b67","role":"audio-input-port"},
+    {"id":"mod-audio-output","file":"ports/audio-output.png","source":"html/img/audio-output.png","sha256":"a5a613346cf47ae8a46e9c6ca6ea228c4d4ecc39f1f54f1d74b58a05c8772103","role":"audio-output-port"},
+    {"id":"mod-audio-jack","file":"ports/audio-jack.png","source":"html/img/audio-jack.png","sha256":"2fd61cd24709391464cace399874ad79eb7579b7b8399b0c90ced7709af550f2","role":"audio-connected-jack"},
+    {"id":"mod-audio-jack-open","file":"ports/audio-jack-open.png","source":"html/img/audio-jack-nconnect.png","sha256":"2213029f18dddc5711e1670d2c08028584bbba776a076e3208bba6a1a3d82cb1","role":"audio-open-jack"},
+    {"id":"mod-cv-input","file":"ports/cv-input.png","source":"html/img/cv-input.png","sha256":"fe5f3098e180f2da52e39d070d7a1c45164d6fbcb14080b3727beeb6f4286aab","role":"cv-input-port"},
+    {"id":"mod-cv-output","file":"ports/cv-output.png","source":"html/img/cv-output.png","sha256":"dfea50a73751fae258ba72813604005350b008cc70b0b019ab396905e55e878e","role":"cv-output-port"},
+    {"id":"mod-cv-jack","file":"ports/cv-jack.png","source":"html/img/cv-jack.png","sha256":"d2326b93c4642866b8013503c6ab2340956a93b805636d55c8a829e9c462f0ce","role":"cv-connected-jack"},
+    {"id":"mod-cv-jack-open","file":"ports/cv-jack-open.png","source":"html/img/cv-jack-nconnect.png","sha256":"4a6629f42bdc0c7bf7460d37478f661295066dedf676dc4a71aab5e6e6034c1e","role":"cv-open-jack"},
+    {"id":"mod-midi-input","file":"ports/midi-input.png","source":"html/img/midi-input.png","sha256":"565c3337e8d237ab9c522ea0806cdbfa0a4e2cd345bcc390a77e9d171a228732","role":"midi-input-port"},
+    {"id":"mod-midi-output","file":"ports/midi-output.png","source":"html/img/midi-output.png","sha256":"5f7cce33f3309a980661cc065c1105c68f02ecb20e810b2c1f6f0ee29ead933d","role":"midi-output-port"},
+    {"id":"mod-midi-jack","file":"ports/midi-jack.png","source":"html/img/midi-jack.png","sha256":"b5dacbf85f6df704be4b575b0113ae16fd9eaa68d81f43ce5f077a47a11058b0","role":"midi-connected-jack"},
+    {"id":"mod-midi-jack-open","file":"ports/midi-jack-open.png","source":"html/img/midi-jack-nconnect.png","sha256":"354810905d653f77141044a33d00f5e664b0417f037164c9db101c821ee2afe8","role":"midi-open-jack"},
+    {"id":"mod-footswitch","file":"controls/footswitch.png","source":"html/img/footswitch.png","sha256":"bfdc41417cb363892ae1e67563a82aa00b596435e1209ee077a6177215f73bf4","role":"footswitch"},
+    {"id":"mod-knob-sprite","file":"controls/knob.png","source":"html/img/knob.png","sha256":"0f875a8bca79b222bdaeb24c15ec3a6deae52f36d24683440aec477d4e1d5db2","role":"rotary-control-sprite"},
+    {"id":"mod-slider-sprite","file":"controls/slider.png","source":"html/img/slider.png","sha256":"b37b0bc74f08301f02c5fbea7e120e6dacea2d9188d8fa117329e4bfb794ad98","role":"fader-control-sprite"},
+    {"id":"mod-switch","file":"controls/switch.svg","source":"html/img/switch.svg","upstreamSha256":"a7c30099fced184ef04578097c2db474152639f2b91503ec9b3a6b2afb523b66","sha256":"1dfb3c5000bd7e3ba7d167ffc3b6df4109b99e1381b820e35157bcb0839c12fb","role":"toggle-control","transform":"removed-editor-metadata-and-sanitized"},
+    {"id":"mod-rocker-off","file":"controls/rocker-off.png","source":"html/img/rocker-switch-off.png","sha256":"53a21d09b4e55a629bd0d234bd73dc6f6080dfc20258ae1ddaa5a7f357bafbc2","role":"rocker-off"},
+    {"id":"mod-rocker-on","file":"controls/rocker-on.png","source":"html/img/rocker-switch-on.png","sha256":"d42895a5e523771a33fdfb2e546a7e3d609fb8ef30938019c97c814a26428e53","role":"rocker-on"},
+    {"id":"mod-red-led-off","file":"status/red-off.png","source":"html/img/red-light-off.png","sha256":"37010d78941a78e213c092a9be0022c15af080b27911b842b0fdd1990a99a4ba","role":"status-led-off"},
+    {"id":"mod-red-led-on","file":"status/red-on.png","source":"html/img/red-light-on.png","sha256":"9bedded18815070b534a1e146cd6393b150109e4b41036bb42edd75d4b5479da","role":"status-led-on"},
+    {"id":"mod-purple-led-off","file":"status/purple-off.png","source":"html/img/purple-light-off.png","sha256":"e6fc4b461e24caef02283c66a32ac2742e08aa71e29ed5720ce9154183c5d3e3","role":"status-led-off"},
+    {"id":"mod-purple-led-on","file":"status/purple-on.png","source":"html/img/purple-light-on.png","sha256":"fd052d1aca64e089b76e7c6e8dbe37bcc07b9813b0a8bdafe8486093d397e9a7","role":"status-led-on"},
+    {"id":"mod-rack-surface","file":"surfaces/rack.png","source":"html/img/rack.png","sha256":"6d80a667c215169afc014947bf208ad597b7a319c5fef5b1b025f69b41ce369c","role":"rack-surface"},
+    {"id":"mod-library-surface","file":"surfaces/library-background.png","source":"html/img/library-background.png","sha256":"4e212ba69d76aea1f7e2de67d35806d9c4135cd57df8430f65ef07836f67b5c2","role":"library-surface"},
+    {"id":"mod-blocked","file":"icons/blocked.svg","source":"html/img/icons/blocked.svg","upstreamSha256":"2e9c5ba1a9448328f68aeed069982c5dbe2a2fe85aa7cac8ea018a389390aba4","sha256":"7459aa4d55f6993344276e2831edc5b43a7737a9585eff5cfd205a52e1ef3aea","role":"blocked-state","transform":"removed-editor-metadata-and-sanitized"},
+    {"id":"mod-broken-image","file":"icons/broken-image.svg","source":"html/img/icons/broken_image.svg","upstreamSha256":"30bd597b2fd879f513b2d7f9de788683c2c9a484b2188cb7f9777b7e969bc46a","sha256":"b2751f0c12f3d48db8a27116901fcb77338476051375227549d46b8c0f2d9a97","role":"missing-art-state","transform":"removed-editor-metadata-and-sanitized"},
+    {"id":"mod-broken-pedal","file":"icons/broken-pedal.svg","source":"html/img/icons/broken_pedal.svg","upstreamSha256":"63d8cd3dca50fddcc614341f6d041ce5a5b2dc8d8c51910be33142198f63c28d","sha256":"91cb0a409f4bc4321bd249b55d159d5582181cb97308bc26251b480a2b484c03","role":"broken-plugin-state","transform":"removed-editor-metadata-and-sanitized"},
+    {"id":"mod-transport","file":"icons/transport.svg","source":"html/img/icons/transport.svg","upstreamSha256":"9f8ae6b3daf99c32e54c6fcb6b2c001375ce0de5a762a5631aa22b6e84521acf","sha256":"304ffd3ec2c1c7ed8ec0eef13ba800cd783daa429de025f6ff7e8c59484d40ec","role":"transport-state","transform":"removed-editor-metadata-and-sanitized"}
+  ]
+}

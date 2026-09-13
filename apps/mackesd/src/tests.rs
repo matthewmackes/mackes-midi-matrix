@@ -1651,6 +1651,28 @@ fn scenes_query_projects_daemon_scene_catalog() {
         serde_json::from_str(&daemon.scenes_response()).expect("response");
     assert_eq!(response["scenes"], serde_json::json!(["intro", "verse"]));
     assert_eq!(response["active_scene"], "verse");
+    assert!(response["activation_outcomes"].is_array());
+    assert!(response["activation_result"].is_null());
+}
+
+#[test]
+fn scenes_query_projects_last_activation_outcomes() {
+    let path =
+        std::env::temp_dir().join(format!("mackes-scenes-outcomes-{}.sock", std::process::id()));
+    let mut daemon = Daemon::bind(&path).expect("daemon");
+    daemon.publish_activation_result(&[
+        ("device-a".into(), mackes_scene_engine::ActionResult::Succeeded),
+        ("device-b".into(), mackes_scene_engine::ActionResult::SentUnverified),
+    ]);
+
+    let response: serde_json::Value =
+        serde_json::from_str(&daemon.scenes_response()).expect("response");
+    assert_eq!(
+        response["activation_result"],
+        "total=2 succeeded=1 failed=0 skipped=0 cancelled=0 unverified=1"
+    );
+    assert_eq!(response["activation_outcomes"].as_array().expect("outcomes").len(), 2);
+    assert_eq!(response["activation_outcomes"][1]["id"], "device-b");
 }
 
 #[test]

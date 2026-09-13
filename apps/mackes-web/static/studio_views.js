@@ -8,7 +8,7 @@
   const render = async () => {
     panel.hidden = false; panel.replaceChildren(card('Loading', 'Checking studio state…', 'Authoritative status will appear here.'));
     try {
-      const [healthResponse, mappingsResponse, pipedalResponse, scenesResponse, capabilitiesResponse] = await Promise.all([safeFetch('/api/v1/health', 5000), safeFetch('/api/v1/mappings', 10000), view === 'devices' ? safeFetch('/api/v1/pipedal', 10000) : Promise.resolve(null), view === 'scenes' ? safeFetch('/api/v1/scenes', 15000) : Promise.resolve(null), view === 'devices' ? safeFetch('/api/v1/studio/capabilities', 10000) : Promise.resolve(null)]);
+      const [healthResponse, mappingsResponse, pipedalResponse, scenesResponse, capabilitiesResponse] = await Promise.all([safeFetch('/api/v1/health', 5000), safeFetch('/api/v1/mappings', 10000), view === 'devices' ? safeFetch('/api/v1/pipedal', 10000) : Promise.resolve(null), view === 'scenes' ? safeFetch('/api/v1/scenes', 15000) : Promise.resolve(null), view === 'devices' || view === 'scenes' ? safeFetch('/api/v1/studio/capabilities', 10000) : Promise.resolve(null)]);
       const health = healthResponse?.ok ? await healthResponse.json().catch(() => ({})) : {};
       const mappingBody = mappingsResponse?.ok ? await mappingsResponse.json().catch(() => ({})) : {};
       const pipedal = pipedalResponse?.ok ? await pipedalResponse.json().catch(() => ({})) : {};
@@ -34,6 +34,8 @@
           capabilityList.append(article);
         });
         if (capabilityList.children.length) panel.append(capabilityList);
+        if (window.MackesPiPedalCanvas?.render) window.MackesPiPedalCanvas.render(pipedal, panel);
+        if (window.MackesPiPedalLibrary?.render) window.MackesPiPedalLibrary.render(pipedal, panel);
       } else if (view === 'routing') {
         panel.append(card('Control paths', `${active} active`, 'Each path begins at a named Novation control and ends at a selected device function.'), card('Sync', Number.isInteger(mappingBody.generation) ? `Generation ${mappingBody.generation}` : 'Awaiting generation', 'The daemon remains authoritative for ordering and conflict handling.'));
       } else if (view === 'scenes') {
@@ -41,6 +43,9 @@
         panel.append(card('Base scene', scenesBody.active_scene || 'Ready', scenesBody.active_scene ? 'The daemon reports the currently selected performance scene.' : 'Layer selection stays available from the Controller workspace.'));
         panel.append(card('Saved scenes', scenes.length ? `${scenes.length} available` : 'No saved scenes yet', scenes.length ? 'Choose a scene to review its destinations before recall.' : 'Your current assignments remain available; saving a scene will appear here.'));
         panel.append(card('Assignments', `${active} active`, 'Scene changes preserve destination details and clearly identify unconfirmed device portions.'));
+        const confirmation = document.createElement('p'); confirmation.className = 'scene-confirmation-note'; confirmation.textContent = 'State truth: MACKES scene and mapping data are authoritative; device preset/readback portions remain unconfirmed unless reported by the connected capability.'; confirmation.setAttribute('role', 'status'); panel.append(confirmation);
+        const devices = Array.isArray(capabilitiesBody.devices) ? capabilitiesBody.devices : [];
+        const deviceSummary = document.createElement('p'); deviceSummary.className = 'scene-device-summary'; deviceSummary.textContent = devices.length ? `${devices.filter(device => device.lifecycle === 'ready').length} of ${devices.length} device capabilities ready; preset/readback confirmation is reported per device.` : 'Device capability readiness unavailable; no preset/readback state is inferred.'; panel.append(deviceSummary);
         const actions = document.createElement('div'); actions.className = 'scene-actions'; actions.setAttribute('aria-label', 'Scene actions');
         const name = document.createElement('input'); name.type = 'text'; name.placeholder = 'Name this scene'; name.maxLength = 64; name.setAttribute('aria-label', 'New scene name');
         const save = document.createElement('button'); save.type = 'button'; save.className = 'add-assignment'; save.textContent = 'Save current setup';
@@ -64,6 +69,8 @@
           };
           const previous = document.createElement('button'); previous.type = 'button'; previous.className = 'quiet-button'; previous.textContent = 'Previous scene'; previous.addEventListener('click', () => navigate('previous'));
           const next = document.createElement('button'); next.type = 'button'; next.className = 'quiet-button'; next.textContent = 'Next scene'; next.addEventListener('click', () => navigate('next'));
+          const preview = document.createElement('button'); preview.type = 'button'; preview.className = 'quiet-button'; preview.textContent = 'Preview selected scene';
+          preview.addEventListener('click', async () => { if (!select.value) return; preview.disabled = true; status.textContent = 'Previewing scene; no device state will be changed…'; try { const response = await fetch('/api/v1/scenes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ preview_scene: select.value }) }); if (!response.ok) throw new Error(`preview ${response.status}`); status.textContent = `Preview ready for “${select.value}”. Review before recalling.`; } catch (_) { status.textContent = 'Scene preview was not confirmed; nothing was changed.'; } finally { preview.disabled = false; } });
           const recall = document.createElement('button'); recall.type = 'button'; recall.className = 'quiet-button'; recall.textContent = 'Recall selected scene'; recall.disabled = true;
           const select = document.createElement('select'); select.setAttribute('aria-label', 'Scene to recall');
           scenes.forEach(item => { const id = typeof item === 'string' ? item : item.id || item.name; if (!id) return; const option = document.createElement('option'); option.value = id; option.textContent = typeof item === 'string' ? item : item.name || id; select.append(option); });
@@ -72,8 +79,8 @@
           recall.disabled = !select.options.length;
           select.addEventListener('change', () => { recall.disabled = !select.value; if (select.value) window.localStorage?.setItem('mackes-studio-selected-scene', select.value); });
           if (select.value) window.localStorage?.setItem('mackes-studio-selected-scene', select.value);
-          recall.addEventListener('click', async () => { if (!select.value || !window.confirm(`Recall “${select.value}”?`)) return; recall.disabled = true; status.textContent = 'Recalling scene…'; try { const response = await fetch('/api/v1/scenes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ execute_scene: select.value }) }); if (!response.ok) throw new Error(`recall ${response.status}`); status.textContent = `“${select.value}” recalled.`; } catch (_) { status.textContent = 'Scene recall was not confirmed; review the current setup.'; recall.disabled = false; } });
-          actions.append(previous, next, select, recall);
+          recall.addEventListener('click', async () => { if (!select.value || !window.confirm(`Recall “${select.value}”?`)) return; recall.disabled = true; status.textContent = 'Recalling scene…'; try { const response = await fetch('/api/v1/scenes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ execute_scene: select.value }) }); const body = await response.json().catch(() => ({})); if (!response.ok) throw new Error(`recall ${response.status}`); const outcomes = Array.isArray(body.activation_outcomes) ? body.activation_outcomes : []; const unconfirmed = outcomes.filter(item => String(item?.outcome || '').toLowerCase().includes('unverified')).length; status.textContent = unconfirmed ? `“${select.value}” recalled; ${unconfirmed} device action(s) remain unconfirmed.` : `“${select.value}” recalled; ${outcomes.length} device action(s) reported.`; } catch (_) { status.textContent = 'Scene recall was not confirmed; review the current setup.'; recall.disabled = false; } });
+          actions.append(previous, next, select, preview, recall);
         }
         actions.append(status); panel.append(actions);
       } else {

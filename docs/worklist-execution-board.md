@@ -1,7 +1,12 @@
 # Worklist execution board
 
-Updated 2026-09-12. This board is subordinate to `WORKLIST.md`; it records the next executable
+Updated 2026-09-13. This board is subordinate to `WORKLIST.md`; it records the next executable
 step for the active Web Interface drain packets and must be updated with command output, not intent.
+
+W203 records the new MOD-inspired visual instrument and artwork epic and assigns W204–W212 to
+Orion. The detailed execution handoff is `docs/mod-inspired-visual-instrument-epic.md`; W204 is now
+in progress after the operator confirmed remote-repository approval and must finish the asset
+provenance manifest before artwork is qualified or product UI code changes.
 
 Latest automated checkpoint (2026-09-12): W186 records the replacement plug-and-play live-instrument
 epic and assigns W187–W202 to Luna. The current execution handoff is
@@ -20,7 +25,7 @@ The previous installed checkpoint remains evidence for the retired interface: `c
 interface guard, web asset budget (38,643 compressed bytes), worklist validation, JavaScript syntax,
 and `git diff --check` all passed. Installed browser smoke passed against
 `http://172.20.222.222:8081` after release rebuild/reinstall, including deep links, 320/768 responsive
-captures, light theme, GUI surface checks, and installed asset hashes. current worklist state: 160 complete, 10 in progress, 16 not started (186 total; measured 2026-09-12; all unchecked packets are explicitly deferred).
+captures, light theme, GUI surface checks, and installed asset hashes. current worklist state: 175 complete, 5 in progress, 16 not started (196 total; measured 2026-09-13; the prior sixteen remain explicitly deferred).
 The installed graphical-inventory, renderer-registry, and novice-surface fixtures pass (32 live device
 cards, 7 researched feature cards, all nine governed renderer keys, no visible code editor); generation ordering and visual draft-preservation fixtures also
 pass. The PiPedal catalog fixture now passes after the bounded 265-entry decoder fix, reporting 3,076
@@ -42,13 +47,14 @@ clippy, benchmark, hermetic integration, installer smoke, and release artifact c
 The installed baseline and bounded service soak also pass: four samples, zero status failures, zero
 dropped events, zero restarts, and four MIDISPORT ports observed on `NAM-MIDI`.
 Those results are reusable regression evidence but do not qualify the replacement epic. W179, W186,
-W187, W188, and W189 are complete; W190–W202 follow the new dependency chain.
+W187, W188, W189, W194, and W198 are complete; W199–W202 follow the new dependency chain.
 The executable moderated-review record is
 `docs/graphical-studio-human-signoff-checklist.md`; it remains intentionally uncompleted until a
 reviewer records each scenario and disposition.
 
-Packet-marker audit (2026-09-12): the governed `WORKLIST.md` contains 186 packet headers: 160 DONE,
-10 active packets, and 16 unchecked packets (all DEFERRED), matching the current summary after
+Packet-marker audit (2026-09-13): the governed `WORKLIST.md` contains 196 packet headers: 175 DONE,
+5 active packets, and 16 unchecked packets. W200–W212 and W144 are DONE under Orion/Codex;
+the prior 16 unchecked packets remain DEFERRED. The counts match the current summary after
 reconciling W192, W193, and W195–W197 under the recorded external-qualification waiver.
 The installed sequential novice walkthrough also passes all five primary graphical workspaces; the
 moderated checklist remains the required human disposition.
@@ -58,7 +64,8 @@ sign-off or native hardware observation.
 
 | Packet | Current evidence | Next executable step | Exit evidence | External dependency |
 |---|---|---|---|---|
-| W186–W202 | W186–W193 and W195–W197 DONE; W194 PiPedal experience remains IN_PROGRESS; W198 and W200–W202 remain IN_REVIEW behind unfinished dependencies; W199 scene orchestration remains IN_PROGRESS; W180–W185 superseded | Complete W194 connector/UI coverage, then W198; complete W199 cross-device persistence, then reconcile W200–W202 in dependency order | Exhaustive PiPedal operation evidence, cross-device scene restart/reconnect evidence, installed gate | Unqualified protocol operations require a pinned installed contract; external physical/human artifacts are waived by the 2026-09-07 operator decision |
+| W203–W212 | Detailed design is recorded; operator confirmed remote-repository approval; `mod-ui` is pinned at `c3004836…`; W204 is DONE and W205–W212 remain active under Orion; 28 assets, semantic gallery, rack art, target canvas, plugin faces, typed cables, read-only library, visual assignment, release rebuild/install, aggregate qualification, and complete served byte-parity are evidenced | Finish W205–W211 review/budgets, then document W212 rollback rehearsal and final handoff | Validated manifest, semantic component gallery, authoritative graph/assignment fixtures, installed hashes, accessibility/performance matrix, rollback, and full release gate | Artwork is fully authorized for this private project; rollback artifact and human/native residuals remain explicit |
+| W186–W202 | W186–W198 DONE; W200–W202 remain IN_REVIEW behind unfinished dependencies; W199 scene orchestration remains IN_PROGRESS; W180–W185 superseded | Complete W199 cross-device persistence, then reconcile W200–W202 in dependency order | Exhaustive PiPedal operation evidence, cross-device scene restart/reconnect evidence, installed gate | Unqualified protocol operations require a pinned installed contract; external physical/human artifacts are waived by the 2026-09-07 operator decision |
 | 2026-09-12 qualification refresh | Installed `qualify-web-installed.sh` now uses Studio-backed fixtures and passes end to end; draft reload, native endpoint ownership/routing, and 12-second stability soak evidence are recorded | W192/W193/W197/W200/W201/W202 | Physical feedback/readback and moderated human sign-off remain external acceptance gates |
 | W159 | Navigation, health, feature-catalog, renderer, and state-store modules extracted; cancellation, stale-generation, abort, hidden-tab, draft, focus, scroll, inventory, assignment, route-guard, and task fixtures pass independently; aggregate remains long-run sensitive | Continue component/state boundaries and stabilize full aggregate orchestration with bounded recovery | Component tests plus bundle/source provenance and full gate | Browser harness choice must honor offline/no-CDN policy |
 | W160 | DONE: read coalescing/single-flight deployed; post-daemon 1,000/1,000 health soak and 250/250 feature-isolation soak pass; broken-pipe logging repaired; ADR-0014 records root cause | No further W160 software action; retain soak evidence | Evidence and closure record in `WORKLIST.md`/ADR-0014 | Native hardware qualification remains separate |

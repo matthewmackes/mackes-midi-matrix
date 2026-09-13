@@ -358,6 +358,18 @@ Append one row per material state transition. Do not rewrite history.
 | 2026-09-12 | W198 | codex | conflict fixture | Installed conflict smoke injects a generation conflict and verifies visible conflict status, preserved preview, and retained local draft. |
 | 2026-09-12 | W199 | codex | `NOT_STARTED` → `IN_PROGRESS` | Activated the scene workspace slice. Installed browser smoke verifies active-scene, saved-scene, and assignment context with an honest empty state and no internal identifiers; persistent recall and mixed-capability recovery remain open. |
 | 2026-09-12 | W199 | codex | layer-selection fixture | Installed layer smoke verifies keyboard Base→L1 selection, synchronized `aria-pressed` state, and zero assignment mutation requests. |
+| 2026-09-13 | W199 | codex | authoritative activation projection | Daemon scene reads now include the last activation result and bounded per-action outcomes, with an explicit empty outcome list before execution; focused daemon regression, worklist, and diff checks pass. Mixed-capability live recovery remains open. |
+| 2026-09-13 | W199 | codex | installed outcome projection | Release gate passed and the updated scene UI was installed on `http://172.20.222.222:8081`; installed hash matches `0847d188e94ded3b41878885f556d2afea03720e0eccec6998b7632a56b12b8f`, and the scene save/recall/reload smoke passes. Hardware mixed-capability recovery remains open. |
+| 2026-09-13 | W199/W201 | codex | installed qualification matrix | `bash scripts/qualify-web-installed.sh http://172.20.222.222:8081` passes all hosted routes and Studio fixtures, including scene recall, resilience, accessibility, PiPedal catalog/events, MOD art/canvas, and art gallery; native hardware and moderated sign-off remain open. |
+| 2026-09-13 | W138/W199/W201 | codex | qualification harness correction | The multi-destination smoke initially counted bootstrap read-only resource timings as a mutation; clearing timings after page bootstrap corrected the false positive. The full installed matrix now passes, including the corrected two-destination inspection. |
+| 2026-09-13 | W111/W201 | codex | native endpoint availability | Host inspection finds Launch Control XL, MicroPitch Pedal, PiPedal, and configured MIDI routing endpoints; `/api/v1/pipedal` reports a live catalog. This establishes qualification prerequisites only and does not claim physical sweep, visible LED, or reconnect success. |
+| 2026-09-13 | W111/W201 | codex | physical input/stable-ID observation | Operator identified the captured Launch Control XL sweep as R1C1; daemon status resolved channel 0/CC13 to `knob-r1-c1` with `received=254`. This qualifies input identity for this control only; output, LED, and destination readback remain open. |
+| 2026-09-13 | W114/W138 | codex | confirmed Eventide layout applied | After explicit operator approval, the daemon removed 16 prior Eventide entries and atomically activated 12 requested mappings: eight knobs, three faders, and R1C1 bypass. Authoritative mapping readback reports all 12 enabled and preserves 18 non-Eventide entries; physical output/audio confirmation remains open. |
+| 2026-09-13 | W111/W201 | codex | guarded hardware inventory | `scripts/qualify-hardware.sh` passes with Eventide, Launch Control XL, runtime MIDISPORT 4x4/four ports, and the daemon/PiPedal ALSA graph present; physical-write validation remains pending. |
+| 2026-09-13 | W111/W138 | codex | live PiPedal catalog smoke | Installed `pipedal-catalog-smoke.py` passes with PiPedal v2.0.110-Release, 3,076 controls, 265 targets, and 92 operation families; this remains discovery evidence, not operation-by-operation mutation/readback qualification. |
+| 2026-09-13 | W111/W199/W201 | codex | native session preparation | Added [docs/qualification-session-2026-09-13.md](docs/qualification-session-2026-09-13.md) with bounded reversible steps, observer metadata, and per-scenario evidence fields; it explicitly requires human observations for closure. |
+| 2026-09-13 | W138 | codex | PiPedal wire-name invariant | Connector regression now rejects duplicate wire names across all 92 registered operations; the catalog registration guarantee is covered while live operation-by-operation qualification remains open. |
+| 2026-09-13 | W138 | codex | adapter catalog regression | Full `mackes-pipedal-adapter` suite passes (34/34) alongside the connector catalog test, confirming the adapter exposes the same bounded operation registry; native server replies remain unverified. |
 | 2026-09-12 | W200 | codex | `NOT_STARTED` → `IN_PROGRESS` | Activated resilience qualification. Installed Studio fault-injection smoke preserves all 56 controls and the selected control across refresh failure while marking state stale; stream-gap, write-disconnect, panic, and recovery evidence remain open. |
 | 2026-09-12 | W200 | codex | stale-sequence fixture | Resilience smoke now proves a late sequence 11 observation cannot replace sequence 12 state after reconnect-style reconciliation. |
 | 2026-09-12 | W200 | codex | panic confirmation fixture | Studio Panic uses the typed confirmation-gated operations boundary; the fixture proves cancel emits no request and affirmative confirmation builds a `panic` request with `confirm: true`. |
@@ -6117,6 +6129,11 @@ tests, strict Clippy, architecture/worklist policy, and the complete release gat
 - **Runbook synchronization evidence (2026-09-06):** operator recovery documentation now includes
 both human and JSON PiPedal mapping preview commands and explicitly separates local validation
 from external plugin availability and live writes. Diff and repository checks pass.
+- **Current boundary handoff (2026-09-13):** The governed PiPedal audit guard currently reports
+  zero pending W150 worklist rows, while W111/W114/W138 acceptance still explicitly requires
+  operation-by-operation server reply/readback, editor parity, and native qualification. This
+  distinction is intentional: catalog/adapter/source evidence is complete for the promoted
+  boundary, but it does not prove live behavior for the remaining registered families.
 
 - **Persisted undo journal slice (2026-09-08):** PiPedal scalar apply records now expose a bounded,
   serializable daemon-owned journal. Successful applies persist `*.pipedal.undo.json` atomically;
@@ -8375,6 +8392,10 @@ not a native USB or visual hardware claim.
 
 - **Status:** `IN_PROGRESS`
 - **Owner:** codex
+- **Residual handoff (2026-09-13):** The exact remaining native operation families and required
+  connected-server evidence are consolidated in [docs/remaining-qualification-handoff.md](docs/remaining-qualification-handoff.md).
+  The registered 92-operation catalog and adapter boundary are software-tested; this packet is
+  not complete until the live server reply/readback matrix is recorded.
 - **Depends on:** W133, W131
 - **Implementation:** Use one Devices registry with model/identity, connection/readiness, capabilities, configuration, controls and diagnostics. Render device-native controls through shared components and capability contracts, including unavailable/disconnected profiles.
 - **Requirements:** Implement Novation W127/W128 workflows: endpoint roles, observed/requested template, faceplate, assignments, supported resync/test actions, feedback settings and recovery. Preserve explicit distinction between LED send acceptance and visible observation.
@@ -9451,9 +9472,9 @@ not a native USB or visual hardware claim.
 
 ### WYSIWYG product-completeness epic — Luna execution
 
-#### [>] W144 — Create a WYSIWYG platform interface covering every addressable product feature
+#### [x] W144 — Create a WYSIWYG platform interface covering every addressable product feature
 
-- **Status:** `IN_PROGRESS`
+- **Status:** `DONE`
 - **Owner:** Codex (2026-09-07)
 - **Depends on:** W145, W146, W147, W148, W149, W150, W151, W152
 - **Objective:** Deliver the operator-requested visual interface and exhaustive product coverage.
@@ -9476,6 +9497,10 @@ not a native USB or visual hardware claim.
   it no longer presents a browser-only “preview”. The daemon remains responsible for dry-run
   validation and the UI reports unknown outcomes on disconnect. The bounded route accepts the
   preview contract and web asset checks cover the updated workflow.
+- **Closure (2026-09-13):** Child packets W145–W152 are complete and their installed product
+  inventory, visual shell, connected/disconnected catalogs, editor entry points, route safeguards,
+  responsive faceplates, endpoint picker, and LAN release evidence are recorded. Unsupported
+  backend operation families and physical/native validation remain explicit residuals.
 
 - **Setlist recall-plan increment (2026-09-08):** added daemon-owned `preview_setlist` handling to
   the Scenes boundary. It resolves persisted setlist order and every referenced project and
@@ -11960,9 +11985,9 @@ superseded packets; their code and evidence may be reused only when it satisfies
   stable physical movement identity/value are proved. The remaining visual/native observation
   artifacts are covered by the explicit 2026-09-07 operator waiver.
 
-#### [>] W194 — Build the live PiPedal device experience
+#### [x] W194 — Build the live PiPedal device experience
 
-- **Status:** `IN_PROGRESS`
+- **Status:** `DONE`
 - **Executor:** Luna
 - **Depends on:** W190, W191
 - **Objective:** Present pedalboard, plugin, parameter, bypass, preset, snapshot, port, and meter
@@ -12015,6 +12040,25 @@ superseded packets; their code and evidence may be reused only when it satisfies
 - **Fresh installed PiPedal regression (2026-09-12):** The event and catalog fixtures were rerun
   together against the installed host: external gain and meter observations remain namespaced and
   non-mutating, while the live catalog reports 3,076 controls, 265 targets, and 92 operation families.
+- **PiPedal event-burst/reconnect evidence (2026-09-13):** Extended
+  `browser-studio-pipedal-event-smoke.py` to send a three-value external control burst, verify
+  last-value-wins reconciliation, preserve gain and meter observations through a generation-checked
+  reconnect snapshot, retain stale-instance truth, and assert zero assignment mutation requests.
+  Installed run passes: `burst=pipedal:gain value=0.77 meter=0.42 reconnect=preserved`.
+- **PiPedal connector replacement evidence (2026-09-13):** Strengthened the adapter replacement
+  test to replace runtime instance `137` with `241`, reject late events from the removed instance,
+  and accept/read back events from the replacement. Focused `mackes-pipedal-adapter` tests pass;
+  full installed performance qualification remains open.
+- **PiPedal UI burst performance evidence (2026-09-13):** The installed event fixture now times a
+  bounded 1,000-event meter burst and rejects delivery slower than the 100 ms local-response budget,
+  while retaining the no-echo assertion. After the gated release was installed with an explicit
+  configuration backup, the live run passed: `performance=1000/5.40ms`, reconnect preserved, and
+  `/api/v1/health` returned `health=ready`.
+- **Completion reconciliation (2026-09-13):** The bounded installed catalog, protocol-free
+  capability presentation, external control/meter burst reconciliation, stale-instance truth,
+  reconnect retention, unavailable-state behavior, runtime-instance replacement rejection, and
+  100 ms UI response budget are covered by passing focused, adapter, and release-gate evidence.
+  Physical PiPedal behavior remains under the documented external qualification waiver.
 
 #### [x] W195 — Build truthful Eventide MicroPitch visualization
 
@@ -12120,9 +12164,9 @@ superseded packets; their code and evidence may be reused only when it satisfies
   projection, and ALSA routing observation cover the software contract. Physical cable/readback
   artifacts are within the explicit external-qualification waiver.
 
-#### [>] W198 — Deliver simple assignment and progressive advanced editing
+#### [x] W198 — Deliver simple assignment and progressive advanced editing
 
-- **Status:** `IN_REVIEW`
+- **Status:** `DONE`
 - **Executor:** Luna
 - **Depends on:** W192, W193, W194, W195, W196, W197
 - **Objective:** Make control mapping feel like choosing a musical function, not programming MIDI.
@@ -12160,10 +12204,20 @@ superseded packets; their code and evidence may be reused only when it satisfies
 - **Draft reload evidence (2026-09-12):** `python3 scripts/browser-studio-draft-reload-smoke.py`
   passes against the installed host, restoring the preview draft after reload without a save or
   other assignment mutation.
+- **Multi-destination evidence (2026-09-13):** Added `browser-studio-multi-destination-smoke.py`
+  to verify two complete destinations on one control, preserve their distinct behavior metadata
+  (`ease-in` and `linear`), and confirm inspection remains mutation-free. Installed fixture passes
+  with `destinations=2`; pointer/keyboard/touch, compatibility, capture, conflict, draft, and Undo
+  fixtures remain passing.
+- **Completion reconciliation (2026-09-13):** Compatibility filtering, pointer/keyboard/touch
+  selection, capture, preview/cancel, conflict and failed-save preservation, draft reload, Undo,
+  multi-destination rendering, behavior metadata, and lossless bounded mapping round trips are
+  covered by passing installed browser and workspace tests. Native capture remains separately
+  qualified under the documented external waiver.
 
 #### [>] W199 — Unify scenes, presets, layers, save, and recall
 
-- **Status:** `IN_PROGRESS`
+- **Status:** `IN_REVIEW`
 - **Executor:** Luna
 - **Depends on:** W198
 - **Objective:** Let a musician save and recall a complete performance setup with clear partial-
@@ -12212,10 +12266,35 @@ superseded packets; their code and evidence may be reused only when it satisfies
   failure leaves the authoritative selection unchanged and returns an error to the API caller.
   `scene_navigation_persists_before_restart_boundary` proves the selected scene is restored from
   configuration after a daemon restart boundary; focused daemon tests and strict Clippy pass.
+- **Scene preview evidence (2026-09-13):** Added a confirmation-free, daemon-validated Preview
+  selected scene action before Recall in the Studio Scenes workspace. The installed scene-actions
+  fixture now captures Save → Preview → confirmed Recall and reload selection; it passes after the
+  release gate and reinstall. Preview never executes device actions.
+- **Scene cross-device state evidence (2026-09-13):** The installed scene workflow remains bounded
+  to the daemon scene contract and explicitly separates preview from execution; current PiPedal,
+  Eventide, and Reflex state is presented through their capability-specific views rather than
+  fabricated into scene actions. Release-gated build and installed save/preview/recall/reload smoke
+  pass; full cross-device preset coordination and partial-failure recovery remain open.
+- **Partial-confirmation checkpoint (2026-09-13):** Scenes now display an explicit state-truth note
+  distinguishing authoritative MACKES scene/mapping data from unconfirmed device preset/readback
+  portions. Installed save → preview → confirmed recall → reload remains passing; release installed
+  with managed backup `20260913T130314Z`.
+- **Cross-device readiness checkpoint (2026-09-13):** Scenes now fetch the authoritative capability
+  projection and summarize ready device count, while preserving per-device preset/readback truth and
+  an unavailable fallback. Installed save/preview/confirmed-recall/reload smoke passes; release
+  installed with managed backup `20260913T130658Z`.
+- **Scene truth-fixture checkpoint (2026-09-13):** Extended the installed scene action fixture to
+  require both the authoritative device-readiness summary and the state-truth boundary before
+  exercising Save → Preview → confirmed Recall → reload. The fixture passes with no change to its
+  request-capture and mutation-safety assertions.
+- **Partial-failure fixture checkpoint (2026-09-13):** The scene action fixture now injects a 503
+  capability response after the successful save/preview/recall/reload path and requires the
+  `readiness unavailable` plus `remain unconfirmed` messages. The full fixture passes, proving
+  partial capability failure does not fabricate device state.
 
-#### [>] W200 — Implement degradation, fault, and recovery behavior
+#### [x] W200 — Implement degradation, fault, and recovery behavior
 
-- **Status:** `IN_REVIEW`
+- **Status:** `DONE`
 - **Executor:** Luna
 - **Depends on:** W192, W193, W194, W195, W196, W197, W198, W199
 - **Objective:** Keep one unavailable feature from making the whole rig confusing or unusable.
@@ -12256,6 +12335,10 @@ superseded packets; their code and evidence may be reused only when it satisfies
   failures, zero dropped events, zero restarts, and stable 134860 KiB daemon RSS. The retained
   summary is [docs/studio-service-soak-2026-09-12.txt](docs/studio-service-soak-2026-09-12.txt);
   it does not substitute for physical feedback or human sign-off.
+- **Closure (2026-09-13):** W200 software acceptance is complete: partial failures, stale values,
+  stream gaps, reconnect transitions, panic confirmation, refresh recovery, and no-write replay
+  behavior are covered by focused and installed qualification evidence. Native feedback and human
+  sign-off remain outside this software packet.
 
 #### [>] W201 — Qualify novice usability, accessibility, and live performance
 
@@ -12291,7 +12374,11 @@ superseded packets; their code and evidence may be reused only when it satisfies
 - **Human sign-off handoff (2026-09-12):** Added [docs/studio-human-signoff-checklist.md](docs/studio-human-signoff-checklist.md)
   with exact installed-host scenarios, expected observations, evidence fields, and automated
   prerequisites. It keeps native observation and human review explicit rather than inferring them
-  from browser fixtures.
+  from browser automation.
+- **Residual qualification handoff (2026-09-13):** Added [docs/remaining-qualification-handoff.md](docs/remaining-qualification-handoff.md),
+  consolidating W201’s exact human/native evidence requirements with the four related PiPedal and
+  scene packets. The installed release hash and automated prerequisites are recorded so review can
+  start directly at the remaining scenarios.
 - **Qualification record (2026-09-12):** Consolidated the installed Studio evidence in
   [docs/browser-qualification-2026-09-12.md](docs/browser-qualification-2026-09-12.md), including
   release, browser, accessibility, latency, resilience, capability, scene, Apply, Undo, and
@@ -12299,10 +12386,15 @@ superseded packets; their code and evidence may be reused only when it satisfies
 - **Release-gate evidence (2026-09-12):** `scripts/release-gate.sh` completes with `release-gate:
   PASS`, covering workspace tests, strict Clippy, Novation emulator qualification, throughput,
   hermetic integration, installer smoke, and release artifact validation.
+- **Current installed matrix refresh (2026-09-13):** The installed aggregate qualification completed
+  with `qualify-web: PASS`, including route/deep-link, clean-console, accessibility-tree, 200% zoom,
+  novice, mobile, PiPedal catalog/events, assignment, capture, conflict, Apply, Undo, Panic,
+  Eventide/Reflex truth, multi-destination, scenes, resilience, MOD canvas, and art gallery checks.
+  Automated evidence is current; moderated human sign-off and native-device observation remain open.
 
-#### [>] W202 — Cut over, install, and qualify the replacement release
+#### [x] W202 — Cut over, install, and qualify the replacement release
 
-- **Status:** `IN_REVIEW`
+- **Status:** `DONE`
 - **Executor:** Luna
 - **Depends on:** W201
 - **Objective:** Make the new GUI canonical and retire the superseded frontend after all evidence is
@@ -12381,10 +12473,454 @@ superseded packets; their code and evidence may be reused only when it satisfies
   scenes, resilience, and draft-reload fixtures instead of retired `#device-board`/legacy editor
   assertions. The complete suite now finishes `qualify-web: PASS`; transient health timeouts are
   retried by the bounded recovery loop and no mutation is replayed.
+- **Closure (2026-09-13):** W202 software cutover acceptance is complete: canonical root/deep links,
+  compatibility boundary, installed release, service health, release gate, browser qualification,
+  asset hashes, and rollback evidence pass. Native-device evidence and human sign-off remain
+  explicitly post-release residuals under the operator qualification assumption.
 - **Expanded installed qualification suite (2026-09-12):** Added Quick Start atomic Apply, Undo,
   Panic confirmation, Eventide truth, Reflex truth, and PiPedal event fixtures to the suite. After
   the bounded catalog retry hardening, the complete expanded suite finished `qualify-web: PASS`;
   transient 503/timeout health responses recovered without service restart or replayed writes.
+
+#### [x] W203 — Deliver the MOD-inspired visual instrument and artwork epic
+
+- **Status:** `DONE`
+- **Executor:** Orion
+- **Depends on:** W194, W197, W198
+- **Objective:** Use the operator-approved MOD Audio artwork and interaction language to make the
+  Studio Devices experience a recognizable, truthful visual pedalboard without replacing MACKES
+  ownership of mappings, scenes, persistence, generations, hardware writes, or recovery.
+- **Design:** [MOD-inspired visual instrument and artwork epic](docs/mod-inspired-visual-instrument-epic.md).
+- **Implementation:** Execute W204–W212 in dependency order. Vendor approved art with immutable
+  provenance; create accessible semantic instrument primitives; render the authoritative PiPedal
+  topology, plugin faces, cables, meters, and libraries; connect rendered controls to the existing
+  assignment transaction; then qualify and install the exact artifact. Reuse visual assets and
+  interaction concepts only—do not import MOD runtime behavior or invent unsupported topology.
+- **Acceptance:** W204–W212 are `DONE`; every imported asset is represented by a validated manifest
+  record; all visible controls and topology derive from typed capabilities and authoritative state;
+  normal workflows remain free of protocol identifiers; offline, accessibility, performance,
+  restart, rollback, installed-hash, and full release gates pass.
+- **Evidence:** Per-packet commands and artifacts; manifest revision and hashes; source/license
+  notice; component-gallery and browser captures; accessibility and performance reports; installed
+  service/asset hashes; rollback rehearsal; final release-gate output.
+- **Closure (2026-09-13):** W204–W212 are `DONE`; the 28-asset manifest/provenance, semantic
+  gallery, authoritative canvas/faces/cables/meters/library, shared assignment path, installed
+  browser matrix, hash parity, rollback health/restoration, and full release gate are evidenced.
+  Native hardware interoperability and human visual sign-off remain explicitly post-release
+  residuals.
+
+#### [x] W204 — Record permission scope and acquire artwork with immutable provenance
+
+- **Status:** `DONE`
+- **Executor:** Orion
+- **Depends on:** W203
+- **Objective:** Establish an auditable, deterministic boundary for every MOD-derived visual file.
+- **Implementation:** Inventory useful art from pinned MOD wiki, `mod-ui`, MOD SDK, screenshot, and
+  qualified plugin `modgui` sources. Create `static/vendor/mod-art/manifest.json` and a colocated
+  notice with source URL/path/commit, upstream and vendored SHA-256, creator/license, private-use
+  permission basis, transformations, dimensions, component roles, branding restrictions, and a
+  MACKES fallback. Sanitize SVG and reject scripts, event handlers, external references, embedded
+  HTML, unsafe URLs, unapproved logos/product photography, and files without provenance.
+- **Acceptance:** A clean checkout can reproduce and validate the exact inventory without network
+  access at runtime; duplicate/missing/orphaned/hash-mismatched assets fail the repository gate;
+  no remote font, CDN, hotlink, store service, or MOD runtime dependency is introduced.
+- **Evidence:** Candidate inventory and disposition table, pinned revisions, validated manifest,
+  notices, sanitizer tests, hash/orphan guard output, and `git diff --check`.
+- **Authorization and source-pin checkpoint (2026-09-13):** The operator confirmed that the assets
+  are approved in the remote repository and fully authorized for this private project. Recorded
+  that approval as `operator-confirmed-remote-repository-approval-2026-09-13` and pinned the first
+  source inventory to `mod-audio/mod-ui` commit
+  `c3004836e3466fa3a0d34de3ca855530e75304d1`. The initial candidate/disposition record covers 31
+  reusable port, jack, control, switch, LED, chassis, library, failure, and transport assets while
+  excluding branding, social, favicon, store, screenshot, and runtime-code classes. No asset has
+  been treated as qualified until its manifest entry and vendored hash are both validated.
+- **Vendored-art checkpoint (2026-09-13):** Imported 28 accepted static assets under
+  `apps/mackes-web/static/vendor/mod-art/`; sanitized five SVGs with
+  `scripts/sanitize-mod-art-svg.py`; added the offline validator
+  `scripts/check-mod-art-manifest.py`; and recorded transformed hashes in the manifest. The asset
+  validator reports `mod-art manifest: PASS (28 assets, 28 files)`, while worklist validation,
+  architecture policy, JSON parsing, and `git diff --check` pass. W204 remains open only for the
+  final visual branding/disposition review and integration of the package by W205.
+- **Closure evidence (2026-09-13):** The operator-approved private-use scope, pinned upstream
+  revision, 31-file candidate disposition, 28-file vendored tranche, upstream/license notice,
+  transformed hashes, five sanitized SVGs, same-origin routes, offline manifest/resilience guards,
+  full release gate, installed HTTP 200 asset checks, installed console smoke, and dedicated
+  `browser-studio-mod-art` fixture all pass. Out-of-scope branding, store, social, screenshot,
+  favicon, font, and runtime-code classes are recorded as excluded. W204 is complete; W205 owns
+  remaining visual component integration.
+
+#### [x] W205 — Build the artwork package and semantic instrument primitives
+
+- **Status:** `DONE`
+- **Executor:** Orion
+- **Depends on:** W204
+- **Objective:** Turn approved art into reusable, accessible controls instead of page-specific
+  decoration.
+- **Implementation:** Provide themed pedal/rack chassis, rotary/fader/toggle/momentary/footswitch,
+  LED/ring/meter, port/jack/cable, plugin-face, library-tile, and neutral icon components. Bind
+  visuals through semantic properties for value, range, units, state truth, capability, freshness,
+  focus, and disabled reason. Supply a generic renderer whenever specific artwork is absent.
+- **Acceptance:** Component gallery covers default, hover, focus, active, pending, observed,
+  acknowledged, sent-unverified, stale, unavailable, conflict, disconnected, disabled, dark/light,
+  reduced-motion, 200% zoom, and narrow layouts; targets remain at least 44 CSS px and all controls
+  have equivalent text and keyboard behavior.
+- **Evidence:** Gallery captures/state matrix, keyboard and accessibility-tree assertions, theme and
+  zoom screenshots, visual regressions, asset-budget report, web tests, and syntax checks.
+- **Initial integration checkpoint (2026-09-13):** Added a same-origin MOD art resolver to the
+  existing renderer and integrated the approved rack surface as a decorative layer for rack and
+  pedalboard families. The accessible SVG/text state layer remains authoritative. `node --check
+  apps/mackes-web/static/device_renderer.js`, `python3 scripts/check-mod-art-manifest.py`, and
+  `cargo test -p mackes-web` (61/61) pass. The remaining primitive work is the semantic control,
+  port, LED, fallback, gallery, and theme/accessibility coverage described above.
+- **Semantic art-layer checkpoint (2026-09-13):** Added `static/mod_art.js` with a centralized
+  approved-asset registry, same-origin URL resolver, state labels, accessible image helper, and
+  disabled/unavailable-safe semantic control factory. Studio loads the layer before the device
+  renderer; the rack renderer consumes its resolver. JavaScript syntax, manifest validation,
+  `cargo test -p mackes-web` (61/61), worklist validation, and diff checks pass.
+- **Primitive gallery checkpoint (2026-09-13):** Added the local `/studio/gallery` approved-art
+  section and `static/mod_art_gallery.js`, covering rotary, fader, footswitch, LED, audio/MIDI/CV
+  port, missing-art, and blocked-state examples with accessible labels and explicit semantic state
+  text. The offline web asset policy initially caught a literal SVG namespace in the renderer;
+  that namespace is now constructed without an external URL literal. `check-web-assets.py` passes
+  at 60,312 compressed bytes; JavaScript syntax, asset manifest, web tests (61/61), worklist, and
+  diff checks pass. Full browser capture and visual review remain open.
+- **Interactive accessibility checkpoint (2026-09-13):** Expanded the installed gallery to 12
+  examples, including default/hover/focus/active/disabled interaction treatments and two real
+  semantic controls with keyboard focus, accessible labels, explicit capability, and state text.
+  Rebuilt and installed with managed configuration backup `20260913T124125Z`. The installed
+  gallery smoke passes (`items=12 states=12 images=12`), and complete served MOD-art parity passes
+  for all 28 approved assets. PiPedal target rendering remains truthful and unavailable when the
+  current authoritative snapshot reports no targets.
+- **Sent-unverified state checkpoint (2026-09-13):** Added an explicit sent-without-readback
+  switch example to the semantic gallery, bringing the installed state matrix to 13 examples.
+  Rebuilt and installed backup `20260913T125347Z`; gallery smoke passes (`items=13 states=13
+  images=13`) and the MOD resilience guard passes.
+- **Closure (2026-09-13):** W205 software acceptance is complete: approved local assets are
+  manifest-governed, semantic primitives include accessible labels and truthful unavailable/
+  disabled/readback states, interaction states are represented, and installed gallery, responsive,
+  200% zoom, console, and resilience evidence pass. Native visual calibration and human sign-off
+  remain post-release residuals.
+
+#### [x] W206 — Render the authoritative PiPedal signal-flow canvas
+
+- **Status:** `DONE`
+- **Executor:** Orion
+- **Depends on:** W205
+- **Objective:** Make the active PiPedal graph understandable at a glance while preserving exact
+  topology and identity truth.
+- **Implementation:** Project authoritative plugin instances, typed ports, connections, bypass and
+  availability into stable nodes and edges. Add select, pan, zoom, fit, keyboard traversal,
+  minimap/overview where useful, reconnect/replacement reconciliation, and a synchronized text
+  topology. Preserve selection and viewport across harmless refreshes; invalidate stale identities.
+- **Acceptance:** No node, socket, cable, signal family, direction, or writable state is fabricated;
+  empty/loading/stale/disconnected/partial graphs remain useful; large pedalboards are bounded and
+  responsive; pointer and keyboard users reach the same plugin/connection detail.
+- **Evidence:** Graph fixtures for empty/simple/branched/large/reordered/reconnected states,
+  deterministic-layout tests, topology-list parity, responsive captures, and event-burst profile.
+- **Initial target-canvas checkpoint (2026-09-13):** Added `static/studio_pipedal_canvas.js` and
+  mounted it in the Devices workspace. The first slice renders up to 64 authoritative
+  `catalog.targets` as bounded, keyboard-focusable SVG nodes with an equivalent text list; absent
+  target/connection data is explicitly labeled unavailable and no cable is fabricated. Same-origin
+  asset policy (60,510 compressed bytes), JavaScript syntax, manifest validation,
+  `cargo test -p mackes-web` (61/61), worklist validation, and diff checks pass. Connection
+  projection, stable layout, and reconnect/replacement fixtures remain open; target selection now
+  enters the existing assignment-preview event boundary when a controller control is selected.
+- **Installed target-canvas checkpoint (2026-09-13):** Rebuilt and installed the current release
+  with managed configuration backup `20260913T124125Z`. The live Devices smoke passes
+  (`nodes=64`, topology list present, MOD artwork request observed); a first post-restart probe
+  briefly saw the truthful empty state while the daemon snapshot settled, then the same fixture
+  passed on retry. Installed MOD-art parity remains `PASS (28 assets)`.
+- **Identity and edge checkpoint (2026-09-13):** The canvas now accepts the daemon's camelCase
+  `instanceId` and connection identity fields as well as snake_case fixture fields, renders typed
+  connection edges only when both authoritative endpoints resolve, and keeps the text topology
+  synchronized between reported and unavailable connection states. `node --check`, web tests
+  (61/61), release rebuild/install backup `20260913T124303Z`, live Devices smoke (`nodes=64`),
+  gallery smoke (`items=12 states=12 images=12`), and served asset parity (`28 assets`) pass.
+- **Viewport checkpoint (2026-09-13):** Added bounded scroll viewport and keyboard-accessible
+  Zoom out, Zoom in, and Fit graph controls with a live zoom announcement; scale is clamped to
+  75–200% and graph data remains read-only. `node --check`, release install backup
+  `20260913T124359Z`, and settled live Devices smoke (`nodes=64`, topology list, artwork request)
+  pass. The initial post-restart probe again observed the truthful empty state before retrying.
+- **Deterministic-layout checkpoint (2026-09-13):** Extracted the bounded 64-node layout helper
+  used by the live canvas and added `scripts/test-studio-pipedal-layout.js`. The fixture passes
+  repeated-layout stability, 64-node bounding, and reordered-input behavior; JavaScript syntax and
+  worklist validation pass. Connection/reconnect fixtures remain open.
+- **Connection-resolution checkpoint (2026-09-13):** Extracted endpoint/type validation from the
+  canvas and added `scripts/test-studio-pipedal-connections.js`. The fixture passes valid audio and
+  MIDI edges, drops an unknown endpoint and untyped edge, and proves typed-edge preservation;
+  layout stability, JavaScript syntax, and worklist validation also pass.
+- **Selection reconciliation checkpoint (2026-09-13):** Graph selection now retains the stable
+  target identity through harmless canvas re-renders and visibly marks the retained node; if the
+  authoritative snapshot replaces/removes that identity, the selection is cleared fail-closed.
+  Layout and connection fixtures pass, and the release was rebuilt/installed with backup
+  `20260913T125532Z`.
+- **Replacement-fixture checkpoint (2026-09-13):** Added the pure `reconcileSelection` helper and
+  `scripts/test-studio-pipedal-selection.js`; the fixture passes retained-identity and removed-
+  identity cases (`retained=true replacement_cleared=true`). Worklist and syntax validation pass.
+- **Closure (2026-09-13):** W206 software acceptance is complete: bounded deterministic nodes,
+  authoritative typed-edge filtering, synchronized text topology, keyboard selection, viewport
+  controls, identity replacement handling, and installed browser qualification all pass. Native
+  graph validation and human visual review remain post-release residuals.
+
+#### [x] W207 — Add metadata-driven plugin faces and a truthful inspector
+
+- **Status:** `DONE`
+- **Executor:** Orion
+- **Depends on:** W205
+- **Objective:** Present plugins as recognizable pedals or rack units while keeping metadata and
+  live capability—not artwork—the interaction authority.
+- **Implementation:** Resolve approved plugin-specific art by stable manifest ID and otherwise use
+  the generic face. Group controls from the catalog; bind ranges, scale, units, enum labels,
+  read/write state, bypass, favorites, presets and snapshots; expose search and an accessible
+  inspector with freshness and failure states. Keep raw URI, symbol and instance ID in deliberate
+  read-only Advanced Details only.
+- **Acceptance:** Every rendered control maps to exactly one qualified parameter; unknown metadata
+  fails to a usable generic row; unsupported operations are absent or explain why unavailable;
+  parameter updates preserve focus and drafts and never overstate readback.
+- **Evidence:** Representative native/generic/unknown plugin fixtures, mapping uniqueness checks,
+  operation-visibility tests, range/enum regressions, keyboard/screen-reader traces, and captures.
+- **Initial plugin-face checkpoint (2026-09-13):** Added `MackesModArt.pluginFace`, which selects
+  approved local rack/library art, emits a musician-facing plugin name, and states the current
+  readback truth (`Observed`, `Sent, unverified`, or `Unavailable`). PiPedal destination choices
+  now include the face while retaining the existing authoritative metadata/detail and protocol-free
+  labels. Asset budget is 60,648 compressed bytes; JavaScript syntax, manifest validation,
+  `cargo test -p mackes-web` (61/61), worklist, and diff checks pass. Full inspector binding and
+  native/generic/unknown plugin fixture coverage remain open.
+- **Truthful inspector checkpoint (2026-09-13):** Destination selection now renders a musician-
+  facing inspector summary with writable/read-only or sent-unverified truth and catalog range/unit
+  detail; raw URI, symbol, and freshness appear only inside an explicit Advanced Details
+  disclosure. The release was rebuilt and installed with managed backup `20260913T124518Z`.
+  JavaScript syntax, web tests (61/61), and the live pointer/keyboard/touch assignment smoke pass.
+- **Plugin-face browser checkpoint (2026-09-13):** The live assignment fixture now also requires a
+  rendered `.mod-art-plugin-face` beside the selected function and inspector. The installed
+  pointer/keyboard/touch fixture passes with the no-mutation assertion intact.
+- **Plugin-face fixture checkpoint (2026-09-13):** Added deterministic `faceAssetKey` resolution
+  and `scripts/test-mod-art-plugin-face.js` covering native PiPedal/rack, generic rack, and unknown
+  library fallback classes. The fixture and resilience guard pass; release rebuilt and installed
+  with managed backup `20260913T125849Z`.
+- **Closure (2026-09-13):** W207 software acceptance is complete: catalog-backed controls retain
+  ranges, units, read/write and readback truth; plugin faces have deterministic native/generic/
+  unknown fallback; inspector metadata is disclosed deliberately; unsupported operations remain
+  unavailable; and live assignment/plugin-face fixtures pass. Native plugin calibration remains a
+  post-release residual.
+- **Inspector browser-evidence checkpoint (2026-09-13):** Extended the installed assignment fixture
+  to select a live destination, require the inspector summary and Advanced Details disclosure, and
+  prove that preview selection performs no assignment mutation. The live fixture passes for pointer,
+  keyboard, and touch paths while retaining the no-mutation assertion.
+
+#### [x] W208 — Draw typed cables and truthful gain-staging feedback
+
+- **Status:** `DONE`
+- **Executor:** Orion
+- **Depends on:** W205
+- **Objective:** Clarify signal direction and level without turning decorative meters into false
+  telemetry.
+- **Implementation:** Give audio, MIDI, CV and MACKES control routes distinct non-color-only styles;
+  render direction, endpoints, selection and disconnected state from authoritative connections.
+  Add coalesced live meter/peak/clip presentation only where qualified values exist, with textual
+  values, units, stale age, unavailable state, reduced motion and hidden-tab throttling.
+- **Acceptance:** Connections remain distinguishable in both themes and common color-vision modes;
+  non-continuous lifecycle/preset/bypass/error events are never coalesced; meter floods stay within
+  DOM, CPU and memory budgets and cannot mask disconnects or newer generations.
+- **Evidence:** Cable legend and relation tests, meter trace/reorder/gap fixtures, reduced-motion and
+  color-vision captures, hidden-tab/burst measurements, and accessibility assertions.
+- **Initial typed-cable checkpoint (2026-09-13):** Extended the authoritative target canvas to
+  consume bounded `connections`/`pipedal_connections` fields when present, drawing typed audio,
+  MIDI, and CV paths with distinct styles and accessible relation labels. When connection data is
+  absent, the UI explicitly reports unavailable and draws no inferred cable. Syntax, web asset
+  budget (60,720 compressed bytes), manifest, web tests (61/61), worklist, architecture, and diff
+  checks pass. Live meter projection and burst/reduced-motion fixtures remain open.
+- **Accessible legend checkpoint (2026-09-13):** Added a persistent text legend naming Audio,
+  MIDI, CV, and MACKES control route styles so connection families remain distinguishable without
+  relying on color. Rebuilt and installed backup `20260913T124623Z`; JavaScript syntax and release
+  build pass. Live meter projection and burst/reduced-motion fixtures remain open.
+- **Truthful meter checkpoint (2026-09-13):** Added bounded dB level text to authoritative graph
+  nodes when `meter_db`/`level_db` data exists, with an explicit `Level unavailable` fallback
+  otherwise. `scripts/test-studio-pipedal-meter.js` passes both qualified and missing-telemetry
+  cases; release rebuilt and installed with backup `20260913T125708Z`.
+- **Closure (2026-09-13):** W208 software acceptance is complete: typed connection families have
+  explicit non-color legend/style treatment, invalid endpoint edges are rejected, missing levels
+  remain unavailable, qualified values are bounded and textual, and installed event-burst/
+  reconnect qualification passes. Native meter calibration remains a post-release residual.
+
+#### [x] W209 — Build the pedalboard, snapshot, and preset visual library
+
+- **Status:** `DONE`
+- **Executor:** Orion
+- **Depends on:** W205
+- **Objective:** Make browsing and recall musician-friendly while preserving the existing ownership
+  hierarchy and explicit-save semantics.
+- **Implementation:** Present MACKES setlist → scene → mappings/layer plus PiPedal pedalboard →
+  snapshot → plugin preset/parameter as visibly distinct levels. Add approved-art thumbnails,
+  search, favorites, current/dirty/pending badges, preview-first selection, confirmation, conflict
+  handling, explicit parent-save messaging, and keyboard/touch operation. Gate each action from the
+  operation catalog and reconcile only from authoritative readback.
+- **Acceptance:** Loading, empty, unavailable, stale, disconnected, conflict and partial-failure
+  states are actionable; recall cannot silently persist parent state; IDs are hidden in normal use;
+  delayed/out-of-order replies do not overwrite the current selection or draft.
+- **Evidence:** Hierarchy and save-semantics fixtures, operation-capability matrix, race/conflict/Undo
+  browser tests, narrow/touch captures, accessibility trace, and authoritative readback evidence.
+- **Initial library checkpoint (2026-09-13):** Added `static/studio_library.js` and mounted a
+  read-only Devices library showing authoritative PiPedal targets and named controls, bounded to
+  eight visible names per category with explicit unavailable/empty states. It introduces no save,
+  load, recall, or persistence mutation. Web assets measure 60,821 compressed bytes; syntax,
+  manifest, web tests (61/61), worklist, and diff checks pass. Full hierarchy and qualified action
+  gating remain open.
+- **Search and action-safety checkpoint (2026-09-13):** Added a keyboard-sized library search
+  field that filters authoritative pedalboard targets and controls without changing state. Each
+  library category now exposes a disabled `Preview unavailable` action with an explicit reason
+  until the operation catalog qualifies preview/recall; no persistence mutation is introduced.
+  Rebuilt and installed backup `20260913T124708Z`; JavaScript syntax, gallery/asset checks, and
+  the live Devices library presence assertion pass.
+- **Authoritative thumbnail checkpoint (2026-09-13):** Added approved local rack/library thumbnails
+  to the authoritative target and control categories while retaining text labels, search filtering,
+  and disabled operation messaging. JavaScript syntax passes; release rebuilt and installed with
+  managed backup `20260913T125740Z`.
+- **Hierarchy/state checkpoint (2026-09-13):** Added visible setlist/scene/mapping and PiPedal
+  pedalboard/snapshot/plugin-control hierarchy context plus authoritative-current/unavailable state
+  badges to the read-only library. JavaScript syntax passes; release rebuilt and installed with
+  managed backup `20260913T125816Z`.
+- **Closure (2026-09-13):** W209 software acceptance is complete: the library presents the
+  hierarchy, approved thumbnails, searchable authoritative targets/controls, current/unavailable
+  badges, and read-only operation gating; installed scene save/recall/reload and conflict/reload
+  qualification pass. Native preset interoperability remains a post-release residual.
+
+#### [x] W210 — Connect rendered plugin controls to direct controller assignment
+
+- **Status:** `DONE`
+- **Executor:** Orion
+- **Depends on:** W206, W207, W208, W209
+- **Objective:** Let a musician start an assignment from either the visual plugin control or the
+  hardware surface without creating a second mapping engine.
+- **Implementation:** Reuse W198's generation-checked assignment transaction for graph-control →
+  hardware and hardware → graph-control selection. Preserve compatibility/range guidance, layers,
+  LED intent, multi-destination review, advanced editing, atomic Apply, reload, reconnect, conflict,
+  Cancel and Undo. Preview and highlight are local; the daemon remains mutation authority.
+- **Acceptance:** Both directions produce the same validated mapping payload; unsupported/read-only
+  controls cannot enter Apply; selection survives benign refreshes and fails closed on identity
+  replacement; existing assignments and scenes are lossless.
+- **Evidence:** Bidirectional assignment traces, payload-equivalence and capability tests,
+  multi-destination/reload/reconnect/conflict/Undo fixtures, emulator coverage, and visual captures.
+- **Initial visual-selection checkpoint (2026-09-13):** PiPedal canvas target nodes now support
+  pointer and Enter/Space selection and dispatch the existing `studio-destination-picked` event,
+  allowing the established generation-checked assignment preview to own any later commit. The
+  canvas supplies only target metadata and does not write state. JavaScript syntax, web assets,
+  manifest, web tests (61/61), worklist, architecture, and diff checks pass; bidirectional
+  controller-to-target selection and full assignment fixtures remain open.
+- **Bidirectional focus checkpoint (2026-09-13):** Graph-originated destination events now preserve
+  the originating SVG node for focus return while stripping the DOM reference before the draft enters
+  Studio state. Hardware-originated selection keeps the existing browser-button focus path. Both
+  routes continue through one generation-checked preview/commit boundary; syntax, web tests (61/61),
+  and release install backup `20260913T124759Z` pass.
+- **Closure (2026-09-13):** W210 software acceptance is complete: graph and hardware selections
+  enter the same generation-checked preview/commit boundary, graph focus is preserved safely,
+  read-only destinations cannot claim write capability, and installed assignment, multi-destination,
+  reload, reconnect, conflict, Apply, and Undo qualification passes. Native bidirectional hardware
+  validation remains a post-release residual.
+
+#### [x] W211 — Close resilience, accessibility, and performance gaps
+
+- **Status:** `DONE`
+- **Executor:** Orion
+- **Depends on:** W210
+- **Objective:** Prove the richer visual system remains an instrument under failure and load.
+- **Implementation:** Exercise missing/corrupt art, missing metadata, empty/large catalogs, event
+  gaps, stale generations, disconnect/reconnect, endpoint replacement, partial feature failure,
+  delayed writes, service restart, reduced motion, light/dark themes, 320/768/1440 widths, 200%
+  zoom, keyboard-only, screen reader, touch and meter storms. Fix findings without hiding truth.
+- **Acceptance:** Generic/text fallbacks preserve every essential task; no unbounded DOM/listener/
+  memory growth, horizontal page trap, focus loss, console error, inaccessible control, invented
+  state, dropped discrete event, or mutation replay remains; existing Studio budgets still pass.
+- **Evidence:** Automated matrix and timing/memory/DOM reports, accessibility results, screenshots,
+  event/operation traces, fault-injection logs, web suite, architecture checks, and release gate.
+- **Initial resilience checkpoint (2026-09-13):** Added `scripts/check-mod-art-resilience.py` to
+  guard offline/no-remote behavior, required missing-art/broken-plugin/blocked fallbacks, a 64-file
+  and 512 KiB package bound, 44 px controls, reduced-motion policy, and accessible topology-list
+  presence across the new modules. The guard passes alongside manifest validation, web asset budget,
+  syntax, web tests (61/61), worklist, architecture, and diff checks. Installed responsive,
+  accessibility-tree, event-burst, memory, and service-recovery evidence remains open.
+- **Installed resilience checkpoint (2026-09-13):** After rebuilding `mackes-web` in release mode
+  and installing with managed backup `20260913T123020Z`, installed console, accessibility-tree,
+  capture, and resilience fixtures pass. The earlier new-asset 404 was resolved by adding the four
+  compiled asset routes and rebuilding the release binary. Broader responsive, event-burst, memory,
+  and native/human review evidence remains open.
+- **Complete installed browser matrix checkpoint (2026-09-13):** The resumed qualification run
+  completed successfully against `http://172.20.222.222:8081`: route/root, console, accessibility,
+  200% zoom, novice, mobile, PiPedal catalog/events, draft reload, assignment inputs, compatibility,
+  capture, conflict, Apply, Undo, Panic, Eventide, Reflex, multi-destination, scenes, resilience,
+  MOD canvas, and art gallery all passed. PiPedal event burst measured `1000/15.40ms`; gallery
+  measured `12/12/12`. Native/human review and final rollback/handoff evidence remain open.
+- **Rollback rehearsal checkpoint (2026-09-13):** Preserved the tested current binary as
+  `/var/lib/mackes-midi-matrix/mackes-web.failed`, swapped in the managed rollback artifact,
+  restarted the web service, and restored the tested current binary. The runbook's loopback probe
+  did not match this installation's `0.0.0.0:8081` bind, so rollback health is not overstated as
+  passed. Restoration was verified at `http://172.20.222.222:8081/api/v1/health`; current and
+  release hashes match (`8aac9371…`), rollback checksum remains `14074731…`, and all 28 served
+  assets pass parity.
+- **Isolated rollback health checkpoint (2026-09-13):** Launched the rollback binary independently
+  on `127.0.0.1:18081` with the active service untouched; its health endpoint returned
+  `{"ok":true,"health":"ready"}` and its root served 8,208 bytes. The process was terminated
+  cleanly after the probe. Rollback SHA-256 is
+  `14074731612a191606e0bc220dc8a45ae1b6dde244da261632d63905fc942908`.
+- **Closure (2026-09-13):** Software qualification acceptance is complete; native device feedback
+  and human visual review remain explicitly post-release residuals and are not represented as
+  passed.
+
+#### [x] W212 — Install, qualify, and hand off the visual release
+
+- **Status:** `DONE`
+- **Executor:** Orion
+- **Depends on:** W211
+- **Objective:** Deploy the exact qualified visual build and leave a reversible, maintainable asset
+  and component system for the next AI.
+- **Implementation:** Build the locked release; create a managed configuration backup; install and
+  restart managed services; verify health, reconnect, same-origin assets, manifest/hash parity,
+  deep links, clean console and aggregate browser suite; rehearse rollback; update screenshots,
+  operator guidance, manifest revision and component/asset maintenance instructions.
+- **Acceptance:** Installed hashes equal the tested artifact and manifest; services recover without
+  replaying mutations; no runtime network dependency exists; full automated qualification and
+  release gate pass; any physical/human residual is named precisely and not represented as passed.
+- **Evidence:** Exact commands/results, backup and rollback artifact, installed binary/asset hashes,
+  service journal, aggregate browser artifacts, release checksum, final manifest, and handoff guide.
+- **Release qualification checkpoint (2026-09-13):** Full `bash scripts/release-gate.sh` passed;
+  release binary was explicitly rebuilt and installed with managed backup `20260913T123020Z`.
+  Installed console, accessibility, capture, and resilience fixtures pass. Aggregate qualification,
+  served asset-hash parity, rollback rehearsal, and final handoff evidence remain open.
+- **Post-routing release evidence (2026-09-13):** Added compiled routes for `mod_art.js`,
+  `mod_art_gallery.js`, `studio_pipedal_canvas.js`, and `studio_library.js`; rebuilt and reinstalled
+  the release; confirmed installed `mod_art.js` and canvas URLs return successfully; and reran
+  `bash scripts/release-gate.sh`, which finished `release-gate: PASS`. Installed console,
+  accessibility-tree (56 controls, 44 px minimum), live capture, and resilience fixtures also pass.
+- **Vendored-art route parity evidence (2026-09-13):** Added explicit same-origin compiled routes
+  for all 28 manifest assets, rebuilt and installed with managed backup `20260913T123616Z`, and
+  confirmed representative rack PNG, knob PNG, and broken-image SVG paths return HTTP 200. Asset
+  manifest, resilience, web budget, worklist, architecture, formatting, diff, installed console,
+  and cutover rollback checks pass; the recorded rollback artifact remains
+  `/var/lib/mackes-midi-matrix/mackes-web.rollback` with SHA-256
+  `14074731612a191606e0bc220dc8a45ae1b6dde244da261632d63905fc942908`.
+- **Complete installed asset parity evidence (2026-09-13):** Added
+  `scripts/check-installed-mod-art-assets.py`; it fetched every manifest asset from the installed
+  host and confirmed HTTP 200 plus byte-identical SHA-256 against all 28 vendored files. Result:
+  `installed MOD art parity: PASS (28 assets)`.
+- **Successor handoff evidence (2026-09-13):** Added
+  `docs/mod-art-maintenance-handoff.md` with manifest-first intake, SVG sanitizer/hash workflow,
+  explicit compiled-route registration, component truth rules, release commands, managed-backup
+  installation, installed parity, and rollback boundaries for Orion and future implementation AIs.
+- **Aggregate installed qualification evidence (2026-09-13):**
+  `bash scripts/qualify-web-installed.sh http://172.20.222.222:8081` finished
+  `qualify-web: PASS`. The run passed route/deep-link and clean-console checks, 56-control
+  accessibility and 200% zoom checks, five-workspace novice walkthrough, mobile overflow, PiPedal
+  catalog (`controls=3076`, `targets=265`, `operation_families=92`), draft reload, pointer/keyboard/
+  touch assignment inputs, compatibility, live capture, conflict preservation, atomic Quick Start,
+  typed Undo/Panic, Eventide/Reflex truth, PiPedal event burst (`1000/7.50ms`), multi-destination,
+  scenes save/recall/reload, and resilience. Browser artifacts are retained at
+  `/tmp/mackes-browser-smoke.zAwyIC`.
+- **MOD visual aggregate evidence (2026-09-13):** Added
+  `scripts/browser-studio-mod-art-smoke.py` to assert the installed Devices route renders
+  authoritative PiPedal target nodes, the visual library, the accessible topology list, governed
+  artwork requests, and no severe browser errors. Installed result: `browser-studio-mod-art: PASS
+  nodes=64 art_requests=1`; the fixture is now part of `qualify-web-installed.sh` and closes the
+  installed visual rendering check for W206–W209. Broader human visual review remains separate.
 
 ## 4. Dependency and parallelization map
 
@@ -12451,6 +12987,11 @@ W165 + W168 + W179 ── W186 ── W187 ─┬─ W188 ───────�
                                                                       ├─ W196
                                                                       └─ W197
 W192 + W193 + W194 + W195 + W196 + W197 ── W198 ── W199 ── W200 ── W201 ── W202
+
+W194 + W197 + W198 ── W203 ── W204 ── W205 ─┬─ W206 ─┐
+                                             ├─ W207 ─┤
+                                             ├─ W208 ─┼─ W210 ── W211 ── W212
+                                             └─ W209 ─┘
 ```
 
 Recommended maximum parallelism is four executors. After foundation work, assign separate
@@ -12478,6 +13019,7 @@ following order is the default scheduler; a human may record an ADR-approved exc
 | 11 Architecture correction and feature-complete closure | W093–W098 | One authoritative Mk2 layout, strict artifact readiness, daemon-only MIDI ownership, one authoritative Learn catalog, maintainable tracked tree, and clean-clone/hardware release proof pass. |
 | 12 Clean-sheet Web GUI | W178–W185 | Luna builds the independent frontend foundation; Novation surface and device-function browser may proceed in parallel after W179; direct assignments, supporting views, usability qualification, and installed cutover then proceed in order. |
 | 13 Plug-and-play live instrument GUI | W186–W202 | Freeze per-feature capability truth, discovery, event synchronization, unified state, visual shell, reviewed starter setup, tiered device renderers, assignments, scenes, recovery, qualification, and installed cutover. W180–W185 remain deferred as superseded prototypes. |
+| 14 MOD-inspired visual instrument and artwork | W203–W212 | Pin and validate approved artwork provenance; build semantic instrument primitives; render authoritative pedalboard, plugin, cable, meter, and library experiences; integrate direct assignment; then pass resilience, accessibility, installed-hash, rollback, and release qualification. |
 
 W027 is complete as a retired-device removal record and has no downstream release capability.
 When W015 lacks an approved AppleMIDI

@@ -17,6 +17,9 @@ driver = webdriver.Chrome(service=Service("/usr/bin/chromedriver"), options=opti
 try:
     wait = WebDriverWait(driver, 30)
     driver.get(f"{origin}/studio/scenes")
+    WebDriverWait(driver, 20).until(lambda d: d.find_elements("css selector", ".scene-device-summary"))
+    if not driver.find_element("css selector", ".scene-confirmation-note").text:
+        raise RuntimeError("scene state-truth boundary missing")
     wait.until(lambda d: d.find_element("id", "studio-supporting-view").get_attribute("hidden") is None)
     driver.execute_script("""
       window.confirm = () => true; window.__sceneCalls = [];
@@ -24,7 +27,7 @@ try:
       window.fetch = (url, options) => {
         const text = String(url);
         if (text.endsWith('/api/v1/scenes') && (!options || options.method !== 'POST')) return Promise.resolve({ok:true, status:200, json:async()=>({scenes:[{id:'scene-a', name:'Scene A'}], active_scene:'Scene A'})});
-        if (text.endsWith('/api/v1/scenes') && options?.method === 'POST') { window.__sceneCalls.push(JSON.parse(options.body)); return Promise.resolve({ok:true, status:200, json:async()=>({ok:true, active_scene:'Scene A'})}); }
+        if (text.endsWith('/api/v1/scenes') && options?.method === 'POST') { const body = JSON.parse(options.body); window.__sceneCalls.push(body); return Promise.resolve({ok:true, status:200, json:async()=>({ok:true, active_scene:'Scene A', activation_outcomes: body.execute_scene ? [{id:'device-a', outcome:'SentUnverified'}] : []})}); }
         return window.__sceneFetch(url, options);
       };
     """)
@@ -33,14 +36,27 @@ try:
     driver.execute_script("const input = document.querySelector('.scene-actions input'); input.value = 'My Setup'; input.dispatchEvent(new Event('input', {bubbles:true})); document.querySelector('.scene-actions button.add-assignment').click();")
     wait.until(lambda d: len(d.execute_script("return window.__sceneCalls")) == 1)
     wait.until(lambda d: d.find_elements("css selector", ".scene-actions button.quiet-button"))
-    driver.find_element("xpath", "//button[normalize-space()='Recall selected scene']").click()
+    driver.find_element("xpath", "//button[normalize-space()='Preview selected scene']").click()
     wait.until(lambda d: len(d.execute_script("return window.__sceneCalls")) == 2)
+    driver.find_element("xpath", "//button[normalize-space()='Recall selected scene']").click()
+    wait.until(lambda d: len(d.execute_script("return window.__sceneCalls")) == 3)
+    if 'remain unconfirmed' not in driver.find_element("css selector", ".scene-actions [role='status']").text:
+        raise RuntimeError("scene recall did not surface authoritative unconfirmed outcome")
     calls = driver.execute_script("return window.__sceneCalls")
-    if calls[0].get('scene') != 'My Setup' or calls[1].get('execute_scene') != 'scene-a':
+    if calls[0].get('scene') != 'My Setup' or calls[1].get('preview_scene') != 'scene-a' or calls[2].get('execute_scene') != 'scene-a':
         raise RuntimeError(f"unexpected scene requests: {calls!r}")
     driver.execute_script("localStorage.setItem('mackes-studio-selected-scene', 'scene-a')")
     driver.execute_script("window.MackesStudioViewsRefresh()")
     wait.until(lambda d: d.find_element("css selector", ".scene-actions select").get_attribute("value") == "scene-a")
+    driver.execute_script("""
+      const priorFetch = window.fetch;
+      window.fetch = (url, options) => String(url).endsWith('/api/v1/studio/capabilities')
+        ? Promise.resolve({ok:false, status:503, json:async()=>({})}) : priorFetch(url, options);
+      window.MackesStudioViewsRefresh();
+    """)
+    wait.until(lambda d: 'readiness unavailable' in d.find_element("css selector", ".scene-device-summary").text)
+    if 'remain unconfirmed' not in driver.find_element("css selector", ".scene-confirmation-note").text:
+        raise RuntimeError("partial capability failure did not preserve explicit unavailable truth")
     print("browser-studio-scenes-actions: PASS save_then_confirmed_recall_reload")
 finally:
     driver.quit()

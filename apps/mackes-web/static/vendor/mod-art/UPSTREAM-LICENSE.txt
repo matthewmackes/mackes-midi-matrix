@@ -1,0 +1,8 @@
+MOD Audio mod-ui
+Source: https://github.com/mod-audio/mod-ui
+Revision: c3004836e3466fa3a0d34de3ca855530e75304d1
+
+The upstream repository's LICENSE file is GNU Affero General Public License, version 3.
+This notice accompanies the approved static artwork tranche. MACKES does not import or execute
+the upstream mod-ui runtime, protocol, persistence, store, account, telemetry, or network code.
+Operator authorization for this private project was confirmed on 2026-09-13.

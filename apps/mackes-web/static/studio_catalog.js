@@ -9,10 +9,14 @@
   let entries = [];
   let selected = null;
   let opener = null;
+  const inspector = document.createElement('section');
+  inspector.className = 'destination-inspector';
+  inspector.setAttribute('aria-live', 'polite');
   const friendly = value => String(value || '').replace(/[._:-]+/g, ' ').replace(/\b\w/g, character => character.toUpperCase());
   const render = () => {
     const query = search?.value.trim().toLowerCase() || '';
     list.replaceChildren();
+    if (!browser.contains(inspector)) browser.insertBefore(inspector, list);
     const controlType = state.read().selectedControl?.type;
     const visible = entries.filter(entry => (!entry.compatible || entry.compatible.includes(controlType)) && `${entry.label} ${entry.detail}`.toLowerCase().includes(query));
     if (!visible.length) {
@@ -23,9 +27,16 @@
       button.type = 'button'; button.className = 'function-choice'; button.setAttribute('role', 'option');
       const label = document.createElement('strong'); label.textContent = entry.label;
       const detail = document.createElement('span'); detail.textContent = `${entry.detail}${entry.meter ? ' · Read-only meter' : entry.readable === false ? ' · Sent — device does not confirm' : entry.writable === false ? ' · Read-only' : ' · Writable'}${entry.requiresConfirmation ? ' · Confirmation required' : ''}`;
+      const face = window.MackesModArt?.pluginFace?.({ renderer: profile, name: entry.plugin_name || friendly(profile), state: entry.readable === false ? 'sent-unverified' : entry.writable === false ? 'observed' : 'unavailable' });
+      if (face) button.append(face);
       button.append(label, detail);
       button.addEventListener('click', () => {
         selected = entry;
+        inspector.replaceChildren();
+        const title = document.createElement('h4'); title.textContent = 'Selected function'; inspector.append(title);
+        const summary = document.createElement('p'); summary.textContent = `${entry.label} · ${entry.readable === false ? 'Sent, unverified' : entry.writable === false ? 'Read-only' : 'Writable'}${entry.detail ? ` · ${entry.detail}` : ''}`; inspector.append(summary);
+        const details = document.createElement('details'); const summaryLabel = document.createElement('summary'); summaryLabel.textContent = 'Advanced Details'; details.append(summaryLabel);
+        const raw = document.createElement('p'); raw.textContent = `URI: ${entry.effect || 'Unavailable'} · Symbol: ${entry.parameter || 'Unavailable'} · Freshness: ${entry.readable === false ? 'not confirmed' : 'authoritative catalog'}`; details.append(raw); inspector.append(details);
         state.publish({ selectedDestination: { ...entry, profile } });
         document.dispatchEvent(new CustomEvent('studio-destination-picked', { detail: { ...entry, profile } }));
         document.querySelector('#studio-announcement').textContent = `${entry.label} selected from the ${friendly(profile)} catalog. Review the preview before saving.`;

@@ -604,6 +604,262 @@ fn route(request: &HttpRequest, socket: &PathBuf, origin: &str) -> HttpResponse 
             )
             .expect("bounded studio behavior response");
         }
+        ("GET", "/assets/mod_art.js") => {
+            return HttpResponse::asset(
+                200,
+                include_bytes!("../static/mod_art.js").to_vec(),
+                "text/javascript; charset=utf-8",
+            )
+            .expect("bounded MOD art response");
+        }
+        ("GET", "/assets/mod_art_gallery.js") => {
+            return HttpResponse::asset(
+                200,
+                include_bytes!("../static/mod_art_gallery.js").to_vec(),
+                "text/javascript; charset=utf-8",
+            )
+            .expect("bounded MOD art gallery response");
+        }
+        ("GET", "/assets/studio_pipedal_canvas.js") => {
+            return HttpResponse::asset(
+                200,
+                include_bytes!("../static/studio_pipedal_canvas.js").to_vec(),
+                "text/javascript; charset=utf-8",
+            )
+            .expect("bounded PiPedal canvas response");
+        }
+        ("GET", "/assets/studio_library.js") => {
+            return HttpResponse::asset(
+                200,
+                include_bytes!("../static/studio_library.js").to_vec(),
+                "text/javascript; charset=utf-8",
+            )
+            .expect("bounded PiPedal library response");
+        }
+        ("GET", "/assets/vendor/mod-art/ports/audio-input.png") => {
+            return HttpResponse::asset(
+                200,
+                include_bytes!("../static/vendor/mod-art/ports/audio-input.png").to_vec(),
+                "image/png",
+            )
+            .expect("bounded MOD artwork response");
+        }
+        ("GET", "/assets/vendor/mod-art/ports/audio-output.png") => {
+            return HttpResponse::asset(
+                200,
+                include_bytes!("../static/vendor/mod-art/ports/audio-output.png").to_vec(),
+                "image/png",
+            )
+            .expect("bounded MOD artwork response");
+        }
+        ("GET", "/assets/vendor/mod-art/ports/audio-jack.png") => {
+            return HttpResponse::asset(
+                200,
+                include_bytes!("../static/vendor/mod-art/ports/audio-jack.png").to_vec(),
+                "image/png",
+            )
+            .expect("bounded MOD artwork response");
+        }
+        ("GET", "/assets/vendor/mod-art/ports/audio-jack-open.png") => {
+            return HttpResponse::asset(
+                200,
+                include_bytes!("../static/vendor/mod-art/ports/audio-jack-open.png").to_vec(),
+                "image/png",
+            )
+            .expect("bounded MOD artwork response");
+        }
+        ("GET", "/assets/vendor/mod-art/ports/cv-input.png") => {
+            return HttpResponse::asset(
+                200,
+                include_bytes!("../static/vendor/mod-art/ports/cv-input.png").to_vec(),
+                "image/png",
+            )
+            .expect("bounded MOD artwork response");
+        }
+        ("GET", "/assets/vendor/mod-art/ports/cv-output.png") => {
+            return HttpResponse::asset(
+                200,
+                include_bytes!("../static/vendor/mod-art/ports/cv-output.png").to_vec(),
+                "image/png",
+            )
+            .expect("bounded MOD artwork response");
+        }
+        ("GET", "/assets/vendor/mod-art/ports/cv-jack.png") => {
+            return HttpResponse::asset(
+                200,
+                include_bytes!("../static/vendor/mod-art/ports/cv-jack.png").to_vec(),
+                "image/png",
+            )
+            .expect("bounded MOD artwork response");
+        }
+        ("GET", "/assets/vendor/mod-art/ports/cv-jack-open.png") => {
+            return HttpResponse::asset(
+                200,
+                include_bytes!("../static/vendor/mod-art/ports/cv-jack-open.png").to_vec(),
+                "image/png",
+            )
+            .expect("bounded MOD artwork response");
+        }
+        ("GET", "/assets/vendor/mod-art/ports/midi-input.png") => {
+            return HttpResponse::asset(
+                200,
+                include_bytes!("../static/vendor/mod-art/ports/midi-input.png").to_vec(),
+                "image/png",
+            )
+            .expect("bounded MOD artwork response");
+        }
+        ("GET", "/assets/vendor/mod-art/ports/midi-output.png") => {
+            return HttpResponse::asset(
+                200,
+                include_bytes!("../static/vendor/mod-art/ports/midi-output.png").to_vec(),
+                "image/png",
+            )
+            .expect("bounded MOD artwork response");
+        }
+        ("GET", "/assets/vendor/mod-art/ports/midi-jack.png") => {
+            return HttpResponse::asset(
+                200,
+                include_bytes!("../static/vendor/mod-art/ports/midi-jack.png").to_vec(),
+                "image/png",
+            )
+            .expect("bounded MOD artwork response");
+        }
+        ("GET", "/assets/vendor/mod-art/ports/midi-jack-open.png") => {
+            return HttpResponse::asset(
+                200,
+                include_bytes!("../static/vendor/mod-art/ports/midi-jack-open.png").to_vec(),
+                "image/png",
+            )
+            .expect("bounded MOD artwork response");
+        }
+        ("GET", "/assets/vendor/mod-art/controls/footswitch.png") => {
+            return HttpResponse::asset(
+                200,
+                include_bytes!("../static/vendor/mod-art/controls/footswitch.png").to_vec(),
+                "image/png",
+            )
+            .expect("bounded MOD artwork response");
+        }
+        ("GET", "/assets/vendor/mod-art/controls/knob.png") => {
+            return HttpResponse::asset(
+                200,
+                include_bytes!("../static/vendor/mod-art/controls/knob.png").to_vec(),
+                "image/png",
+            )
+            .expect("bounded MOD artwork response");
+        }
+        ("GET", "/assets/vendor/mod-art/controls/slider.png") => {
+            return HttpResponse::asset(
+                200,
+                include_bytes!("../static/vendor/mod-art/controls/slider.png").to_vec(),
+                "image/png",
+            )
+            .expect("bounded MOD artwork response");
+        }
+        ("GET", "/assets/vendor/mod-art/controls/switch.svg") => {
+            return HttpResponse::asset(
+                200,
+                include_bytes!("../static/vendor/mod-art/controls/switch.svg").to_vec(),
+                "image/svg+xml",
+            )
+            .expect("bounded MOD artwork response");
+        }
+        ("GET", "/assets/vendor/mod-art/controls/rocker-off.png") => {
+            return HttpResponse::asset(
+                200,
+                include_bytes!("../static/vendor/mod-art/controls/rocker-off.png").to_vec(),
+                "image/png",
+            )
+            .expect("bounded MOD artwork response");
+        }
+        ("GET", "/assets/vendor/mod-art/controls/rocker-on.png") => {
+            return HttpResponse::asset(
+                200,
+                include_bytes!("../static/vendor/mod-art/controls/rocker-on.png").to_vec(),
+                "image/png",
+            )
+            .expect("bounded MOD artwork response");
+        }
+        ("GET", "/assets/vendor/mod-art/status/purple-off.png") => {
+            return HttpResponse::asset(
+                200,
+                include_bytes!("../static/vendor/mod-art/status/purple-off.png").to_vec(),
+                "image/png",
+            )
+            .expect("bounded MOD artwork response");
+        }
+        ("GET", "/assets/vendor/mod-art/status/purple-on.png") => {
+            return HttpResponse::asset(
+                200,
+                include_bytes!("../static/vendor/mod-art/status/purple-on.png").to_vec(),
+                "image/png",
+            )
+            .expect("bounded MOD artwork response");
+        }
+        ("GET", "/assets/vendor/mod-art/status/red-off.png") => {
+            return HttpResponse::asset(
+                200,
+                include_bytes!("../static/vendor/mod-art/status/red-off.png").to_vec(),
+                "image/png",
+            )
+            .expect("bounded MOD artwork response");
+        }
+        ("GET", "/assets/vendor/mod-art/status/red-on.png") => {
+            return HttpResponse::asset(
+                200,
+                include_bytes!("../static/vendor/mod-art/status/red-on.png").to_vec(),
+                "image/png",
+            )
+            .expect("bounded MOD artwork response");
+        }
+        ("GET", "/assets/vendor/mod-art/surfaces/library-background.png") => {
+            return HttpResponse::asset(
+                200,
+                include_bytes!("../static/vendor/mod-art/surfaces/library-background.png").to_vec(),
+                "image/png",
+            )
+            .expect("bounded MOD artwork response");
+        }
+        ("GET", "/assets/vendor/mod-art/surfaces/rack.png") => {
+            return HttpResponse::asset(
+                200,
+                include_bytes!("../static/vendor/mod-art/surfaces/rack.png").to_vec(),
+                "image/png",
+            )
+            .expect("bounded MOD artwork response");
+        }
+        ("GET", "/assets/vendor/mod-art/icons/blocked.svg") => {
+            return HttpResponse::asset(
+                200,
+                include_bytes!("../static/vendor/mod-art/icons/blocked.svg").to_vec(),
+                "image/svg+xml",
+            )
+            .expect("bounded MOD artwork response");
+        }
+        ("GET", "/assets/vendor/mod-art/icons/broken-image.svg") => {
+            return HttpResponse::asset(
+                200,
+                include_bytes!("../static/vendor/mod-art/icons/broken-image.svg").to_vec(),
+                "image/svg+xml",
+            )
+            .expect("bounded MOD artwork response");
+        }
+        ("GET", "/assets/vendor/mod-art/icons/broken-pedal.svg") => {
+            return HttpResponse::asset(
+                200,
+                include_bytes!("../static/vendor/mod-art/icons/broken-pedal.svg").to_vec(),
+                "image/svg+xml",
+            )
+            .expect("bounded MOD artwork response");
+        }
+        ("GET", "/assets/vendor/mod-art/icons/transport.svg") => {
+            return HttpResponse::asset(
+                200,
+                include_bytes!("../static/vendor/mod-art/icons/transport.svg").to_vec(),
+                "image/svg+xml",
+            )
+            .expect("bounded MOD artwork response");
+        }
         ("GET", "/api/v1/state") => Command::Snapshot,
         ("GET", "/api/v1/health") => Command::Health,
         ("GET", "/api/v1/endpoints") => Command::Endpoints,

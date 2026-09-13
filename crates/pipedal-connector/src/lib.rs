@@ -1553,7 +1553,16 @@ pub fn decode_favorites(
 
 /// Decode PiPedal's scalar `getGovernorSettings` response.
 pub fn decode_governor_settings(body: Option<serde_json::Value>) -> Result<String, String> {
-    let governor: String = decode_body(body)?;
+    let value = body.ok_or_else(|| "PiPedal governor response has no body".to_string())?;
+    let governor = match value {
+        serde_json::Value::String(governor) => governor,
+        serde_json::Value::Object(object) => object
+            .get("governor")
+            .and_then(serde_json::Value::as_str)
+            .ok_or_else(|| "PiPedal governor response is missing governor".to_string())?
+            .to_owned(),
+        _ => return Err("PiPedal governor response has invalid shape".into()),
+    };
     if governor.trim().is_empty() || governor.len() > MAX_GOVERNOR_TEXT {
         return Err("PiPedal governor setting is empty or excessive".into());
     }
@@ -2261,7 +2270,9 @@ impl SessionPhase {
             (
                 Self::LoadingCatalog,
                 "plugins" | "currentPedalboard" | "pluginClasses" | "getPresets" | "getBankIndex"
-                | "imageList",
+                | "imageList" | "getFavorites"
+                | "getGovernorSettings" | "getShowStatusMonitor" | "getWifiRegulatoryDomains"
+                | "getHasWifi" | "getUpdateStatus" | "getKnownWifiNetworks",
             ) => Ok(Self::LoadingCatalog),
             (Self::Ready, _) => Ok(Self::Ready),
             (phase, message) => {
@@ -3363,6 +3374,15 @@ mod tests {
         }
         assert_eq!(Operation::all().len(), 92);
         assert!(Operation::all().iter().all(|operation| !operation.wire_name().is_empty()));
+        for (index, operation) in Operation::all().iter().enumerate() {
+            assert!(
+                Operation::all()[..index]
+                    .iter()
+                    .all(|prior| prior.wire_name() != operation.wire_name()),
+                "duplicate PiPedal wire operation: {}",
+                operation.wire_name()
+            );
+        }
         assert_eq!(serde_json::to_string(&Operation::SetControl).expect("json"), "\"setControl\"");
     }
 

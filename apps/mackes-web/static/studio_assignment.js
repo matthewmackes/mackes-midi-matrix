@@ -14,8 +14,10 @@
   document.addEventListener('studio-destination-picked', event => {
     const control = state.read().selectedControl;
     if (!control) return;
-    pending = { control, destination: event.detail };
-    previewOpener = document.querySelector('#destination-functions button[aria-selected="true"]');
+    const destination = { ...event.detail };
+    previewOpener = destination.sourceElement || document.querySelector('#destination-functions button[aria-selected="true"]');
+    delete destination.sourceElement;
+    pending = { control, destination };
     state.publish({ draft: pending });
     preview.hidden = false;
     previewText.textContent = `Moving ${control.label} will control ${event.detail.label} on ${friendly(event.detail.profile)}.`;

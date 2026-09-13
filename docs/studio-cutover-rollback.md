@@ -24,8 +24,8 @@ operator qualification checks.
 
    ```sh
    systemctl is-active mackes-web.service
-   curl --fail --max-time 5 http://127.0.0.1:8081/api/v1/health
-   curl --fail --max-time 5 http://127.0.0.1:8081/
+   curl --fail --max-time 5 http://172.20.222.222:8081/api/v1/health
+   curl --fail --max-time 5 http://172.20.222.222:8081/
    ```
 
 The rollback artifact is a web binary only. It does not restore or rewrite `/etc/mackes-midi-matrix`,

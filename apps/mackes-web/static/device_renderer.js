@@ -1,5 +1,6 @@
 (function () {
   const namespace = ['http', String.fromCharCode(58, 47, 47), 'www.w3.org/2000/svg'].join('');
+  const xlinkNamespace = ['http', String.fromCharCode(58, 47, 47), 'www.w3.org/1999/xlink'].join('');
   const renderers = [
     { key: 'novation.launch-control-xl', test: /novation|launch control/i, kind: 'controller', accent: '#4589ff', controls: 24 },
     { key: 'eventide.micropitch', test: /eventide|micropitch/i, kind: 'pedal', accent: '#ee5396', controls: 6 },
@@ -29,10 +30,24 @@
     parent.append(element);
     return element;
   }
+  function artPath(name) {
+    return `/assets/vendor/mod-art/${name}`;
+  }
+  function appendSurfaceArt(renderer, svg) {
+    if (renderer.kind !== 'pedalboard' && renderer.kind !== 'rack') return;
+    const artUrl = window.MackesModArt?.url('rack') || '/assets/vendor/mod-art/surfaces/rack.png';
+    const image = svgElement('image', {
+      x: 14, y: 12, width: 332, height: 126, preserveAspectRatio: 'xMidYMid slice',
+      href: artUrl, opacity: '.16', 'aria-hidden': 'true',
+      'data-art-asset': 'mod-rack-surface',
+    }, svg);
+    image.setAttributeNS(xlinkNamespace, 'xlink:href', artUrl);
+  }
   function appendGraphic(device, parent) {
     const renderer = rendererFor(device);
     const svg = svgElement('svg', { class: 'device-graphic', viewBox: '0 0 360 150', role: 'img', 'aria-label': `${renderer.key} graphical device representation` }, parent);
     svgElement('rect', { x: 4, y: 4, width: 352, height: 142, rx: 10, class: 'device-graphic-chassis', 'data-renderer-key': renderer.key }, svg);
+    appendSurfaceArt(renderer, svg);
     svgElement('rect', { x: 4, y: 4, width: 8, height: 142, rx: 4, fill: renderer.accent, 'aria-hidden': 'true' }, svg);
     const title = svgElement('text', { x: 24, y: 30, class: 'device-graphic-title' }, svg); title.textContent = renderer.kind;
     const model = stateModel(device);
