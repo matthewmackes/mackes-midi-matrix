@@ -459,8 +459,10 @@ the human-facing Factory slot remains `1`; these are separate values and must ne
 Writes require exactly one Launch Control XL Mk2 MIDI output;
 HUI endpoints are ignored; two MIDI endpoints fail closed with a snapshot `led.last_error`.
 Base colors come from persisted mappings: unmapped OFF, Lexicon amber, Eventide red, other
-owners green. Learn capture is yellow. Successful persist uses two 400 ms green pulses, then
-the owner color; failure uses the matching red pulse sequence.
+owners green. Learn capture is yellow. By default, a mapped knob retains its owner color and
+briefly blinks green whenever it produces valid MIDI activity; this movement acknowledgment is
+part of the base contract. Successful persist uses two 400 ms green pulses, then the owner
+color; failure uses the matching red pulse sequence.
 
 Faders have no individual LED address. Software policy: a mapped fader lights that column's
 two channel-button LEDs as a proxy, unless a button in the column already has its own

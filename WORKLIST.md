@@ -4005,6 +4005,7 @@ appearance qualification is explicitly owned by W092, not this software contract
      other valid owners are green only when explicitly defined. Never represent amber as blue or
      claim unsupported colors.
   4. Preserve normal base state beneath temporary overlays. Device entry acknowledges visibly;
+     mapped knobs retain their owner color and blink green on valid MIDI movement by default;
      the captured control remains yellow throughout Learn; successful atomic persistence produces
      exactly two visible green blinks and then restores the destination-owner color; failure
      produces the documented red failure indication and then restores the prior valid base state.
